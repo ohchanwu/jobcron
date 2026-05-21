@@ -1,0 +1,167 @@
+package storage
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/ohchanwu/job-scraper/internal/scraper"
+)
+
+// postingColumns is the column list shared by the insert and select queries,
+// in a fixed order so the parameter list and the scan list stay in lockstep.
+const postingColumns = `source, source_posting_id, url, title, company, location,
+	newcomer, min_career, max_career, career_level, education, education_name,
+	stack_tags_json, tags_json, description, raw_json, published_at, closed_at,
+	always_open, first_seen_at, last_seen_at`
+
+// UpsertPosting inserts p as a new posting or, when a posting with the same
+// (Source, SourcePostingID) already exists, refreshes its last_seen_at. It
+// reports the row id and whether the posting was newly inserted.
+//
+// On the already-seen path only last_seen_at advances: per the design's
+// scrape flow, postings already in the DB are not re-fetched, so no other
+// field has fresh data to write.
+func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64, isNew bool, err error) {
+	var existingID int64
+	err = s.db.QueryRowContext(ctx,
+		`SELECT id FROM postings WHERE source = ? AND source_posting_id = ?`,
+		p.Source, p.SourcePostingID).Scan(&existingID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// New posting — fall through to INSERT.
+	case err != nil:
+		return 0, false, fmt.Errorf("storage: look up posting: %w", err)
+	default:
+		if _, err := s.db.ExecContext(ctx,
+			`UPDATE postings SET last_seen_at = ? WHERE id = ?`,
+			p.LastSeenAt.UTC(), existingID); err != nil {
+			return 0, false, fmt.Errorf("storage: update last_seen_at: %w", err)
+		}
+		return existingID, false, nil
+	}
+
+	stackJSON, err := json.Marshal(nonNilSlice(p.StackTags))
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: marshal stack tags: %w", err)
+	}
+	tagsJSON, err := json.Marshal(nonNilTags(p.Tags))
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: marshal tags: %w", err)
+	}
+	res, err := s.db.ExecContext(ctx, `
+INSERT INTO postings (`+postingColumns+`)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		p.Source, p.SourcePostingID, p.URL, p.Title, p.Company, p.Location,
+		p.Newcomer, p.MinCareer, p.MaxCareer, p.CareerLevel, p.Education, p.EducationName,
+		string(stackJSON), string(tagsJSON), p.Description, p.RawJSON, utcPtr(p.PublishedAt), utcPtr(p.ClosedAt),
+		p.AlwaysOpen, p.FirstSeenAt.UTC(), p.LastSeenAt.UTC())
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: insert posting: %w", err)
+	}
+	id, err = res.LastInsertId()
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: insert posting id: %w", err)
+	}
+	return id, true, nil
+}
+
+// PostingByID returns the posting with the given row id, or ok=false if none.
+func (s *Store) PostingByID(ctx context.Context, id int64) (scraper.Posting, bool, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT id, `+postingColumns+` FROM postings WHERE id = ?`, id)
+	p, err := scanPosting(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return scraper.Posting{}, false, nil
+	}
+	if err != nil {
+		return scraper.Posting{}, false, err
+	}
+	return p, true, nil
+}
+
+// rowScanner is satisfied by both *sql.Row and *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanPosting reads one posting row whose columns are `id` followed by
+// postingColumns, in that order. It propagates sql.ErrNoRows unwrapped.
+func scanPosting(row rowScanner) (scraper.Posting, error) {
+	var (
+		p             scraper.Posting
+		location      sql.NullString
+		careerLevel   sql.NullString
+		education     sql.NullInt64
+		educationName sql.NullString
+		stackJSON     string
+		tagsJSON      string
+		publishedAt   sql.NullTime
+		closedAt      sql.NullTime
+		firstSeen     time.Time
+		lastSeen      time.Time
+	)
+	err := row.Scan(
+		&p.ID, &p.Source, &p.SourcePostingID, &p.URL, &p.Title, &p.Company, &location,
+		&p.Newcomer, &p.MinCareer, &p.MaxCareer, &careerLevel, &education, &educationName,
+		&stackJSON, &tagsJSON, &p.Description, &p.RawJSON, &publishedAt, &closedAt,
+		&p.AlwaysOpen, &firstSeen, &lastSeen,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return scraper.Posting{}, sql.ErrNoRows
+	}
+	if err != nil {
+		return scraper.Posting{}, fmt.Errorf("storage: scan posting: %w", err)
+	}
+
+	p.Location = location.String
+	p.CareerLevel = careerLevel.String
+	if education.Valid {
+		v := int(education.Int64)
+		p.Education = &v
+	}
+	p.EducationName = educationName.String
+	if err := json.Unmarshal([]byte(stackJSON), &p.StackTags); err != nil {
+		return scraper.Posting{}, fmt.Errorf("storage: unmarshal stack tags: %w", err)
+	}
+	if err := json.Unmarshal([]byte(tagsJSON), &p.Tags); err != nil {
+		return scraper.Posting{}, fmt.Errorf("storage: unmarshal tags: %w", err)
+	}
+	if publishedAt.Valid {
+		v := publishedAt.Time.UTC()
+		p.PublishedAt = &v
+	}
+	if closedAt.Valid {
+		v := closedAt.Time.UTC()
+		p.ClosedAt = &v
+	}
+	p.FirstSeenAt = firstSeen.UTC()
+	p.LastSeenAt = lastSeen.UTC()
+	return p, nil
+}
+
+// utcPtr returns t normalized to UTC, or nil when t is nil.
+func utcPtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	return &u
+}
+
+func nonNilSlice(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+func nonNilTags(t []scraper.Tag) []scraper.Tag {
+	if t == nil {
+		return []scraper.Tag{}
+	}
+	return t
+}
