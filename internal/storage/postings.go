@@ -83,6 +83,45 @@ func (s *Store) PostingByID(ctx context.Context, id int64) (scraper.Posting, boo
 	return p, true, nil
 }
 
+// KnownSourceIDs returns the set of source_posting_id values already stored
+// for the given source — used to tell new postings from already-seen ones.
+func (s *Store) KnownSourceIDs(ctx context.Context, source string) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT source_posting_id FROM postings WHERE source = ?`, source)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query known ids: %w", err)
+	}
+	defer rows.Close()
+	ids := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("storage: scan known id: %w", err)
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
+}
+
+// AllPostings returns every stored posting, newest first.
+func (s *Store) AllPostings(ctx context.Context) ([]scraper.Posting, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, `+postingColumns+` FROM postings ORDER BY first_seen_at DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query postings: %w", err)
+	}
+	defer rows.Close()
+	var postings []scraper.Posting
+	for rows.Next() {
+		p, err := scanPosting(rows)
+		if err != nil {
+			return nil, err
+		}
+		postings = append(postings, p)
+	}
+	return postings, rows.Err()
+}
+
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
 type rowScanner interface {
 	Scan(dest ...any) error

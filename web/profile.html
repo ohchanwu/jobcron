@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>프로필 설정 — 신입 IT Job Briefing</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <h1>프로필 설정</h1>
+  <p>이 정보로 매일의 공고에 점수를 매겨요.</p>
+  <form method="post" action="/profile">
+    <label>경력 (년) — 신입이면 0
+      <input type="number" name="career_years" min="0" value="{{.CareerYears}}">
+    </label>
+    <label>희망 연봉 하한 (만원) — 상관없으면 0
+      <input type="number" name="salary_floor_man" min="0" value="{{.SalaryFloorMan}}">
+    </label>
+    <label>최종 학력
+      <select name="max_education">
+        <option value="0"{{if eq .MaxEducation 0}} selected{{end}}>학력 무관</option>
+        <option value="1"{{if eq .MaxEducation 1}} selected{{end}}>고등학교 졸업</option>
+        <option value="2"{{if eq .MaxEducation 2}} selected{{end}}>전문대 졸업</option>
+        <option value="3"{{if eq .MaxEducation 3}} selected{{end}}>대학교 졸업</option>
+        <option value="4"{{if eq .MaxEducation 4}} selected{{end}}>대학원 졸업</option>
+      </select>
+    </label>
+    <label>기술 스택 — 한 줄에 하나, "이름,가중치" 형식 (예: React,20)
+      <textarea name="stacks" rows="5">{{.StacksText}}</textarea>
+    </label>
+    <label>희망 근무지 — 쉼표로 구분 (예: 서울, 판교)
+      <input type="text" name="cities" value="{{.CitiesText}}">
+    </label>
+    <label>근무지 가중치
+      <input type="number" name="location_weight" min="0" value="{{.LocationWeight}}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="remote_ok"{{if .RemoteOK}} checked{{end}}> 재택근무 가능
+    </label>
+    <label>필수 키워드 — 한 줄에 하나, 모두 포함된 공고만 점수를 받아요
+      <textarea name="must_have" rows="3">{{.MustHaveText}}</textarea>
+    </label>
+    <label>제외 키워드 — 한 줄에 하나, 하나라도 있으면 공고를 제외해요
+      <textarea name="dealbreakers" rows="3">{{.DealbreakersText}}</textarea>
+    </label>
+    <p class="hint">키워드는 어근만 적어주세요. "개발자"는 "개발"과 다르게 취급되고,
+      "야근 없음" 같은 부정 표현은 "야근"과 구분하지 못해요.</p>
+    <button type="submit">저장하고 브리핑 보기</button>
+  </form>
+</body>
+</html>

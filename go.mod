@@ -3,6 +3,7 @@ module github.com/ohchanwu/job-scraper
 go 1.26.3
 
 require (
+	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	golang.org/x/text v0.37.0
 	modernc.org/sqlite v1.50.1
 )

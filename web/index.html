@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>신입 IT Job Briefing</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header>
+    <h1>오늘의 채용 브리핑</h1>
+    <a href="/profile">프로필 수정</a>
+  </header>
+  <p>
+    <button id="scrape">스크랩 시작</button>
+    <span id="status"></span>
+  </p>
+  <main>
+    {{if .Postings}}
+    <ol class="postings">
+      {{range .Postings}}
+      <li class="{{if .Excluded}}excluded{{end}}">
+        <span class="score">{{if .Excluded}}제외됨{{else}}{{.Total}}점{{end}}</span>
+        <a href="{{.Posting.URL}}">{{.Posting.Title}}</a>
+        <span class="company">{{.Posting.Company}}</span>
+        {{if .Explanation}}<div class="why">{{.Explanation}}</div>{{end}}
+      </li>
+      {{end}}
+    </ol>
+    {{else}}
+    <p class="empty">아직 공고가 없어요. "스크랩 시작"을 눌러 오늘의 공고를 받아보세요.</p>
+    {{end}}
+  </main>
+  <script>
+    document.getElementById("scrape").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      status.textContent = "스크랩 중...";
+      try {
+        const resp = await fetch("/api/scrape", { method: "POST" });
+        if (!resp.ok) throw new Error(await resp.text());
+        location.reload();
+      } catch (e) {
+        status.textContent = "스크랩에 실패했어요: " + e.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -361,3 +361,76 @@ func TestSaveProfileWritesOnlyWhenContentChanges(t *testing.T) {
 		t.Errorf("stored profile = (%q,%q), want (%q,%q)", gotJSON, gotHash, v2, h2)
 	}
 }
+
+func TestKnownSourceIDs(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	p1 := samplePosting()
+	p2 := samplePosting()
+	p2.SourcePostingID = "99999"
+	other := samplePosting()
+	other.Source = "wanted"
+	other.SourcePostingID = "wanted-1"
+	for _, p := range []scraper.Posting{p1, p2, other} {
+		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+
+	ids, err := st.KnownSourceIDs(ctx, "jumpit")
+	if err != nil {
+		t.Fatalf("KnownSourceIDs: %v", err)
+	}
+	if len(ids) != 2 || !ids["53688979"] || !ids["99999"] {
+		t.Errorf("KnownSourceIDs = %v, want {53688979, 99999}", ids)
+	}
+	if ids["wanted-1"] {
+		t.Error("KnownSourceIDs returned an id belonging to a different source")
+	}
+}
+
+func TestAllPostings(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	p2 := samplePosting()
+	p2.SourcePostingID = "222"
+	for _, p := range []scraper.Posting{samplePosting(), p2} {
+		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+	all, err := st.AllPostings(ctx)
+	if err != nil {
+		t.Fatalf("AllPostings: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("AllPostings returned %d, want 2", len(all))
+	}
+}
+
+func TestScoresByPostingID(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	id, _, err := st.UpsertPosting(ctx, samplePosting())
+	if err != nil {
+		t.Fatalf("UpsertPosting: %v", err)
+	}
+	in := Score{
+		PostingID: id, ProfileHash: "h", Total: 70, BreakdownJSON: "[]",
+		ComputedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+	}
+	if err := st.UpsertScore(ctx, in); err != nil {
+		t.Fatalf("UpsertScore: %v", err)
+	}
+	scores, err := st.ScoresByPostingID(ctx)
+	if err != nil {
+		t.Fatalf("ScoresByPostingID: %v", err)
+	}
+	got, ok := scores[id]
+	if !ok || got.Total != 70 {
+		t.Errorf("scores[%d] = %+v (ok=%v), want total 70", id, got, ok)
+	}
+}
