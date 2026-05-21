@@ -1,0 +1,1141 @@
+[
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53789527",
+    "URL": "https://jumpit.saramin.co.kr/position/53789527",
+    "Title": "서버·웹 개발자(신입)",
+    "Company": "넥시클",
+    "Location": "세종 나성로125-4, 314호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 0,
+    "EducationName": "무관",
+    "StackTags": [
+      "AI/인공지능"
+    ],
+    "Tags": [
+      {
+        "id": "com_128",
+        "name": "매출액 150% 급성장",
+        "category": "sales"
+      },
+      {
+        "id": "276",
+        "name": "유연근무제",
+        "category": "welfare"
+      },
+      {
+        "id": "com_127",
+        "name": "매출액 20% 지속성장",
+        "category": "sales"
+      },
+      {
+        "id": "com_157",
+        "name": "영업이익 150% 급성장",
+        "category": "sales"
+      }
+    ],
+    "Description": "개발자 채용 공고\r\n\r\nXR(확장현실) 운영·관리 인프라 전문기업 (주)넥시클은 AI 기반 XR 통합 운영 플랫폼 ControlXR / Al ControlXR 2.0을 개발하며 교육·산업·의료·훈련 분야에서 대규모 XR 환경의 운영 표준을 만들어가고 있습니다.\r\n\r\n당사는 중소벤처기업부 TIPS(Tech Incubator Program for Startup) R\u0026D 과제 최종 선정\r\n벤처기업 인증 기업부설연구소 설립 완료를 기반으로, AI 기반 XR 다중 사용자·디바이스 관리 기술을 함께 고도화할 핵심 인재를 채용합니다.\n\n서버·웹 개발자 (플랫폼 / 운영 인프라)\r\n• XR 다중 사용자 운영을 위한 서버·웹 기반 관리 플랫폼 개발\r\n• 실시간 XR 스트림 모니터링 및 제어를 위한 백엔드 API 설계\r\n• 운영자용 웹 대시보드 및 관리 UI 개발\r\n• AI 모듈, XR 디바이스, 스트리밍 서버 간 연동 구조 설계\n\n• 경력 무관 (신입 지원 가능)\n• 학력무관\n\n• 실시간 스트리밍 관련 경험, 대규모 사용자 관리 시스템 or 관제 시스템 개발 경험, 클라우드 기반 서비스 운영 경험\n\n[이런 분을 찾습니다]\n• 콘텐츠가 아닌 \"운영 인프라\"로 XR 산업을 바꾸고 싶으신 분\n• AI와 플랫폼 기술을 실제 현장에 적용하는 데 관심 있는 분\n• PoC를 넘어 확장 가능한 상용 시스템을 만들고 싶은 분\n• 기술 기반 스타트업의 성장과 함께 성장하실 분\n\n[근무 환경 및 혜택]\r\n• TIPS 선정 과제 기반 R\u0026D 중심 개발 환경\r\n• 기업부설연구소 소속 연구원 근무\r\n• XR·AI·플랫폼 핵심 기술을 처음부터 함께 설계하는 초기 멤버 포지션\r\n• 기술 중심의 의사결정 문화 (불필요한 보고 최소화)\r\n• 성장 단계에 따른 스톡옵션/성과 보상 검토 가능\r\n• 탄력 출퇴근 제도\r\n• 회사 복지 추천 받습니다.\r\n※ 근무 형태 및 조건은 경력·역량에 따라 협의",
+    "RawJSON": "{\"id\":53789527,\"title\":\"서버·웹 개발자(신입)\",\"companyName\":\"넥시클\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20263724103740784_189_189.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174433976_4000_3000.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174440687_4000_3000.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174448077_4000_3000.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174453023_4000_3000.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174458695_4000_3000.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174521567_4000_3000.jpg\",\"sortNumber\":8},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174526091_4000_3000.jpg\",\"sortNumber\":9},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174530497_4000_3000.jpg\",\"sortNumber\":10},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174535856_4000_3000.jpg\",\"sortNumber\":11},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174541676_4000_3000.jpg\",\"sortNumber\":12},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174553369_4000_3000.jpg\",\"sortNumber\":13},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174558427_4000_3000.jpg\",\"sortNumber\":14}],\"techStacks\":[{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"개발자 채용 공고\\r\\n\\r\\nXR(확장현실) 운영·관리 인프라 전문기업 (주)넥시클은 AI 기반 XR 통합 운영 플랫폼 ControlXR / Al ControlXR 2.0을 개발하며 교육·산업·의료·훈련 분야에서 대규모 XR 환경의 운영 표준을 만들어가고 있습니다.\\r\\n\\r\\n당사는 중소벤처기업부 TIPS(Tech Incubator Program for Startup) R\u0026D 과제 최종 선정\\r\\n벤처기업 인증 기업부설연구소 설립 완료를 기반으로, AI 기반 XR 다중 사용자·디바이스 관리 기술을 함께 고도화할 핵심 인재를 채용합니다.\",\"responsibility\":\"서버·웹 개발자 (플랫폼 / 운영 인프라)\\r\\n• XR 다중 사용자 운영을 위한 서버·웹 기반 관리 플랫폼 개발\\r\\n• 실시간 XR 스트림 모니터링 및 제어를 위한 백엔드 API 설계\\r\\n• 운영자용 웹 대시보드 및 관리 UI 개발\\r\\n• AI 모듈, XR 디바이스, 스트리밍 서버 간 연동 구조 설계\",\"qualifications\":\"• 경력 무관 (신입 지원 가능)\\n• 학력무관\",\"preferredRequirements\":\"• 실시간 스트리밍 관련 경험, 대규모 사용자 관리 시스템 or 관제 시스템 개발 경험, 클라우드 기반 서비스 운영 경험\\n\\n[이런 분을 찾습니다]\\n• 콘텐츠가 아닌 \\\"운영 인프라\\\"로 XR 산업을 바꾸고 싶으신 분\\n• AI와 플랫폼 기술을 실제 현장에 적용하는 데 관심 있는 분\\n• PoC를 넘어 확장 가능한 상용 시스템을 만들고 싶은 분\\n• 기술 기반 스타트업의 성장과 함께 성장하실 분\",\"welfares\":\"[근무 환경 및 혜택]\\r\\n• TIPS 선정 과제 기반 R\u0026D 중심 개발 환경\\r\\n• 기업부설연구소 소속 연구원 근무\\r\\n• XR·AI·플랫폼 핵심 기술을 처음부터 함께 설계하는 초기 멤버 포지션\\r\\n• 기술 중심의 의사결정 문화 (불필요한 보고 최소화)\\r\\n• 성장 단계에 따른 스톡옵션/성과 보상 검토 가능\\r\\n• 탄력 출퇴근 제도\\r\\n• 회사 복지 추천 받습니다.\\r\\n※ 근무 형태 및 조건은 경력·역량에 따라 협의\",\"recruitProcess\":\"[근무조건]\\r\\n• 고용형태 : 정규직(수습 3개월)\\r\\n• 급여 : 면접 후 결정\\r\\n• 근무지 : 서울 도봉구 마들로13길 84 창동 아우르네 211호\\r\\n\\r\\n[채용절차]\\r\\n• 제출서류 : 온라인 이력서\\r\\n• 전형절차 : 서류전형 ＞ 1차면접 ＞ 2차면접 ＞ 최종합격\\r\\n\\r\\n[유의사항]\\r\\n• 입사지원 서류에 허위사실이 발견될 경우, 채용확정 이후라도 채용이 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-04 00:00:00\",\"closedAt\":\"2026-06-02 23:59:59\",\"location\":\"세종 나성로125-4, 314호\",\"tags\":[{\"id\":\"com_128\",\"name\":\"매출액 150% 급성장\",\"emoticon\":\"sales\"},{\"id\":\"276\",\"name\":\"유연근무제\",\"emoticon\":\"welfare\"},{\"id\":\"com_127\",\"name\":\"매출액 20% 지속성장\",\"emoticon\":\"sales\"},{\"id\":\"com_157\",\"name\":\"영업이익 150% 급성장\",\"emoticon\":\"sales\"}],\"serialNumber\":\"7428703306\",\"encodedSerialNumber\":\"NzQyODcwMzMwNg==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":0,\"educationName\":\"무관\",\"graduate\":false,\"establishPeriod\":3,\"establishDate\":\"2024년 9월 설립\",\"workingPlaces\":[{\"address\":\"세종 나성로125-4, 314호\",\"domestic\":false}],\"jobCategories\":[{\"id\":1,\"name\":\"서버/백엔드 개발자\"},{\"id\":9,\"name\":\"devops/시스템 엔지니어\"},{\"id\":8,\"name\":\"인공지능/머신러닝\"}],\"invisible\":false,\"manDbMcomIdx\":8412115,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-04T00:00:00+09:00",
+    "ClosedAt": "2026-06-02T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53786260",
+    "URL": "https://jumpit.saramin.co.kr/position/53786260",
+    "Title": "IT/AI부문(전문연구요원 포함)신입",
+    "Company": "연합인포맥스",
+    "Location": "서울 종로구 율곡로2길25, 10층",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "Azure DevOps",
+      "Python",
+      "AWS",
+      "GCP",
+      "AZURE"
+    ],
+    "Tags": [
+      {
+        "id": "com_156",
+        "name": "영업이익 20% 지속성장",
+        "category": "sales"
+      },
+      {
+        "id": "com_151",
+        "name": "매출액 500억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "291",
+        "name": "육아휴직",
+        "category": "welfare"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "com_117",
+        "name": "연합뉴스 계열사",
+        "category": "scale"
+      },
+      {
+        "id": "286",
+        "name": "프리한 복장",
+        "category": "welfare"
+      },
+      {
+        "id": "com_126",
+        "name": "3호선 역세권 기업",
+        "category": "subway"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "278",
+        "name": "성과급/상여금",
+        "category": "welfare"
+      },
+      {
+        "id": "289",
+        "name": "사내 카페",
+        "category": "welfare"
+      }
+    ],
+    "Description": "국내 최고의 경제ㆍ금융정보 미디어인 연합인포맥스가 창의적이고 패기 넘치는 인재를 찾습니다. \r\n경제ㆍ금융 전문 매체를 지향하고 독보적인 금융정보를 기반으로 미디어 융합시대를 선도하는 연합인포맥스에 열정과 패기로 꿈을 펼칠 인재들의 많은 지원을 바랍니다.\n\n• AI 모델 연구/운영: 머신러닝/딥러닝 모델 개발, 배포, 성능 모니터링 및 최적화\r\n• 신규 서비스 개발: AI 기술과 프론트/백엔드를 접목한 신상품 기획 및 프로토타이핑\r\n• 방송 콘텐츠 자동화: AI 음성·영상 생성 및 플랫폼 개발\n\n• AI 개발 스택: Python 기반 머신러닝/딥러닝 (TensorFlow, PyTorch 등) 실무 활용 능력\n• 자연어 처리(NLP) 이해: 텍스트 분류, 요약, 질의응답 등 모델 구현 경험\n• 프론트엔드: React를 활용한 웹 애플리케이션 개발 능력 (TypeScript, Next.js 우대)\n• 클라우드·DevOps: GCP/AWS/Azure 등 클라우드 환경에서의 모델 배포 및 MLOps 경험\n• 데이터 엔지니어링: 대규모 데이터 파이프라인 구성 및 API 설계·운영 경험\n\n* 신입 : 수습기간 6개월, 수습기간 근무성적 우수자 정규직으로 채용\n※공통요건) 해외 여행에 결격사유가 없는 자, 남성의 경우 군필 또는 군면제자(전문연구요원 제외)\n\n\n• AI 기반 비디오 생성·편집 기술 경험\n• 금융 데이터 분석·트레이딩 관련 이해도 및 프로젝트 경험\n• 강화학습(Reinforcement Learning) 및 최적화 알고리즘 연구 경험\n• 데이터 시각화/BI(D3.js, Chart.js 등) 구현 경험\n• 기술 기획 및 신상품 아이디어 도출에 적극적인 분\n• 보훈대상자 우대\n\n■지원금/보험\r\n- 건강검진\r\n- 의료비지원(본인,가족)\r\n- 직원대출제도\r\n- 각종 경조사 지원\r\n- 단체 상해보험\r\n- 체력단련실 운영\r\n- 업무활동비 지급\r\n- 통신비 지원\r\n- 선택적 복리후생\r\n- 자녀학자금\r\n\r\n■급여제도\r\n- 퇴직연금\r\n- 장기근속자 포상\r\n- 우수사원 포상\r\n- 퇴직금\r\n- 성과급\r\n- 야근수당\r\n- 휴일(특근) 수당\r\n- 연차수당\r\n- 4대보험\r\n\r\n■교육/생활\r\n- 구내식당\r\n- 사내동호회 운영\r\n\r\n■근무환경\r\n- 수유실\r\n- 회의실\r\n- 공기청정기\r\n- 카페테리아\r\n- 사원증\r\n- 콘도/리조트 이용권\r\n\r\n■조직문화\r\n- 노조/노사협의회\r\n- 자유복장\r\n\r\n■리프레시\r\n- 연차\r\n- 반차\r\n- 육아휴직\r\n- 보건휴가\r\n- 휴양시설 제공",
+    "RawJSON": "{\"id\":53786260,\"title\":\"IT/AI부문(전문연구요원 포함)신입\",\"companyName\":\"연합인포맥스\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20255024125006227_189_189.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/327076/20252924112955219/profile-image.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/327076/20253024113001368/profile-image.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/327076/20253024113006408/profile-image.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/327076/20253024113013827/profile-image.jpg\",\"sortNumber\":4}],\"techStacks\":[{\"stack\":\"Azure DevOps\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/azuredevops.png\"},{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"},{\"stack\":\"AWS\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/aws.png\"},{\"stack\":\"GCP\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/googlecloudplatform.png\"},{\"stack\":\"AZURE\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/azure.png\"}],\"serviceInfo\":\"국내 최고의 경제ㆍ금융정보 미디어인 연합인포맥스가 창의적이고 패기 넘치는 인재를 찾습니다. \\r\\n경제ㆍ금융 전문 매체를 지향하고 독보적인 금융정보를 기반으로 미디어 융합시대를 선도하는 연합인포맥스에 열정과 패기로 꿈을 펼칠 인재들의 많은 지원을 바랍니다.\",\"responsibility\":\"• AI 모델 연구/운영: 머신러닝/딥러닝 모델 개발, 배포, 성능 모니터링 및 최적화\\r\\n• 신규 서비스 개발: AI 기술과 프론트/백엔드를 접목한 신상품 기획 및 프로토타이핑\\r\\n• 방송 콘텐츠 자동화: AI 음성·영상 생성 및 플랫폼 개발\",\"qualifications\":\"• AI 개발 스택: Python 기반 머신러닝/딥러닝 (TensorFlow, PyTorch 등) 실무 활용 능력\\n• 자연어 처리(NLP) 이해: 텍스트 분류, 요약, 질의응답 등 모델 구현 경험\\n• 프론트엔드: React를 활용한 웹 애플리케이션 개발 능력 (TypeScript, Next.js 우대)\\n• 클라우드·DevOps: GCP/AWS/Azure 등 클라우드 환경에서의 모델 배포 및 MLOps 경험\\n• 데이터 엔지니어링: 대규모 데이터 파이프라인 구성 및 API 설계·운영 경험\\n\\n* 신입 : 수습기간 6개월, 수습기간 근무성적 우수자 정규직으로 채용\\n※공통요건) 해외 여행에 결격사유가 없는 자, 남성의 경우 군필 또는 군면제자(전문연구요원 제외)\\n\",\"preferredRequirements\":\"• AI 기반 비디오 생성·편집 기술 경험\\n• 금융 데이터 분석·트레이딩 관련 이해도 및 프로젝트 경험\\n• 강화학습(Reinforcement Learning) 및 최적화 알고리즘 연구 경험\\n• 데이터 시각화/BI(D3.js, Chart.js 등) 구현 경험\\n• 기술 기획 및 신상품 아이디어 도출에 적극적인 분\\n• 보훈대상자 우대\",\"welfares\":\"■지원금/보험\\r\\n- 건강검진\\r\\n- 의료비지원(본인,가족)\\r\\n- 직원대출제도\\r\\n- 각종 경조사 지원\\r\\n- 단체 상해보험\\r\\n- 체력단련실 운영\\r\\n- 업무활동비 지급\\r\\n- 통신비 지원\\r\\n- 선택적 복리후생\\r\\n- 자녀학자금\\r\\n\\r\\n■급여제도\\r\\n- 퇴직연금\\r\\n- 장기근속자 포상\\r\\n- 우수사원 포상\\r\\n- 퇴직금\\r\\n- 성과급\\r\\n- 야근수당\\r\\n- 휴일(특근) 수당\\r\\n- 연차수당\\r\\n- 4대보험\\r\\n\\r\\n■교육/생활\\r\\n- 구내식당\\r\\n- 사내동호회 운영\\r\\n\\r\\n■근무환경\\r\\n- 수유실\\r\\n- 회의실\\r\\n- 공기청정기\\r\\n- 카페테리아\\r\\n- 사원증\\r\\n- 콘도/리조트 이용권\\r\\n\\r\\n■조직문화\\r\\n- 노조/노사협의회\\r\\n- 자유복장\\r\\n\\r\\n■리프레시\\r\\n- 연차\\r\\n- 반차\\r\\n- 육아휴직\\r\\n- 보건휴가\\r\\n- 휴양시설 제공\",\"recruitProcess\":\"근무조건\\r\\n- 고용형태 : 정규직\\r\\n- 근무시간 : 08:00 ~ 17:00 (주 5일 근무)\\r\\n  ※ 부서에 따라 근무시간이 상이할 수 있습니다.\\r\\n- 급여 : 회사 기준에 따름\\r\\n\\r\\n전형절차 : 서류전형 \u003e 인성검사 및 실무면접 \u003e 임원면접 \u003e 채용검진 \u003e 최종합격\\r\\n- 서류전형 합격자에 한해 면접 일정 등 유선 상으로 개별 통보 예정\\r\\n- 채용 전형 상황에 따라 2차 면접(실기 면접) 등 추가 전형이 생길 수도 있음\\r\\n\\r\\n당사 홈페이지(https://recruit.einfomax.co.kr)\\r\\n\\r\\n. 유의사항\\r\\n- 기재사항이 사실과 다른 것으로 판명될 경우 합격 또는 채용이 취소될 수 있음\\r\\n- 채용 전형 상황에 따라 2차 면접 등 추가 전형이 생길 수도 있음\\r\\n\\r\\n\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-05 00:00:00\",\"closedAt\":\"2026-06-03 23:59:59\",\"location\":\"서울 종로구 율곡로2길25, 10층\",\"tags\":[{\"id\":\"com_156\",\"name\":\"영업이익 20% 지속성장\",\"emoticon\":\"sales\"},{\"id\":\"com_151\",\"name\":\"매출액 500억 기업\",\"emoticon\":\"sales\"},{\"id\":\"291\",\"name\":\"육아휴직\",\"emoticon\":\"welfare\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"com_117\",\"name\":\"연합뉴스 계열사\",\"emoticon\":\"scale\"},{\"id\":\"286\",\"name\":\"프리한 복장\",\"emoticon\":\"welfare\"},{\"id\":\"com_126\",\"name\":\"3호선 역세권 기업\",\"emoticon\":\"subway\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"278\",\"name\":\"성과급/상여금\",\"emoticon\":\"welfare\"},{\"id\":\"289\",\"name\":\"사내 카페\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"1018158798\",\"encodedSerialNumber\":\"MTAxODE1ODc5OA==\",\"companyUrl\":\"https://yonhap.einfomax.co.kr/newinfomax/yonhapinfomax/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":27,\"establishDate\":\"2000년 6월 설립\",\"workingPlaces\":[{\"address\":\"서울 종로구 율곡로2길25, 10층\",\"domestic\":false}],\"jobCategories\":[{\"id\":8,\"name\":\"인공지능/머신러닝\"}],\"invisible\":false,\"manDbMcomIdx\":33854,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-05T00:00:00+09:00",
+    "ClosedAt": "2026-06-03T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53923048",
+    "URL": "https://jumpit.saramin.co.kr/position/53923048",
+    "Title": "AI 개발자",
+    "Company": "테크랩스",
+    "Location": "서울 강남구 강남대로84길13, 5,6,7,8,9층",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "JavaScript",
+      "Python",
+      "PyTorch",
+      "TensorFlow",
+      "TypeScript",
+      "SQL",
+      "CrewAI"
+    ],
+    "Tags": [
+      {
+        "id": "com_151",
+        "name": "매출액 500억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "283",
+        "name": "자유로운 연차",
+        "category": "welfare"
+      },
+      {
+        "id": "284",
+        "name": "패밀리데이",
+        "category": "welfare"
+      },
+      {
+        "id": "289",
+        "name": "사내 카페",
+        "category": "welfare"
+      }
+    ],
+    "Description": "테크랩스 소개\r\nㆍ테크랩스는 헬스케어, 뷰티, 라이프스타일 분야를 아우르는 선도적인 웰니스 플랫폼 기업입니다.\r\nㆍ`매일을 더 아름답고 즐겁게` 만들겠다는 비전 아래, 수년간의 노하우와 기술력을 바탕으로 미용 의료 섹터에 특화된\r\n    원스톱 마케팅서비스를 제공해 왔으며, 국내 1위 운세 서비스인 점신과 같은 라이프스타일 분야에서도 굳건한\r\n    포지셔닝을 해오고 있습니다.\r\n\r\n테크랩스 실적\r\nㆍ25년 실적 : 매출액 923억, 영업이익 73억\r\nㆍ24년 실적 : 매출액 978억, 영업이익 105억\r\nㆍ23년 실적 : 매출액 830억, 영업이익 100억\r\nㆍ22년 실적 : 매출액 619억, 영업이익 54억\r\n\r\n테크랩스 연혁\r\n\r\n​2025\r\nㆍ네이버 공식 프리미어 파트너사 선정\r\nㆍ중소기업 혁신유공자 기술혁신분야 포상 수상\r\n\r\n​2024\r\n​ㆍMeta(메타)와 디지털 마케팅 분야 전략적 파트너십 체결\r\n​ㆍ24년 나이스 기술평가 우수기업 선정(최우수(T-3))\r\nㆍ벤처기업, 경영혁신형 중소기업(MAIN-BIZ), 기술혁신형 중소기업(INNO-BIZ) 인증\r\n\r\n2023년\r\nㆍSSP기업 애드오피 흡수 합병\r\nㆍ23년 서울시 강남구 일자리창출 우수기업 선정\r\nㆍ중소벤처기업부 지정 `글로벌 강소기업 1000+` 선정\r\n\r\n2022년\r\nㆍ아웃스탠딩 선정 \"가장 빠르게 매출이 성장하는 스타트업\" 5위(매출 435%)\r\nㆍ브랜드 엑셀러레이팅 사업 모델 개발 완료\r\nㆍ애드테크기업 메타마케팅 흡수합병\r\nㆍ아이겐코리아 흡수합병\r\nㆍ임팩트AI투자 (2대 주주)\r\n\r\n2021년\r\nㆍ퍼포먼스마케팅 확대 : 모모 성형외과, 다이트한의원 파트너십 체결\r\n\r\n2020년\r\nㆍ퍼포먼스마케팅 확대 : 리팅 성형외과 파트너십 채결\r\nㆍ한다소프트(운세 AI 점신) 인수\r\nㆍ사명변경(넥스트매치 ⇒ 테크랩스)\n\n[R\u0026D 사업부 소개]\r\nㆍ인프라 및 전사 프로그램 개발하며 회사의 핵심 IT 인프라를 구축하고, 안정적으로 운영하는 한편, 전사적으로 사용되는 내부 시스템과 업무 플랫폼을 기획·개발·관리 합니다.\r\nㆍ서버, 네트워크, 클라우드, 보안 등 물리·가상 인프라 전반의 a설계와 운영을 책임지며, 사내 각 부서의 요구사항을 반영하여 데이터 시스템 등 전사 프로그램을 설계하고 지속적으로 고도화합니다.\r\nㆍ업무 자동화, 성능 최적화, 보안 체계 강화 등을 통해 조직 전체의 생산성 향상과 기술 경쟁력 확보에 기여합니다.\r\n\r\n[담당업무]\r\n\r\nㆍ멀티 에이전트 기반 AI 워크플로우 설계 및 운영\r\nㆍLLM 프롬프트 엔지니어링 및 리즈닝 성능 최적화\r\nㆍ상담 데이터 기반 도메인 특화 모델 파인튜닝\r\nㆍ광고·상담·CRM 연계형 AI 자동화 시스템 구축\r\nㆍ작동하는 결과물을 우선 구현하고, 빠른 실험과 검증을 통해 AI 서비스를 지속적으로 고도화\n\nㆍAI를 단순히 활용해본 수준을 넘어, 실제 비즈니스 문제 해결 경험이 있으신 분\nㆍ불확실한 상황에서도 직접 만들고, 빠르게 검증하며, 지속적으로 개선하시는 분\nㆍ300만 건 이상의 데이터를 바탕으로 문제 정의와 실행 방향을 스스로 설계하실 수 있으신 분\nㆍ기술 스택보다 비즈니스 임팩트를 우선적으로 생각하시는 분\n\nㆍ상담·CRM·마케팅 데이터 등 비즈니스 데이터 활용 경험이 있으신 분\nㆍ병원, 의료, 고객상담 자동화 등 유관 도메인에 대한 이해가 있으신 분\n\n[근로조건]\r\nㆍ고용 형태 : 정규직(시용기간: 3개월, 급여 100% 지급, 시용기간 중 평가를 거쳐 본 채용 여부 검토)\r\nㆍ근무요일 및 시간 : 주 5일(월~금) 오전 10시 ~ 오후 7시\r\nㆍ급여조건 : 회사 내규에 따름\r\nㆍ근무지역 : 서울특별시 강남구 강남대로84길 13 (역삼동,KR타워) 5층,6층,7층,8층,9층\r\n\r\n[복리후생]\r\nㆍ자유로운 사내문화: 상호존중, 배려, 자유로운 출퇴근 복장\r\nㆍ자유로운 연차: 연차 외 반차/반반차/시간차 사용 가능\r\nㆍ스낵바\u0026카페테리아 운영: 사내 라운지 카페 사용 가능\r\nㆍ경조휴가 + 경조사비 지원: 생일/결혼/장례 등\r\nㆍ도서 구입비 지원: 월별 업무 유관 도서 구입 지원\r\nㆍ자격증 취득 지원: 업무 유관 자격증 응시료(접수료) 지원\r\nㆍ교통비 지원: 외근/연장근무/출장 시 카카오 T 택시비 지원\r\nㆍ건강검진 지원: 격년마다 30만원 상당의 건강검진 지원\r\nㆍ패밀리 데이 제도: 월 1회 조기 퇴근 제도(※사업부마다 운영방식 차이 존재)",
+    "RawJSON": "{\"id\":53923048,\"title\":\"AI 개발자\",\"companyName\":\"테크랩스\",\"logo\":\"https://cdn.jumpit.co.kr/images/166201/20230309150358010_224_224.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251410141451989/profile-image.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251410141454684/profile-image.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251410141456824/profile-image.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251410141459494/profile-image.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141501443/profile-image.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141503749/profile-image.jpg\",\"sortNumber\":7},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141515613/profile-image.jpg\",\"sortNumber\":8},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141519149/profile-image.jpg\",\"sortNumber\":9},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141522432/profile-image.jpg\",\"sortNumber\":10},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141525245/profile-image.jpg\",\"sortNumber\":11},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/166201/20251510141528140/profile-image.jpg\",\"sortNumber\":12}],\"techStacks\":[{\"stack\":\"JavaScript\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/javascript.png\"},{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"},{\"stack\":\"PyTorch\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/pytorch.png\"},{\"stack\":\"TensorFlow\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/tensorflow.png\"},{\"stack\":\"TypeScript\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/typescript.png\"},{\"stack\":\"SQL\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/sql.png\"},{\"stack\":\"CrewAI\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"테크랩스 소개\\r\\nㆍ테크랩스는 헬스케어, 뷰티, 라이프스타일 분야를 아우르는 선도적인 웰니스 플랫폼 기업입니다.\\r\\nㆍ`매일을 더 아름답고 즐겁게` 만들겠다는 비전 아래, 수년간의 노하우와 기술력을 바탕으로 미용 의료 섹터에 특화된\\r\\n    원스톱 마케팅서비스를 제공해 왔으며, 국내 1위 운세 서비스인 점신과 같은 라이프스타일 분야에서도 굳건한\\r\\n    포지셔닝을 해오고 있습니다.\\r\\n\\r\\n테크랩스 실적\\r\\nㆍ25년 실적 : 매출액 923억, 영업이익 73억\\r\\nㆍ24년 실적 : 매출액 978억, 영업이익 105억\\r\\nㆍ23년 실적 : 매출액 830억, 영업이익 100억\\r\\nㆍ22년 실적 : 매출액 619억, 영업이익 54억\\r\\n\\r\\n테크랩스 연혁\\r\\n\\r\\n​2025\\r\\nㆍ네이버 공식 프리미어 파트너사 선정\\r\\nㆍ중소기업 혁신유공자 기술혁신분야 포상 수상\\r\\n\\r\\n​2024\\r\\n​ㆍMeta(메타)와 디지털 마케팅 분야 전략적 파트너십 체결\\r\\n​ㆍ24년 나이스 기술평가 우수기업 선정(최우수(T-3))\\r\\nㆍ벤처기업, 경영혁신형 중소기업(MAIN-BIZ), 기술혁신형 중소기업(INNO-BIZ) 인증\\r\\n\\r\\n2023년\\r\\nㆍSSP기업 애드오피 흡수 합병\\r\\nㆍ23년 서울시 강남구 일자리창출 우수기업 선정\\r\\nㆍ중소벤처기업부 지정 `글로벌 강소기업 1000+` 선정\\r\\n\\r\\n2022년\\r\\nㆍ아웃스탠딩 선정 \\\"가장 빠르게 매출이 성장하는 스타트업\\\" 5위(매출 435%)\\r\\nㆍ브랜드 엑셀러레이팅 사업 모델 개발 완료\\r\\nㆍ애드테크기업 메타마케팅 흡수합병\\r\\nㆍ아이겐코리아 흡수합병\\r\\nㆍ임팩트AI투자 (2대 주주)\\r\\n\\r\\n2021년\\r\\nㆍ퍼포먼스마케팅 확대 : 모모 성형외과, 다이트한의원 파트너십 체결\\r\\n\\r\\n2020년\\r\\nㆍ퍼포먼스마케팅 확대 : 리팅 성형외과 파트너십 채결\\r\\nㆍ한다소프트(운세 AI 점신) 인수\\r\\nㆍ사명변경(넥스트매치 ⇒ 테크랩스)\",\"responsibility\":\"[R\u0026D 사업부 소개]\\r\\nㆍ인프라 및 전사 프로그램 개발하며 회사의 핵심 IT 인프라를 구축하고, 안정적으로 운영하는 한편, 전사적으로 사용되는 내부 시스템과 업무 플랫폼을 기획·개발·관리 합니다.\\r\\nㆍ서버, 네트워크, 클라우드, 보안 등 물리·가상 인프라 전반의 a설계와 운영을 책임지며, 사내 각 부서의 요구사항을 반영하여 데이터 시스템 등 전사 프로그램을 설계하고 지속적으로 고도화합니다.\\r\\nㆍ업무 자동화, 성능 최적화, 보안 체계 강화 등을 통해 조직 전체의 생산성 향상과 기술 경쟁력 확보에 기여합니다.\\r\\n\\r\\n[담당업무]\\r\\n\\r\\nㆍ멀티 에이전트 기반 AI 워크플로우 설계 및 운영\\r\\nㆍLLM 프롬프트 엔지니어링 및 리즈닝 성능 최적화\\r\\nㆍ상담 데이터 기반 도메인 특화 모델 파인튜닝\\r\\nㆍ광고·상담·CRM 연계형 AI 자동화 시스템 구축\\r\\nㆍ작동하는 결과물을 우선 구현하고, 빠른 실험과 검증을 통해 AI 서비스를 지속적으로 고도화\",\"qualifications\":\"ㆍAI를 단순히 활용해본 수준을 넘어, 실제 비즈니스 문제 해결 경험이 있으신 분\\nㆍ불확실한 상황에서도 직접 만들고, 빠르게 검증하며, 지속적으로 개선하시는 분\\nㆍ300만 건 이상의 데이터를 바탕으로 문제 정의와 실행 방향을 스스로 설계하실 수 있으신 분\\nㆍ기술 스택보다 비즈니스 임팩트를 우선적으로 생각하시는 분\",\"preferredRequirements\":\"ㆍ상담·CRM·마케팅 데이터 등 비즈니스 데이터 활용 경험이 있으신 분\\nㆍ병원, 의료, 고객상담 자동화 등 유관 도메인에 대한 이해가 있으신 분\",\"welfares\":\"[근로조건]\\r\\nㆍ고용 형태 : 정규직(시용기간: 3개월, 급여 100% 지급, 시용기간 중 평가를 거쳐 본 채용 여부 검토)\\r\\nㆍ근무요일 및 시간 : 주 5일(월~금) 오전 10시 ~ 오후 7시\\r\\nㆍ급여조건 : 회사 내규에 따름\\r\\nㆍ근무지역 : 서울특별시 강남구 강남대로84길 13 (역삼동,KR타워) 5층,6층,7층,8층,9층\\r\\n\\r\\n[복리후생]\\r\\nㆍ자유로운 사내문화: 상호존중, 배려, 자유로운 출퇴근 복장\\r\\nㆍ자유로운 연차: 연차 외 반차/반반차/시간차 사용 가능\\r\\nㆍ스낵바\u0026카페테리아 운영: 사내 라운지 카페 사용 가능\\r\\nㆍ경조휴가 + 경조사비 지원: 생일/결혼/장례 등\\r\\nㆍ도서 구입비 지원: 월별 업무 유관 도서 구입 지원\\r\\nㆍ자격증 취득 지원: 업무 유관 자격증 응시료(접수료) 지원\\r\\nㆍ교통비 지원: 외근/연장근무/출장 시 카카오 T 택시비 지원\\r\\nㆍ건강검진 지원: 격년마다 30만원 상당의 건강검진 지원\\r\\nㆍ패밀리 데이 제도: 월 1회 조기 퇴근 제도(※사업부마다 운영방식 차이 존재)\",\"recruitProcess\":\"[채용절차 및 제출 서류]\\r\\n• 전반적인 채용 절차는 아래와 같습니다.\\r\\n• 채용 절차 : 서류 전형(온라인 접수) -\u003e 실무자 면접(대면) -\u003e 최종합격\\r\\n- 포지션과 상황에 따라 실무과제 및 임원 면접이 추가될 수 있습니다.\\r\\n\\r\\n1. 서류전형(온라인 접수)\\r\\n• 제출 서류 : 이력서 및 경력기술서, 포트폴리오, 자기소개서\\r\\n\\r\\n1) 이력서(필수) 및 경력기술서(선택) \\r\\n: 자유 양식(인적사항, 경력 등)\\r\\n2) 포트폴리오(대상자에 한함 / PDF로 제출) \\r\\n: 자유양식(프로젝트 / 참여율 표기)\\r\\n3) 자기소개서(선택) \\r\\n: 자유 양식\\r\\n\\r\\n2. 실무자 면접(대면)\\r\\n\\r\\n• 현업 사업부의 실무 담당자 검토 후 결과에 따라 합격자에 한해서 1차 면접 제안을 드립니다.\\r\\n• 테크랩스와 지원자가 서로에 대해 알아가는 시간을 가집니다.\\r\\n• 소속 사업부의 실무자분들과 직무 역량에 대한 이야기를 나누기 위해 경험/기술과 관련된 질문을 드립니다.\\r\\n• 면접 이후 10~15분 정도 채용 담당자와 이야기를 나누는 시간을 가질 예정입니다.\\r\\n\\r\\n3. 최종합격\\r\\n\\r\\n• 최종 면접 합격 이후 개별적으로 인사팀에서 처우 안내 및 제안을 드립니다.\\r\\n• 제안 수락 및 처우가 확정이 되면 오퍼레터 발송과 입사 안내를 진행하게 됩니다.\\r\\n\\r\\n[기타 참고 사항]\\r\\n​ㆍ면접 일정은 서류 합격자에 한해 개별 연락 드립니다.\\r\\n​ㆍ채용 전형 절차는 포지션 및 상황에 따라 변동 될 수 있으니 참고 부탁 드립니다.\\r\\n​ㆍ입사지원 서류에 허위 사실이 발견되면, 채용 확정 이후에도 입사가 취소될 수 있습니다. \\r\\n​ㆍ입사 시 추가 서류 제출이 필요할 수 있습니다.\\r\\nㆍ본 채용은 3개월의 시용기간을 거쳐 진행되며, 시용기간 종료 시 평가 결과에 따라 채용 여부가 결정됩니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-18 00:00:00\",\"closedAt\":\"2026-06-16 23:59:59\",\"location\":\"서울 강남구 강남대로84길13, 5,6,7,8,9층\",\"tags\":[{\"id\":\"com_151\",\"name\":\"매출액 500억 기업\",\"emoticon\":\"sales\"},{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"283\",\"name\":\"자유로운 연차\",\"emoticon\":\"welfare\"},{\"id\":\"284\",\"name\":\"패밀리데이\",\"emoticon\":\"welfare\"},{\"id\":\"289\",\"name\":\"사내 카페\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"1448115705\",\"encodedSerialNumber\":\"MTQ0ODExNTcwNQ==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":14,\"establishDate\":\"2013년 7월 설립\",\"workingPlaces\":[{\"address\":\"서울 강남구 강남대로84길13, 5,6,7,8,9층\",\"domestic\":false}],\"jobCategories\":[{\"id\":1,\"name\":\"서버/백엔드 개발자\"},{\"id\":8,\"name\":\"인공지능/머신러닝\"},{\"id\":19,\"name\":\"빅데이터 엔지니어\"}],\"invisible\":false,\"manDbMcomIdx\":8007957,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-18T00:00:00+09:00",
+    "ClosedAt": "2026-06-16T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53816258",
+    "URL": "https://jumpit.saramin.co.kr/position/53816258",
+    "Title": "HR AI 서비스 기획자 (신입)",
+    "Company": "무하유",
+    "Location": "서울 성동구 성수일로8길5, 에이동 201호, 202호, 203호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "Confluence",
+      "Figma",
+      "Jira",
+      "AI/인공지능",
+      "OneSaas"
+    ],
+    "Tags": [
+      {
+        "id": "com_152",
+        "name": "매출액 100억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "291",
+        "name": "육아휴직",
+        "category": "welfare"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "286",
+        "name": "프리한 복장",
+        "category": "welfare"
+      },
+      {
+        "id": "com_126",
+        "name": "2호선 역세권 기업",
+        "category": "subway"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "277",
+        "name": "워라밸",
+        "category": "welfare"
+      },
+      {
+        "id": "com_157",
+        "name": "영업이익 150% 급성장",
+        "category": "sales"
+      }
+    ],
+    "Description": "무하유는 표절 검사 서비스인 `카피킬러`를 시작으로 실용 AI가 적용된 서비스를 시장에 공급해 온 국내 대표 인공지능 기업입니다. \r\n\r\n“자연어를 이해하는 AI 기술 기업\"이라는 비전 아래 사람만이 할 수 있는 본질적인 업무에 집중할 수 있도록 그 밖의 업무를 대신할 수 있는 기술과 서비스를 개발하고자 합니다. '서류검토'가 필요한 AI 채용 시장의 가능성을 발견하여 AI 서류 검토 서비스에서 AI 면접 서비스까지 사업의 영역을 확장하고 있습니다. 또한 우수한 기술력과 구성원들의 노력을 바탕으로 2024년도 AI 기술적용 서비스 실사용수 1,163만명, 서비스 도입 고객사 수는 3,485개를 돌파하였고, 당기순이익은 전년대비 37% 성장을 이뤄낼 수 있었습니다.\r\n\r\n이러한 지속적인 성장의 결과물로, 2023년 10월, 150억원의 프리 IPO 투자유치에 성공하였고, 2026년 상반기 코스닥 상장을 목표로 전력을 다해 달려나가고 있는 상황에서 폭발적인 무하유의 성장과 사업의 성과에 큰 힘을 보태주실 열정적인 분들을 찾고 있습니다. 무하유에서 더 나은 서비스와 제품을 함께 만들어가고자 하는 목적을 가지신 분들은 모두 합류해주세요!\r\n\r\n서비스소개\r\n- 100억건 이상의 데이터베이스로 빠르고 정확하게 대한민국 1위 표절검사 서비스‘카피킬러’ \u0026 \r\n  AI가 쓴 글을 베끼는 것도 찾아내는 AI 표절검사 서비스 “ GPT 킬러\r\n- 글자 단위로 1:1 비교가 필요한 모든 문서를 검사 가능한 서비스 \"카피킬러 DIFF\"\r\n-  표이미지 표절검사도 역시, 카피킬러 서비스 \"비주얼체커\" \r\n- AI 채용서류 평가 서비스”프리즘” \u0026 국내 유일 대화형 면접 서비스”몬스터”\r\n- AI기반 취업 지원 올인원 서비스 “CK PASS' \u0026 대입 면접 지원 올인원 서비스 “몬스터 T” \r\n-대입 자소서, 학생부의 공정성을 위한 자동 가림 솔루션 ‘블라인드 체커’\r\n\r\n\r\n* 어떤 팀에서 함께하게 되나요?\r\n제품2유닛은 무하유의 HR 서비스 '프리즘 x 몬스터'의 서비스 성장을 담당하는 유닛입니다.\r\n채용 시장의 트렌드와 기업·지원자의 니즈를 분석해 HR 분야의 AX 혁신을 추진하고 있습니다.\r\nAI 시대에 걸맞은 새로운 평가 패러다임을 선도할 전략을 수립하고 있습니다.\r\n유닛원 모두 PM으로서 HR 연구 유닛 및 서비스 개발 유닛과 긴밀하게 협업하며 프로젝트를 주도합니다.\r\n이용 데이터와 사용자 피드백을 바탕으로 서비스 품질을 고도화하고, 채용 시장에서 독보적인 경쟁력을 갖춘 기업으로 성장하고자 합니다.\r\n이렇게 일하고 있어요\r\nAI 면접, AI 서류평가, 역량검사, 구술평가 등 AI에 기반한 HR 서비스를 기획하고 개발합니다.\r\nAX 시대의 새로운 평가 패러다임을 향해 HR 서비스를 지속적으로 고도화 합니다.\r\n유닛원 모두 PM으로서 다양한 유닛 간 이해관계를 조율하며, 회사의 비전과 미션을 함께 실현해 나가고 있습니다.\r\n\r\n* 이런 고민을 하고 함께 해결하고 싶어요!\r\nAX 기반의 서비스 운영 : 제품2유닛은 현재 HR 서비스의 핵심 기능에 대한 정책과 개발 프로세스를 고도화 하고 있습니다. \r\n빠르게 진화하는 서비스만큼, 정책 문서와 운영 기반도 탄탄하게 정비해야 합니다. \r\n중요하지만 지금 당장 손을 뻗기 어려웠던 이 영역에 집중해, HR 서비스 개발의 업무 효율을 한 단계 올려줄 분이 필요합니다.\r\n\r\nAI 기반 정책 업무 효율화 : 단순히 문서를 '관리'하는 것을 넘어, AX 관점에서 정책 업무 전반을 더 빠르고 정확하게 처리할 수 있는 구조를 만들고 싶습니다. \r\n이 기반을 함께 설계하고 구축해갈 분을 찾습니다.\r\n\r\n운영 문서의 체계화 : 기획서, 가이드라인, 운영 매뉴얼 등을 최신화하여 팀의 업무 효율을 높이는 기반을 만듭니다.\r\n\r\n데이터 인사이트 도출 : 운영 과정에서 발생하는 데이터를 분석하여 서비스 품질 고도화 방향을 제안합니다.\r\n\r\n* 입사 후 이렇게 성장할 수 있습니다.\r\n정책 설계 역량 : 단순 문서 관리를 넘어, HR 서비스의 정책 구조 전체를 이해하고 설계하는 역량을 쌓을 수 있습니다. \r\n정책이 서비스 품질과 운영 효율에 어떻게 연결되는지 직접 체감할 수 있습니다.\r\n\r\nAI 업무 효율화 전문가 : 생성형 AI를 실무에 깊게 적용하면서, 단순 활용을 넘어 '업무 자체를 재설계하는' 수준의 AI 리터러시를 갖출 수 있습니다. \r\n이 경험은 어떤 조직에서도 희소한 역량이 됩니다.\r\n\r\n정규직 전환의 기회 : 1년간의 실무 성과와 조직 적합도 검토를 통해, 제품의 성장 구조를 설계하는 정규 PM으로 전환될 기회를 갖습니다.\n\n• 서비스 운영 및 장애 대응 : 서비스 모니터링 및 이슈 발생 시 즉각적인 대응과 유관 부서 커뮤니케이션을 수행합니다.\r\n• 운영 문서 자산화 : 기획서, 정책서, 가이드라인 등 서비스 관련 각종 문서를 관리하고 최신 상태로 유지합니다.\r\n• 기획 지원 및 AI 업무 효율화 : 신규 기능 기획을 보조하며, AI 툴을 활용해 운영 프로세스를 개선하고 효율화하는 작업을 병행합니다.\r\n• 시장 및 지표 분석 : 시장 트렌드 분석과 서비스 지표 모니터링을 통해 개선안 도출을 위한 기초 자료를 마련합니다.\n\n• AI 리터러시가 높은 분 (필수) : 생성형 AI 등을 실무에 능동적으로 적용하며, 반복 업무를 줄이고 더 나은 방식을 스스로 찾아가는 분. \n※ 최신 AI 트렌드에 관심이 높고, 새로운 툴이나 기능을 빠르게 파악해 실무에 적용하거나 \n   실질적인 성과로 연결해 본 경험이 있는 분이라면 더욱 환영합니다.\n• 구조화에 강한 분 : 흩어져 있는 정보를 명확한 체계로 정리하고, 복잡한 내용을 논리적으로 문서화하는 데 강점이 있는 분\n• 완성에 집착하는 분 : 시작한 일을 끝까지 마무리하고, 결과물의 완성도를 높이는 데서 성취감을 느끼는 분\n• 유연한 커뮤니케이터 : 다양한 구성원과 협력하며 명확한 소통으로 프로젝트를 지원할 수 있는 분\n\n• IT 서비스 운영 및 기획에 대한 기초 지식이 있으신 분\n• 생성형 AI 툴(ChatGPT, Claude 등)을 실무나 프로젝트에 적극적으로 활용해 본 경험\n• IT 서비스 기획 또는 운영 관련 인턴/실무 경험이 있으신 분\n• Jira, Confluence, Figma 등 협업 및 프로토타이핑 툴 활용이 능숙하신 분\n• SaaS 또는 플랫폼 서비스의 운영 프로세스를 경험해 보신 분\n• 사내 위키, Confluence, Notion 등을 활용한 문서 체계 구축 또는 정보 아키텍처 설계 경험\n• 정책·프로세스 문서 작성 또는 운영 매뉴얼 구조화 경험\n\n• 지원금/보험 : 건강검진, 각종 경조사 지원\r\n• 급여제도 : 퇴직연금, 인센티브제, 장기근속자 포상, 우수사원포상, 퇴직금, 4대 보험\r\n• 선물 : 명절선물/귀향비, 생일선물/파티\r\n• 교육/생활 : 창립일행사, 우수사원시상식, 워크샵, 플레이샵, 신규 입사자 교육(OJT), 도서구입비지원, 교육비 지원, \r\n              점심식사 제공, 저녁식사 제공, 음료제공(차,커피)\r\n• 근무 환경 : 휴게실, 회의실, 공기청정기, 게임기, 장애인 화장실, 장애인 전용주차장, 문턱 없음, 사무용품 지급, 안마실/안마의자\r\n• 조직문화 : 회식강요 안함, 야근강요 안함, 자유복장\r\n• 출퇴근 : 야간교통비지급\r\n• 리프레시 : 연차, 경조휴가제, 반차, 근로자의날 휴무, 산전 후 휴가, 육아휴직, 남성출산휴가\r\n",
+    "RawJSON": "{\"id\":53816258,\"title\":\"HR AI 서비스 기획자 (신입)\",\"companyName\":\"무하유\",\"logo\":\"https://cdn.jumpit.co.kr/images/3896/20231101171121343_180_180.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_3896/20215520145527459_4032_3024.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_3896/20221314161332691_992_739.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_3896/20215520145543292_4032_3024.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_3896/20215520145556936_2560_1920.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_3896/20225714155700369_3656_2781.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_3896/20225714155708938_4032_3024.jpg\",\"sortNumber\":7},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/3896/20222013122022459_4032_3024.jpg\",\"sortNumber\":8}],\"techStacks\":[{\"stack\":\"Confluence\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/confluence.png\"},{\"stack\":\"Figma\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/figma.png\"},{\"stack\":\"Jira\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/jira.png\"},{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"OneSaas\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"무하유는 표절 검사 서비스인 `카피킬러`를 시작으로 실용 AI가 적용된 서비스를 시장에 공급해 온 국내 대표 인공지능 기업입니다. \\r\\n\\r\\n“자연어를 이해하는 AI 기술 기업\\\"이라는 비전 아래 사람만이 할 수 있는 본질적인 업무에 집중할 수 있도록 그 밖의 업무를 대신할 수 있는 기술과 서비스를 개발하고자 합니다. '서류검토'가 필요한 AI 채용 시장의 가능성을 발견하여 AI 서류 검토 서비스에서 AI 면접 서비스까지 사업의 영역을 확장하고 있습니다. 또한 우수한 기술력과 구성원들의 노력을 바탕으로 2024년도 AI 기술적용 서비스 실사용수 1,163만명, 서비스 도입 고객사 수는 3,485개를 돌파하였고, 당기순이익은 전년대비 37% 성장을 이뤄낼 수 있었습니다.\\r\\n\\r\\n이러한 지속적인 성장의 결과물로, 2023년 10월, 150억원의 프리 IPO 투자유치에 성공하였고, 2026년 상반기 코스닥 상장을 목표로 전력을 다해 달려나가고 있는 상황에서 폭발적인 무하유의 성장과 사업의 성과에 큰 힘을 보태주실 열정적인 분들을 찾고 있습니다. 무하유에서 더 나은 서비스와 제품을 함께 만들어가고자 하는 목적을 가지신 분들은 모두 합류해주세요!\\r\\n\\r\\n서비스소개\\r\\n- 100억건 이상의 데이터베이스로 빠르고 정확하게 대한민국 1위 표절검사 서비스‘카피킬러’ \u0026 \\r\\n  AI가 쓴 글을 베끼는 것도 찾아내는 AI 표절검사 서비스 “ GPT 킬러\\r\\n- 글자 단위로 1:1 비교가 필요한 모든 문서를 검사 가능한 서비스 \\\"카피킬러 DIFF\\\"\\r\\n-  표이미지 표절검사도 역시, 카피킬러 서비스 \\\"비주얼체커\\\" \\r\\n- AI 채용서류 평가 서비스”프리즘” \u0026 국내 유일 대화형 면접 서비스”몬스터”\\r\\n- AI기반 취업 지원 올인원 서비스 “CK PASS' \u0026 대입 면접 지원 올인원 서비스 “몬스터 T” \\r\\n-대입 자소서, 학생부의 공정성을 위한 자동 가림 솔루션 ‘블라인드 체커’\\r\\n\\r\\n\\r\\n* 어떤 팀에서 함께하게 되나요?\\r\\n제품2유닛은 무하유의 HR 서비스 '프리즘 x 몬스터'의 서비스 성장을 담당하는 유닛입니다.\\r\\n채용 시장의 트렌드와 기업·지원자의 니즈를 분석해 HR 분야의 AX 혁신을 추진하고 있습니다.\\r\\nAI 시대에 걸맞은 새로운 평가 패러다임을 선도할 전략을 수립하고 있습니다.\\r\\n유닛원 모두 PM으로서 HR 연구 유닛 및 서비스 개발 유닛과 긴밀하게 협업하며 프로젝트를 주도합니다.\\r\\n이용 데이터와 사용자 피드백을 바탕으로 서비스 품질을 고도화하고, 채용 시장에서 독보적인 경쟁력을 갖춘 기업으로 성장하고자 합니다.\\r\\n이렇게 일하고 있어요\\r\\nAI 면접, AI 서류평가, 역량검사, 구술평가 등 AI에 기반한 HR 서비스를 기획하고 개발합니다.\\r\\nAX 시대의 새로운 평가 패러다임을 향해 HR 서비스를 지속적으로 고도화 합니다.\\r\\n유닛원 모두 PM으로서 다양한 유닛 간 이해관계를 조율하며, 회사의 비전과 미션을 함께 실현해 나가고 있습니다.\\r\\n\\r\\n* 이런 고민을 하고 함께 해결하고 싶어요!\\r\\nAX 기반의 서비스 운영 : 제품2유닛은 현재 HR 서비스의 핵심 기능에 대한 정책과 개발 프로세스를 고도화 하고 있습니다. \\r\\n빠르게 진화하는 서비스만큼, 정책 문서와 운영 기반도 탄탄하게 정비해야 합니다. \\r\\n중요하지만 지금 당장 손을 뻗기 어려웠던 이 영역에 집중해, HR 서비스 개발의 업무 효율을 한 단계 올려줄 분이 필요합니다.\\r\\n\\r\\nAI 기반 정책 업무 효율화 : 단순히 문서를 '관리'하는 것을 넘어, AX 관점에서 정책 업무 전반을 더 빠르고 정확하게 처리할 수 있는 구조를 만들고 싶습니다. \\r\\n이 기반을 함께 설계하고 구축해갈 분을 찾습니다.\\r\\n\\r\\n운영 문서의 체계화 : 기획서, 가이드라인, 운영 매뉴얼 등을 최신화하여 팀의 업무 효율을 높이는 기반을 만듭니다.\\r\\n\\r\\n데이터 인사이트 도출 : 운영 과정에서 발생하는 데이터를 분석하여 서비스 품질 고도화 방향을 제안합니다.\\r\\n\\r\\n* 입사 후 이렇게 성장할 수 있습니다.\\r\\n정책 설계 역량 : 단순 문서 관리를 넘어, HR 서비스의 정책 구조 전체를 이해하고 설계하는 역량을 쌓을 수 있습니다. \\r\\n정책이 서비스 품질과 운영 효율에 어떻게 연결되는지 직접 체감할 수 있습니다.\\r\\n\\r\\nAI 업무 효율화 전문가 : 생성형 AI를 실무에 깊게 적용하면서, 단순 활용을 넘어 '업무 자체를 재설계하는' 수준의 AI 리터러시를 갖출 수 있습니다. \\r\\n이 경험은 어떤 조직에서도 희소한 역량이 됩니다.\\r\\n\\r\\n정규직 전환의 기회 : 1년간의 실무 성과와 조직 적합도 검토를 통해, 제품의 성장 구조를 설계하는 정규 PM으로 전환될 기회를 갖습니다.\",\"responsibility\":\"• 서비스 운영 및 장애 대응 : 서비스 모니터링 및 이슈 발생 시 즉각적인 대응과 유관 부서 커뮤니케이션을 수행합니다.\\r\\n• 운영 문서 자산화 : 기획서, 정책서, 가이드라인 등 서비스 관련 각종 문서를 관리하고 최신 상태로 유지합니다.\\r\\n• 기획 지원 및 AI 업무 효율화 : 신규 기능 기획을 보조하며, AI 툴을 활용해 운영 프로세스를 개선하고 효율화하는 작업을 병행합니다.\\r\\n• 시장 및 지표 분석 : 시장 트렌드 분석과 서비스 지표 모니터링을 통해 개선안 도출을 위한 기초 자료를 마련합니다.\",\"qualifications\":\"• AI 리터러시가 높은 분 (필수) : 생성형 AI 등을 실무에 능동적으로 적용하며, 반복 업무를 줄이고 더 나은 방식을 스스로 찾아가는 분. \\n※ 최신 AI 트렌드에 관심이 높고, 새로운 툴이나 기능을 빠르게 파악해 실무에 적용하거나 \\n   실질적인 성과로 연결해 본 경험이 있는 분이라면 더욱 환영합니다.\\n• 구조화에 강한 분 : 흩어져 있는 정보를 명확한 체계로 정리하고, 복잡한 내용을 논리적으로 문서화하는 데 강점이 있는 분\\n• 완성에 집착하는 분 : 시작한 일을 끝까지 마무리하고, 결과물의 완성도를 높이는 데서 성취감을 느끼는 분\\n• 유연한 커뮤니케이터 : 다양한 구성원과 협력하며 명확한 소통으로 프로젝트를 지원할 수 있는 분\",\"preferredRequirements\":\"• IT 서비스 운영 및 기획에 대한 기초 지식이 있으신 분\\n• 생성형 AI 툴(ChatGPT, Claude 등)을 실무나 프로젝트에 적극적으로 활용해 본 경험\\n• IT 서비스 기획 또는 운영 관련 인턴/실무 경험이 있으신 분\\n• Jira, Confluence, Figma 등 협업 및 프로토타이핑 툴 활용이 능숙하신 분\\n• SaaS 또는 플랫폼 서비스의 운영 프로세스를 경험해 보신 분\\n• 사내 위키, Confluence, Notion 등을 활용한 문서 체계 구축 또는 정보 아키텍처 설계 경험\\n• 정책·프로세스 문서 작성 또는 운영 매뉴얼 구조화 경험\",\"welfares\":\"• 지원금/보험 : 건강검진, 각종 경조사 지원\\r\\n• 급여제도 : 퇴직연금, 인센티브제, 장기근속자 포상, 우수사원포상, 퇴직금, 4대 보험\\r\\n• 선물 : 명절선물/귀향비, 생일선물/파티\\r\\n• 교육/생활 : 창립일행사, 우수사원시상식, 워크샵, 플레이샵, 신규 입사자 교육(OJT), 도서구입비지원, 교육비 지원, \\r\\n              점심식사 제공, 저녁식사 제공, 음료제공(차,커피)\\r\\n• 근무 환경 : 휴게실, 회의실, 공기청정기, 게임기, 장애인 화장실, 장애인 전용주차장, 문턱 없음, 사무용품 지급, 안마실/안마의자\\r\\n• 조직문화 : 회식강요 안함, 야근강요 안함, 자유복장\\r\\n• 출퇴근 : 야간교통비지급\\r\\n• 리프레시 : 연차, 경조휴가제, 반차, 근로자의날 휴무, 산전 후 휴가, 육아휴직, 남성출산휴가\\r\\n\",\"recruitProcess\":\"근무조건\\r\\n• 고용형태 : 계약직(1년 이후 정규직 전환 가능)\\r\\n• 급여 : 면접 후 결정\\r\\n• 근무지 : 서울 성동구 성수일로8길 5 서울숲 SK V1 TOWER A동 2층\\r\\n• 근무요일/시간 : 주 5일(월~금) 09:00~18:00\\r\\n\\r\\n채용절차\\r\\n• 제출서류 : 자유양식 이력서\\r\\n• 접수방법 : 사람인 입사지원\\r\\n• 전형절차 : 서류제출 → AI대화형면접(몬스터) → 1차 면접 → 2차 면접 → 최종합격\\r\\n\\r\\n유의사항\\r\\n• 입사지원 서류에 허위사실이 발견될 경우, 채용확정 이후라도 채용이 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[{\"id\":230,\"title\":\"'무하유'의 기술블로그를 소개합니다\",\"link\":\"https://blog.naver.com/muhayuin/\",\"imagePath\":\"https://cdn.jumpit.co.kr/jumpit/position/blog.png\",\"category\":\"blog\",\"classification\":\"OUTSIDE\",\"publish\":true,\"memo\":\"마이그레이션 데이터\"}],\"publishedAt\":\"2026-05-07 00:00:00\",\"closedAt\":\"2026-06-05 23:59:59\",\"location\":\"서울 성동구 성수일로8길5, 에이동 201호, 202호, 203호\",\"tags\":[{\"id\":\"com_152\",\"name\":\"매출액 100억 기업\",\"emoticon\":\"sales\"},{\"id\":\"291\",\"name\":\"육아휴직\",\"emoticon\":\"welfare\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"286\",\"name\":\"프리한 복장\",\"emoticon\":\"welfare\"},{\"id\":\"com_126\",\"name\":\"2호선 역세권 기업\",\"emoticon\":\"subway\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"277\",\"name\":\"워라밸\",\"emoticon\":\"welfare\"},{\"id\":\"com_157\",\"name\":\"영업이익 150% 급성장\",\"emoticon\":\"sales\"}],\"serialNumber\":\"2068655577\",\"encodedSerialNumber\":\"MjA2ODY1NTU3Nw==\",\"companyUrl\":\"http://www.muhayu.com/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":16,\"establishDate\":\"2011년 7월 설립\",\"workingPlaces\":[{\"address\":\"서울 성동구 성수일로8길5, 에이동 201호, 202호, 203호\",\"domestic\":true}],\"jobCategories\":[{\"id\":8,\"name\":\"인공지능/머신러닝\"}],\"invisible\":false,\"manDbMcomIdx\":8014031,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-07T00:00:00+09:00",
+    "ClosedAt": "2026-06-05T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53776048",
+    "URL": "https://jumpit.saramin.co.kr/position/53776048",
+    "Title": "모바일 앱 개발자(신입)",
+    "Company": "지그키",
+    "Location": "경기 고양시 덕양구 향동로128, 411, 412호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 7,
+    "EducationName": "대학졸업(2,3년) 이상",
+    "StackTags": [
+      "Android OS",
+      "Flutter",
+      "iOS",
+      "Kotlin",
+      "React Native"
+    ],
+    "Tags": [
+      {
+        "id": "283",
+        "name": "자유로운 연차",
+        "category": "welfare"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      }
+    ],
+    "Description": "　\n\n· 자체 쇼핑몰 모바일 앱(iOS/Android) 신규 개발 및 유지보수\r\n· 앱 내 결제, 상품, 주문, 리뷰 등 주요 기능 개발 및 개선\r\n· 백엔드 API 연동 및 UI/UX 최적화\n\n· 학력 무관 (컴퓨터공학 또는 관련 전공 우대)\n· React Native, Flutter, Swift, Kotlin 등 모바일 프레임워크 중 1개 이상 숙련자\n· RESTful API, Git, Firebase 등 실무 활용 가능자\n· 원활한 커뮤니케이션과 적극적인 문제 해결 능력 보유\n\n· 전자상거래(Commerce) 플랫폼 또는 쇼핑몰 앱 개발 경험\n· UI/UX에 대한 높은 이해도 및 디자인 감각\n\n· 중식 제공\r\n· 자유로운 연차사용",
+    "RawJSON": "{\"id\":53776048,\"title\":\"모바일 앱 개발자(신입)\",\"companyName\":\"지그키\",\"logo\":\"https://cdn.jumpit.co.kr/images/gwangmin_200421/20252028092028785_216_74.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/gwangmin_200421/20253228093251726_840_592.png\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/gwangmin_200421/20253228093254859_590_590.png\",\"sortNumber\":2}],\"techStacks\":[{\"stack\":\"Android OS\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/androidos.png\"},{\"stack\":\"Flutter\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/flutter.png\"},{\"stack\":\"iOS\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/ios.png\"},{\"stack\":\"Kotlin\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/kotlin.png\"},{\"stack\":\"React Native\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/reactnative.png\"}],\"serviceInfo\":\"　\",\"responsibility\":\"· 자체 쇼핑몰 모바일 앱(iOS/Android) 신규 개발 및 유지보수\\r\\n· 앱 내 결제, 상품, 주문, 리뷰 등 주요 기능 개발 및 개선\\r\\n· 백엔드 API 연동 및 UI/UX 최적화\",\"qualifications\":\"· 학력 무관 (컴퓨터공학 또는 관련 전공 우대)\\n· React Native, Flutter, Swift, Kotlin 등 모바일 프레임워크 중 1개 이상 숙련자\\n· RESTful API, Git, Firebase 등 실무 활용 가능자\\n· 원활한 커뮤니케이션과 적극적인 문제 해결 능력 보유\",\"preferredRequirements\":\"· 전자상거래(Commerce) 플랫폼 또는 쇼핑몰 앱 개발 경험\\n· UI/UX에 대한 높은 이해도 및 디자인 감각\",\"welfares\":\"· 중식 제공\\r\\n· 자유로운 연차사용\",\"recruitProcess\":\"· 서류전형 -\u003e 1차 면접 -\u003e 최종합격\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-04-30 00:00:00\",\"closedAt\":\"2026-05-29 23:59:59\",\"location\":\"경기 고양시 덕양구 향동로128, 411, 412호\",\"tags\":[{\"id\":\"283\",\"name\":\"자유로운 연차\",\"emoticon\":\"welfare\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"8532201031\",\"encodedSerialNumber\":\"ODUzMjIwMTAzMQ==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":7,\"educationName\":\"대학졸업(2,3년) 이상\",\"graduate\":false,\"establishPeriod\":0,\"establishDate\":\"-\",\"workingPlaces\":[{\"address\":\"경기 고양시 덕양구 향동로128, 411, 412호\",\"domestic\":false}],\"jobCategories\":[],\"invisible\":false,\"manDbMcomIdx\":8489140,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-04-30T00:00:00+09:00",
+    "ClosedAt": "2026-05-29T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53718113",
+    "URL": "https://jumpit.saramin.co.kr/position/53718113",
+    "Title": "로봇/로보틱스 S/W 엔지니어 신입 모집",
+    "Company": "테솔로",
+    "Location": "인천 연수구 컨벤시아대로165, 26층 브이454",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "C#",
+      "C++",
+      "Python"
+    ],
+    "Tags": [
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "283",
+        "name": "자유로운 연차",
+        "category": "welfare"
+      },
+      {
+        "id": "284",
+        "name": "패밀리데이",
+        "category": "welfare"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "com_113",
+        "name": "시리즈A 투자유치",
+        "category": "invest"
+      }
+    ],
+    "Description": "테솔로는 세계최고 수준의 로봇 손기술로 자동화 산업의 미래를 새롭게 그려가며 혁신을 이끄는 스타트업입니다.\r\n우리는 첨단기술과 창의적인 사고로 자동화 산업의 무한한 가능성을 확정하고 있습니다.\r\n함께 성장하며 미래를 창조할 혁신적인 인재를 찾고 있습니다.\n\n그리퍼 제어 알고리즘 개발\r\n협동 / 산업용 로봇 티칭\r\n로봇 통합 시스템 개발\n\n대졸(예정자) 이상\n공학 계열 우대\nC++ , C# / Python 등 개발 경럭 ( 경험)\n\n남성의 경우 병역필 또는 면제자로 해외여행에 결격사유가 없는자\n국내/외 대학(원) 기졸업자 또는 졸업 예정자\n\n로봇동아리, 로봇 연구실 외 로봇 관련 경험이 있으신분 \n비전 카메라를 사용한 경험 ( 업무 경험)\n운전면허 소유자 ( 출장 대응이 필요할 수 있음)\n\n자기계발 - 업무 관련 도서구입비 무제한 지원\r\n삭시\u0026간식 제공 - 점심 제공 / 야근시 식사 제공 , 간식 음료 무제한 제공\r\n근무환경 - 휴게실, 노트북, 사원증, 회의실, 커피머신, 자율복장\r\n리프레시 - 자유로운 휴가, 패밀리데이\r\n생일자 조기 퇴근\r\n조직문화 - 오픈마인드로 수평적인 조직문화",
+    "RawJSON": "{\"id\":53718113,\"title\":\"로봇/로보틱스 S/W 엔지니어 신입 모집\",\"companyName\":\"테솔로\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20263624103646140_189_189.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20235525085517619_979_693.png\",\"sortNumber\":1}],\"techStacks\":[{\"stack\":\"C#\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CSharp.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"}],\"serviceInfo\":\"테솔로는 세계최고 수준의 로봇 손기술로 자동화 산업의 미래를 새롭게 그려가며 혁신을 이끄는 스타트업입니다.\\r\\n우리는 첨단기술과 창의적인 사고로 자동화 산업의 무한한 가능성을 확정하고 있습니다.\\r\\n함께 성장하며 미래를 창조할 혁신적인 인재를 찾고 있습니다.\",\"responsibility\":\"그리퍼 제어 알고리즘 개발\\r\\n협동 / 산업용 로봇 티칭\\r\\n로봇 통합 시스템 개발\",\"qualifications\":\"대졸(예정자) 이상\\n공학 계열 우대\\nC++ , C# / Python 등 개발 경럭 ( 경험)\\n\\n남성의 경우 병역필 또는 면제자로 해외여행에 결격사유가 없는자\\n국내/외 대학(원) 기졸업자 또는 졸업 예정자\",\"preferredRequirements\":\"로봇동아리, 로봇 연구실 외 로봇 관련 경험이 있으신분 \\n비전 카메라를 사용한 경험 ( 업무 경험)\\n운전면허 소유자 ( 출장 대응이 필요할 수 있음)\",\"welfares\":\"자기계발 - 업무 관련 도서구입비 무제한 지원\\r\\n삭시\u0026간식 제공 - 점심 제공 / 야근시 식사 제공 , 간식 음료 무제한 제공\\r\\n근무환경 - 휴게실, 노트북, 사원증, 회의실, 커피머신, 자율복장\\r\\n리프레시 - 자유로운 휴가, 패밀리데이\\r\\n생일자 조기 퇴근\\r\\n조직문화 - 오픈마인드로 수평적인 조직문화\",\"recruitProcess\":\"입사지원 서류에 허위사실이 발견될 경우 채용확정 이후라도 채용이 \\r\\n취소 될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-04-25 00:00:00\",\"closedAt\":\"2026-05-24 23:59:59\",\"location\":\"인천 연수구 컨벤시아대로165, 26층 브이454\",\"tags\":[{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"283\",\"name\":\"자유로운 연차\",\"emoticon\":\"welfare\"},{\"id\":\"284\",\"name\":\"패밀리데이\",\"emoticon\":\"welfare\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"com_113\",\"name\":\"시리즈A 투자유치\",\"emoticon\":\"invest\"}],\"serialNumber\":\"3078150598\",\"encodedSerialNumber\":\"MzA3ODE1MDU5OA==\",\"companyUrl\":\"https://www.tesollo.com\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":8,\"establishDate\":\"2019년 설립\",\"workingPlaces\":[{\"address\":\"인천 연수구 컨벤시아대로165, 26층 브이454\",\"domestic\":false}],\"jobCategories\":[{\"id\":15,\"name\":\"SW/솔루션\"}],\"invisible\":false,\"manDbMcomIdx\":7881284,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-04-25T00:00:00+09:00",
+    "ClosedAt": "2026-05-24T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53789097",
+    "URL": "https://jumpit.saramin.co.kr/position/53789097",
+    "Title": "웹 개발자 채용 (신입)",
+    "Company": "아이엔마케팅",
+    "Location": "경기 파주시 헤이리마을길48-57",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 7,
+    "EducationName": "대학졸업(2,3년) 이상",
+    "StackTags": [
+      "CSS 3",
+      "Firebase",
+      "Google Analytics",
+      "HTML5",
+      "JavaScript",
+      "jQuery",
+      "Google Optimize"
+    ],
+    "Tags": [
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "288",
+        "name": "간식 제공",
+        "category": "welfare"
+      },
+      {
+        "id": "com_157",
+        "name": "영업이익 150% 급성장",
+        "category": "sales"
+      },
+      {
+        "id": "278",
+        "name": "성과급/상여금",
+        "category": "welfare"
+      }
+    ],
+    "Description": "광고의 미래를 함께 만들 동료를 찾습니다\r\n\r\n\"인하우스 마케터의 마음으로, 기술로 광고의 본질을 바꾸다\"\r\n\r\n아이엔마케팅은 Google Ads, SEO,AEO(GEO) 전문성을 핵심으로, AI 기술과 데이터 분석을 결합해 고객사의 성과를 직접 책임지는 AI 광고대행사입니다.\r\n\r\n우리는 단순히 광고를 '집행'하는 회사가 아니라, 고객의 비즈니스를 내 일처럼 파고들어 성장을 함께 설계하는 팀입니다.\r\n\r\n그리고 지금, 우리가 직접 만들고 있는 \"아이엔 광고주센터\"는 그 철학을 기술로 구현한 B2B SaaS 플랫폼입니다.\r\n\r\n[우리가 만들고 있는 것]\r\n → 아이엔 광고주센터는 광고주와 대행사 사이의 협업을 근본적으로 바꾸는 올인원 플랫폼입니다.\r\n → 아이엔 AI — 도메인 하나만 입력하면 SWOT, STP, 4P 등 9차원 AI 비즈니스 분석을 즉시 제공합니다. AI가 광고 카피, 영상 시나리오, CM송 가사까지 자동 생성합니다.\r\n → 아이엔 AI 통계 — KOBACO, KOSIS, 네이버 데이터랩, Google Trends 4대 데이터 소스를 통합 분석하고, 아이엔 AI가 맞춤 인사이트를 실시간으로 도출합니다.\r\n → 프로젝트·계약·정산 관리 — 흩어져 있던 광고 운영의 모든 흐름을 하나의 대시보드에서 관리합니다.\r\n → G-Tutor — 구글 광고 마케팅 교육 플랫폼으로 업계의 지식 격차를 줄입니다.\r\n\r\n[이런 환경에서 일합니다]\r\n → 자체 SaaS를 직접 기획하고 빌드합니다. 외주가 아니라, 팀이 기획부터 개발·운영까지 주도합니다. 내가 만든 기능이 실제 광고주의 비즈니스 성과로 이어지는 경험을 할 수 있습니다.\r\n → 최신 기술 스택을 실전에 적용합니다. 50여가지 이상의 AI를 직접 사용해보고 아이엔 AI에 적용합니다.\r\n → React + TypeScript, Node.js, PostgreSQL, Gemini AI, RAG 시스템 등 언어검증된 최신 기술을 프로덕션 레벨에서 다룹니다.\r\n → 광고 산업의 실제 데이터를 다룹니다. KOBACO 광고경기전망지수, 국가통계, 네이버·구글 트렌드 등 살아있는 데이터와 AI를 결합해 의미 있는 인사이트를 만듭니다.\r\n → Small team, Big impact. 각자의 의견이 곧 제품에 반영됩니다. 빠르게 실험하고, 빠르게 배우고, 빠르게 성장합니다.\r\n\r\n[합류하면 이런 성장을 합니다]\r\n → 웹 전반, 마케팅  지식 + 기술 역량을 동시에 쌓을 수 있습니다\r\n → AI·데이터 기반 SaaS 제품의 전체 라이프사이클을 경험합니다\r\n → 한국 디지털 광고 시장의 구조적 문제를 기술로 해결하는 과정에 참여합니다\r\n → 대행사·광고주 양쪽의 Pain Point를 깊이 이해하는 희소한 전문성을 갖추게 됩니다\r\n\r\n[아이엔마케팅 핵심 사업]\r\n → 광고주센터: 대행사와 광고주 간의 협업을 원활하게 만드는 올인원 플랫폼\r\n → 구글 광고 대행: Google Ads, SEO\r\n → AI 마케팅 올인원 대행: 최신 AI 기술을 활용한 종합 광고 대행 서비스\r\n → G-Tutor: 구글 광고 마케팅 교육 플랫폼\r\n\r\n[공식 웹]\r\n홈페이지: https://inmarketing.kr/\r\n아이엔 광고주센터 : https://myad.inmarketing.kr/\r\nAI 올인원 마케팅 대행 : https://ai.inmarketing.kr/\r\n지튜터 : https://g-tutor.kr/\r\n\r\n[마케팅 채널]\r\n유튜브: https://www.youtube.com/@in-marketing\r\n네이버 TV : https://tv.naver.com/inmarketing\r\nX : https://x.com/IN_marketingkr\r\n쓰레드 : https://www.threads.net/@inmarketing.kr\r\n인스타그램: https://www.instagram.com/inmarketing.kr/\r\n블로그: https://blog.naver.com/in-marketing\r\n링크드인 : https://www.linkedin.com/in/inmarketingkr/\r\n페이스북 : https://www.facebook.com/inmarketing.kr/\r\n네이버 카페 : https://cafe.naver.com/gtutor\r\n핀터레스트 : https://kr.pinterest.com/IN_marketing/\n\n• 자사 / 고객사 웹페이지 기획 및 제작\r\n• 자사 웹, 앱 서비스 제작\n\n• 신입\n• 대학졸업(2,3년)이상\n\n• 문제 해결 능력이 있는 사람\n• 광고를 좋아하고, 직무 성장을 위해 주도적으로 끊임없이 노력하는 사람\n• 웹 에이전시 경력자\n• 워드프레스 등 웹 제작 솔루션 사용 능력\n• HTML, CSS, Java script, jQuery 에 대한 이해\n• Google SEO, Google Analytics, Google Optimize, Firebase 관련 지식\n• 인터넷 및 웹서버에 대한 포괄적인 이해\n\n• 급여제도 : 상여금\r\n• 근무 환경 : 회의실, 카페테리아, 전용사옥, 사내 정원, 스마트기기, 노트북, 사무용품 지급, 최고 성능 컴퓨터\r\n• 출퇴근 : 주차장제공\r\n• 리프레시 : 연차, 여름휴가, 경조휴가제, 반차\r\n• 조직 문화 : 회식강요 안함, 야근강요 안함, 자유로운 연차사용\r\n• 교육/생활 : 신규 입사자 교육(OJT), 간식 제공, 음료제공(차,커피)",
+    "RawJSON": "{\"id\":53789097,\"title\":\"웹 개발자 채용 (신입)\",\"companyName\":\"아이엔마케팅\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20244509154517689_189_189.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174116631/s3w9yu_j4b0-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":0},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174116902/s3w9t7_oglo-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174117269/s3w9tv_lz7p-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174117451/s3w9uy_lqij-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174117894/s3w9sp_qqkx-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174118493/s3w9o8_9j5t-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174119127/s3w9wk_g8h2-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/company/2688802771/20244119174119385/s3wa0j_h289-1pq7s9v_workenv-bg.jpg\",\"sortNumber\":7}],\"techStacks\":[{\"stack\":\"CSS 3\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/css3.png\"},{\"stack\":\"Firebase\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/firebase.png\"},{\"stack\":\"Google Analytics\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/googleanalytics.png\"},{\"stack\":\"HTML5\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/html5.png\"},{\"stack\":\"JavaScript\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/javascript.png\"},{\"stack\":\"jQuery\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/jquery.png\"},{\"stack\":\"Google Optimize\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"광고의 미래를 함께 만들 동료를 찾습니다\\r\\n\\r\\n\\\"인하우스 마케터의 마음으로, 기술로 광고의 본질을 바꾸다\\\"\\r\\n\\r\\n아이엔마케팅은 Google Ads, SEO,AEO(GEO) 전문성을 핵심으로, AI 기술과 데이터 분석을 결합해 고객사의 성과를 직접 책임지는 AI 광고대행사입니다.\\r\\n\\r\\n우리는 단순히 광고를 '집행'하는 회사가 아니라, 고객의 비즈니스를 내 일처럼 파고들어 성장을 함께 설계하는 팀입니다.\\r\\n\\r\\n그리고 지금, 우리가 직접 만들고 있는 \\\"아이엔 광고주센터\\\"는 그 철학을 기술로 구현한 B2B SaaS 플랫폼입니다.\\r\\n\\r\\n[우리가 만들고 있는 것]\\r\\n → 아이엔 광고주센터는 광고주와 대행사 사이의 협업을 근본적으로 바꾸는 올인원 플랫폼입니다.\\r\\n → 아이엔 AI — 도메인 하나만 입력하면 SWOT, STP, 4P 등 9차원 AI 비즈니스 분석을 즉시 제공합니다. AI가 광고 카피, 영상 시나리오, CM송 가사까지 자동 생성합니다.\\r\\n → 아이엔 AI 통계 — KOBACO, KOSIS, 네이버 데이터랩, Google Trends 4대 데이터 소스를 통합 분석하고, 아이엔 AI가 맞춤 인사이트를 실시간으로 도출합니다.\\r\\n → 프로젝트·계약·정산 관리 — 흩어져 있던 광고 운영의 모든 흐름을 하나의 대시보드에서 관리합니다.\\r\\n → G-Tutor — 구글 광고 마케팅 교육 플랫폼으로 업계의 지식 격차를 줄입니다.\\r\\n\\r\\n[이런 환경에서 일합니다]\\r\\n → 자체 SaaS를 직접 기획하고 빌드합니다. 외주가 아니라, 팀이 기획부터 개발·운영까지 주도합니다. 내가 만든 기능이 실제 광고주의 비즈니스 성과로 이어지는 경험을 할 수 있습니다.\\r\\n → 최신 기술 스택을 실전에 적용합니다. 50여가지 이상의 AI를 직접 사용해보고 아이엔 AI에 적용합니다.\\r\\n → React + TypeScript, Node.js, PostgreSQL, Gemini AI, RAG 시스템 등 언어검증된 최신 기술을 프로덕션 레벨에서 다룹니다.\\r\\n → 광고 산업의 실제 데이터를 다룹니다. KOBACO 광고경기전망지수, 국가통계, 네이버·구글 트렌드 등 살아있는 데이터와 AI를 결합해 의미 있는 인사이트를 만듭니다.\\r\\n → Small team, Big impact. 각자의 의견이 곧 제품에 반영됩니다. 빠르게 실험하고, 빠르게 배우고, 빠르게 성장합니다.\\r\\n\\r\\n[합류하면 이런 성장을 합니다]\\r\\n → 웹 전반, 마케팅  지식 + 기술 역량을 동시에 쌓을 수 있습니다\\r\\n → AI·데이터 기반 SaaS 제품의 전체 라이프사이클을 경험합니다\\r\\n → 한국 디지털 광고 시장의 구조적 문제를 기술로 해결하는 과정에 참여합니다\\r\\n → 대행사·광고주 양쪽의 Pain Point를 깊이 이해하는 희소한 전문성을 갖추게 됩니다\\r\\n\\r\\n[아이엔마케팅 핵심 사업]\\r\\n → 광고주센터: 대행사와 광고주 간의 협업을 원활하게 만드는 올인원 플랫폼\\r\\n → 구글 광고 대행: Google Ads, SEO\\r\\n → AI 마케팅 올인원 대행: 최신 AI 기술을 활용한 종합 광고 대행 서비스\\r\\n → G-Tutor: 구글 광고 마케팅 교육 플랫폼\\r\\n\\r\\n[공식 웹]\\r\\n홈페이지: https://inmarketing.kr/\\r\\n아이엔 광고주센터 : https://myad.inmarketing.kr/\\r\\nAI 올인원 마케팅 대행 : https://ai.inmarketing.kr/\\r\\n지튜터 : https://g-tutor.kr/\\r\\n\\r\\n[마케팅 채널]\\r\\n유튜브: https://www.youtube.com/@in-marketing\\r\\n네이버 TV : https://tv.naver.com/inmarketing\\r\\nX : https://x.com/IN_marketingkr\\r\\n쓰레드 : https://www.threads.net/@inmarketing.kr\\r\\n인스타그램: https://www.instagram.com/inmarketing.kr/\\r\\n블로그: https://blog.naver.com/in-marketing\\r\\n링크드인 : https://www.linkedin.com/in/inmarketingkr/\\r\\n페이스북 : https://www.facebook.com/inmarketing.kr/\\r\\n네이버 카페 : https://cafe.naver.com/gtutor\\r\\n핀터레스트 : https://kr.pinterest.com/IN_marketing/\",\"responsibility\":\"• 자사 / 고객사 웹페이지 기획 및 제작\\r\\n• 자사 웹, 앱 서비스 제작\",\"qualifications\":\"• 신입\\n• 대학졸업(2,3년)이상\",\"preferredRequirements\":\"• 문제 해결 능력이 있는 사람\\n• 광고를 좋아하고, 직무 성장을 위해 주도적으로 끊임없이 노력하는 사람\\n• 웹 에이전시 경력자\\n• 워드프레스 등 웹 제작 솔루션 사용 능력\\n• HTML, CSS, Java script, jQuery 에 대한 이해\\n• Google SEO, Google Analytics, Google Optimize, Firebase 관련 지식\\n• 인터넷 및 웹서버에 대한 포괄적인 이해\",\"welfares\":\"• 급여제도 : 상여금\\r\\n• 근무 환경 : 회의실, 카페테리아, 전용사옥, 사내 정원, 스마트기기, 노트북, 사무용품 지급, 최고 성능 컴퓨터\\r\\n• 출퇴근 : 주차장제공\\r\\n• 리프레시 : 연차, 여름휴가, 경조휴가제, 반차\\r\\n• 조직 문화 : 회식강요 안함, 야근강요 안함, 자유로운 연차사용\\r\\n• 교육/생활 : 신규 입사자 교육(OJT), 간식 제공, 음료제공(차,커피)\",\"recruitProcess\":\"• 입사지원 서류에 허위사실이 발견될 경우, 채용확정 이후라도 채용이 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-04 00:00:00\",\"closedAt\":\"2026-06-02 23:59:59\",\"location\":\"경기 파주시 헤이리마을길48-57\",\"tags\":[{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"288\",\"name\":\"간식 제공\",\"emoticon\":\"welfare\"},{\"id\":\"com_157\",\"name\":\"영업이익 150% 급성장\",\"emoticon\":\"sales\"},{\"id\":\"278\",\"name\":\"성과급/상여금\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"2688802771\",\"encodedSerialNumber\":\"MjY4ODgwMjc3MQ==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":7,\"educationName\":\"대학졸업(2,3년) 이상\",\"graduate\":false,\"establishPeriod\":5,\"establishDate\":\"2022년 7월 설립\",\"workingPlaces\":[{\"address\":\"경기 파주시 헤이리마을길48-57\",\"domestic\":false}],\"jobCategories\":[],\"invisible\":false,\"manDbMcomIdx\":8050787,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-04T00:00:00+09:00",
+    "ClosedAt": "2026-06-02T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53948023",
+    "URL": "https://jumpit.saramin.co.kr/position/53948023",
+    "Title": "B2B 프로젝트 개발팀 신입",
+    "Company": "에스피에이치",
+    "Location": "서울 마포구 마포대로92, A동 3층",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "Git",
+      "Java",
+      "React",
+      "Spring",
+      "AI/인공지능"
+    ],
+    "Tags": [
+      {
+        "id": "com_143",
+        "name": "연봉상승률 15% 이상",
+        "category": "salary"
+      },
+      {
+        "id": "285",
+        "name": "휴가비 지원",
+        "category": "welfare"
+      },
+      {
+        "id": "com_126",
+        "name": "5호선 역세권 기업",
+        "category": "subway"
+      },
+      {
+        "id": "com_147",
+        "name": "평균연봉 6,000 이상",
+        "category": "salary"
+      }
+    ],
+    "Description": "\"효율적으로 일하고 성과에 대한 보상과 워라벨이 있는 회사생활\"\r\n\r\nSPH(Story Place Human)는 2011년이후 한국내 유일한 Google Maps Premier Partner사로서 \r\n1,000여개 기업에게 구글맵, 위성영상 등 Location Intelligence 분야의 제품판매 및 구축개발 활동을 하고 있습니다.\r\n또한 2023년 클라우드 기반 데이터서비스인 Snowflake 파트너사, 2026년 실리콘밸리에서 뜨는 BI Tool인 Sigma Computing의 파트너사로 사업을 확장하여 AI\u0026BI분야 전문기업으로 성장하고 있습니다.\r\n\r\n현재 전직원 30명 2025년 매출 97억의 알차고 강한 기업을 지향하는 안정적인 벤처기업입니다.\r\nGoogle과 먼데이닷컴으로 부터 Best Partner상을 받은 SPH는 2026년 저희와 함께 할 B2B 프로젝트, GIS S/W, 빅데이터 분야의 신입 개발 인력을 구하고 있습니다.\r\n15여년의 기간동안 매년 꾸준히 성장해온 안정성과 스타트업과 같은 민첩하고 자율적인 분위기에서 함께 할 분들의 많은 지원을 바랍니다.\n\n• Google Maps API, GIS S/W, Big Data 활용 B2B 프로그램 개발\r\n• 연구사업/민간 SI 프로젝트 개발 및 시스템 구축(파견 아님)\r\n• 자사제품 및 GIS S/W 기술지원, 구축시스템 유지보수\n\n• 새로운 기술에 대한 학습력, 문제해결, 소통에 자신이 있으신분\n• Java, Spring, x-javascript, React 개발 능력 보유\n• RestFul API 개발 및 활용 능력 보유\n• 컴퓨터 관련 전공 또는 IT 교육과정 이수자\n• 신입 및 경력(1년~2년) 가능\n\n• Claude Code, Cursor와 같은 AI 코딩도구 활용 경험자\n• AI(Chat GPT, Gemini 등) 활용 능숙자\n• GitHub, Git와 같은 형상도구 활용 경험\n\n• 동종업계 상위의 연봉수준(성과달성시 인센티브)\r\n• 매년초 한해의 성과 공유. 실적에 따른 인센티브 10년째 지급\r\n\r\n• 근무시간: 아침 출근의 여유와 저녁이 있는 삶을 추구\r\n• 일7시간 근무 : 오전10시 ~ 오후6시, 주35시간 근무(본사근무시)\r\n• 매주 금요일 원격(재택)근무 (재택은 집이 아니여도 됩니다)\r\n• 매 3년근무시 1개월의 리프레쉬 휴가 지원\r\n\r\n• 모든직원 월25만원 한도 법인카드 제공(점심, 간식, 교통비)\r\n• 생일자는 30만원한도내 법인카드로 본인의 선물구입\u2028\r\n• 자기계발비 연간 120만원 지원, 운동, 외국어 등\r\n\r\n• 휴가에는 사유를 묻지 않습니다\r\n구글캘린더에 입력하고 공유 후 자유롭게 사용합니다\r\n• 여름휴가시 100만원의 휴가비를 지원합니다\r\n\u2028\r\n• 대학병원급에서 정밀 건강검진(2년마다)\r\n• 4대보험외 24시간 재해와 사고 지원되는 기업보험\r\n• 청년내일채움공제, 재직자 내일채움공제 지원\r\n\r\n• 최신사양의 맥북프로(또는 고사양 노트북)과 듀얼모니터 제공\r\n• 효율적인 Tool로 모두가 업무를 투명하게 처리하고 커뮤니케이션\r\n• 구성원 각자의 전문성과 자율을 중시하고 최대한의 권한을 줍니다",
+    "RawJSON": "{\"id\":53948023,\"title\":\"B2B 프로젝트 개발팀 신입\",\"companyName\":\"에스피에이치\",\"logo\":\"https://cdn.jumpit.co.kr/images/syyun_26773/20221625111640538_904_904.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/syyun_26773/20221625111647511_1200_675.jpeg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/syyun_26773/20221625111651915_1200_675.jpeg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/syyun_26773/20221625111649390_1200_675.jpeg\",\"sortNumber\":3}],\"techStacks\":[{\"stack\":\"Git\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/git.png\"},{\"stack\":\"Java\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/java.png\"},{\"stack\":\"React\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/react.png\"},{\"stack\":\"Spring\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/spring.png\"},{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"\\\"효율적으로 일하고 성과에 대한 보상과 워라벨이 있는 회사생활\\\"\\r\\n\\r\\nSPH(Story Place Human)는 2011년이후 한국내 유일한 Google Maps Premier Partner사로서 \\r\\n1,000여개 기업에게 구글맵, 위성영상 등 Location Intelligence 분야의 제품판매 및 구축개발 활동을 하고 있습니다.\\r\\n또한 2023년 클라우드 기반 데이터서비스인 Snowflake 파트너사, 2026년 실리콘밸리에서 뜨는 BI Tool인 Sigma Computing의 파트너사로 사업을 확장하여 AI\u0026BI분야 전문기업으로 성장하고 있습니다.\\r\\n\\r\\n현재 전직원 30명 2025년 매출 97억의 알차고 강한 기업을 지향하는 안정적인 벤처기업입니다.\\r\\nGoogle과 먼데이닷컴으로 부터 Best Partner상을 받은 SPH는 2026년 저희와 함께 할 B2B 프로젝트, GIS S/W, 빅데이터 분야의 신입 개발 인력을 구하고 있습니다.\\r\\n15여년의 기간동안 매년 꾸준히 성장해온 안정성과 스타트업과 같은 민첩하고 자율적인 분위기에서 함께 할 분들의 많은 지원을 바랍니다.\",\"responsibility\":\"• Google Maps API, GIS S/W, Big Data 활용 B2B 프로그램 개발\\r\\n• 연구사업/민간 SI 프로젝트 개발 및 시스템 구축(파견 아님)\\r\\n• 자사제품 및 GIS S/W 기술지원, 구축시스템 유지보수\",\"qualifications\":\"• 새로운 기술에 대한 학습력, 문제해결, 소통에 자신이 있으신분\\n• Java, Spring, x-javascript, React 개발 능력 보유\\n• RestFul API 개발 및 활용 능력 보유\\n• 컴퓨터 관련 전공 또는 IT 교육과정 이수자\\n• 신입 및 경력(1년~2년) 가능\",\"preferredRequirements\":\"• Claude Code, Cursor와 같은 AI 코딩도구 활용 경험자\\n• AI(Chat GPT, Gemini 등) 활용 능숙자\\n• GitHub, Git와 같은 형상도구 활용 경험\",\"welfares\":\"• 동종업계 상위의 연봉수준(성과달성시 인센티브)\\r\\n• 매년초 한해의 성과 공유. 실적에 따른 인센티브 10년째 지급\\r\\n\\r\\n• 근무시간: 아침 출근의 여유와 저녁이 있는 삶을 추구\\r\\n• 일7시간 근무 : 오전10시 ~ 오후6시, 주35시간 근무(본사근무시)\\r\\n• 매주 금요일 원격(재택)근무 (재택은 집이 아니여도 됩니다)\\r\\n• 매 3년근무시 1개월의 리프레쉬 휴가 지원\\r\\n\\r\\n• 모든직원 월25만원 한도 법인카드 제공(점심, 간식, 교통비)\\r\\n• 생일자는 30만원한도내 법인카드로 본인의 선물구입\u2028\\r\\n• 자기계발비 연간 120만원 지원, 운동, 외국어 등\\r\\n\\r\\n• 휴가에는 사유를 묻지 않습니다\\r\\n구글캘린더에 입력하고 공유 후 자유롭게 사용합니다\\r\\n• 여름휴가시 100만원의 휴가비를 지원합니다\\r\\n\u2028\\r\\n• 대학병원급에서 정밀 건강검진(2년마다)\\r\\n• 4대보험외 24시간 재해와 사고 지원되는 기업보험\\r\\n• 청년내일채움공제, 재직자 내일채움공제 지원\\r\\n\\r\\n• 최신사양의 맥북프로(또는 고사양 노트북)과 듀얼모니터 제공\\r\\n• 효율적인 Tool로 모두가 업무를 투명하게 처리하고 커뮤니케이션\\r\\n• 구성원 각자의 전문성과 자율을 중시하고 최대한의 권한을 줍니다\",\"recruitProcess\":\"\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[{\"id\":296,\"title\":\"'에스피에이치'의 기술블로그를 소개합니다\",\"link\":\"https://www.sphinfo.com/blog/\",\"imagePath\":\"https://cdn.jumpit.co.kr/jumpit/position/blog.png\",\"category\":\"blog\",\"classification\":\"OUTSIDE\",\"publish\":true,\"memo\":\"마이그레이션 데이터\"}],\"publishedAt\":\"2026-05-21 00:00:00\",\"closedAt\":\"2026-06-19 23:59:59\",\"location\":\"서울 마포구 마포대로92, A동 3층\",\"tags\":[{\"id\":\"com_143\",\"name\":\"연봉상승률 15% 이상\",\"emoticon\":\"salary\"},{\"id\":\"285\",\"name\":\"휴가비 지원\",\"emoticon\":\"welfare\"},{\"id\":\"com_126\",\"name\":\"5호선 역세권 기업\",\"emoticon\":\"subway\"},{\"id\":\"com_147\",\"name\":\"평균연봉 6,000 이상\",\"emoticon\":\"salary\"}],\"serialNumber\":\"1078721078\",\"encodedSerialNumber\":\"MTA3ODcyMTA3OA==\",\"companyUrl\":\"https://www.sphinfo.com\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":18,\"establishDate\":\"2009년 6월 설립\",\"workingPlaces\":[{\"address\":\"서울 마포구 마포대로92, A동 3층\",\"domestic\":false}],\"jobCategories\":[{\"id\":15,\"name\":\"SW/솔루션\"}],\"invisible\":false,\"manDbMcomIdx\":5599241,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-21T00:00:00+09:00",
+    "ClosedAt": "2026-06-19T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53789512",
+    "URL": "https://jumpit.saramin.co.kr/position/53789512",
+    "Title": "AI 엔지니어(신입)",
+    "Company": "넥시클",
+    "Location": "세종 나성로125-4, 314호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 0,
+    "EducationName": "무관",
+    "StackTags": [
+      "AI/인공지능"
+    ],
+    "Tags": [
+      {
+        "id": "com_128",
+        "name": "매출액 150% 급성장",
+        "category": "sales"
+      },
+      {
+        "id": "276",
+        "name": "유연근무제",
+        "category": "welfare"
+      },
+      {
+        "id": "com_127",
+        "name": "매출액 20% 지속성장",
+        "category": "sales"
+      },
+      {
+        "id": "com_157",
+        "name": "영업이익 150% 급성장",
+        "category": "sales"
+      }
+    ],
+    "Description": "개발자 채용 공고\r\n\r\nXR(확장현실) 운영·관리 인프라 전문기업 (주)넥시클은 AI 기반 XR 통합 운영 플랫폼 ControlXR / Al ControlXR 2.0을 개발하며 교육·산업·의료·훈련 분야에서 대규모 XR 환경의 운영 표준을 만들어가고 있습니다.\r\n\r\n당사는 중소벤처기업부 TIPS(Tech Incubator Program for Startup) R\u0026D 과제 최종 선정\r\n벤처기업 인증 기업부설연구소 설립 완료를 기반으로, AI 기반 XR 다중 사용자·디바이스 관리 기술을 함께 고도화할 핵심 인재를 채용합니다.\n\nPM급 AI 엔지니어 1명\r\n• XR 다중 사용자·디바이스 환경에서의 AI Vision Intelligence 모델 개발\r\n• 실시간 XR 스트림 분석 (사용자 상태, 행동, 이벤트 인식 등)\r\n• 운영 자동화를 위한 AI 기반 가이던스·판단 로직 설계\r\n• 서버/플랫폼 연동을 고려한 AI 모듈 구조 설계\n\n• 경력 무관 (신입 지원 가능)\n• 학력무관\n\n우대사항\n• 실시간 영상처리, 스트리밍 데이터 분석 경험, XR/AR/VR/게임/시뮬레이션 도메인, AI 모델의 서비스 적용 및 운영경험\n\n[이런 분을 찾습니다]\n• 콘텐츠가 아닌 \"운영 인프라\"로 XR 산업을 바꾸고 싶으신 분\n• AI와 플랫폼 기술을 실제 현장에 적용하는 데 관심 있는 분\n• PoC를 넘어 확장 가능한 상용 시스템을 만들고 싶은 분\n• 기술 기반 스타트업의 성장과 함께 성장하실 분\n\n[근무 환경 및 혜택]\r\n• TIPS 선정 과제 기반 R\u0026D 중심 개발 환경\r\n• 기업부설연구소 소속 연구원 근무\r\n• XR·AI·플랫폼 핵심 기술을 처음부터 함께 설계하는 초기 멤버 포지션\r\n• 기술 중심의 의사결정 문화 (불필요한 보고 최소화)\r\n• 성장 단계에 따른 스톡옵션/성과 보상 검토 가능\r\n• 탄력 출퇴근 제도\r\n• 회사 복지 추천 받습니다.\r\n※ 근무 형태 및 조건은 경력·역량에 따라 협의",
+    "RawJSON": "{\"id\":53789512,\"title\":\"AI 엔지니어(신입)\",\"companyName\":\"넥시클\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20263724103740784_189_189.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174433976_4000_3000.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174440687_4000_3000.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174448077_4000_3000.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174453023_4000_3000.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264402174458695_4000_3000.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174521567_4000_3000.jpg\",\"sortNumber\":8},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174526091_4000_3000.jpg\",\"sortNumber\":9},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174530497_4000_3000.jpg\",\"sortNumber\":10},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174535856_4000_3000.jpg\",\"sortNumber\":11},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174541676_4000_3000.jpg\",\"sortNumber\":12},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174553369_4000_3000.jpg\",\"sortNumber\":13},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/woohee_329322/20264502174558427_4000_3000.jpg\",\"sortNumber\":14}],\"techStacks\":[{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"개발자 채용 공고\\r\\n\\r\\nXR(확장현실) 운영·관리 인프라 전문기업 (주)넥시클은 AI 기반 XR 통합 운영 플랫폼 ControlXR / Al ControlXR 2.0을 개발하며 교육·산업·의료·훈련 분야에서 대규모 XR 환경의 운영 표준을 만들어가고 있습니다.\\r\\n\\r\\n당사는 중소벤처기업부 TIPS(Tech Incubator Program for Startup) R\u0026D 과제 최종 선정\\r\\n벤처기업 인증 기업부설연구소 설립 완료를 기반으로, AI 기반 XR 다중 사용자·디바이스 관리 기술을 함께 고도화할 핵심 인재를 채용합니다.\",\"responsibility\":\"PM급 AI 엔지니어 1명\\r\\n• XR 다중 사용자·디바이스 환경에서의 AI Vision Intelligence 모델 개발\\r\\n• 실시간 XR 스트림 분석 (사용자 상태, 행동, 이벤트 인식 등)\\r\\n• 운영 자동화를 위한 AI 기반 가이던스·판단 로직 설계\\r\\n• 서버/플랫폼 연동을 고려한 AI 모듈 구조 설계\",\"qualifications\":\"• 경력 무관 (신입 지원 가능)\\n• 학력무관\",\"preferredRequirements\":\"우대사항\\n• 실시간 영상처리, 스트리밍 데이터 분석 경험, XR/AR/VR/게임/시뮬레이션 도메인, AI 모델의 서비스 적용 및 운영경험\\n\\n[이런 분을 찾습니다]\\n• 콘텐츠가 아닌 \\\"운영 인프라\\\"로 XR 산업을 바꾸고 싶으신 분\\n• AI와 플랫폼 기술을 실제 현장에 적용하는 데 관심 있는 분\\n• PoC를 넘어 확장 가능한 상용 시스템을 만들고 싶은 분\\n• 기술 기반 스타트업의 성장과 함께 성장하실 분\",\"welfares\":\"[근무 환경 및 혜택]\\r\\n• TIPS 선정 과제 기반 R\u0026D 중심 개발 환경\\r\\n• 기업부설연구소 소속 연구원 근무\\r\\n• XR·AI·플랫폼 핵심 기술을 처음부터 함께 설계하는 초기 멤버 포지션\\r\\n• 기술 중심의 의사결정 문화 (불필요한 보고 최소화)\\r\\n• 성장 단계에 따른 스톡옵션/성과 보상 검토 가능\\r\\n• 탄력 출퇴근 제도\\r\\n• 회사 복지 추천 받습니다.\\r\\n※ 근무 형태 및 조건은 경력·역량에 따라 협의\",\"recruitProcess\":\"[근무조건]\\r\\n• 고용형태 : 정규직(수습 3개월)\\r\\n• 급여 : 면접 후 결정\\r\\n• 근무지 : 서울 도봉구 마들로13길 84 창동 아우르네 211호\\r\\n\\r\\n[채용절차]\\r\\n• 제출서류 : 온라인 이력서\\r\\n• 전형절차 : 서류전형 ＞ 1차면접 ＞ 2차면접 ＞ 최종합격\\r\\n\\r\\n[유의사항]\\r\\n• 입사지원 서류에 허위사실이 발견될 경우, 채용확정 이후라도 채용이 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-04 00:00:00\",\"closedAt\":\"2026-06-02 23:59:59\",\"location\":\"세종 나성로125-4, 314호\",\"tags\":[{\"id\":\"com_128\",\"name\":\"매출액 150% 급성장\",\"emoticon\":\"sales\"},{\"id\":\"276\",\"name\":\"유연근무제\",\"emoticon\":\"welfare\"},{\"id\":\"com_127\",\"name\":\"매출액 20% 지속성장\",\"emoticon\":\"sales\"},{\"id\":\"com_157\",\"name\":\"영업이익 150% 급성장\",\"emoticon\":\"sales\"}],\"serialNumber\":\"7428703306\",\"encodedSerialNumber\":\"NzQyODcwMzMwNg==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":0,\"educationName\":\"무관\",\"graduate\":false,\"establishPeriod\":3,\"establishDate\":\"2024년 9월 설립\",\"workingPlaces\":[{\"address\":\"세종 나성로125-4, 314호\",\"domestic\":false}],\"jobCategories\":[{\"id\":1,\"name\":\"서버/백엔드 개발자\"},{\"id\":15,\"name\":\"SW/솔루션\"},{\"id\":8,\"name\":\"인공지능/머신러닝\"}],\"invisible\":false,\"manDbMcomIdx\":8412115,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-04T00:00:00+09:00",
+    "ClosedAt": "2026-06-02T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53771908",
+    "URL": "https://jumpit.saramin.co.kr/position/53771908",
+    "Title": "펌웨어 개발 신입 채용",
+    "Company": "엠투아이코퍼레이션",
+    "Location": "경기 안양시 동안구 시민대로327번길11-35",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "C",
+      "C#",
+      "C++",
+      "Linux",
+      "Embedded Linux",
+      "Zephyr",
+      "Yocto",
+      "Scope"
+    ],
+    "Tags": [
+      {
+        "id": "291",
+        "name": "육아휴직",
+        "category": "welfare"
+      },
+      {
+        "id": "com_117",
+        "name": "스마트이노베이션홀딩스 계열사",
+        "category": "scale"
+      },
+      {
+        "id": "com_139",
+        "name": "코스닥",
+        "category": "ipo"
+      },
+      {
+        "id": "285",
+        "name": "휴가비 지원",
+        "category": "welfare"
+      },
+      {
+        "id": "com_126",
+        "name": "4호선 역세권 기업",
+        "category": "subway"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "com_147",
+        "name": "평균연봉 6,000 이상",
+        "category": "salary"
+      }
+    ],
+    "Description": "스마트팩토리 구축의 필수요소인 스마트HMI(Human Machine Interface), 스마트SCADA(Supervisory Control And Data \r\nAcquisition, 원격 감시제어 및 데이터 수집 시스템) 및 스마트팩토리솔루션(Smart Factory Solution)을 제공하는 기업입니다. \n\nㆍEmbedded Linux 제품 개발\r\nㆍZephyr 펌웨어 개발\n\nㆍ대학 4년 이상\nㆍ신입\nㆍ컴퓨터, 전자, 정보통신 전공 전공자\nㆍC/C++ 능숙자\nㆍlinux device driver 개발 경험 또는 RTOS 제품 개발 경험\n  (신입의 경우 이에 준하는 사항 기재)\nㆍ오실로스코프 사용 가능자\n\nㆍROS(Robot Operating System) 경험자 우대\nㆍ EtherCAT Master 개발 경험자 우대\nㆍ 리눅스 개발 경험자 우대\nㆍ Yocto File system 개발 경험자 우대\n\n하나. 선택적 복지제도\r\nㆍ본인이 원하는 취미, 문화, 외식 등 지원\r\n둘. 임직원 건강관리\r\nㆍ2년마다 종합건강검진 지원\r\nㆍ사내 헬스센터 운영\r\n셋. 식사 제공\r\nㆍ사내식당에서 따뜻한 식사 제공\r\n넷. 장기근속자 포상\r\nㆍ리프레시 휴가 및 휴가비 지원\r\n다섯. 직무교육 지원\r\nㆍ직무 관련 외부교육 아낌없이 지원\r\n여섯. 기념일 지원\r\nㆍ생일, 출산 상품권 지급\r\n일곱. 경조사 지원\r\nㆍ경조휴가 및 경조금\r\nㆍ자녀 입학 축하금\r\n여덟. 여가활동 지원\r\nㆍ제휴 리조트 할인가 이용 가능\r\nㆍ사내 동호회 지원금",
+    "RawJSON": "{\"id\":53771908,\"title\":\"펌웨어 개발 신입 채용\",\"companyName\":\"엠투아이코퍼레이션\",\"logo\":\"https://cdn.jumpit.co.kr/images/dabin_3358/20211117151124335_1000_1002.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20255422095401883_567_378.png\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/dabin_3358/20211117151134155_1440_810.jpg\",\"sortNumber\":3}],\"techStacks\":[{\"stack\":\"C\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"C#\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CSharp.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/linux.png\"},{\"stack\":\"Embedded Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Zephyr\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Yocto\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Scope\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"스마트팩토리 구축의 필수요소인 스마트HMI(Human Machine Interface), 스마트SCADA(Supervisory Control And Data \\r\\nAcquisition, 원격 감시제어 및 데이터 수집 시스템) 및 스마트팩토리솔루션(Smart Factory Solution)을 제공하는 기업입니다. \",\"responsibility\":\"ㆍEmbedded Linux 제품 개발\\r\\nㆍZephyr 펌웨어 개발\",\"qualifications\":\"ㆍ대학 4년 이상\\nㆍ신입\\nㆍ컴퓨터, 전자, 정보통신 전공 전공자\\nㆍC/C++ 능숙자\\nㆍlinux device driver 개발 경험 또는 RTOS 제품 개발 경험\\n  (신입의 경우 이에 준하는 사항 기재)\\nㆍ오실로스코프 사용 가능자\",\"preferredRequirements\":\"ㆍROS(Robot Operating System) 경험자 우대\\nㆍ EtherCAT Master 개발 경험자 우대\\nㆍ 리눅스 개발 경험자 우대\\nㆍ Yocto File system 개발 경험자 우대\",\"welfares\":\"하나. 선택적 복지제도\\r\\nㆍ본인이 원하는 취미, 문화, 외식 등 지원\\r\\n둘. 임직원 건강관리\\r\\nㆍ2년마다 종합건강검진 지원\\r\\nㆍ사내 헬스센터 운영\\r\\n셋. 식사 제공\\r\\nㆍ사내식당에서 따뜻한 식사 제공\\r\\n넷. 장기근속자 포상\\r\\nㆍ리프레시 휴가 및 휴가비 지원\\r\\n다섯. 직무교육 지원\\r\\nㆍ직무 관련 외부교육 아낌없이 지원\\r\\n여섯. 기념일 지원\\r\\nㆍ생일, 출산 상품권 지급\\r\\n일곱. 경조사 지원\\r\\nㆍ경조휴가 및 경조금\\r\\nㆍ자녀 입학 축하금\\r\\n여덟. 여가활동 지원\\r\\nㆍ제휴 리조트 할인가 이용 가능\\r\\nㆍ사내 동호회 지원금\",\"recruitProcess\":\"ㆍ고용형태 : 정규직 / 정규직의 경우, 입사 시, 3개월의 시용기간이 적용됩니다. (급여 100%)\\r\\nㆍ근무시간 : 주 5일 (월~금) 9:00 ~ 18:00 *시차출퇴근 선택 가능 (8:00 ~ 17:00)\\r\\nㆍ채용전형 : 서류전형\u003e실무진면접\u003e임원면접\u003e처우 협의\u003e최종합격\\r\\nㆍ입사지원 시,  추가 제출서류 :\\r\\n- 최종학교 성적증명서\\r\\n- 포트폴리오(프로젝트 수행경험 포함 필수)\\r\\n- 경력 지원 시, 경력기술서 포함 필수\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-01 00:00:00\",\"closedAt\":\"2026-05-30 23:59:59\",\"location\":\"경기 안양시 동안구 시민대로327번길11-35\",\"tags\":[{\"id\":\"291\",\"name\":\"육아휴직\",\"emoticon\":\"welfare\"},{\"id\":\"com_117\",\"name\":\"스마트이노베이션홀딩스 계열사\",\"emoticon\":\"scale\"},{\"id\":\"com_139\",\"name\":\"코스닥\",\"emoticon\":\"ipo\"},{\"id\":\"285\",\"name\":\"휴가비 지원\",\"emoticon\":\"welfare\"},{\"id\":\"com_126\",\"name\":\"4호선 역세권 기업\",\"emoticon\":\"subway\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"com_147\",\"name\":\"평균연봉 6,000 이상\",\"emoticon\":\"salary\"}],\"serialNumber\":\"1238148572\",\"encodedSerialNumber\":\"MTIzODE0ODU3Mg==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":28,\"establishDate\":\"1999년 4월 설립\",\"workingPlaces\":[{\"address\":\"경기 안양시 동안구 시민대로327번길11-35\",\"domestic\":false}],\"jobCategories\":[{\"id\":13,\"name\":\"HW/임베디드\"}],\"invisible\":false,\"manDbMcomIdx\":5724649,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-01T00:00:00+09:00",
+    "ClosedAt": "2026-05-30T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53789461",
+    "URL": "https://jumpit.saramin.co.kr/position/53789461",
+    "Title": "SW 개발자 신입 [Android, C, C++, QT]",
+    "Company": "모비루스",
+    "Location": "경기 성남시 수정구 창업로43, 311호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 7,
+    "EducationName": "대학졸업(2,3년) 이상",
+    "StackTags": [
+      "C",
+      "C++",
+      "GitHub",
+      "Qt",
+      "SW",
+      "MCU",
+      "Embedded Linux"
+    ],
+    "Tags": [
+      {
+        "id": "290",
+        "name": "주거복지",
+        "category": "welfare"
+      },
+      {
+        "id": "com_152",
+        "name": "매출액 100억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "276",
+        "name": "유연근무제",
+        "category": "welfare"
+      },
+      {
+        "id": "com_147",
+        "name": "평균연봉 6,000 이상",
+        "category": "salary"
+      }
+    ],
+    "Description": "(주)모비루스의 비전은 'We lead AI mobility\" 입니다.\r\n\"AI와 Mobility의 진화\" 라는 큰 흐름 속에서, 끊임없는 차세대 핵심기술 연구개발과 지속적인 품질혁신으로, \r\n\"세계 최고의 경쟁력을 갖춘 AI Mobility 기업\"이 되는 것을 목표로 하고 있습니다.\r\n\r\n(주)모비루스는 자체 HW/SW 플랫폼을 보유하고 있으며, 글로벌 공급을 위한 구매, 개발, 생산, 품질까지 모든 영역을 다루고 있습니다.\n\n• 안드로이드 개발자(Kotlin or JAVA)\r\n  - Android Application 아키텍쳐 설계 및 개발\r\n  - 전장 SW 개발(Android Automotive OS)\r\n\r\n• C, C++ 개발자\r\n  - C/C++ 을 이용한 아키텍쳐 설계 및 Software 개발\r\n  - Embedded Linux, Git Hub\r\n\r\n• Qt 개발자\r\n  - Qt/Qml 을 이용한 Application 개발\r\n  - Hyundai/Kia 자동차 Navigation 및 자체 Solution 개발\r\n\r\n• 제어기 MCU SW 개발자\r\n  - Automotive MCU SW 개발\r\n  - CAN (CAN2.0A/2.0B/CAN-FD/J1939) interface 개발\n\n• 경력 : 신입(년수 무관)(연구원,  선임 연구원, 책임 연구원)\n\n• 컴퓨터/시스템 공학 전공\n• 해당 직무 근무 경험, AVN(IVI) 시스템 개발 경험, QT 개발 경험, Git 활용 경험\n\n• 연말 보너스\r\n• 자율출퇴근제\r\n• 기숙사 운영\r\n• 셔틀 버스 운영\r\n• 건강검진 (30만원 상당)\r\n• 워크샵\r\n• 사내 동호회\r\n• 명절 선물",
+    "RawJSON": "{\"id\":53789461,\"title\":\"SW 개발자 신입 [Android, C, C++, QT]\",\"companyName\":\"모비루스\",\"logo\":\"https://cdn.jumpit.co.kr/images/syyun_26773/20243411153456025_300_300.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/rob721_67406/20224628094630078_1440_810.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/rob721_67406/20224628094627786_1440_810.jpg\",\"sortNumber\":2}],\"techStacks\":[{\"stack\":\"C\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"GitHub\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/github.png\"},{\"stack\":\"Qt\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/qt.png\"},{\"stack\":\"SW\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"MCU\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Embedded Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"(주)모비루스의 비전은 'We lead AI mobility\\\" 입니다.\\r\\n\\\"AI와 Mobility의 진화\\\" 라는 큰 흐름 속에서, 끊임없는 차세대 핵심기술 연구개발과 지속적인 품질혁신으로, \\r\\n\\\"세계 최고의 경쟁력을 갖춘 AI Mobility 기업\\\"이 되는 것을 목표로 하고 있습니다.\\r\\n\\r\\n(주)모비루스는 자체 HW/SW 플랫폼을 보유하고 있으며, 글로벌 공급을 위한 구매, 개발, 생산, 품질까지 모든 영역을 다루고 있습니다.\",\"responsibility\":\"• 안드로이드 개발자(Kotlin or JAVA)\\r\\n  - Android Application 아키텍쳐 설계 및 개발\\r\\n  - 전장 SW 개발(Android Automotive OS)\\r\\n\\r\\n• C, C++ 개발자\\r\\n  - C/C++ 을 이용한 아키텍쳐 설계 및 Software 개발\\r\\n  - Embedded Linux, Git Hub\\r\\n\\r\\n• Qt 개발자\\r\\n  - Qt/Qml 을 이용한 Application 개발\\r\\n  - Hyundai/Kia 자동차 Navigation 및 자체 Solution 개발\\r\\n\\r\\n• 제어기 MCU SW 개발자\\r\\n  - Automotive MCU SW 개발\\r\\n  - CAN (CAN2.0A/2.0B/CAN-FD/J1939) interface 개발\",\"qualifications\":\"• 경력 : 신입(년수 무관)(연구원,  선임 연구원, 책임 연구원)\",\"preferredRequirements\":\"• 컴퓨터/시스템 공학 전공\\n• 해당 직무 근무 경험, AVN(IVI) 시스템 개발 경험, QT 개발 경험, Git 활용 경험\",\"welfares\":\"• 연말 보너스\\r\\n• 자율출퇴근제\\r\\n• 기숙사 운영\\r\\n• 셔틀 버스 운영\\r\\n• 건강검진 (30만원 상당)\\r\\n• 워크샵\\r\\n• 사내 동호회\\r\\n• 명절 선물\",\"recruitProcess\":\"• 서류전형 → 필기시험, 1차 면접(동시진행) → 2차 면접(필요시) → 최종합격\\r\\n※ 절차는 변경될 수 있습니다.\\r\\n• 신입 지원시 첫 3개월은 평가기간으로 수습기간이 있을 수 있습니다. (수습 기간 3개월간 급여 70% 적용, 정규직 전환 시 3개월분 30% 소급하여 지급, 전환율 약 95%)\\r\\n• 서류 합격자에 한해 연락드립니다.\\r\\n• 본 채용은 수시 진행으로 우수 인재 채용 시 마감될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-04 00:00:00\",\"closedAt\":\"2026-06-02 23:59:59\",\"location\":\"경기 성남시 수정구 창업로43, 311호\",\"tags\":[{\"id\":\"290\",\"name\":\"주거복지\",\"emoticon\":\"welfare\"},{\"id\":\"com_152\",\"name\":\"매출액 100억 기업\",\"emoticon\":\"sales\"},{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"276\",\"name\":\"유연근무제\",\"emoticon\":\"welfare\"},{\"id\":\"com_147\",\"name\":\"평균연봉 6,000 이상\",\"emoticon\":\"salary\"}],\"serialNumber\":\"5048160421\",\"encodedSerialNumber\":\"NTA0ODE2MDQyMQ==\",\"companyUrl\":\"www.mobilus.co.kr\",\"alwaysOpen\":false,\"celebration\":50,\"education\":7,\"educationName\":\"대학졸업(2,3년) 이상\",\"graduate\":true,\"establishPeriod\":22,\"establishDate\":\"2005년 1월 설립\",\"workingPlaces\":[{\"address\":\"경기 성남시 수정구 창업로43, 311호\",\"domestic\":false}],\"jobCategories\":[{\"id\":13,\"name\":\"HW/임베디드\"},{\"id\":15,\"name\":\"SW/솔루션\"}],\"invisible\":false,\"manDbMcomIdx\":4489068,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-04T00:00:00+09:00",
+    "ClosedAt": "2026-06-02T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53819548",
+    "URL": "https://jumpit.saramin.co.kr/position/53819548",
+    "Title": "클라우드 엔지니어 신입 모집",
+    "Company": "이비즈테크",
+    "Location": "서울 마포구 성암로189, 802, 804호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "Azure DevOps",
+      "Linux",
+      "Windows",
+      "AWS",
+      "AZURE",
+      "OpenStack"
+    ],
+    "Tags": [
+      {
+        "id": "com_152",
+        "name": "매출액 100억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "291",
+        "name": "육아휴직",
+        "category": "welfare"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "283",
+        "name": "자유로운 연차",
+        "category": "welfare"
+      },
+      {
+        "id": "286",
+        "name": "프리한 복장",
+        "category": "welfare"
+      },
+      {
+        "id": "288",
+        "name": "간식 제공",
+        "category": "welfare"
+      }
+    ],
+    "Description": "이비즈테크는 클라우드 컴퓨팅, 스토리지, AI, 오케스트레이션을 중심으로 고객의 디지털 전환을 지원하는 IT 서비스 기업입니다.국내외 시장에서 빠르게 성장하는 클라우드·AI 산업 속에서, 안정적인 인프라와 데이터 서비스를 기반으로 고객의 비즈니스 혁신을 이끌고 있습니다.\r\n\r\n이제 미래 성장을 함께할 주니어 인재를 찾습니다.\n\n●클라우드 인프라(서버·스토리지·네트워크) 기술 지원 보조\r\n\r\n●고객 기술 상담 및 PoC 환경 구축 지원\r\n\r\n●제품·솔루션 기능 테스트 및 기술 자료 작성\r\n\r\n●영업 및 마케팅 지원을 위한 데모 환경 구성\n\n●영어로의 커뮤니케이션 가능자 (이메일, 문서, 회의 기본)\n\n●기본적인 컴퓨터 활용 능력 (MS Office, 프레젠테이션 툴 등)\n\n●빠른 학습 능력 및 적극적인 문제해결 태도\n\n●협업 가능하고 책임감 있는 태도\n\n●고객 지향 마인드, 영업/서비스 정신\n\n●기본적인 네트워크·클라우드 인프라 지식 보유\n\n●클라우드/IT 산업 관련 인턴 경험\n\n●영어 외 기타 외국어 활용 가능자\n\n●프레젠테이션 및 보고서 작성 능력 우수자\n\n●군 장교 출신으로 조직관리 및 리더십 경험 보유자\n\n●클라우드 / AI 서비스에 대한 이해 또는 관련 교육/자격증 보유자 (예: AWS, Azure, Google Cloud)\n\n• 교육/생활 : 워크샵, 신규 입사자 교육(OJT), 직무능력향상교육, 자격증취득지원, 교육비 지원, 저녁식사 제공, 간식 제공, 음료제공(차,커피)\r\n\r\n• 리프레시 : 연차, 경조휴가제, 근로자의날 휴무, 산전 후 휴가, 육아휴직\r\n\r\n• 급여제도 : 퇴직연금, 장기근속자 포상, 휴일(특근)수당, 자격증수당, 4대 보험\r\n\r\n• 지원금/보험 : 금연수당, 각종 경조사 지원, 통신비 지원\r\n\r\n• 출퇴근 : 차량유류비지급, 주차장제공, 주차비지원, 회사차량 있음\r\n\r\n• 선물 : 명절선물/귀향비, 생일선물/파티, 임신/출산 선물, 생일자 조기퇴근, 장기근속 선물\r\n\r\n• 근무 환경 : 회의실, 노트북, 사원증, 사내도서관, 사무용품 지급\r\n\r\n• 조직 문화 : 자유복장, 자유로운 연차사용",
+    "RawJSON": "{\"id\":53819548,\"title\":\"클라우드 엔지니어 신입 모집\",\"companyName\":\"이비즈테크\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20245902155943330_189_189.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20255316155353011_567_378.png\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/310297/20242629152632029/profile-image.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/310297/20242629152636782/profile-image.jpg\",\"sortNumber\":4}],\"techStacks\":[{\"stack\":\"Azure DevOps\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/azuredevops.png\"},{\"stack\":\"Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/linux.png\"},{\"stack\":\"Windows\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/windows.png\"},{\"stack\":\"AWS\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/aws.png\"},{\"stack\":\"AZURE\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/azure.png\"},{\"stack\":\"OpenStack\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"이비즈테크는 클라우드 컴퓨팅, 스토리지, AI, 오케스트레이션을 중심으로 고객의 디지털 전환을 지원하는 IT 서비스 기업입니다.국내외 시장에서 빠르게 성장하는 클라우드·AI 산업 속에서, 안정적인 인프라와 데이터 서비스를 기반으로 고객의 비즈니스 혁신을 이끌고 있습니다.\\r\\n\\r\\n이제 미래 성장을 함께할 주니어 인재를 찾습니다.\",\"responsibility\":\"●클라우드 인프라(서버·스토리지·네트워크) 기술 지원 보조\\r\\n\\r\\n●고객 기술 상담 및 PoC 환경 구축 지원\\r\\n\\r\\n●제품·솔루션 기능 테스트 및 기술 자료 작성\\r\\n\\r\\n●영업 및 마케팅 지원을 위한 데모 환경 구성\",\"qualifications\":\"●영어로의 커뮤니케이션 가능자 (이메일, 문서, 회의 기본)\\n\\n●기본적인 컴퓨터 활용 능력 (MS Office, 프레젠테이션 툴 등)\\n\\n●빠른 학습 능력 및 적극적인 문제해결 태도\\n\\n●협업 가능하고 책임감 있는 태도\\n\\n●고객 지향 마인드, 영업/서비스 정신\\n\\n●기본적인 네트워크·클라우드 인프라 지식 보유\",\"preferredRequirements\":\"●클라우드/IT 산업 관련 인턴 경험\\n\\n●영어 외 기타 외국어 활용 가능자\\n\\n●프레젠테이션 및 보고서 작성 능력 우수자\\n\\n●군 장교 출신으로 조직관리 및 리더십 경험 보유자\\n\\n●클라우드 / AI 서비스에 대한 이해 또는 관련 교육/자격증 보유자 (예: AWS, Azure, Google Cloud)\",\"welfares\":\"• 교육/생활 : 워크샵, 신규 입사자 교육(OJT), 직무능력향상교육, 자격증취득지원, 교육비 지원, 저녁식사 제공, 간식 제공, 음료제공(차,커피)\\r\\n\\r\\n• 리프레시 : 연차, 경조휴가제, 근로자의날 휴무, 산전 후 휴가, 육아휴직\\r\\n\\r\\n• 급여제도 : 퇴직연금, 장기근속자 포상, 휴일(특근)수당, 자격증수당, 4대 보험\\r\\n\\r\\n• 지원금/보험 : 금연수당, 각종 경조사 지원, 통신비 지원\\r\\n\\r\\n• 출퇴근 : 차량유류비지급, 주차장제공, 주차비지원, 회사차량 있음\\r\\n\\r\\n• 선물 : 명절선물/귀향비, 생일선물/파티, 임신/출산 선물, 생일자 조기퇴근, 장기근속 선물\\r\\n\\r\\n• 근무 환경 : 회의실, 노트북, 사원증, 사내도서관, 사무용품 지급\\r\\n\\r\\n• 조직 문화 : 자유복장, 자유로운 연차사용\",\"recruitProcess\":\"●직위: 신입 / 주니어\\r\\n\\r\\n●학력: 대졸 이상 또는 졸업 예정자 (관련 전공 우대)\\r\\n\\r\\n●경력: 무경력 또는 3년이하, 인턴 경험 또는 관련 프로젝트 경험 있는 경우 플러스\\r\\n\\r\\n●전공무관하나, 클라우드/AI 기술에 대한 이해 및 관심 필수\\r\\n\\r\\n3개월 수습 기간 동안 업무 역량 및 근무 태도 등을 평가하여 정규직 전환 여부를 결정합니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-07 00:00:00\",\"closedAt\":\"2026-06-05 23:59:59\",\"location\":\"서울 마포구 성암로189, 802, 804호\",\"tags\":[{\"id\":\"com_152\",\"name\":\"매출액 100억 기업\",\"emoticon\":\"sales\"},{\"id\":\"291\",\"name\":\"육아휴직\",\"emoticon\":\"welfare\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"283\",\"name\":\"자유로운 연차\",\"emoticon\":\"welfare\"},{\"id\":\"286\",\"name\":\"프리한 복장\",\"emoticon\":\"welfare\"},{\"id\":\"288\",\"name\":\"간식 제공\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"4178800055\",\"encodedSerialNumber\":\"NDE3ODgwMDA1NQ==\",\"companyUrl\":\"https://www.ebiztech.co.kr\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":true,\"establishPeriod\":12,\"establishDate\":\"2015년 3월 설립\",\"workingPlaces\":[{\"address\":\"서울 마포구 성암로189, 802, 804호\",\"domestic\":false}],\"jobCategories\":[{\"id\":21,\"name\":\"기술지원\"},{\"id\":19,\"name\":\"빅데이터 엔지니어\"},{\"id\":9,\"name\":\"devops/시스템 엔지니어\"},{\"id\":13,\"name\":\"HW/임베디드\"},{\"id\":16,\"name\":\"iOS 개발자\"}],\"invisible\":false,\"manDbMcomIdx\":7026583,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-07T00:00:00+09:00",
+    "ClosedAt": "2026-06-05T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53762539",
+    "URL": "https://jumpit.saramin.co.kr/position/53762539",
+    "Title": "통합보안관리 엔지니어(신입)",
+    "Company": "이너버스",
+    "Location": "서울 영등포구 양평로21길26, 1604호 1605호 1606호 1607호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 7,
+    "EducationName": "대학졸업(2,3년) 이상",
+    "StackTags": [
+      "Docker",
+      "Elasticsearch",
+      "Kafka",
+      "Linux",
+      "Python",
+      "vmware",
+      "SW",
+      "Shell"
+    ],
+    "Tags": [
+      {
+        "id": "com_156",
+        "name": "영업이익 20% 지속성장",
+        "category": "sales"
+      },
+      {
+        "id": "com_131",
+        "name": "스타트업",
+        "category": "scale"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "275",
+        "name": "재택근무",
+        "category": "welfare"
+      },
+      {
+        "id": "286",
+        "name": "프리한 복장",
+        "category": "welfare"
+      },
+      {
+        "id": "com_126",
+        "name": "9호선 역세권 기업",
+        "category": "subway"
+      },
+      {
+        "id": "276",
+        "name": "유연근무제",
+        "category": "welfare"
+      },
+      {
+        "id": "289",
+        "name": "사내 카페",
+        "category": "welfare"
+      }
+    ],
+    "Description": "23년간 로그데이터를 연구해 온 로그 분야 전문 기업 INNERBUS\r\n\r\n[이너버스, 국내 통합로그관리 솔루션의 일인자]\r\n정보유출 모니터링, 정규표현식, 텍스트 검색식 자동완성 방법, 대용량 로그 파일의 인덱싱\r\n방법 등 총 8종의 특허를 보유하고 있으며, 로그 분야의 연구 개발에 정진하고 있습니다.\r\n\r\n* 국내 최다 로그 관련 특허 보유 (8개)\r\n* 최근 11개년 평균 점유율 56% (조달청 나라장터 ‘13~23년 통합로그관리부문 판매 기준)\r\n* 국내최다 고객사 보유(700+)\n\n• 컨설팅 / PL \r\n• IT 보안 - SIEM솔루션 기술 엔지니어\r\n• 제조 기술 습득 및 활용 (보안 SW 기술지원 / 장애처리 / 유지보수), 구축사 아케텍처 설계 및 컨설팅\r\n• 자체 솔루션(SIEM) 납품 고객사 및 전국 파트너(협력사) 기술 지원 및 관리\n\n• 경력 : 신입~2년\n• 학력 : 초대졸이상\n• IT 엔지니어 경력자(제조사 및 유통사 근무 이력)\n• Linux/dbms/네트워크 지식 활용 및 활동 경험 보유자\n\n\n• Docker, Elasticsearch, Kafka, Python, Linux, DBMS, Kibana, QueryDSL, VMware, JVM 경험자\n• 업무 관련 shell script 또는 tools개발 가능자\n• 관련 자격증 소지자 우대 (CISA, CISSP, 보안기사/산업기사, ISMS, MOS)\n• 적극적이고 진취적이며, 업무에 대한 책임감 보유자\n• 관련 문서 작성 능력 및 프리젠테이션 능력 우수자(한글, Excel, Powerpoint, Word)\n\n\n• 고용노동부 일 생활 균형 캠페인 참여\r\n• 재택근무, 유연근무, 눈치 보지 않는 정시 칼퇴근\r\n• 점심 회식 권장, 자율 참석\r\n• 자율 복장, 자유로운 연차사용\r\n• 반반차 제도 도입, 휴가 사유 미 기재\r\n• 근로자의 날 휴무, 육아휴직, 경조 휴가, 대체 휴가, 백신 휴가\r\n• 한국관광공사 근로자 휴가 지원사업 7년 연속 참여\r\n• 볼링, 자전거 라이딩 등의 동호회 활동비 지원,\r\n• 이너버스 데이, 할로윈 데이 등 다양한 파티로 직원 간 친목 도모\r\n• 신입사원교육(OJT), 정보보호, IT 관련 교육비 지원\r\n• 도서구입비 지원, 자격증 시험 응시료 등 자기 계발비 지원\r\n• 휴게실, 회의실, 최신 노트북, 공기청정기, 카페테리아\r\n• 장기근속 및 우수사원 포상 (황금 열쇠, 스마트 워치, 상금 등)\r\n• 퇴직금, 각종 경조금, 인센티브, 매월 팀 회식비, 통신비, 야근 식대 등 지원\r\n• 명절 선물",
+    "RawJSON": "{\"id\":53762539,\"title\":\"통합보안관리 엔지니어(신입)\",\"companyName\":\"이너버스\",\"logo\":\"https://cdn.jumpit.co.kr/images/songkh87_252139/20242517172550852_2300_2300.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20242517172502544_876_525.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20242517172502970_863_517.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20242517172503099_870_522.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20242517172502770_865_519.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20240917170903113/profile-image.png\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20240917170921043/profile-image.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255270/20240917170931161/profile-image.png\",\"sortNumber\":7}],\"techStacks\":[{\"stack\":\"Docker\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/docker.png\"},{\"stack\":\"Elasticsearch\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/elasticsearch.png\"},{\"stack\":\"Kafka\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/kafka.png\"},{\"stack\":\"Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/linux.png\"},{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"},{\"stack\":\"vmware\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"SW\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Shell\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/Shell.png\"}],\"serviceInfo\":\"23년간 로그데이터를 연구해 온 로그 분야 전문 기업 INNERBUS\\r\\n\\r\\n[이너버스, 국내 통합로그관리 솔루션의 일인자]\\r\\n정보유출 모니터링, 정규표현식, 텍스트 검색식 자동완성 방법, 대용량 로그 파일의 인덱싱\\r\\n방법 등 총 8종의 특허를 보유하고 있으며, 로그 분야의 연구 개발에 정진하고 있습니다.\\r\\n\\r\\n* 국내 최다 로그 관련 특허 보유 (8개)\\r\\n* 최근 11개년 평균 점유율 56% (조달청 나라장터 ‘13~23년 통합로그관리부문 판매 기준)\\r\\n* 국내최다 고객사 보유(700+)\",\"responsibility\":\"• 컨설팅 / PL \\r\\n• IT 보안 - SIEM솔루션 기술 엔지니어\\r\\n• 제조 기술 습득 및 활용 (보안 SW 기술지원 / 장애처리 / 유지보수), 구축사 아케텍처 설계 및 컨설팅\\r\\n• 자체 솔루션(SIEM) 납품 고객사 및 전국 파트너(협력사) 기술 지원 및 관리\",\"qualifications\":\"• 경력 : 신입~2년\\n• 학력 : 초대졸이상\\n• IT 엔지니어 경력자(제조사 및 유통사 근무 이력)\\n• Linux/dbms/네트워크 지식 활용 및 활동 경험 보유자\\n\",\"preferredRequirements\":\"• Docker, Elasticsearch, Kafka, Python, Linux, DBMS, Kibana, QueryDSL, VMware, JVM 경험자\\n• 업무 관련 shell script 또는 tools개발 가능자\\n• 관련 자격증 소지자 우대 (CISA, CISSP, 보안기사/산업기사, ISMS, MOS)\\n• 적극적이고 진취적이며, 업무에 대한 책임감 보유자\\n• 관련 문서 작성 능력 및 프리젠테이션 능력 우수자(한글, Excel, Powerpoint, Word)\\n\",\"welfares\":\"• 고용노동부 일 생활 균형 캠페인 참여\\r\\n• 재택근무, 유연근무, 눈치 보지 않는 정시 칼퇴근\\r\\n• 점심 회식 권장, 자율 참석\\r\\n• 자율 복장, 자유로운 연차사용\\r\\n• 반반차 제도 도입, 휴가 사유 미 기재\\r\\n• 근로자의 날 휴무, 육아휴직, 경조 휴가, 대체 휴가, 백신 휴가\\r\\n• 한국관광공사 근로자 휴가 지원사업 7년 연속 참여\\r\\n• 볼링, 자전거 라이딩 등의 동호회 활동비 지원,\\r\\n• 이너버스 데이, 할로윈 데이 등 다양한 파티로 직원 간 친목 도모\\r\\n• 신입사원교육(OJT), 정보보호, IT 관련 교육비 지원\\r\\n• 도서구입비 지원, 자격증 시험 응시료 등 자기 계발비 지원\\r\\n• 휴게실, 회의실, 최신 노트북, 공기청정기, 카페테리아\\r\\n• 장기근속 및 우수사원 포상 (황금 열쇠, 스마트 워치, 상금 등)\\r\\n• 퇴직금, 각종 경조금, 인센티브, 매월 팀 회식비, 통신비, 야근 식대 등 지원\\r\\n• 명절 선물\",\"recruitProcess\":\"\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-03 00:00:00\",\"closedAt\":\"2026-06-01 23:59:59\",\"location\":\"서울 영등포구 양평로21길26, 1604호 1605호 1606호 1607호\",\"tags\":[{\"id\":\"com_156\",\"name\":\"영업이익 20% 지속성장\",\"emoticon\":\"sales\"},{\"id\":\"com_131\",\"name\":\"스타트업\",\"emoticon\":\"scale\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"275\",\"name\":\"재택근무\",\"emoticon\":\"welfare\"},{\"id\":\"286\",\"name\":\"프리한 복장\",\"emoticon\":\"welfare\"},{\"id\":\"com_126\",\"name\":\"9호선 역세권 기업\",\"emoticon\":\"subway\"},{\"id\":\"276\",\"name\":\"유연근무제\",\"emoticon\":\"welfare\"},{\"id\":\"289\",\"name\":\"사내 카페\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"2208622785\",\"encodedSerialNumber\":\"MjIwODYyMjc4NQ==\",\"companyUrl\":\"https://www.innerbus.com\",\"alwaysOpen\":false,\"celebration\":50,\"education\":7,\"educationName\":\"대학졸업(2,3년) 이상\",\"graduate\":true,\"establishPeriod\":26,\"establishDate\":\"2001년 10월 설립\",\"workingPlaces\":[{\"address\":\"서울 영등포구 양평로21길26, 1604호 1605호 1606호 1607호\",\"domestic\":false}],\"jobCategories\":[{\"id\":19,\"name\":\"빅데이터 엔지니어\"},{\"id\":10,\"name\":\"정보보안 담당자\"},{\"id\":21,\"name\":\"기술지원\"},{\"id\":9,\"name\":\"devops/시스템 엔지니어\"}],\"invisible\":false,\"manDbMcomIdx\":40010,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-03T00:00:00+09:00",
+    "ClosedAt": "2026-06-01T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53771491",
+    "URL": "https://jumpit.saramin.co.kr/position/53771491",
+    "Title": "Windows개발자 (신입)",
+    "Company": "페이타랩",
+    "Location": "부산 부산진구 서면로39, 6층 쿨리지코너부산센터 601호, 602호, 603호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      ".NET",
+      "C#",
+      "C++",
+      "Git",
+      "Slack",
+      "Visual Studio",
+      "Windows",
+      "WPF"
+    ],
+    "Tags": [
+      {
+        "id": "com_111",
+        "name": "시리즈B 투자유치",
+        "category": "invest"
+      },
+      {
+        "id": "com_131",
+        "name": "스타트업",
+        "category": "scale"
+      },
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      }
+    ],
+    "Description": "【 대한민국 No. 1 카페 주문 플랫폼 - 패스오더 】  \r\n \r\n페이타랩은 대한민국 No.1 커피 주문 플랫폼인 ‘패스오더’를 운영하고 있는 스타트업입니다.\r\n\r\n패스오더는 2018년, 자영업 사장님들의 인건비 부담, 매출 부진이라는 사회적인 문제를 해결하기 위해 대형 프랜차이즈에서만 가능했던 스마트오더 시스템을 중소형 프랜차이즈 및 개인 카페까지 사용할 수 있도록 개발한 간편한 스마트오더 서비스입니다.\r\n\r\n투자 혹한기에도 불구하고 시장에서 우리의 경쟁력과 성장성을 인정받아 22년 1월, Series B에서 121억 원이라는 투자 유치에 성공했고 약 1년 반 만인 23년 9월, 또 한 번 성공적으로 투자를 유치해 누적 투자 금액 200억 원을 달성했습니다. \r\n\r\n페이타랩은 올 한해도 빠르게 성장하여 지난 1년 동안 달성했던 지표를 3개월 만에 달성하며 지금 이 순간에도 우리가 세운 기록을 계속해서 경신하며 무섭게 성장하고 있습니다!\r\n\r\n【 패스오더만의 독보적인 경쟁력 5가지 핵심 요약! 】 \r\n \r\n1. 바쁜 시간에 줄 서지 않고 언제 어디서든 미리 주문해요! (매일 10분 절약)\r\n2. 매장 상황에 따른 예상 수령시간 NO! 내가 원하는 시간에 픽업해요!\r\n3. 주문  결제  적립을 동시에 패스오더 하나로 해결해요!\r\n4. 매일 마시는 커피, 단 3번의 클릭으로 빠르게 재주문!\r\n5. 300개 이상의 브랜드 카페 주문을 패스오더 앱 하나로 이용 가능해요!\r\n \r\n“어중간하게 성공해서 안주하지 않겠습니다.”라는 대표님의 경영 철학과 “Pay+Data+Lab”이라는 페이타랩의 사명처럼 아날로그 기반의 자영업시장 데이터를 통해 IT화를 이뤄내는 그날까지 안주하지 않고 달려나가고 있어요.\r\n\r\n■ 페이타랩 CEO 인터뷰 : https://bit.ly/3yEZh18\r\n: 향후 목표 및 비전, 채용 기준, 많은 기업들 중 페이타랩 합류해야 하는 이유가 궁금하다면? \r\n\r\n\r\n【 안주하지 않겠다는 집요함으로 이뤄낸 무서운 성장 】\r\n \r\n『 투자 혹한기 속 누적 투자 금액 200억+ 달성』\r\n『 포브스 선정 한국인이 사랑한 식음료 앱 5위 』\r\n『 2024년 앱스토어 식음료 부문 1위 』\r\n『 매년 3배씩, 매출액 1800% 성장 』\r\n『 앱 사용자 수 800만명 달성 』\r\n 『 구글 앱스토어 평점 4.9점 』\r\n 『 재주문율 80% 이상 』\r\n 『 1초에 599잔 』\r\n\r\n*2018년 ~ 현재까지\r\n \r\n \r\n【 성장하는 팀의 비결을 알려드려요 】\r\n\r\n페이타랩에는 일과 성장에 미쳐있는 사람들이 모여있어요.\r\n자신의 일에 깊게 몰입하여 뛰어난 결과를 만들어 내는 것에 희열을 느끼는 사람들이에요.\r\n이렇게 성장에 대한 집착으로 안주하지 않고 달려 나가는 사람들이 모여 무서운 성장을 만들어 내요.\r\n팀 페이타랩에 합류하여 우리의 위닝포인트를 체득하고, 문제를 해결해 나가며 우리와 함께 다음 정답을 찾아나갈 분을 찾아요! \r\n\r\n\r\n【 페이타랩에는 세 가지 기회가 있어요 】\r\n\r\n■ 커리어 성장의 확실한 기회\r\n놀라운 속도로 성장하고 있는 회사이기에 앞으로 해결해야 하는 미션들이 무수히 많아요. 챌린지한 미션들이 주어지고, 빠르게 해결해 나가는 과정에서 개인의 역량이 폭발적으로 성장하는 경험을 통해 남들과 비교할 수 없는 멋진 커리어를 쌓아나갈 수 있어요.\r\n\r\n■ 뛰어난 동료와 함께할 기회\r\n인재 밀도가 높은 조직인 만큼 열정적이고 뛰어난 능력을 가진 동료들과 함께할 수 있어요. 자신의 일에 진심인 사람들이 모여 있기에, 동료로부터 좋은 자극과 인사이트를 주고받으며 시너지를 낼 수 있는 환경에서 일할 수 있어요.\r\n\r\n■ 일에만 집중할 수 있는 기회\r\n불필요한 절차 및 비효율적인 요소들을 없애 오직 일에만 집중하며 자신의 역량을 마음껏 펼칠 수 있습니다. 그중에서도 특히, 사람 때문에 힘든 일은 없도록 조직문화에 있어 절대 타협하지 않고 있어요.\n\n【페이타랩 프로덕트팀】  \r\n \r\n프로덕트팀은 패스오더 유저와 점주님을 연결하며 고객지향적인 프로덕트를 만드는 팀이에요. 프로덕트의 성장을 위해 각 팀에서 실현하고자 하는 수많은 아이디어와 프로젝트를 유기적인 의사소통을 통해 흡수하고 구현해내고, 이를 위해 불필요하고 복잡한 업무 프로세스를 지양하며 실행 중심의 효율적인 업무 문화를 갖고 있어요. \r\n\r\n“개발의 마지막 관문”이라는 마음가짐으로 안정적이면서도 혁신을 일으킬 수 있는 프로덕트를 개발하기 위해 수단과 방법을 가리지 않고 학습하고 실행하는 팀이에요. 엔지니어, 프로덕트 오너, 프로덕트 디자이너, 데브옵스 등 프로덕트를 실현하는 과정 자체에서 즐거움을 느끼는 사람들이 모여있으며 그 이상으로 비즈니스 임팩트가 가장 중요하다는 점에 공감하는 사람들이 모여있어요.\r\n\r\n\r\n【오시면 이런 업무를 하게 되실 거예요!】\r\n\r\n• WPF를 이용한 응용프로그램 개발, 배포 및 유지/보수를 진행해요.\r\n• 패스오더 점주님 PC 주문접수 애플리케이션을 개발해요.\r\n• 기존 서비스를 안전하게 유지보수 하면서 점진적으로 리팩토링해요.\r\n\r\n\r\n【개발환경】\r\n\r\n• 사용언어: C#\r\n• 개발환경 및 도구: Visual Studio\r\n\r\n\r\n【병역특례자 (산업기능요원) 지원 가능】   \r\n• 병역특례 지원 시 원활한 진행을 위해 병역유형을 기재해주세요.\r\n• 현역신규/현역전직/보충역신규/보충역전직 등\r\n• 현재 패스오더는 현역전직/보충역 신규/보충역 전직이 가능합니다.\n\n【이런 분을 찾고 있어요!】\n \n• C#, C++ 중 1개 이상 언어에 능숙한 분\n• .Net framework에 대해 이해하고 계신 분\n• 신규 서비스를 위한 기획, 설계, 커뮤니케이션, 개발, 운영에 적극적으로 참여할 수 있는 분\n• RESTful API 연동 개발 경험이 있는 분\n• Socket 통신을 이용한 네트워킹 경험이 있는 분\n\n【이런 분이면 더 좋아요!】\n\n• WPF 상용 서비스 개발, 배포 및 운영 경험이 있는 분\n• Thermal Printer 연동 등 POS 시스템 개발 경험이 있는 분\n• 다양한 환경으로 배포된 프로그램 유지/보수 경험이 있는 분\n• 요구사항 분석 및 다른 개발자와 협업을 위한 원활한 커뮤니케이션 능력을 가지신 분\n• 팀과 함께 성장하며 지식을 공유하는 문화를 지향하시는 분\n\n【저희는 이렇게 일해요!】\r\n\r\n1. 그냥 하는 일은 없어요. 스스로 업무를 할 때 '왜?'를 항상 생각해요.\r\n2. 완벽한 결과물은 없다고 생각해요. 빠르게 실행해 보고 아니면 개선해 나가요.\r\n3. 하나의 팀으로 연결되어 있어요. 사내의 모든 정보는 투명하게 공유하고 있어요.\r\n4. 스포츠팀처럼 일해요. 각자의 포지션에서 최고가 되기 위해 끊임없이 성장해요. \r\n5. 개인의 성장을 지지해요. 누구나 원하는 만큼 성장할 수 있도록 회사가 지원을 아끼지 않아요.\r\n6. 직책 및 연차와 상관없이 모든 구성원이 자유롭게 소통하고 대단하게 피드백을 주고받아요.\r\n7. 관계는 수평적이에요. 직급 대신 ‘님’이라는 호칭을 사용하고, 상호 존칭을 사용하며 서로를 존중해요.\r\n8. 업무는 수직적으로 해요. 책임을 지는 의사 결정권자와 실무자의 구분을 명확히 해요.\r\n9. 구성원들을 진심으로 아끼고 배려해요. 일은 힘들 수 있지만, 사람 때문에 힘든 일은 없어요.\r\n10. 저녁 회식이 없어요. 다음 날 최상의 컨디션으로 일할 수 있도록 회사가 방해하지 않아요.\r\n\r\n\r\n\r\n【당신의 성장을 적극적으로 지원해요!】\r\n\r\n■ 오직 일과 성장에만 몰입하고 집중할 수 있도록\r\n• 업무 효율을 낼 수 있는 최고 스펙 장비 제공\r\n   ┕ 맥북프로, LG 그램 (2-3년 주기 업그레이드)\r\n• 27” 듀얼모니터 제공\r\n• 쾌적한 업무 환경 제공 (스타일러, 가습기, IQ Air 공기청정기)\r\n• 키보드, 마우스 등 필요한 주변기기 맞춤 제공\r\n• 개인별 법인카드 지급 (식대, 출장 등에 사용)\r\n• 사유를 묻지 않는 자유로운 연차 사용\r\n\r\n■ 원하는 만큼 배우고, 성장할 수 있도록\r\n• 교육비 무제한 전액 지원\r\n• 세미나, 컨퍼런스 참여 비용 무제한 지원\r\n• 20개 이상 교육 또는 온라인 콘텐츠 구독\r\n• 도서 무제한 구입 지원\r\n• Chat GPT 4.0 지원\r\n• 업무에 필요한 다양한 툴 적극 지원\r\n\r\n■ 함께하는 구성원이 행복할 수 있도록\r\n• 법인카드 식대 지원(식대 1만 1천원)\r\n• 패스오더 포인트 매월 지급 (50,000P)\r\n• 에스프레소 머신, Tea 무제한 제공\r\n• 간식(스낵바) 무제한 제공\r\n• 종합건강검진 지원\r\n• 명절 백화점 상품권 지급\r\n• 생일 축하 백화점 상품권 지급\r\n• 구성원 경조사 발생 시 근조화환 및 경조 휴가, 경조금 지원",
+    "RawJSON": "{\"id\":53771491,\"title\":\"Windows개발자 (신입)\",\"companyName\":\"페이타랩\",\"logo\":\"https://cdn.jumpit.co.kr/images/2334/20244127154117839/profile-image.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/2334/20244327154319495/profile-image.png\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/2334/20244427154414850/profile-image.png\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/2334/20244427154422954/profile-image.png\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/2334/20231708131731123_4096_2303.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/2334/20244427154420240/profile-image.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/2334/20244427154437736/profile-image.png\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_2334/20214924104948431_6480_4320.jpg\",\"sortNumber\":7},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_2334/20214924104941932_6480_4320.jpg\",\"sortNumber\":8}],\"techStacks\":[{\"stack\":\".NET\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/ASP_NET.png\"},{\"stack\":\"C#\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CSharp.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"Git\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/git.png\"},{\"stack\":\"Slack\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/slack.png\"},{\"stack\":\"Visual Studio\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/visualstudio.png\"},{\"stack\":\"Windows\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/windows.png\"},{\"stack\":\"WPF\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"【 대한민국 No. 1 카페 주문 플랫폼 - 패스오더 】  \\r\\n \\r\\n페이타랩은 대한민국 No.1 커피 주문 플랫폼인 ‘패스오더’를 운영하고 있는 스타트업입니다.\\r\\n\\r\\n패스오더는 2018년, 자영업 사장님들의 인건비 부담, 매출 부진이라는 사회적인 문제를 해결하기 위해 대형 프랜차이즈에서만 가능했던 스마트오더 시스템을 중소형 프랜차이즈 및 개인 카페까지 사용할 수 있도록 개발한 간편한 스마트오더 서비스입니다.\\r\\n\\r\\n투자 혹한기에도 불구하고 시장에서 우리의 경쟁력과 성장성을 인정받아 22년 1월, Series B에서 121억 원이라는 투자 유치에 성공했고 약 1년 반 만인 23년 9월, 또 한 번 성공적으로 투자를 유치해 누적 투자 금액 200억 원을 달성했습니다. \\r\\n\\r\\n페이타랩은 올 한해도 빠르게 성장하여 지난 1년 동안 달성했던 지표를 3개월 만에 달성하며 지금 이 순간에도 우리가 세운 기록을 계속해서 경신하며 무섭게 성장하고 있습니다!\\r\\n\\r\\n【 패스오더만의 독보적인 경쟁력 5가지 핵심 요약! 】 \\r\\n \\r\\n1. 바쁜 시간에 줄 서지 않고 언제 어디서든 미리 주문해요! (매일 10분 절약)\\r\\n2. 매장 상황에 따른 예상 수령시간 NO! 내가 원하는 시간에 픽업해요!\\r\\n3. 주문  결제  적립을 동시에 패스오더 하나로 해결해요!\\r\\n4. 매일 마시는 커피, 단 3번의 클릭으로 빠르게 재주문!\\r\\n5. 300개 이상의 브랜드 카페 주문을 패스오더 앱 하나로 이용 가능해요!\\r\\n \\r\\n“어중간하게 성공해서 안주하지 않겠습니다.”라는 대표님의 경영 철학과 “Pay+Data+Lab”이라는 페이타랩의 사명처럼 아날로그 기반의 자영업시장 데이터를 통해 IT화를 이뤄내는 그날까지 안주하지 않고 달려나가고 있어요.\\r\\n\\r\\n■ 페이타랩 CEO 인터뷰 : https://bit.ly/3yEZh18\\r\\n: 향후 목표 및 비전, 채용 기준, 많은 기업들 중 페이타랩 합류해야 하는 이유가 궁금하다면? \\r\\n\\r\\n\\r\\n【 안주하지 않겠다는 집요함으로 이뤄낸 무서운 성장 】\\r\\n \\r\\n『 투자 혹한기 속 누적 투자 금액 200억+ 달성』\\r\\n『 포브스 선정 한국인이 사랑한 식음료 앱 5위 』\\r\\n『 2024년 앱스토어 식음료 부문 1위 』\\r\\n『 매년 3배씩, 매출액 1800% 성장 』\\r\\n『 앱 사용자 수 800만명 달성 』\\r\\n 『 구글 앱스토어 평점 4.9점 』\\r\\n 『 재주문율 80% 이상 』\\r\\n 『 1초에 599잔 』\\r\\n\\r\\n*2018년 ~ 현재까지\\r\\n \\r\\n \\r\\n【 성장하는 팀의 비결을 알려드려요 】\\r\\n\\r\\n페이타랩에는 일과 성장에 미쳐있는 사람들이 모여있어요.\\r\\n자신의 일에 깊게 몰입하여 뛰어난 결과를 만들어 내는 것에 희열을 느끼는 사람들이에요.\\r\\n이렇게 성장에 대한 집착으로 안주하지 않고 달려 나가는 사람들이 모여 무서운 성장을 만들어 내요.\\r\\n팀 페이타랩에 합류하여 우리의 위닝포인트를 체득하고, 문제를 해결해 나가며 우리와 함께 다음 정답을 찾아나갈 분을 찾아요! \\r\\n\\r\\n\\r\\n【 페이타랩에는 세 가지 기회가 있어요 】\\r\\n\\r\\n■ 커리어 성장의 확실한 기회\\r\\n놀라운 속도로 성장하고 있는 회사이기에 앞으로 해결해야 하는 미션들이 무수히 많아요. 챌린지한 미션들이 주어지고, 빠르게 해결해 나가는 과정에서 개인의 역량이 폭발적으로 성장하는 경험을 통해 남들과 비교할 수 없는 멋진 커리어를 쌓아나갈 수 있어요.\\r\\n\\r\\n■ 뛰어난 동료와 함께할 기회\\r\\n인재 밀도가 높은 조직인 만큼 열정적이고 뛰어난 능력을 가진 동료들과 함께할 수 있어요. 자신의 일에 진심인 사람들이 모여 있기에, 동료로부터 좋은 자극과 인사이트를 주고받으며 시너지를 낼 수 있는 환경에서 일할 수 있어요.\\r\\n\\r\\n■ 일에만 집중할 수 있는 기회\\r\\n불필요한 절차 및 비효율적인 요소들을 없애 오직 일에만 집중하며 자신의 역량을 마음껏 펼칠 수 있습니다. 그중에서도 특히, 사람 때문에 힘든 일은 없도록 조직문화에 있어 절대 타협하지 않고 있어요.\",\"responsibility\":\"【페이타랩 프로덕트팀】  \\r\\n \\r\\n프로덕트팀은 패스오더 유저와 점주님을 연결하며 고객지향적인 프로덕트를 만드는 팀이에요. 프로덕트의 성장을 위해 각 팀에서 실현하고자 하는 수많은 아이디어와 프로젝트를 유기적인 의사소통을 통해 흡수하고 구현해내고, 이를 위해 불필요하고 복잡한 업무 프로세스를 지양하며 실행 중심의 효율적인 업무 문화를 갖고 있어요. \\r\\n\\r\\n“개발의 마지막 관문”이라는 마음가짐으로 안정적이면서도 혁신을 일으킬 수 있는 프로덕트를 개발하기 위해 수단과 방법을 가리지 않고 학습하고 실행하는 팀이에요. 엔지니어, 프로덕트 오너, 프로덕트 디자이너, 데브옵스 등 프로덕트를 실현하는 과정 자체에서 즐거움을 느끼는 사람들이 모여있으며 그 이상으로 비즈니스 임팩트가 가장 중요하다는 점에 공감하는 사람들이 모여있어요.\\r\\n\\r\\n\\r\\n【오시면 이런 업무를 하게 되실 거예요!】\\r\\n\\r\\n• WPF를 이용한 응용프로그램 개발, 배포 및 유지/보수를 진행해요.\\r\\n• 패스오더 점주님 PC 주문접수 애플리케이션을 개발해요.\\r\\n• 기존 서비스를 안전하게 유지보수 하면서 점진적으로 리팩토링해요.\\r\\n\\r\\n\\r\\n【개발환경】\\r\\n\\r\\n• 사용언어: C#\\r\\n• 개발환경 및 도구: Visual Studio\\r\\n\\r\\n\\r\\n【병역특례자 (산업기능요원) 지원 가능】   \\r\\n• 병역특례 지원 시 원활한 진행을 위해 병역유형을 기재해주세요.\\r\\n• 현역신규/현역전직/보충역신규/보충역전직 등\\r\\n• 현재 패스오더는 현역전직/보충역 신규/보충역 전직이 가능합니다.\",\"qualifications\":\"【이런 분을 찾고 있어요!】\\n \\n• C#, C++ 중 1개 이상 언어에 능숙한 분\\n• .Net framework에 대해 이해하고 계신 분\\n• 신규 서비스를 위한 기획, 설계, 커뮤니케이션, 개발, 운영에 적극적으로 참여할 수 있는 분\\n• RESTful API 연동 개발 경험이 있는 분\\n• Socket 통신을 이용한 네트워킹 경험이 있는 분\",\"preferredRequirements\":\"【이런 분이면 더 좋아요!】\\n\\n• WPF 상용 서비스 개발, 배포 및 운영 경험이 있는 분\\n• Thermal Printer 연동 등 POS 시스템 개발 경험이 있는 분\\n• 다양한 환경으로 배포된 프로그램 유지/보수 경험이 있는 분\\n• 요구사항 분석 및 다른 개발자와 협업을 위한 원활한 커뮤니케이션 능력을 가지신 분\\n• 팀과 함께 성장하며 지식을 공유하는 문화를 지향하시는 분\",\"welfares\":\"【저희는 이렇게 일해요!】\\r\\n\\r\\n1. 그냥 하는 일은 없어요. 스스로 업무를 할 때 '왜?'를 항상 생각해요.\\r\\n2. 완벽한 결과물은 없다고 생각해요. 빠르게 실행해 보고 아니면 개선해 나가요.\\r\\n3. 하나의 팀으로 연결되어 있어요. 사내의 모든 정보는 투명하게 공유하고 있어요.\\r\\n4. 스포츠팀처럼 일해요. 각자의 포지션에서 최고가 되기 위해 끊임없이 성장해요. \\r\\n5. 개인의 성장을 지지해요. 누구나 원하는 만큼 성장할 수 있도록 회사가 지원을 아끼지 않아요.\\r\\n6. 직책 및 연차와 상관없이 모든 구성원이 자유롭게 소통하고 대단하게 피드백을 주고받아요.\\r\\n7. 관계는 수평적이에요. 직급 대신 ‘님’이라는 호칭을 사용하고, 상호 존칭을 사용하며 서로를 존중해요.\\r\\n8. 업무는 수직적으로 해요. 책임을 지는 의사 결정권자와 실무자의 구분을 명확히 해요.\\r\\n9. 구성원들을 진심으로 아끼고 배려해요. 일은 힘들 수 있지만, 사람 때문에 힘든 일은 없어요.\\r\\n10. 저녁 회식이 없어요. 다음 날 최상의 컨디션으로 일할 수 있도록 회사가 방해하지 않아요.\\r\\n\\r\\n\\r\\n\\r\\n【당신의 성장을 적극적으로 지원해요!】\\r\\n\\r\\n■ 오직 일과 성장에만 몰입하고 집중할 수 있도록\\r\\n• 업무 효율을 낼 수 있는 최고 스펙 장비 제공\\r\\n   ┕ 맥북프로, LG 그램 (2-3년 주기 업그레이드)\\r\\n• 27” 듀얼모니터 제공\\r\\n• 쾌적한 업무 환경 제공 (스타일러, 가습기, IQ Air 공기청정기)\\r\\n• 키보드, 마우스 등 필요한 주변기기 맞춤 제공\\r\\n• 개인별 법인카드 지급 (식대, 출장 등에 사용)\\r\\n• 사유를 묻지 않는 자유로운 연차 사용\\r\\n\\r\\n■ 원하는 만큼 배우고, 성장할 수 있도록\\r\\n• 교육비 무제한 전액 지원\\r\\n• 세미나, 컨퍼런스 참여 비용 무제한 지원\\r\\n• 20개 이상 교육 또는 온라인 콘텐츠 구독\\r\\n• 도서 무제한 구입 지원\\r\\n• Chat GPT 4.0 지원\\r\\n• 업무에 필요한 다양한 툴 적극 지원\\r\\n\\r\\n■ 함께하는 구성원이 행복할 수 있도록\\r\\n• 법인카드 식대 지원(식대 1만 1천원)\\r\\n• 패스오더 포인트 매월 지급 (50,000P)\\r\\n• 에스프레소 머신, Tea 무제한 제공\\r\\n• 간식(스낵바) 무제한 제공\\r\\n• 종합건강검진 지원\\r\\n• 명절 백화점 상품권 지급\\r\\n• 생일 축하 백화점 상품권 지급\\r\\n• 구성원 경조사 발생 시 근조화환 및 경조 휴가, 경조금 지원\",\"recruitProcess\":\"【이런 여정을 거치게 되실 거예요!】 \\r\\n \\r\\n서류전형 \u003e 사전 테스트(필요 시 생략) \u003e 1차 인터뷰(직무) \u003e 2차 인터뷰(컬쳐 핏) \u003e 서류, 레퍼런스 체크 \u003e 최종합격\\r\\n\\r\\n• 전형이 생략되거나 추가 및 변경되는 등 지원 포지션 및 경력 등 기타 상황에 따라 유연하게 진행하고 있어요. \\r\\n• 개발자 및 일부 포지션의 경우 서류전형 다음으로 사전 테스트(코딩테스트, SQL 테스트, 과제테스트, 사전질문 등)를 진행해요.\\r\\n• 합격 여부와 관계없이 모든 전형의 결과를 안내해 드리고 있으며, 결과는 알림톡 및 메일을 통해 안내드려요.\\r\\n• 레퍼런스 체크를 진행하게 될 시, 사전에 지원자님께 반드시 동의를 구하고 진행해요.\\r\\n• 입사일, 처우 협의 등은 최종합격 시 진행하고 있으며, 가능한 지원자님의 상황을 배려해 드리고 있어요.\\r\\n\\r\\n【결과는 이렇게 안내 드려요!】\\r\\n\\r\\n※ 해당 포지션의 서류 검토는 최대 2주 이상 소요될 수 있는 점 너른 양해를 부탁 드립니다.\\r\\n   소중한 지원에 감사드리며, 보다 신중하게 검토할 수 있도록 하겠습니다.\\r\\n※ 전형 결과는 서류 합격자에 한해 개별적으로 다음 전형을 안내 드릴 예정이에요.\\r\\n\\r\\n【이렇게 일하게 되실 거예요!】\\r\\n\\r\\n• 근무 형태: 경력 3년 미만 (6개월), 경력 3년 이상 (3개월) 수습\\r\\n* 수습 기간은 지원자님과 회사가 서로를 알아가는 소중한 기간이에요. 수습 기간에도 급여 100% 지급 및 동일한 복지가 적용돼요. 수습기간 이후 내부 기준에 따라 정규직으로 계약하고 있어요.\\r\\n• 근무 지역: 서울 삼성역 인근 (강남구 영동대로 85길 34, 6층)\\r\\n\\r\\n\\r\\n\\r\\n【채용에 진심인 채용담당자의 한마디】\\r\\n\\r\\n구성원분들을 부품으로 여기지 않고, 한 분 한 분을 소중하게 생각하는 만큼 시간이 오래 걸리더라도 신중하게, 우리와 맞는 분을 모시기 위해 노력하고 있어요. 일부 지원자분들에게는 페이타랩 합류 과정이 다소 까다롭고 긴 여정이라고 느끼실 수도 있지만, 서로에 대해 깊게 알아가는 시간이라고 생각해 주시고 우리의 채용 여정을 진심으로 바라봐 주시면 감사하겠습니다. :)\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-01 00:00:00\",\"closedAt\":\"2026-05-30 23:59:59\",\"location\":\"부산 부산진구 서면로39, 6층 쿨리지코너부산센터 601호, 602호, 603호\",\"tags\":[{\"id\":\"com_111\",\"name\":\"시리즈B 투자유치\",\"emoticon\":\"invest\"},{\"id\":\"com_131\",\"name\":\"스타트업\",\"emoticon\":\"scale\"},{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"}],\"serialNumber\":\"4528701123\",\"encodedSerialNumber\":\"NDUyODcwMTEyMw==\",\"companyUrl\":\"https://passorder.co.kr/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":true,\"establishPeriod\":9,\"establishDate\":\"2018년 2월 설립\",\"workingPlaces\":[{\"address\":\"부산 부산진구 서면로39, 6층 쿨리지코너부산센터 601호, 602호, 603호\",\"domestic\":false}],\"jobCategories\":[{\"id\":9,\"name\":\"devops/시스템 엔지니어\"},{\"id\":15,\"name\":\"SW/솔루션\"}],\"invisible\":false,\"manDbMcomIdx\":7584477,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-01T00:00:00+09:00",
+    "ClosedAt": "2026-05-30T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53772511",
+    "URL": "https://jumpit.saramin.co.kr/position/53772511",
+    "Title": "임베디드 소프트웨어 개발자 (Junior)",
+    "Company": "디엑스솔루션",
+    "Location": "경기 성남시 수정구 달래내로46, 601호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 7,
+    "EducationName": "대학졸업(2,3년) 이상",
+    "StackTags": [
+      "C",
+      "C++",
+      "Linux",
+      "Python",
+      "Spring Framework",
+      "AI/인공지능",
+      "Embedded",
+      "SW",
+      "RTOS",
+      "Embedded Linux"
+    ],
+    "Tags": [
+      {
+        "id": "com_117",
+        "name": "다산그룹 계열사",
+        "category": "scale"
+      },
+      {
+        "id": "276",
+        "name": "유연근무제",
+        "category": "welfare"
+      }
+    ],
+    "Description": "디엑스솔루션㈜는 NPU를 활용한 제품 및 모듈 개발을 통해 AI기술과 시장에 발맞춰 혁신기술과 고객서비스로 함께 성장할 가족을 찾습니다.\r\n임베디드(Embedded) 소프트웨어 개발자로서 NPU SDK 개발 등 다양한 경험을 가지신 유경험자를 찾습니다.\n\n• Embedded Linux / RTOS based embedded software 개발\r\n　- BSP 포팅\r\n　- 소프트웨어 Framework 개발\r\n• NPU SDK 개발\n\n• 컴퓨터공학, 전산학, AI 또는 S/W관련학과 졸업(전문대졸 이상) 또는 정보처리기사 자격증을 보유하신 분\n• 소프트웨어 개발 경험을 가지신 분\n• Embedded 시스템 개발 경험(Linux, RTOS) 혹은 Window 기반 소프트웨어 개발 경험을 가지신 분\n\n[필요역량]\n• C, C++, Python 등 개발 프로그래밍 언어 활용 경험을 가지신 분\n• Linux 환경 개발 혹은 Window 기반 Vitual C++, MFC Python 개발 경험을 가지신 분\n\n• AI 가속기 개발 경험이 있으신 분\n• Yocto 빌드 시스템 개발 경험을 가지신 분\n• Embedded Linux BSP 개발 경험이 있으신 분\n• Vision 처리 개발 경험이 있으신 분\n\n• 정규직(수습기간 3개월)\r\n• 주5일(월~금), 협의 시 유연근무 가능",
+    "RawJSON": "{\"id\":53772511,\"title\":\"임베디드 소프트웨어 개발자 (Junior)\",\"companyName\":\"디엑스솔루션\",\"logo\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20243006083045181_2192_2192.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254417154421888_567_378.png\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20243006083050038_1859_1273.png\",\"sortNumber\":3}],\"techStacks\":[{\"stack\":\"C\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/linux.png\"},{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"},{\"stack\":\"Spring Framework\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/springframework.png\"},{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Embedded\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/embedded.png\"},{\"stack\":\"SW\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"RTOS\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Embedded Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"디엑스솔루션㈜는 NPU를 활용한 제품 및 모듈 개발을 통해 AI기술과 시장에 발맞춰 혁신기술과 고객서비스로 함께 성장할 가족을 찾습니다.\\r\\n임베디드(Embedded) 소프트웨어 개발자로서 NPU SDK 개발 등 다양한 경험을 가지신 유경험자를 찾습니다.\",\"responsibility\":\"• Embedded Linux / RTOS based embedded software 개발\\r\\n　- BSP 포팅\\r\\n　- 소프트웨어 Framework 개발\\r\\n• NPU SDK 개발\",\"qualifications\":\"• 컴퓨터공학, 전산학, AI 또는 S/W관련학과 졸업(전문대졸 이상) 또는 정보처리기사 자격증을 보유하신 분\\n• 소프트웨어 개발 경험을 가지신 분\\n• Embedded 시스템 개발 경험(Linux, RTOS) 혹은 Window 기반 소프트웨어 개발 경험을 가지신 분\\n\\n[필요역량]\\n• C, C++, Python 등 개발 프로그래밍 언어 활용 경험을 가지신 분\\n• Linux 환경 개발 혹은 Window 기반 Vitual C++, MFC Python 개발 경험을 가지신 분\",\"preferredRequirements\":\"• AI 가속기 개발 경험이 있으신 분\\n• Yocto 빌드 시스템 개발 경험을 가지신 분\\n• Embedded Linux BSP 개발 경험이 있으신 분\\n• Vision 처리 개발 경험이 있으신 분\",\"welfares\":\"• 정규직(수습기간 3개월)\\r\\n• 주5일(월~금), 협의 시 유연근무 가능\",\"recruitProcess\":\"• 서류 전형 - 1차(실무) 면접 - 2차(인사) 면접 – 처우협의 – 최종합격\\r\\n※ 입사지원 서류에 허위사실이 발견될 경우, 채용확정 이후라도 채용이 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-01 00:00:00\",\"closedAt\":\"2026-05-30 23:59:59\",\"location\":\"경기 성남시 수정구 달래내로46, 601호\",\"tags\":[{\"id\":\"com_117\",\"name\":\"다산그룹 계열사\",\"emoticon\":\"scale\"},{\"id\":\"276\",\"name\":\"유연근무제\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"1918603234\",\"encodedSerialNumber\":\"MTkxODYwMzIzNA==\",\"companyUrl\":\"\",\"alwaysOpen\":false,\"celebration\":50,\"education\":7,\"educationName\":\"대학졸업(2,3년) 이상\",\"graduate\":false,\"establishPeriod\":4,\"establishDate\":\"2023년 11월 설립\",\"workingPlaces\":[{\"address\":\"경기 성남시 수정구 달래내로46, 601호\",\"domestic\":false}],\"jobCategories\":[{\"id\":13,\"name\":\"HW/임베디드\"}],\"invisible\":false,\"manDbMcomIdx\":8155740,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-01T00:00:00+09:00",
+    "ClosedAt": "2026-05-30T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53805973",
+    "URL": "https://jumpit.saramin.co.kr/position/53805973",
+    "Title": "ML Engineer/Researcher (신입)",
+    "Company": "에너자이",
+    "Location": "서울 강남구 테헤란로27길27",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "C",
+      "C++",
+      "Keras",
+      "Python",
+      "PyTorch",
+      "TensorFlow",
+      "MachineLearning",
+      "AI/인공지능"
+    ],
+    "Tags": [
+      {
+        "id": "291",
+        "name": "육아휴직",
+        "category": "welfare"
+      },
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "com_113",
+        "name": "시리즈A 투자유치",
+        "category": "invest"
+      }
+    ],
+    "Description": "[회사 소개]\r\n에너자이는 ‘모든 이들이 모든 사물을 통해 최고의 AI를 경험할 수 있도록’이라는 비전 아래 AI 혁신을 선도하고 있는 AI 소프트웨어 기업입니다. 실제 제품 및 서비스 환경에서 AI 모델이 우수한 성능으로 동작하기 위해서는 AI 모델 및 하드웨어를 모두 고려한 AI 최적화가 필수적이며, 에너자이는 업계 최고 수준의 AI 최적화 기술을 기반으로 고객의 AI 역량 강화에 기여하고 있습니다.\r\n\r\n에너자이는 뛰어난 기술력을 바탕으로 국제 저명 학회 CVPR 주최 Mobile AI Challenge에 참가하여 Xiaomi, Huawei 등의 글로벌 기업들을 제치고 우수한 성적으로 입상하였으며, 이후 그 기술력 및 사업성을 인정받아 Intel, Microsoft, Arm, NVIDIA, Qualcomm, Renesas Electronics, Synaptics, 삼성전자 등의 글로벌 대기업들과 파트너쉽을 체결하고 협력을 진행하고 있습니다. 2025년에는 엣지 AI 및 비전 얼라이언스(Edge AI and Vision Alliance)가 Edge AI 분야 산업 혁신을 주도한 기업에 수여하는 2025 올해의 제품상(The Product of the Year Award)을 수상했습니다.\r\n\r\n에너자이는 현재 정확도 손실 없이 대상 하드웨어에서 AI 추론 성능을 획기적으로 향상시키는 AI 추론 엔진 ‘Optimium’을 비롯해, 고도화된 양자화 기술과 Optimium 기반의 커널 최적화 기술을 결합한 고성능 On-device AI 솔루션을 개발해 디바이스 제조사, AI 서비스 기업, 그리고 반도체 팹리스·IP 기업 등에 제공하고 있습니다.\r\n\r\n[주요 제품 및 솔루션 소개]\r\n• 차세대 AI 추론 엔진 Optimium\r\n- 학습된 AI 모델의 정확도를 유지하면서 대상 하드웨어 환경에서의 추론 속도를 획기적으로 향상시킬 수 있는 AI 추론 엔진\r\n- CPU 대상 추론 최적화를 지원하고 있으며, 지원 범위 내 기존 AI 추론 엔진 대비 압도적인 성능 우위 보유 (2025년내 GPU 대상 추론 최적화 지원 예정)\r\n- 4bit 이하의 Low-bit AI 모델에 대한 최적화된 Kernel 지원\r\n- Reference\r\n- 제품 홈페이지: https://optimium.enerzai.com/\r\n- 소개 영상: https://youtu.be/LqxnstNaiDo?si=mTLgxsFBqzQu3TkZ\r\n• On-device AI 솔루션\r\n- 규모가 큰 AI 모델을 4bit 이하로 양자화하고 Optimium 기반의 최적화된 Kernel을 결합해 정확도 손실을 최소화하면서, 전력 및 메모리 사용량을 대폭 절감한 On-device AI 솔루션\r\n- 1.58bit Whisper 모델 기반 음성인식 및 번역을 수행하는 솔루션에 이어, 추후 LLM/VLM 등 다양한 모델 기반 솔루션으로 확장 중\r\n- Ampere, Synaptics, Renesas Electronics를 비롯해 다양한 글로벌 반도체 기업들과 협력해 각 사의 SoC 상에서 압도적인 성능 달성\r\n- 데모시연: https://youtu.be/9Fa6JRqz4Hs?si=ZQ8ETpFdT_Tdp1jC\r\n\r\n[주요 성과]\r\n• 2019 1월 네이버 계열 VC SpringCamp로부터 Seed 투자 유치\r\n• 2019 9월 Seoulz 주관 '주목해야할 대한민국 AI 스타트업 Top 10' 선정\r\n• 2020 2월 중소벤처기업부 TIPS 프로그램 선정\r\n• 2021 4월 Edge AI and Vision Alliance 회원사 선정\r\n• 2021 5월 'CVPR 2021 - Mobile AI Workshop and Challenges' 3위 기록\r\n• 2021 5월 Microsoft 스타트업 프로그램 선발\r\n• 2021 11월 삼성 C-Lab Outside 선발\r\n• 2021 12월 Intel AI Builder 선발\r\n• 2021 12월 SK True Innovation 선발\r\n• 2022 4월 Intel Gold Tier Partner 선정\r\n• 2022 5월 대한민국 녹색에너지 우수기업 대상 수상\r\n• 2022 5월 SK이노베이션 주관 친환경 스타트업 진흥 프로그램 ‘에그’ 선발\r\n• 2022 6월 정보통신산업진흥원 주관 인공지능 온라인 경진대회 1위 수상\r\n• 2022 9월 Arm AI Partner 선정\r\n• 2022 12월 Qualcomm IoT Accelerator 프로그램 선발\r\n• 2023 1월 35억원 규모 Series A 투자 유치\r\n• 2023 1월 KDB NextOne 6기 선정\r\n• 2023 8월 중소벤처기업부 POST TIPS 프로그램 선정\r\n• 2023년 10월 NVIDIA Inception 프로그램 선발\r\n• 2024년 5월 KIC 실리콘밸리 주관 AI/SaaS PMF 프로그램 선정\r\n• 2024년 5월 서울경제진흥원 2024-1기 Pitching \u0026 Connect 최우수상 수상\r\n• 2025년 1월 CES 2025에 삼성전자 C랩 전시관으로 부스 참가\r\n• 2025년 3월 AWS GenAI US Delegation Program 선정\r\n• 2025년 3월 Google for Startups Accelerator: AI First 프로그램 선정\r\n• 2025년 4월 초격차 스타트업 1000+ 프로젝트 DIPS 사업화 창업기업 선정\r\n• 2025년 4월 Edge AI and Vision Product of the Year Award 수상\r\n• 2025년 5월 77억원 규모 Bridge 투자 유치\r\n• 2025년 6월 NextRise Awards 수상\r\n• 2025년 공고일 기준 특허 28건 등록, 23건 출원 완료\n\n해당 직군은 초경량 LLM을 위한 최적화 기법을 연구하고, 이를 사내 추론 엔진과 통합하여 실제 온디바이스 환경에서 실행 가능한 형태로 구현하는 업무를 담당합니다. 주로 transformer 기반의 최신 모델을 극도로 효율화하는 데 집중하며, 연구-실험-적용의 전 과정을 리딩하게 됩니다. 이 과정을 통해 고객 프로젝트 등으로부터 발견된 기술적 병목을 분석하고 새로운 해결책을 제안합니다.\r\n\r\n• LLM 최적화 기법의 연구 및 일반화 수행\r\n  - LLM 추론 과정에서의 Token-level Sparsity, Activation-level Sparsity에 기반한 연산 최적화 전략 연구\r\n  - 1.58bit 양자화를 포함한 ultra-low-bit weight/activation quantization 알고리즘 설계\r\n  - 사내 추론 엔진 Optimium 개발팀과의 협업을 통해 실제 on-device에서 가속화할 수 있는 형태의 연구 수행\r\n  - CPU, GPU, NPU 등 이기종 하드웨어 환경에 최적화된 Heterogeneous Execution 자동 할당 전략 연구 \r\n  - 연구 성과의 기술 문서화, 내부 공유 및 필요 시 데모 콘텐츠 제작\r\n\r\n• 주된 타겟 디바이스 (including but not limited to)\r\n  - Jetson Board (Orin, Xavier, etc.)\r\n  - MPU Boards\n\n• 학부 4학년 이상\n• 해외 여행에 결격 사유가 없으신 분\n• Python 을 활용한 프로젝트 수행 경험이 있으신 분\n• 딥러닝 프레임워크(Pytorch, Keras, Tensorflow 등) 을 활용한 프로젝트 수행 경험이 있으신 분\n• 병역특례 지원 가능자\n  (산업기능요원(보충역), 전문연구요원(전직, 보충역) 지원 가능하며, 이력서에 지원 유형을 표기하여 제출)\n\n• 2bit 이하 quantization 알고리즘 설계 또는 실험 경험자\n• LLM 또는 SLM의 온디바이스 실행 관련 프로젝트 참여 경험자\n• AI 경량화 연구 수행 경험자\n• 관련 학회 및 저널 게재 경력자\n• 관련 전공 석사, 박사 학위 보유자 (경력 인정)\n\n• 점심 및 저녁식대 지원\r\n• 맛있는 간식과 커피머신 상시 비치\r\n• 외근 및 야근 시 택시비 지원\r\n• SW/IT 고성능 장비 지원\r\n• 격년마다 진행하는 의무 건강검진 진행 시 추가 검진비 지원\r\n• 직무관련 도서 구입비 지급\r\n• 업무 역량 향상을 위한 교육비 지급\r\n• 팀 스터디, 세미나, 컨퍼런스, 논문 투고 등의 비용 지원\r\n• 동호회비 지원\r\n• 직무발명보상제도 시행\r\n• 근속 연수에 따른 선물 지급\r\n• 결혼, 출산 시 축하금 지급\r\n• 직계가족 조사 시 경조금 및 상조 서비스 지원\r\n• 생일 유급 반차 제공추가",
+    "RawJSON": "{\"id\":53805973,\"title\":\"ML Engineer/Researcher (신입)\",\"companyName\":\"에너자이\",\"logo\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20223102143119983_210_209.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104534785_567_378.PNG\",\"sortNumber\":7},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104537449_567_378.PNG\",\"sortNumber\":8},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104540124_567_378.PNG\",\"sortNumber\":9},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104543583_567_378.PNG\",\"sortNumber\":10},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104546448_567_378.PNG\",\"sortNumber\":11},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104548918_567_378.PNG\",\"sortNumber\":12}],\"techStacks\":[{\"stack\":\"C\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"Keras\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/keras.png\"},{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"},{\"stack\":\"PyTorch\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/pytorch.png\"},{\"stack\":\"TensorFlow\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/tensorflow.png\"},{\"stack\":\"MachineLearning\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"[회사 소개]\\r\\n에너자이는 ‘모든 이들이 모든 사물을 통해 최고의 AI를 경험할 수 있도록’이라는 비전 아래 AI 혁신을 선도하고 있는 AI 소프트웨어 기업입니다. 실제 제품 및 서비스 환경에서 AI 모델이 우수한 성능으로 동작하기 위해서는 AI 모델 및 하드웨어를 모두 고려한 AI 최적화가 필수적이며, 에너자이는 업계 최고 수준의 AI 최적화 기술을 기반으로 고객의 AI 역량 강화에 기여하고 있습니다.\\r\\n\\r\\n에너자이는 뛰어난 기술력을 바탕으로 국제 저명 학회 CVPR 주최 Mobile AI Challenge에 참가하여 Xiaomi, Huawei 등의 글로벌 기업들을 제치고 우수한 성적으로 입상하였으며, 이후 그 기술력 및 사업성을 인정받아 Intel, Microsoft, Arm, NVIDIA, Qualcomm, Renesas Electronics, Synaptics, 삼성전자 등의 글로벌 대기업들과 파트너쉽을 체결하고 협력을 진행하고 있습니다. 2025년에는 엣지 AI 및 비전 얼라이언스(Edge AI and Vision Alliance)가 Edge AI 분야 산업 혁신을 주도한 기업에 수여하는 2025 올해의 제품상(The Product of the Year Award)을 수상했습니다.\\r\\n\\r\\n에너자이는 현재 정확도 손실 없이 대상 하드웨어에서 AI 추론 성능을 획기적으로 향상시키는 AI 추론 엔진 ‘Optimium’을 비롯해, 고도화된 양자화 기술과 Optimium 기반의 커널 최적화 기술을 결합한 고성능 On-device AI 솔루션을 개발해 디바이스 제조사, AI 서비스 기업, 그리고 반도체 팹리스·IP 기업 등에 제공하고 있습니다.\\r\\n\\r\\n[주요 제품 및 솔루션 소개]\\r\\n• 차세대 AI 추론 엔진 Optimium\\r\\n- 학습된 AI 모델의 정확도를 유지하면서 대상 하드웨어 환경에서의 추론 속도를 획기적으로 향상시킬 수 있는 AI 추론 엔진\\r\\n- CPU 대상 추론 최적화를 지원하고 있으며, 지원 범위 내 기존 AI 추론 엔진 대비 압도적인 성능 우위 보유 (2025년내 GPU 대상 추론 최적화 지원 예정)\\r\\n- 4bit 이하의 Low-bit AI 모델에 대한 최적화된 Kernel 지원\\r\\n- Reference\\r\\n- 제품 홈페이지: https://optimium.enerzai.com/\\r\\n- 소개 영상: https://youtu.be/LqxnstNaiDo?si=mTLgxsFBqzQu3TkZ\\r\\n• On-device AI 솔루션\\r\\n- 규모가 큰 AI 모델을 4bit 이하로 양자화하고 Optimium 기반의 최적화된 Kernel을 결합해 정확도 손실을 최소화하면서, 전력 및 메모리 사용량을 대폭 절감한 On-device AI 솔루션\\r\\n- 1.58bit Whisper 모델 기반 음성인식 및 번역을 수행하는 솔루션에 이어, 추후 LLM/VLM 등 다양한 모델 기반 솔루션으로 확장 중\\r\\n- Ampere, Synaptics, Renesas Electronics를 비롯해 다양한 글로벌 반도체 기업들과 협력해 각 사의 SoC 상에서 압도적인 성능 달성\\r\\n- 데모시연: https://youtu.be/9Fa6JRqz4Hs?si=ZQ8ETpFdT_Tdp1jC\\r\\n\\r\\n[주요 성과]\\r\\n• 2019 1월 네이버 계열 VC SpringCamp로부터 Seed 투자 유치\\r\\n• 2019 9월 Seoulz 주관 '주목해야할 대한민국 AI 스타트업 Top 10' 선정\\r\\n• 2020 2월 중소벤처기업부 TIPS 프로그램 선정\\r\\n• 2021 4월 Edge AI and Vision Alliance 회원사 선정\\r\\n• 2021 5월 'CVPR 2021 - Mobile AI Workshop and Challenges' 3위 기록\\r\\n• 2021 5월 Microsoft 스타트업 프로그램 선발\\r\\n• 2021 11월 삼성 C-Lab Outside 선발\\r\\n• 2021 12월 Intel AI Builder 선발\\r\\n• 2021 12월 SK True Innovation 선발\\r\\n• 2022 4월 Intel Gold Tier Partner 선정\\r\\n• 2022 5월 대한민국 녹색에너지 우수기업 대상 수상\\r\\n• 2022 5월 SK이노베이션 주관 친환경 스타트업 진흥 프로그램 ‘에그’ 선발\\r\\n• 2022 6월 정보통신산업진흥원 주관 인공지능 온라인 경진대회 1위 수상\\r\\n• 2022 9월 Arm AI Partner 선정\\r\\n• 2022 12월 Qualcomm IoT Accelerator 프로그램 선발\\r\\n• 2023 1월 35억원 규모 Series A 투자 유치\\r\\n• 2023 1월 KDB NextOne 6기 선정\\r\\n• 2023 8월 중소벤처기업부 POST TIPS 프로그램 선정\\r\\n• 2023년 10월 NVIDIA Inception 프로그램 선발\\r\\n• 2024년 5월 KIC 실리콘밸리 주관 AI/SaaS PMF 프로그램 선정\\r\\n• 2024년 5월 서울경제진흥원 2024-1기 Pitching \u0026 Connect 최우수상 수상\\r\\n• 2025년 1월 CES 2025에 삼성전자 C랩 전시관으로 부스 참가\\r\\n• 2025년 3월 AWS GenAI US Delegation Program 선정\\r\\n• 2025년 3월 Google for Startups Accelerator: AI First 프로그램 선정\\r\\n• 2025년 4월 초격차 스타트업 1000+ 프로젝트 DIPS 사업화 창업기업 선정\\r\\n• 2025년 4월 Edge AI and Vision Product of the Year Award 수상\\r\\n• 2025년 5월 77억원 규모 Bridge 투자 유치\\r\\n• 2025년 6월 NextRise Awards 수상\\r\\n• 2025년 공고일 기준 특허 28건 등록, 23건 출원 완료\",\"responsibility\":\"해당 직군은 초경량 LLM을 위한 최적화 기법을 연구하고, 이를 사내 추론 엔진과 통합하여 실제 온디바이스 환경에서 실행 가능한 형태로 구현하는 업무를 담당합니다. 주로 transformer 기반의 최신 모델을 극도로 효율화하는 데 집중하며, 연구-실험-적용의 전 과정을 리딩하게 됩니다. 이 과정을 통해 고객 프로젝트 등으로부터 발견된 기술적 병목을 분석하고 새로운 해결책을 제안합니다.\\r\\n\\r\\n• LLM 최적화 기법의 연구 및 일반화 수행\\r\\n  - LLM 추론 과정에서의 Token-level Sparsity, Activation-level Sparsity에 기반한 연산 최적화 전략 연구\\r\\n  - 1.58bit 양자화를 포함한 ultra-low-bit weight/activation quantization 알고리즘 설계\\r\\n  - 사내 추론 엔진 Optimium 개발팀과의 협업을 통해 실제 on-device에서 가속화할 수 있는 형태의 연구 수행\\r\\n  - CPU, GPU, NPU 등 이기종 하드웨어 환경에 최적화된 Heterogeneous Execution 자동 할당 전략 연구 \\r\\n  - 연구 성과의 기술 문서화, 내부 공유 및 필요 시 데모 콘텐츠 제작\\r\\n\\r\\n• 주된 타겟 디바이스 (including but not limited to)\\r\\n  - Jetson Board (Orin, Xavier, etc.)\\r\\n  - MPU Boards\",\"qualifications\":\"• 학부 4학년 이상\\n• 해외 여행에 결격 사유가 없으신 분\\n• Python 을 활용한 프로젝트 수행 경험이 있으신 분\\n• 딥러닝 프레임워크(Pytorch, Keras, Tensorflow 등) 을 활용한 프로젝트 수행 경험이 있으신 분\\n• 병역특례 지원 가능자\\n  (산업기능요원(보충역), 전문연구요원(전직, 보충역) 지원 가능하며, 이력서에 지원 유형을 표기하여 제출)\",\"preferredRequirements\":\"• 2bit 이하 quantization 알고리즘 설계 또는 실험 경험자\\n• LLM 또는 SLM의 온디바이스 실행 관련 프로젝트 참여 경험자\\n• AI 경량화 연구 수행 경험자\\n• 관련 학회 및 저널 게재 경력자\\n• 관련 전공 석사, 박사 학위 보유자 (경력 인정)\",\"welfares\":\"• 점심 및 저녁식대 지원\\r\\n• 맛있는 간식과 커피머신 상시 비치\\r\\n• 외근 및 야근 시 택시비 지원\\r\\n• SW/IT 고성능 장비 지원\\r\\n• 격년마다 진행하는 의무 건강검진 진행 시 추가 검진비 지원\\r\\n• 직무관련 도서 구입비 지급\\r\\n• 업무 역량 향상을 위한 교육비 지급\\r\\n• 팀 스터디, 세미나, 컨퍼런스, 논문 투고 등의 비용 지원\\r\\n• 동호회비 지원\\r\\n• 직무발명보상제도 시행\\r\\n• 근속 연수에 따른 선물 지급\\r\\n• 결혼, 출산 시 축하금 지급\\r\\n• 직계가족 조사 시 경조금 및 상조 서비스 지원\\r\\n• 생일 유급 반차 제공추가\",\"recruitProcess\":\"[근무조건]\\r\\n• 급여 : 경력별 협의\\r\\n• 근무 시작일 : 협의\\r\\n• 근무시간: 평일 주 5일 선택 출퇴근 제도 (9시 ~ 11시 출근 선택)\\r\\n• 근무지 : 서울시 강남구 테헤란로27길 27 (2호선 역삼역 도보 7분 거리)\\r\\n\\r\\n[전형절차]\\r\\n• 제출서류 : 자유양식 이력서 또는 포트폴리오, Github 주소 \\r\\n• 전형절차 : 서류 심사 -＞ 코딩테스트 -＞ 1차 면접(Tech) -＞ 2차 비대면 면접(Culture-Fit) -＞ 최종 합격\\r\\n\\r\\n[유의사항]\\r\\n• 서류 심사 결과는 코딩테스트 대상자에 한하여 연락 드립니다.\\r\\n• 인턴을 제외한 모든 직무는 3개월 미만의 수습기간을 거칩니다.\\r\\n• 입사지원 서류에서 허위기재 사실이 발견될 경우, 입사가 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-06 00:00:00\",\"closedAt\":\"2026-06-04 23:59:59\",\"location\":\"서울 강남구 테헤란로27길27\",\"tags\":[{\"id\":\"291\",\"name\":\"육아휴직\",\"emoticon\":\"welfare\"},{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"com_113\",\"name\":\"시리즈A 투자유치\",\"emoticon\":\"invest\"}],\"serialNumber\":\"2468601405\",\"encodedSerialNumber\":\"MjQ2ODYwMTQwNQ==\",\"companyUrl\":\"https://enerzai.com/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":true,\"establishPeriod\":8,\"establishDate\":\"2019년 설립\",\"workingPlaces\":[{\"address\":\"서울 강남구 테헤란로27길27\",\"domestic\":false}],\"jobCategories\":[{\"id\":8,\"name\":\"인공지능/머신러닝\"},{\"id\":15,\"name\":\"SW/솔루션\"}],\"invisible\":false,\"manDbMcomIdx\":7703780,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-06T00:00:00+09:00",
+    "ClosedAt": "2026-06-04T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53774625",
+    "URL": "https://jumpit.saramin.co.kr/position/53774625",
+    "Title": "SW개발 신입사원 채용",
+    "Company": "인텍에프에이",
+    "Location": "경기 용인시 기흥구 탑실로35번길63",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "Orcad",
+      "SW",
+      "Pads"
+    ],
+    "Tags": [
+      {
+        "id": "com_144",
+        "name": "연봉상승률 10% 이상",
+        "category": "salary"
+      },
+      {
+        "id": "com_131",
+        "name": "스타트업",
+        "category": "scale"
+      },
+      {
+        "id": "290",
+        "name": "주거복지",
+        "category": "welfare"
+      },
+      {
+        "id": "com_152",
+        "name": "매출액 100억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "278",
+        "name": "성과급/상여금",
+        "category": "welfare"
+      },
+      {
+        "id": "com_147",
+        "name": "평균연봉 6,000 이상",
+        "category": "salary"
+      }
+    ],
+    "Description": "인텍에프에이는 전력전자와 제어기술을 바탕으로 에너지·제어솔루션의 새로운 가치를 창출하며\r\n미래 에너지 전환을 책임지는 스마트 전력시스템 선도기업입니다.\r\n\r\n신재생에너지 장비(ESS)와 PCS, 전력계통 운영·제어 시스템 분야에서 축적된 독자적 Core 기술을 바탕으로,\r\n자동화기기·로봇제어·환경시스템 영역까지 사업을 확장해 왔습니다.\r\n또한 한전, LSE, LG전자, 삼성전자, 현대엘리베이터 등 국내외 주요 기업에\r\n산업용 전력변환장치를 안정적으로 공급하여 기술력과 신뢰성을 인정받고 있습니다.\r\n\r\n최근에는 전력계통 안정화(FR) 및 장주기 ESS 분야에 역량을 집중하며,\r\n고출력·고신뢰성 전력변환 기술을 기반으로 에너지 저장 솔루션 사업을 지속적으로 확장하고 있습니다.\r\n\r\n인텍에프에이와 함께 지속가능한 미래를 설계하고, 새로운 도약을 준비할 열정적인 인재를 기다립니다.\n\nㆍ시스템 네트워크 설계\r\nㆍSW 개발\n\nㆍ학력 : 학사 이상\nㆍ전공 : 전력전자, 전기·전자, 제어공학 등 관련 전공\nㆍ경력\n  - PCS/인버터/ 컨버터 개발 실무경력 3년 이상\n  - 양산 또는 실증 프로젝트 수행 경험\n\nㆍPCS, 인버터 개발 경험자\nㆍ인증 또는 대규모 실증 프로젝트 경험자\n\n• 연구직 석사 이상의 경우 전문연구요원 병역특례 편입 및 전직 가능\r\n\r\n• 동종업계 중견기업 수준 급여 지급\r\n  - 연차수당, 4대보험, 퇴직연금 별도 지급\r\n  - 4대보험 외 근로자재해보험 별도 가입\r\n\r\n• PS 성과급 지급\r\n\r\n• 휴가\r\n - 연차, 경조휴가, 리프레쉬 휴가\r\n\r\n• 회사식당 운영(조•중•석식 무료제공)\r\n - 기숙사 운영\r\n\r\n• 유연근무제: 시차출퇴근제 운영\r\n - 8시, 9시, 10시 출근 선택\r\n\r\n• 복리후생\r\n - 복지포인트 지급\r\n - 자녀 학자금 지원\r\n - 사내 동호회 활동 지원\r\n - 임직원 휴양 콘도 운영\r\n\r\n• 선물\r\n - 신규입사자 웰컴키트 지급, 유니폼 지급\r\n - 명절 선물, 근로자의 날 선물, 창립기념일 선물\r\n\r\n• 교육\r\n - 계층/직무교육, 어학교육, 석박사 지원 기회 제공",
+    "RawJSON": "{\"id\":53774625,\"title\":\"SW개발 신입사원 채용\",\"companyName\":\"인텍에프에이\",\"logo\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20221008171043093_670_660.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_87414/20220408170440903_1440_1080.jpg\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_87414/20220408170456378_5581_3721.jpg\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20221008171049821_1438_1085.png\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_87414/20221908171935442_1169_827.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/recruit_87414/20221908171948031_5511_3674.jpg\",\"sortNumber\":6}],\"techStacks\":[{\"stack\":\"Orcad\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"SW\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"Pads\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"인텍에프에이는 전력전자와 제어기술을 바탕으로 에너지·제어솔루션의 새로운 가치를 창출하며\\r\\n미래 에너지 전환을 책임지는 스마트 전력시스템 선도기업입니다.\\r\\n\\r\\n신재생에너지 장비(ESS)와 PCS, 전력계통 운영·제어 시스템 분야에서 축적된 독자적 Core 기술을 바탕으로,\\r\\n자동화기기·로봇제어·환경시스템 영역까지 사업을 확장해 왔습니다.\\r\\n또한 한전, LSE, LG전자, 삼성전자, 현대엘리베이터 등 국내외 주요 기업에\\r\\n산업용 전력변환장치를 안정적으로 공급하여 기술력과 신뢰성을 인정받고 있습니다.\\r\\n\\r\\n최근에는 전력계통 안정화(FR) 및 장주기 ESS 분야에 역량을 집중하며,\\r\\n고출력·고신뢰성 전력변환 기술을 기반으로 에너지 저장 솔루션 사업을 지속적으로 확장하고 있습니다.\\r\\n\\r\\n인텍에프에이와 함께 지속가능한 미래를 설계하고, 새로운 도약을 준비할 열정적인 인재를 기다립니다.\",\"responsibility\":\"ㆍ시스템 네트워크 설계\\r\\nㆍSW 개발\",\"qualifications\":\"ㆍ학력 : 학사 이상\\nㆍ전공 : 전력전자, 전기·전자, 제어공학 등 관련 전공\\nㆍ경력\\n  - PCS/인버터/ 컨버터 개발 실무경력 3년 이상\\n  - 양산 또는 실증 프로젝트 수행 경험\",\"preferredRequirements\":\"ㆍPCS, 인버터 개발 경험자\\nㆍ인증 또는 대규모 실증 프로젝트 경험자\",\"welfares\":\"• 연구직 석사 이상의 경우 전문연구요원 병역특례 편입 및 전직 가능\\r\\n\\r\\n• 동종업계 중견기업 수준 급여 지급\\r\\n  - 연차수당, 4대보험, 퇴직연금 별도 지급\\r\\n  - 4대보험 외 근로자재해보험 별도 가입\\r\\n\\r\\n• PS 성과급 지급\\r\\n\\r\\n• 휴가\\r\\n - 연차, 경조휴가, 리프레쉬 휴가\\r\\n\\r\\n• 회사식당 운영(조•중•석식 무료제공)\\r\\n - 기숙사 운영\\r\\n\\r\\n• 유연근무제: 시차출퇴근제 운영\\r\\n - 8시, 9시, 10시 출근 선택\\r\\n\\r\\n• 복리후생\\r\\n - 복지포인트 지급\\r\\n - 자녀 학자금 지원\\r\\n - 사내 동호회 활동 지원\\r\\n - 임직원 휴양 콘도 운영\\r\\n\\r\\n• 선물\\r\\n - 신규입사자 웰컴키트 지급, 유니폼 지급\\r\\n - 명절 선물, 근로자의 날 선물, 창립기념일 선물\\r\\n\\r\\n• 교육\\r\\n - 계층/직무교육, 어학교육, 석박사 지원 기회 제공\",\"recruitProcess\":\"\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-04-30 00:00:00\",\"closedAt\":\"2026-05-29 23:59:59\",\"location\":\"경기 용인시 기흥구 탑실로35번길63\",\"tags\":[{\"id\":\"com_144\",\"name\":\"연봉상승률 10% 이상\",\"emoticon\":\"salary\"},{\"id\":\"com_131\",\"name\":\"스타트업\",\"emoticon\":\"scale\"},{\"id\":\"290\",\"name\":\"주거복지\",\"emoticon\":\"welfare\"},{\"id\":\"com_152\",\"name\":\"매출액 100억 기업\",\"emoticon\":\"sales\"},{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"278\",\"name\":\"성과급/상여금\",\"emoticon\":\"welfare\"},{\"id\":\"com_147\",\"name\":\"평균연봉 6,000 이상\",\"emoticon\":\"salary\"}],\"serialNumber\":\"1148190208\",\"encodedSerialNumber\":\"MTE0ODE5MDIwOA==\",\"companyUrl\":\"https://www.intech-fa.co.kr/kr/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":28,\"establishDate\":\"1999년 7월 설립\",\"workingPlaces\":[{\"address\":\"경기 용인시 기흥구 탑실로35번길63\",\"domestic\":false}],\"jobCategories\":[{\"id\":13,\"name\":\"HW/임베디드\"}],\"invisible\":false,\"manDbMcomIdx\":91715,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-04-30T00:00:00+09:00",
+    "ClosedAt": "2026-05-29T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53805574",
+    "URL": "https://jumpit.saramin.co.kr/position/53805574",
+    "Title": "AI 컴파일러 엔지니어 (신입)",
+    "Company": "에너자이",
+    "Location": "서울 강남구 테헤란로27길27",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "C",
+      "C++",
+      "Haskell",
+      "PyTorch",
+      "MachineLearning",
+      "AI/인공지능"
+    ],
+    "Tags": [
+      {
+        "id": "291",
+        "name": "육아휴직",
+        "category": "welfare"
+      },
+      {
+        "id": "281",
+        "name": "급성장중",
+        "category": "invest"
+      },
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      },
+      {
+        "id": "com_113",
+        "name": "시리즈A 투자유치",
+        "category": "invest"
+      }
+    ],
+    "Description": "[회사 소개]\r\n에너자이는 ‘모든 이들이 모든 사물을 통해 최고의 AI를 경험할 수 있도록’이라는 비전 아래 AI 혁신을 선도하고 있는 AI 소프트웨어 기업입니다. 실제 제품 및 서비스 환경에서 AI 모델이 우수한 성능으로 동작하기 위해서는 AI 모델 및 하드웨어를 모두 고려한 AI 최적화가 필수적이며, 에너자이는 업계 최고 수준의 AI 최적화 기술을 기반으로 고객의 AI 역량 강화에 기여하고 있습니다.\r\n\r\n에너자이는 뛰어난 기술력을 바탕으로 국제 저명 학회 CVPR 주최 Mobile AI Challenge에 참가하여 Xiaomi, Huawei 등의 글로벌 기업들을 제치고 우수한 성적으로 입상하였으며, 이후 그 기술력 및 사업성을 인정받아 Intel, Microsoft, Arm, NVIDIA, Qualcomm, Renesas Electronics, Synaptics, 삼성전자 등의 글로벌 대기업들과 파트너쉽을 체결하고 협력을 진행하고 있습니다. 2025년에는 엣지 AI 및 비전 얼라이언스(Edge AI and Vision Alliance)가 Edge AI 분야 산업 혁신을 주도한 기업에 수여하는 2025 올해의 제품상(The Product of the Year Award)을 수상했습니다.\r\n\r\n에너자이는 현재 정확도 손실 없이 대상 하드웨어에서 AI 추론 성능을 획기적으로 향상시키는 AI 추론 엔진 ‘Optimium’을 비롯해, 고도화된 양자화 기술과 Optimium 기반의 커널 최적화 기술을 결합한 고성능 On-device AI 솔루션을 개발해 디바이스 제조사, AI 서비스 기업, 그리고 반도체 팹리스·IP 기업 등에 제공하고 있습니다.\r\n\r\n[주요 제품 및 솔루션 소개]\r\n• 차세대 AI 추론 엔진 Optimium\r\n- 학습된 AI 모델의 정확도를 유지하면서 대상 하드웨어 환경에서의 추론 속도를 획기적으로 향상시킬 수 있는 AI 추론 엔진\r\n- CPU 대상 추론 최적화를 지원하고 있으며, 지원 범위 내 기존 AI 추론 엔진 대비 압도적인 성능 우위 보유 (2025년내 GPU 대상 추론 최적화 지원 예정)\r\n- 4bit 이하의 Low-bit AI 모델에 대한 최적화된 Kernel 지원\r\n- Reference\r\n- 제품 홈페이지: https://optimium.enerzai.com/\r\n- 소개 영상: https://youtu.be/LqxnstNaiDo?si=mTLgxsFBqzQu3TkZ\r\n• On-device AI 솔루션\r\n- 규모가 큰 AI 모델을 4bit 이하로 양자화하고 Optimium 기반의 최적화된 Kernel을 결합해 정확도 손실을 최소화하면서, 전력 및 메모리 사용량을 대폭 절감한 On-device AI 솔루션\r\n- 1.58bit Whisper 모델 기반 음성인식 및 번역을 수행하는 솔루션에 이어, 추후 LLM/VLM 등 다양한 모델 기반 솔루션으로 확장 중\r\n- Ampere, Synaptics, Renesas Electronics를 비롯해 다양한 글로벌 반도체 기업들과 협력해 각 사의 SoC 상에서 압도적인 성능 달성\r\n- 데모시연: https://youtu.be/9Fa6JRqz4Hs?si=ZQ8ETpFdT_Tdp1jC\r\n\r\n[주요 성과]\r\n• 2019 1월 네이버 계열 VC SpringCamp로부터 Seed 투자 유치\r\n• 2019 9월 Seoulz 주관 '주목해야할 대한민국 AI 스타트업 Top 10' 선정\r\n• 2020 2월 중소벤처기업부 TIPS 프로그램 선정\r\n• 2021 4월 Edge AI and Vision Alliance 회원사 선정\r\n• 2021 5월 'CVPR 2021 - Mobile AI Workshop and Challenges' 3위 기록\r\n• 2021 5월 Microsoft 스타트업 프로그램 선발\r\n• 2021 11월 삼성 C-Lab Outside 선발\r\n• 2021 12월 Intel AI Builder 선발\r\n• 2021 12월 SK True Innovation 선발\r\n• 2022 4월 Intel Gold Tier Partner 선정\r\n• 2022 5월 대한민국 녹색에너지 우수기업 대상 수상\r\n• 2022 5월 SK이노베이션 주관 친환경 스타트업 진흥 프로그램 ‘에그’ 선발\r\n• 2022 6월 정보통신산업진흥원 주관 인공지능 온라인 경진대회 1위 수상\r\n• 2022 9월 Arm AI Partner 선정\r\n• 2022 12월 Qualcomm IoT Accelerator 프로그램 선발\r\n• 2023 1월 35억원 규모 Series A 투자 유치\r\n• 2023 1월 KDB NextOne 6기 선정\r\n• 2023 8월 중소벤처기업부 POST TIPS 프로그램 선정\r\n• 2023년 10월 NVIDIA Inception 프로그램 선발\r\n• 2024년 5월 KIC 실리콘밸리 주관 AI/SaaS PMF 프로그램 선정\r\n• 2024년 5월 서울경제진흥원 2024-1기 Pitching \u0026 Connect 최우수상 수상\r\n• 2025년 1월 CES 2025에 삼성전자 C랩 전시관으로 부스 참가\r\n• 2025년 3월 AWS GenAI US Delegation Program 선정\r\n• 2025년 3월 Google for Startups Accelerator: AI First 프로그램 선정\r\n• 2025년 4월 초격차 스타트업 1000+ 프로젝트 DIPS 사업화 창업기업 선정\r\n• 2025년 4월 Edge AI and Vision Product of the Year Award 수상\r\n• 2025년 5월 77억원 규모 Bridge 투자 유치\r\n• 2025년 6월 NextRise Awards 수상\r\n• 2025년 공고일 기준 특허 28건 등록, 23건 출원 완료\n\n• 사내 자체 언어 개발\r\n   - Syntax, Semantics 설계 관리\r\n   - Lexer, Parser 구현\r\n   - Type inference algorithm 구현\r\n   - 그 외 사용환경 개선을 위한 Dynamic/Static Analyzer, Testing framework 개발\r\n\r\n• AI compiler 개발\r\n   -  MLIR 기반 컴파일러 개발\r\n   - CPU SIMD Intrinsic 지원\r\n   - GPU, NPU 타겟 확장을 위한 백엔드 개발\r\n   - Compile Time Vectorization, Bufferization 개발\r\n   - Kernel Fusion, Polyhedral Optimization, Tiling 등 AI 도메인에서 중점적으로 활용되는 컴파일 최적화 및 구현\r\n   - Auto tuning을 위한 compile parameter 연구\r\n   - 이 외 성능 최적화를 위한 각종 compiler technique 구현 및 연구\n\n• 학부 4학년 이상\n• 해외 여행에 결격 사유가 없으신 분\n• C/C++을 활용한 프로젝트 개발 경험이 있으신 분\n• (컴파일러 엔지니어) 함수형 언어(Scala, Haskell, F# 등) 사용 경험이 있으신 분\n• (컴파일러 엔지니어) 딥러닝 프레임워크(Pytorch, tensorflow 등) 사용 경험이 있으신 분\n• 병역특례 지원 가능자\n  (산업기능요원(보충역), 전문연구요원(전직, 보충역) 지원 가능하며, 이력서에 지원 유형을 표기하여 제출)\n\n• 딥러닝 개념을 알고 동작 커널 개념을 알고 구현해보신 분\n• 딥러닝 프레임워크에서 operation 에 대한 지식을 갖추신 분\n• 컴파일러 최적화에 관한 지식이 있으신 분\n• 컴퓨터 아키텍쳐 관련 지식이 풍부하신 분\n• Compiler 혹은 Interpreter 를 제작/연구해보신 경험이 있으신 분\n• 병렬 프로그래밍 경험이 있으신 분\n• 딥러닝 커널 최적화 관련 경험이 있으신 분\n• 딥러닝 모델 경량화 기법에 관한 지식이 있으신 분\n• 관련 학회 및 저널 게재 경력자\n• 관련 전공 석사, 박사 학위 보유자 (경력 인정)\n\n• 점심 및 저녁식대 지원\r\n• 맛있는 간식과 커피머신 상시 비치\r\n• 외근 및 야근 시 택시비 지원\r\n• SW/IT 고성능 장비 지원\r\n• 격년마다 진행하는 의무 건강검진 진행 시 추가 검진비 지원\r\n• 직무관련 도서 구입비 지급\r\n• 업무 역량 향상을 위한 교육비 지급\r\n• 팀 스터디, 세미나, 컨퍼런스, 논문 투고 등의 비용 지원\r\n• 동호회비 지원\r\n• 직무발명보상제도 시행\r\n• 근속 연수에 따른 선물 지급\r\n• 결혼, 출산 시 축하금 지급\r\n• 직계가족 조사 시 경조금 및 상조 서비스 지원\r\n• 생일 유급 반차 제공추가",
+    "RawJSON": "{\"id\":53805574,\"title\":\"AI 컴파일러 엔지니어 (신입)\",\"companyName\":\"에너자이\",\"logo\":\"https://cdn.jumpit.co.kr/images/hmlee_4/20223102143119983_210_209.jpg\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104534785_567_378.PNG\",\"sortNumber\":7},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104537449_567_378.PNG\",\"sortNumber\":8},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104540124_567_378.PNG\",\"sortNumber\":9},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104543583_567_378.PNG\",\"sortNumber\":10},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104546448_567_378.PNG\",\"sortNumber\":11},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20254515104548918_567_378.PNG\",\"sortNumber\":12}],\"techStacks\":[{\"stack\":\"C\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"C++\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/CPlusPlus.png\"},{\"stack\":\"Haskell\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/haskell.png\"},{\"stack\":\"PyTorch\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/pytorch.png\"},{\"stack\":\"MachineLearning\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"},{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"[회사 소개]\\r\\n에너자이는 ‘모든 이들이 모든 사물을 통해 최고의 AI를 경험할 수 있도록’이라는 비전 아래 AI 혁신을 선도하고 있는 AI 소프트웨어 기업입니다. 실제 제품 및 서비스 환경에서 AI 모델이 우수한 성능으로 동작하기 위해서는 AI 모델 및 하드웨어를 모두 고려한 AI 최적화가 필수적이며, 에너자이는 업계 최고 수준의 AI 최적화 기술을 기반으로 고객의 AI 역량 강화에 기여하고 있습니다.\\r\\n\\r\\n에너자이는 뛰어난 기술력을 바탕으로 국제 저명 학회 CVPR 주최 Mobile AI Challenge에 참가하여 Xiaomi, Huawei 등의 글로벌 기업들을 제치고 우수한 성적으로 입상하였으며, 이후 그 기술력 및 사업성을 인정받아 Intel, Microsoft, Arm, NVIDIA, Qualcomm, Renesas Electronics, Synaptics, 삼성전자 등의 글로벌 대기업들과 파트너쉽을 체결하고 협력을 진행하고 있습니다. 2025년에는 엣지 AI 및 비전 얼라이언스(Edge AI and Vision Alliance)가 Edge AI 분야 산업 혁신을 주도한 기업에 수여하는 2025 올해의 제품상(The Product of the Year Award)을 수상했습니다.\\r\\n\\r\\n에너자이는 현재 정확도 손실 없이 대상 하드웨어에서 AI 추론 성능을 획기적으로 향상시키는 AI 추론 엔진 ‘Optimium’을 비롯해, 고도화된 양자화 기술과 Optimium 기반의 커널 최적화 기술을 결합한 고성능 On-device AI 솔루션을 개발해 디바이스 제조사, AI 서비스 기업, 그리고 반도체 팹리스·IP 기업 등에 제공하고 있습니다.\\r\\n\\r\\n[주요 제품 및 솔루션 소개]\\r\\n• 차세대 AI 추론 엔진 Optimium\\r\\n- 학습된 AI 모델의 정확도를 유지하면서 대상 하드웨어 환경에서의 추론 속도를 획기적으로 향상시킬 수 있는 AI 추론 엔진\\r\\n- CPU 대상 추론 최적화를 지원하고 있으며, 지원 범위 내 기존 AI 추론 엔진 대비 압도적인 성능 우위 보유 (2025년내 GPU 대상 추론 최적화 지원 예정)\\r\\n- 4bit 이하의 Low-bit AI 모델에 대한 최적화된 Kernel 지원\\r\\n- Reference\\r\\n- 제품 홈페이지: https://optimium.enerzai.com/\\r\\n- 소개 영상: https://youtu.be/LqxnstNaiDo?si=mTLgxsFBqzQu3TkZ\\r\\n• On-device AI 솔루션\\r\\n- 규모가 큰 AI 모델을 4bit 이하로 양자화하고 Optimium 기반의 최적화된 Kernel을 결합해 정확도 손실을 최소화하면서, 전력 및 메모리 사용량을 대폭 절감한 On-device AI 솔루션\\r\\n- 1.58bit Whisper 모델 기반 음성인식 및 번역을 수행하는 솔루션에 이어, 추후 LLM/VLM 등 다양한 모델 기반 솔루션으로 확장 중\\r\\n- Ampere, Synaptics, Renesas Electronics를 비롯해 다양한 글로벌 반도체 기업들과 협력해 각 사의 SoC 상에서 압도적인 성능 달성\\r\\n- 데모시연: https://youtu.be/9Fa6JRqz4Hs?si=ZQ8ETpFdT_Tdp1jC\\r\\n\\r\\n[주요 성과]\\r\\n• 2019 1월 네이버 계열 VC SpringCamp로부터 Seed 투자 유치\\r\\n• 2019 9월 Seoulz 주관 '주목해야할 대한민국 AI 스타트업 Top 10' 선정\\r\\n• 2020 2월 중소벤처기업부 TIPS 프로그램 선정\\r\\n• 2021 4월 Edge AI and Vision Alliance 회원사 선정\\r\\n• 2021 5월 'CVPR 2021 - Mobile AI Workshop and Challenges' 3위 기록\\r\\n• 2021 5월 Microsoft 스타트업 프로그램 선발\\r\\n• 2021 11월 삼성 C-Lab Outside 선발\\r\\n• 2021 12월 Intel AI Builder 선발\\r\\n• 2021 12월 SK True Innovation 선발\\r\\n• 2022 4월 Intel Gold Tier Partner 선정\\r\\n• 2022 5월 대한민국 녹색에너지 우수기업 대상 수상\\r\\n• 2022 5월 SK이노베이션 주관 친환경 스타트업 진흥 프로그램 ‘에그’ 선발\\r\\n• 2022 6월 정보통신산업진흥원 주관 인공지능 온라인 경진대회 1위 수상\\r\\n• 2022 9월 Arm AI Partner 선정\\r\\n• 2022 12월 Qualcomm IoT Accelerator 프로그램 선발\\r\\n• 2023 1월 35억원 규모 Series A 투자 유치\\r\\n• 2023 1월 KDB NextOne 6기 선정\\r\\n• 2023 8월 중소벤처기업부 POST TIPS 프로그램 선정\\r\\n• 2023년 10월 NVIDIA Inception 프로그램 선발\\r\\n• 2024년 5월 KIC 실리콘밸리 주관 AI/SaaS PMF 프로그램 선정\\r\\n• 2024년 5월 서울경제진흥원 2024-1기 Pitching \u0026 Connect 최우수상 수상\\r\\n• 2025년 1월 CES 2025에 삼성전자 C랩 전시관으로 부스 참가\\r\\n• 2025년 3월 AWS GenAI US Delegation Program 선정\\r\\n• 2025년 3월 Google for Startups Accelerator: AI First 프로그램 선정\\r\\n• 2025년 4월 초격차 스타트업 1000+ 프로젝트 DIPS 사업화 창업기업 선정\\r\\n• 2025년 4월 Edge AI and Vision Product of the Year Award 수상\\r\\n• 2025년 5월 77억원 규모 Bridge 투자 유치\\r\\n• 2025년 6월 NextRise Awards 수상\\r\\n• 2025년 공고일 기준 특허 28건 등록, 23건 출원 완료\",\"responsibility\":\"• 사내 자체 언어 개발\\r\\n   - Syntax, Semantics 설계 관리\\r\\n   - Lexer, Parser 구현\\r\\n   - Type inference algorithm 구현\\r\\n   - 그 외 사용환경 개선을 위한 Dynamic/Static Analyzer, Testing framework 개발\\r\\n\\r\\n• AI compiler 개발\\r\\n   -  MLIR 기반 컴파일러 개발\\r\\n   - CPU SIMD Intrinsic 지원\\r\\n   - GPU, NPU 타겟 확장을 위한 백엔드 개발\\r\\n   - Compile Time Vectorization, Bufferization 개발\\r\\n   - Kernel Fusion, Polyhedral Optimization, Tiling 등 AI 도메인에서 중점적으로 활용되는 컴파일 최적화 및 구현\\r\\n   - Auto tuning을 위한 compile parameter 연구\\r\\n   - 이 외 성능 최적화를 위한 각종 compiler technique 구현 및 연구\",\"qualifications\":\"• 학부 4학년 이상\\n• 해외 여행에 결격 사유가 없으신 분\\n• C/C++을 활용한 프로젝트 개발 경험이 있으신 분\\n• (컴파일러 엔지니어) 함수형 언어(Scala, Haskell, F# 등) 사용 경험이 있으신 분\\n• (컴파일러 엔지니어) 딥러닝 프레임워크(Pytorch, tensorflow 등) 사용 경험이 있으신 분\\n• 병역특례 지원 가능자\\n  (산업기능요원(보충역), 전문연구요원(전직, 보충역) 지원 가능하며, 이력서에 지원 유형을 표기하여 제출)\",\"preferredRequirements\":\"• 딥러닝 개념을 알고 동작 커널 개념을 알고 구현해보신 분\\n• 딥러닝 프레임워크에서 operation 에 대한 지식을 갖추신 분\\n• 컴파일러 최적화에 관한 지식이 있으신 분\\n• 컴퓨터 아키텍쳐 관련 지식이 풍부하신 분\\n• Compiler 혹은 Interpreter 를 제작/연구해보신 경험이 있으신 분\\n• 병렬 프로그래밍 경험이 있으신 분\\n• 딥러닝 커널 최적화 관련 경험이 있으신 분\\n• 딥러닝 모델 경량화 기법에 관한 지식이 있으신 분\\n• 관련 학회 및 저널 게재 경력자\\n• 관련 전공 석사, 박사 학위 보유자 (경력 인정)\",\"welfares\":\"• 점심 및 저녁식대 지원\\r\\n• 맛있는 간식과 커피머신 상시 비치\\r\\n• 외근 및 야근 시 택시비 지원\\r\\n• SW/IT 고성능 장비 지원\\r\\n• 격년마다 진행하는 의무 건강검진 진행 시 추가 검진비 지원\\r\\n• 직무관련 도서 구입비 지급\\r\\n• 업무 역량 향상을 위한 교육비 지급\\r\\n• 팀 스터디, 세미나, 컨퍼런스, 논문 투고 등의 비용 지원\\r\\n• 동호회비 지원\\r\\n• 직무발명보상제도 시행\\r\\n• 근속 연수에 따른 선물 지급\\r\\n• 결혼, 출산 시 축하금 지급\\r\\n• 직계가족 조사 시 경조금 및 상조 서비스 지원\\r\\n• 생일 유급 반차 제공추가\",\"recruitProcess\":\"[근무조건]\\r\\n• 급여 : 경력별 협의\\r\\n• 근무 시작일 : 협의\\r\\n• 근무시간: 평일 주 5일 선택 출퇴근 제도 (9시 ~ 11시 출근 선택)\\r\\n• 근무지 : 서울시 강남구 테헤란로27길 27 (2호선 역삼역 도보 7분 거리)\\r\\n\\r\\n[전형절차]\\r\\n• 제출서류 : 자유양식 이력서 또는 포트폴리오, Github 주소 \\r\\n• 전형절차 : 서류 심사 -＞ 코딩테스트 -＞ 1차 면접(Tech) -＞ 2차 비대면 면접(Culture-Fit) -＞ 최종 합격\\r\\n\\r\\n[유의사항]\\r\\n• 서류 심사 결과는 코딩테스트 대상자에 한하여 연락 드립니다.\\r\\n• 인턴을 제외한 모든 직무는 3개월 미만의 수습기간을 거칩니다.\\r\\n• 입사지원 서류에서 허위기재 사실이 발견될 경우, 입사가 취소될 수 있습니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-06 00:00:00\",\"closedAt\":\"2026-06-04 23:59:59\",\"location\":\"서울 강남구 테헤란로27길27\",\"tags\":[{\"id\":\"291\",\"name\":\"육아휴직\",\"emoticon\":\"welfare\"},{\"id\":\"281\",\"name\":\"급성장중\",\"emoticon\":\"invest\"},{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"},{\"id\":\"com_113\",\"name\":\"시리즈A 투자유치\",\"emoticon\":\"invest\"}],\"serialNumber\":\"2468601405\",\"encodedSerialNumber\":\"MjQ2ODYwMTQwNQ==\",\"companyUrl\":\"https://enerzai.com/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":true,\"establishPeriod\":8,\"establishDate\":\"2019년 설립\",\"workingPlaces\":[{\"address\":\"서울 강남구 테헤란로27길27\",\"domestic\":false}],\"jobCategories\":[{\"id\":8,\"name\":\"인공지능/머신러닝\"},{\"id\":15,\"name\":\"SW/솔루션\"}],\"invisible\":false,\"manDbMcomIdx\":7703780,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-06T00:00:00+09:00",
+    "ClosedAt": "2026-06-04T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53860010",
+    "URL": "https://jumpit.saramin.co.kr/position/53860010",
+    "Title": "시스템 사업부 엔지니어 신입",
+    "Company": "이비즈테크",
+    "Location": "서울 마포구 성암로189, 802, 804호",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 7,
+    "EducationName": "대학졸업(2,3년) 이상",
+    "StackTags": [
+      "Linux",
+      "Windows",
+      "AZURE",
+      "vmware"
+    ],
+    "Tags": [
+      {
+        "id": "com_152",
+        "name": "매출액 100억 기업",
+        "category": "sales"
+      },
+      {
+        "id": "288",
+        "name": "간식 제공",
+        "category": "welfare"
+      }
+    ],
+    "Description": "주식회사 이비즈테크는 클라우드 플랫폼 및 스토리지 전문 업체로 다년간의 노하우와 기술력을 바탕으로 IT Infra 사업을 시작하고 있습니다.\r\n현재 시스템 통합, 솔루션, 유지보수에 이르기까지 IT인프라 토탈 솔루션을 개발·공급하고 있으며, 오늘의 꿈이 미래 현실로 실현될 수 있도록 노력하고 있는 정보 기술 기업입니다.\r\n주식회사 이비즈테크는 신용과 정직, 정도 경영으로 고객 가치창조를 최우선으로 삼는 기업이 되겠습니다.\n\n• NetApp 스토리지 설치, 유지보수, 장애처리\r\n• 서버(Dell) 및 스토리지 설치, 유지보수\r\n• 가상화 및 클라우드 서비스 지원\n\n• 신입\n\n• 서버 및 네트워크 관련 자격증 보유자 우대\n• 영어 독해 능력(영어 기술서적 이해 가능)\n• 네트워크 관련 지식 보유자 우대\n• 운전 가능자 우대\n\n• 4대보험, 퇴직연금, 연차, 석식제공, 간식제공, 각종 경조휴가 및 경조금 지원, 차량유류비 지원, 주차비 지원, 통신비 지원, 수도권 외 연고자 월세 별도 지원, 도서구입비 지원, 자격증 취득 지원, 교육비 지원, 명절 선물, 생일상품권 지급 및 생일자 조기퇴근제도, 장기근속자 포상 및 포상휴가, 사내도서관, 워크샵, 금연수당, 추천수당 등\r\n\r\n주소 : 서울특별시 마포구 성암로 189 중소기업 DMC타워 8층(디지털미디어씨티 직통연결)",
+    "RawJSON": "{\"id\":53860010,\"title\":\"시스템 사업부 엔지니어 신입\",\"companyName\":\"이비즈테크\",\"logo\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20245902155943330_189_189.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/jnyoon_106/20255316155353011_567_378.png\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/310297/20242629152632029/profile-image.jpg\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/310297/20242629152636782/profile-image.jpg\",\"sortNumber\":4}],\"techStacks\":[{\"stack\":\"Linux\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/linux.png\"},{\"stack\":\"Windows\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/windows.png\"},{\"stack\":\"AZURE\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/azure.png\"},{\"stack\":\"vmware\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"주식회사 이비즈테크는 클라우드 플랫폼 및 스토리지 전문 업체로 다년간의 노하우와 기술력을 바탕으로 IT Infra 사업을 시작하고 있습니다.\\r\\n현재 시스템 통합, 솔루션, 유지보수에 이르기까지 IT인프라 토탈 솔루션을 개발·공급하고 있으며, 오늘의 꿈이 미래 현실로 실현될 수 있도록 노력하고 있는 정보 기술 기업입니다.\\r\\n주식회사 이비즈테크는 신용과 정직, 정도 경영으로 고객 가치창조를 최우선으로 삼는 기업이 되겠습니다.\",\"responsibility\":\"• NetApp 스토리지 설치, 유지보수, 장애처리\\r\\n• 서버(Dell) 및 스토리지 설치, 유지보수\\r\\n• 가상화 및 클라우드 서비스 지원\",\"qualifications\":\"• 신입\",\"preferredRequirements\":\"• 서버 및 네트워크 관련 자격증 보유자 우대\\n• 영어 독해 능력(영어 기술서적 이해 가능)\\n• 네트워크 관련 지식 보유자 우대\\n• 운전 가능자 우대\",\"welfares\":\"• 4대보험, 퇴직연금, 연차, 석식제공, 간식제공, 각종 경조휴가 및 경조금 지원, 차량유류비 지원, 주차비 지원, 통신비 지원, 수도권 외 연고자 월세 별도 지원, 도서구입비 지원, 자격증 취득 지원, 교육비 지원, 명절 선물, 생일상품권 지급 및 생일자 조기퇴근제도, 장기근속자 포상 및 포상휴가, 사내도서관, 워크샵, 금연수당, 추천수당 등\\r\\n\\r\\n주소 : 서울특별시 마포구 성암로 189 중소기업 DMC타워 8층(디지털미디어씨티 직통연결)\",\"recruitProcess\":\"(수습 3개월동안 90% 지급)\\r\\n\\r\\n3개월 수습 기간 동안 업무 역량 및 근무 태도 등을 평가하여 정규직 전환 여부를 결정 합니다.\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-12 00:00:00\",\"closedAt\":\"2026-06-10 23:59:59\",\"location\":\"서울 마포구 성암로189, 802, 804호\",\"tags\":[{\"id\":\"com_152\",\"name\":\"매출액 100억 기업\",\"emoticon\":\"sales\"},{\"id\":\"288\",\"name\":\"간식 제공\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"4178800055\",\"encodedSerialNumber\":\"NDE3ODgwMDA1NQ==\",\"companyUrl\":\"https://www.ebiztech.co.kr\",\"alwaysOpen\":false,\"celebration\":50,\"education\":7,\"educationName\":\"대학졸업(2,3년) 이상\",\"graduate\":true,\"establishPeriod\":12,\"establishDate\":\"2015년 3월 설립\",\"workingPlaces\":[{\"address\":\"서울 마포구 성암로189, 802, 804호\",\"domestic\":false}],\"jobCategories\":[{\"id\":21,\"name\":\"기술지원\"},{\"id\":1,\"name\":\"서버/백엔드 개발자\"},{\"id\":9,\"name\":\"devops/시스템 엔지니어\"}],\"invisible\":false,\"manDbMcomIdx\":7026583,\"status\":0,\"applied\":false,\"positionStatus\":\"CHECKED\",\"scrap\":false,\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-12T00:00:00+09:00",
+    "ClosedAt": "2026-06-10T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "ID": 0,
+    "Source": "jumpit",
+    "SourcePostingID": "53799628",
+    "URL": "https://jumpit.saramin.co.kr/position/53799628",
+    "Title": "LLM RAG 및 AI Agent 개발 신입",
+    "Company": "바이트사이즈",
+    "Location": "부산 부산진구 엄광로176, 도서관 8층 일부",
+    "Newcomer": true,
+    "MinCareer": 0,
+    "MaxCareer": 0,
+    "CareerLevel": "신입",
+    "Education": 8,
+    "EducationName": "대학교졸업(4년) 이상",
+    "StackTags": [
+      "Python",
+      "AI/인공지능"
+    ],
+    "Tags": [
+      {
+        "id": "292",
+        "name": "장기근속 포상",
+        "category": "welfare"
+      },
+      {
+        "id": "285",
+        "name": "휴가비 지원",
+        "category": "welfare"
+      },
+      {
+        "id": "286",
+        "name": "프리한 복장",
+        "category": "welfare"
+      },
+      {
+        "id": "287",
+        "name": "점심지원",
+        "category": "welfare"
+      }
+    ],
+    "Description": "\"미래를 향한 여정\"\r\nAI•Deep Tech 첨단기술과 신발• 패션 산업의 만남\r\n\r\nBytesize는 Footwear \u0026 Fashion Industry에 특화된 AI와 Deep Tech 를 기반으로 한 R\u0026D 전문  기업입니다. \r\n전통 산업인 Footwear \u0026 Fashion Industry의 축적된 경험과 지식에 혁신적인 선도 기술을 융합하여 시장에 가장 필요한 솔루션으로 이 분야의 새로운 미래를 주도합니다.\r\n\r\n▶Synthetic Data\r\n합성 데이터를 활용하여 민감한 데이터, 정확도가 낮은 데이터, 부족한 데이터의 영향을 극복할 수 있습니다. 이 기술은 더 정확한 고객 분석을 가능하게 하며, 다양한 제품 테스트를, 더 낮은 가격으로 생산할 수 있는 길을 열어줄 것입니다. \r\n\r\n▶Reverse Engineering AI\r\nReverse Engineering 기술을 활용하여 기존 Business를 해체하고 분석할 수 있습니다. 이를 통해 당신의 Business를 쉽고 빠르게 혁신 할 수 있도록 지원 합니다.\r\n\r\n▶Smart Healthcare AI Solution \u0026 Product\r\nFootwear \u0026 Fashion 제품과 AI 및 Deep Tech 기술을 융합, Wellness 분야의 새로운 Smart Healthcare 솔루션 및 제품을 제공하여 \r\nSuper Value를 창출합니다.\r\n\r\nBytesize는 AI와 Deep Tech를 통해 패션 산업에 혁신적인 솔루션을 제시함으로써 기술의 발전과 더불어 신발 패션산업의 변화를 도모합니다.\r\n\r\nPut on the Future ! \r\n\r\n작은 것에서 부터 큰 것을 만들어 가고자 합니다.\r\n그 과정에서 필요한 모든 \"Byte\"를 연결하고 융합하여  Footwear \u0026 Fashion 산업에 새로운 미래를 제시 할 것입니다.\r\n\r\nBytesize는 AI 기술로 미래를 향해 전진하여 작은 시작부터 발전해 큰 성과를 이룰 것입니다.\r\n또한 AI와 Deep Tech기술을 기반으로 Footwear \u0026 Fashion산업을 위한 혁신적인 비즈니스 모델을 구축하는 것을 목표로 하고 있습니다.\r\n\r\n혁신적인 프로젝트를 주도할 수 있는 환경과 더 높은 수준으로 성장할 수 있는 기회를 제공해 드릴 혁신의 여정을 함께 하고 싶다면 \r\n지금 지원 바랍니다 !.\n\n- 데이터 분석형 / 문서처리형 / 로컬자동화형 Al Agent 모듈 개발\r\n- LLM 기반 RAG 시스템 설계 및 구현 지원\r\n- 생성형 AI 응용 서비스 개발\n\n- Python 프로그래밍 능숙자\n- AI 및 자연어처리 관련 기초 지식 보유\n- 생성형 AI 및 RAG 방법론에 대한 이해\n\n- OpenAl, LangChain, Llamalndex 등 관련 프레임워크 경험자\n- 데이터 전처리 및 벡터DB(Qdrant, FAISS 등) 활용 경험자\n\n[연봉 및 복리 후생]\r\n* 연봉 : 동종 업계 최고 대우 보장\r\n           성과에 따른 Incentive Bonus  및 직무 중요도에 따른 Retention Bonus 적용 \r\n           직무 성과에 따른 Option 제공 예정\r\n- 식사 복지 : 중식비 별도 지급  \r\n- 출퇴근 복지 :  매월 교통비(주차비 포함) 지급\r\n- 리프레시 휴가 지원 : 리프레시 휴가 사용 시 휴가비 지원\r\n- 생일 복지 : 반차 소진 없이, 생일 당일 반일 휴가 사용 가능, Super Sneakers Day*동시 진행\r\n- 창립 기념일 [ BITESIZE DAY]: 창립 기념일 기념 캐쥬얼 해피 아워, Super Sneakers Day* 동시 진행 \r\n                    [Super Sneakers Day] 1년에 2번! 생일, 창립 기념일에 운동화 혹은 스포츠 웨어 선물 증정\r\n-근속혜택 :  3년, 6년, 10년 이상 장기근속자 대상 추가 휴가 제공\r\n- 의료복지 :  지정 병원 한해서 가족까지 병원 이용료 할인 가능 (서울/부산 약 650개 병원) \r\n- 장비 혜택 : 최고 사양 개인 장비 지원 \r\n- 스킬업 지원 :  우수 직원 대상으로 석/박사 과정 학원 병행을 위한 플렉서블 타임 적용 \r\n- 자율 복장 근무 :  복장 전면 자율화  \r\n",
+    "RawJSON": "{\"id\":53799628,\"title\":\"LLM RAG 및 AI Agent 개발 신입\",\"companyName\":\"바이트사이즈\",\"logo\":\"https://cdn.jumpit.co.kr/images/255154/20242520132543764/profile-image.png\",\"cacheCompanyImages\":[{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20245518115517935/profile-image.png\",\"sortNumber\":1},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20245618115636653/profile-image.JPG\",\"sortNumber\":2},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20245618115644253/profile-image.JPG\",\"sortNumber\":3},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20245618115652466/profile-image.jpg\",\"sortNumber\":4},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20242520132556055/profile-image.jpg\",\"sortNumber\":5},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20242826102818455/profile-image.jpg\",\"sortNumber\":6},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20242620132606148/profile-image.jpg\",\"sortNumber\":7},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20242620132611113/profile-image.jpg\",\"sortNumber\":8},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20242620132624414/profile-image.jpg\",\"sortNumber\":10},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20242620132627436/profile-image.jpg\",\"sortNumber\":11},{\"imagePath\":\"https://cdn.jumpit.co.kr/images/255154/20243420133401595/profile-image.jpg\",\"sortNumber\":12}],\"techStacks\":[{\"stack\":\"Python\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/python.png\"},{\"stack\":\"AI/인공지능\",\"imagePath\":\"https://cdn.jumpit.co.kr/images/stacks/noStack.png\"}],\"serviceInfo\":\"\\\"미래를 향한 여정\\\"\\r\\nAI•Deep Tech 첨단기술과 신발• 패션 산업의 만남\\r\\n\\r\\nBytesize는 Footwear \u0026 Fashion Industry에 특화된 AI와 Deep Tech 를 기반으로 한 R\u0026D 전문  기업입니다. \\r\\n전통 산업인 Footwear \u0026 Fashion Industry의 축적된 경험과 지식에 혁신적인 선도 기술을 융합하여 시장에 가장 필요한 솔루션으로 이 분야의 새로운 미래를 주도합니다.\\r\\n\\r\\n▶Synthetic Data\\r\\n합성 데이터를 활용하여 민감한 데이터, 정확도가 낮은 데이터, 부족한 데이터의 영향을 극복할 수 있습니다. 이 기술은 더 정확한 고객 분석을 가능하게 하며, 다양한 제품 테스트를, 더 낮은 가격으로 생산할 수 있는 길을 열어줄 것입니다. \\r\\n\\r\\n▶Reverse Engineering AI\\r\\nReverse Engineering 기술을 활용하여 기존 Business를 해체하고 분석할 수 있습니다. 이를 통해 당신의 Business를 쉽고 빠르게 혁신 할 수 있도록 지원 합니다.\\r\\n\\r\\n▶Smart Healthcare AI Solution \u0026 Product\\r\\nFootwear \u0026 Fashion 제품과 AI 및 Deep Tech 기술을 융합, Wellness 분야의 새로운 Smart Healthcare 솔루션 및 제품을 제공하여 \\r\\nSuper Value를 창출합니다.\\r\\n\\r\\nBytesize는 AI와 Deep Tech를 통해 패션 산업에 혁신적인 솔루션을 제시함으로써 기술의 발전과 더불어 신발 패션산업의 변화를 도모합니다.\\r\\n\\r\\nPut on the Future ! \\r\\n\\r\\n작은 것에서 부터 큰 것을 만들어 가고자 합니다.\\r\\n그 과정에서 필요한 모든 \\\"Byte\\\"를 연결하고 융합하여  Footwear \u0026 Fashion 산업에 새로운 미래를 제시 할 것입니다.\\r\\n\\r\\nBytesize는 AI 기술로 미래를 향해 전진하여 작은 시작부터 발전해 큰 성과를 이룰 것입니다.\\r\\n또한 AI와 Deep Tech기술을 기반으로 Footwear \u0026 Fashion산업을 위한 혁신적인 비즈니스 모델을 구축하는 것을 목표로 하고 있습니다.\\r\\n\\r\\n혁신적인 프로젝트를 주도할 수 있는 환경과 더 높은 수준으로 성장할 수 있는 기회를 제공해 드릴 혁신의 여정을 함께 하고 싶다면 \\r\\n지금 지원 바랍니다 !.\",\"responsibility\":\"- 데이터 분석형 / 문서처리형 / 로컬자동화형 Al Agent 모듈 개발\\r\\n- LLM 기반 RAG 시스템 설계 및 구현 지원\\r\\n- 생성형 AI 응용 서비스 개발\",\"qualifications\":\"- Python 프로그래밍 능숙자\\n- AI 및 자연어처리 관련 기초 지식 보유\\n- 생성형 AI 및 RAG 방법론에 대한 이해\",\"preferredRequirements\":\"- OpenAl, LangChain, Llamalndex 등 관련 프레임워크 경험자\\n- 데이터 전처리 및 벡터DB(Qdrant, FAISS 등) 활용 경험자\",\"welfares\":\"[연봉 및 복리 후생]\\r\\n* 연봉 : 동종 업계 최고 대우 보장\\r\\n           성과에 따른 Incentive Bonus  및 직무 중요도에 따른 Retention Bonus 적용 \\r\\n           직무 성과에 따른 Option 제공 예정\\r\\n- 식사 복지 : 중식비 별도 지급  \\r\\n- 출퇴근 복지 :  매월 교통비(주차비 포함) 지급\\r\\n- 리프레시 휴가 지원 : 리프레시 휴가 사용 시 휴가비 지원\\r\\n- 생일 복지 : 반차 소진 없이, 생일 당일 반일 휴가 사용 가능, Super Sneakers Day*동시 진행\\r\\n- 창립 기념일 [ BITESIZE DAY]: 창립 기념일 기념 캐쥬얼 해피 아워, Super Sneakers Day* 동시 진행 \\r\\n                    [Super Sneakers Day] 1년에 2번! 생일, 창립 기념일에 운동화 혹은 스포츠 웨어 선물 증정\\r\\n-근속혜택 :  3년, 6년, 10년 이상 장기근속자 대상 추가 휴가 제공\\r\\n- 의료복지 :  지정 병원 한해서 가족까지 병원 이용료 할인 가능 (서울/부산 약 650개 병원) \\r\\n- 장비 혜택 : 최고 사양 개인 장비 지원 \\r\\n- 스킬업 지원 :  우수 직원 대상으로 석/박사 과정 학원 병행을 위한 플렉서블 타임 적용 \\r\\n- 자율 복장 근무 :  복장 전면 자율화  \\r\\n\",\"recruitProcess\":\"서류전형 \u003e 직무적합성 평가 \u003e 조직 적합성 평가 \u003e 최종합격\\r\\n\\r\\n*서류전형\\r\\n지원서 및 포트폴리오 검토 후 서류 전형 통과자 대상 전화/이메일로 다음 전형에 대한 안내 연락을 드립니다.\\r\\n\\r\\n*1차 인터뷰 (직무적합성)\\r\\n지원 분야 및 직무에 따라 1대1 혹은 다대 1 면접이 진행됩니다.\\r\\n인터뷰는 대면으로 진행되며 사정에 따라 비대면으로 진행될 수 있으며, 지원 분야의 실무진과 진행됩니다.\\r\\n\\r\\n*2,3차 인터뷰(조직적합성)\\r\\n지원분야 및 직무에 따라 1대1 혹은 다대 1 면접이 진행됩니다.\\r\\n인터뷰는 사무실 방문을 통해 대면으로 진행되며, 임원 혹은 대표이사와 진행됩니다.\\r\\n지원 분야 별 3차 인터뷰까지 진행 될 수 있으며, 필요에 의해 판단될 경우 실시합니다\",\"newcomer\":true,\"minCareer\":0,\"maxCareer\":0,\"developerInterviews\":[],\"developerInterviewsCount\":0,\"itCompanyStory\":[],\"publishedAt\":\"2026-05-06 00:00:00\",\"closedAt\":\"2026-06-04 23:59:59\",\"location\":\"부산 부산진구 엄광로176, 도서관 8층 일부\",\"tags\":[{\"id\":\"292\",\"name\":\"장기근속 포상\",\"emoticon\":\"welfare\"},{\"id\":\"285\",\"name\":\"휴가비 지원\",\"emoticon\":\"welfare\"},{\"id\":\"286\",\"name\":\"프리한 복장\",\"emoticon\":\"welfare\"},{\"id\":\"287\",\"name\":\"점심지원\",\"emoticon\":\"welfare\"}],\"serialNumber\":\"3508603129\",\"encodedSerialNumber\":\"MzUwODYwMzEyOQ==\",\"companyUrl\":\"http://www.thebytesize.ai/\",\"alwaysOpen\":false,\"celebration\":50,\"education\":8,\"educationName\":\"대학교졸업(4년) 이상\",\"graduate\":false,\"establishPeriod\":3,\"establishDate\":\"2024년 4월 설립\",\"workingPlaces\":[{\"address\":\"부산 부산진구 엄광로176, 도서관 8층 일부\",\"domestic\":false}],\"jobCategories\":[{\"id\":19,\"name\":\"빅데이터 엔지니어\"}],\"invisible\":false,\"manDbMcomIdx\":8190216,\"status\":0,\"applied\":false,\"scrap\":false,\"positionStatus\":\"CHECKED\",\"saraminCompanyTags\":[],\"follow\":false,\"hiddenPosition\":false}",
+    "PublishedAt": "2026-05-06T00:00:00+09:00",
+    "ClosedAt": "2026-06-04T23:59:59+09:00",
+    "AlwaysOpen": false,
+    "FirstSeenAt": "0001-01-01T00:00:00Z",
+    "LastSeenAt": "0001-01-01T00:00:00Z"
+  }
+]
