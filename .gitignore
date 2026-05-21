@@ -1,0 +1,23 @@
+# Compiled binaries
+/job-scraper
+/job-scraper.exe
+*.exe
+
+# GoReleaser output
+/dist/
+
+# Local runtime data (the app stores jobs.db under os.UserConfigDir())
+*.db
+*.db-shm
+*.db-wal
+
+# 점핏 API spike material — raw captured responses kept locally as Step 4
+# fixture seeds. May contain request headers / cookies. Never committed.
+/internal/scraper/jumpit/API_NOTES.md
+/internal/scraper/jumpit/curl-cmd-response*.txt
+
+# Claude Code local settings
+/.claude/settings.local.json
+
+# macOS
+.DS_Store
