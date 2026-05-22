@@ -1,0 +1,51 @@
+# GoReleaser config — cross-compiles job-scraper for every v1 target platform.
+# Validate with `goreleaser check`; dry-run with `goreleaser release --snapshot --clean`.
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: job-scraper
+    main: ./cmd/job-scraper
+    binary: job-scraper
+    env:
+      - CGO_ENABLED=0 # modernc.org/sqlite is pure Go — fully static builds
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64 # not a v1 target
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: ohchanwu
+    name: job-scraper
+
+changelog:
+  use: github

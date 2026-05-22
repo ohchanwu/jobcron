@@ -17,11 +17,20 @@ import (
 	"github.com/ohchanwu/job-scraper/internal/storage"
 )
 
+// version is the build version, overridden by GoReleaser via -ldflags.
+var version = "dev"
+
 func main() {
 	port := flag.Int("port", 7777, "preferred port; the next ten are tried if it is busy")
 	noOpen := flag.Bool("no-open", false, "do not open a browser window on startup")
 	dbPath := flag.String("db", "", "database file path (default: under the OS config dir)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("job-scraper", version)
+		return
+	}
 
 	store, err := openStore(*dbPath)
 	if err != nil {
