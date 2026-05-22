@@ -217,6 +217,66 @@ func TestFirstRunRedirectsToProfile(t *testing.T) {
 	}
 }
 
+func TestDeadlineBadge(t *testing.T) {
+	kst := time.FixedZone("KST", 9*3600)
+	now := time.Date(2026, 5, 22, 15, 0, 0, 0, kst)
+	at := func(y int, m time.Month, d int) *time.Time {
+		v := time.Date(y, m, d, 23, 59, 59, 0, kst)
+		return &v
+	}
+	cases := []struct {
+		name       string
+		closedAt   *time.Time
+		alwaysOpen bool
+		want       string
+	}{
+		{"closes today", at(2026, 5, 22), false, "오늘 마감"},
+		{"closes tomorrow", at(2026, 5, 23), false, "마감 D-1"},
+		{"closes in 3 days", at(2026, 5, 25), false, "마감 D-3"},
+		{"closes in 10 days", at(2026, 6, 1), false, ""},
+		{"always open", nil, true, ""},
+		{"no closing date", nil, false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := deadlineBadge(tc.closedAt, tc.alwaysOpen, now); got != tc.want {
+				t.Errorf("deadlineBadge = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDashboardShowsOnlyTodaysPostings(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	profJSON, _ := profile.Marshal(profile.Profile{})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	today := listingPosting("today1", "오늘 본 공고")
+	today.FirstSeenAt = time.Now().UTC()
+	today.LastSeenAt = today.FirstSeenAt
+	old := listingPosting("old1", "예전에 본 공고")
+	old.FirstSeenAt = time.Now().Add(-72 * time.Hour).UTC()
+	old.LastSeenAt = old.FirstSeenAt
+	for _, p := range []scraper.Posting{today, old} {
+		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, "오늘 본 공고") {
+		t.Error("dashboard is missing today's posting")
+	}
+	if strings.Contains(body, "예전에 본 공고") {
+		t.Error("dashboard shows a posting first seen on a previous day")
+	}
+}
+
 func TestDashboardShowsScoredPostings(t *testing.T) {
 	f := &fakeScraper{listing: []scraper.Posting{listingPosting("1", "백엔드 신입 개발자")}}
 	srv, st := newTestServer(t, f)

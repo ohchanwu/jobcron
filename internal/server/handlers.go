@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scoring"
@@ -56,7 +57,21 @@ type dashboardPosting struct {
 	Total       int
 	Excluded    bool
 	Explanation string
+	Deadline    string // "오늘 마감" | "마감 D-2" | ""
 }
+
+// briefing is the daily-briefing view model: postings first seen today, split
+// into the scored list and the dealbreaker-excluded list.
+type briefing struct {
+	Today    []dashboardPosting
+	Excluded []dashboardPosting
+}
+
+// briefingCap bounds how many postings the daily briefing lists.
+const briefingCap = 50
+
+// kstZone is Korea Standard Time (UTC+9, no DST).
+var kstZone = time.FixedZone("KST", 9*60*60)
 
 // handleDashboard renders the daily briefing. On first run (no profile saved)
 // it redirects to the profile form.
@@ -71,28 +86,35 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/profile", http.StatusSeeOther)
 		return
 	}
-	postings, err := s.dashboardPostings(ctx)
+	b, err := s.buildBriefing(ctx, time.Now())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "index.html", map[string]any{"Postings": postings})
+	s.render(w, "index.html", b)
 }
 
-// dashboardPostings loads every posting joined with its stored score, sorted
-// by score descending (excluded postings, total -1, fall to the bottom).
-func (s *Server) dashboardPostings(ctx context.Context) ([]dashboardPosting, error) {
+// buildBriefing assembles today's briefing: postings first seen today and not
+// yet past their closing date, each joined with its score, split into the
+// scored list (sorted high to low, capped) and the dealbreaker-excluded list.
+func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, error) {
 	postings, err := s.store.AllPostings(ctx)
 	if err != nil {
-		return nil, err
+		return briefing{}, err
 	}
 	scores, err := s.store.ScoresByPostingID(ctx)
 	if err != nil {
-		return nil, err
+		return briefing{}, err
 	}
-	out := make([]dashboardPosting, 0, len(postings))
+	var b briefing
 	for _, p := range postings {
-		dp := dashboardPosting{Posting: p}
+		if !sameKSTDay(p.FirstSeenAt, now) || expired(p, now) {
+			continue
+		}
+		dp := dashboardPosting{
+			Posting:  p,
+			Deadline: deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total
 			dp.Excluded = sc.Total < 0
@@ -101,10 +123,47 @@ func (s *Server) dashboardPostings(ctx context.Context) ([]dashboardPosting, err
 				dp.Explanation = scoring.Explain(result)
 			}
 		}
-		out = append(out, dp)
+		if dp.Excluded {
+			b.Excluded = append(b.Excluded, dp)
+		} else {
+			b.Today = append(b.Today, dp)
+		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Total > out[j].Total })
-	return out, nil
+	sort.SliceStable(b.Today, func(i, j int) bool { return b.Today[i].Total > b.Today[j].Total })
+	if len(b.Today) > briefingCap {
+		b.Today = b.Today[:briefingCap]
+	}
+	return b, nil
+}
+
+// sameKSTDay reports whether a and b fall on the same calendar day in KST.
+func sameKSTDay(a, b time.Time) bool {
+	ak, bk := a.In(kstZone), b.In(kstZone)
+	return ak.Year() == bk.Year() && ak.YearDay() == bk.YearDay()
+}
+
+// expired reports whether a posting is past its closing date.
+func expired(p scraper.Posting, now time.Time) bool {
+	return !p.AlwaysOpen && p.ClosedAt != nil && p.ClosedAt.Before(now)
+}
+
+// deadlineBadge returns a gentle closing-soon badge for a posting closing
+// within three calendar days (KST), or "" otherwise.
+func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) string {
+	if alwaysOpen || closedAt == nil {
+		return ""
+	}
+	c, n := closedAt.In(kstZone), now.In(kstZone)
+	closeDay := time.Date(c.Year(), c.Month(), c.Day(), 0, 0, 0, 0, kstZone)
+	today := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, kstZone)
+	switch days := int(closeDay.Sub(today).Hours() / 24); {
+	case days == 0:
+		return "오늘 마감"
+	case days >= 1 && days <= 3:
+		return fmt.Sprintf("마감 D-%d", days)
+	default:
+		return ""
+	}
 }
 
 // profileForm is the view model for the profile form — flat string/int fields
