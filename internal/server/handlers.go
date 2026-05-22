@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -20,22 +21,33 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
-	mux.HandleFunc("POST /api/scrape", s.handleScrape)
+	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.FS(web.FS))))
 	return mux
 }
 
-// handleScrape runs the full scrape pipeline synchronously and returns the
-// result as JSON.
-func (s *Server) handleScrape(w http.ResponseWriter, r *http.Request) {
-	res, err := s.runScrape(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+// handleScrapeSSE runs the scrape pipeline, streaming progress to the client
+// as Server-Sent Events. A second concurrent scrape is rejected with 409.
+func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
+	source := s.scr.Source()
+	if !s.flight.tryAcquire(source) {
+		http.Error(w, "이미 스크랩이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(res)
+	defer s.flight.release(source)
+
+	sw, err := newSSEWriter(w)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	res, err := s.runScrape(r.Context(), sw.event)
+	if err != nil {
+		sw.event("failed", "스크랩에 실패했어요. 잠시 후 다시 시도해 주세요.")
+		return
+	}
+	sw.event("done", fmt.Sprintf("브리핑이 준비됐어요 — 새 공고 %d개", res.New))
 }
 
 // dashboardPosting is one row of the daily briefing.

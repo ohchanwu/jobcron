@@ -20,9 +20,10 @@ const scrapeNewCap = 50
 
 // Server wires storage, a scraper, and the HTTP handlers together.
 type Server struct {
-	store *storage.Store
-	scr   scraper.Scraper
-	tmpl  *template.Template
+	store  *storage.Store
+	scr    scraper.Scraper
+	tmpl   *template.Template
+	flight *singleFlight
 }
 
 // New builds a Server over the given storage and scraper. It parses the
@@ -30,9 +31,10 @@ type Server struct {
 // error caught at startup).
 func New(store *storage.Store, scr scraper.Scraper) *Server {
 	return &Server{
-		store: store,
-		scr:   scr,
-		tmpl:  template.Must(template.ParseFS(web.FS, "*.html")),
+		store:  store,
+		scr:    scr,
+		tmpl:   template.Must(template.ParseFS(web.FS, "*.html")),
+		flight: newSingleFlight(),
 	}
 }
 
@@ -43,13 +45,15 @@ type ScrapeResult struct {
 	Scored int `json:"scored"`
 }
 
-// runScrape executes the full synchronous pipeline: robots check, listing
-// fetch, a detail fetch for each posting new to the DB, persistence, then
-// scoring of every stored posting against the current profile.
-func (s *Server) runScrape(ctx context.Context) (ScrapeResult, error) {
+// runScrape executes the full pipeline — robots check, listing fetch, a
+// detail fetch for each posting new to the DB, persistence, then scoring —
+// reporting progress through emit (status / count / progress events).
+func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (ScrapeResult, error) {
+	emit("status", "점핏 robots.txt 확인 중...")
 	if err := s.scr.CheckAccess(ctx); err != nil {
 		return ScrapeResult{}, fmt.Errorf("server: scrape access denied: %w", err)
 	}
+	emit("status", "✓ 허용됐어요 — 공고 목록을 가져오는 중...")
 	listing, err := s.scr.FetchListing(ctx, 0)
 	if err != nil {
 		return ScrapeResult{}, fmt.Errorf("server: fetch listing: %w", err)
@@ -61,6 +65,10 @@ func (s *Server) runScrape(ctx context.Context) (ScrapeResult, error) {
 
 	now := time.Now().UTC()
 	res := ScrapeResult{Listed: len(listing)}
+
+	// Split the listing: already-seen postings just get last_seen_at bumped;
+	// new ones need a detail fetch.
+	var fresh []scraper.Posting
 	for _, p := range listing {
 		if known[p.SourcePostingID] {
 			p.LastSeenAt = now
@@ -69,9 +77,14 @@ func (s *Server) runScrape(ctx context.Context) (ScrapeResult, error) {
 			}
 			continue
 		}
-		if res.New >= scrapeNewCap {
-			break
-		}
+		fresh = append(fresh, p)
+	}
+	if len(fresh) > scrapeNewCap {
+		fresh = fresh[:scrapeNewCap]
+	}
+	emit("count", fmt.Sprintf("✓ 새로운 공고 %d개를 찾았어요", len(fresh)))
+
+	for _, p := range fresh {
 		detailed, err := s.scr.FetchDetail(ctx, p)
 		if err != nil {
 			continue // skip a posting whose detail fetch failed
@@ -82,8 +95,10 @@ func (s *Server) runScrape(ctx context.Context) (ScrapeResult, error) {
 			return res, fmt.Errorf("server: insert new posting: %w", err)
 		}
 		res.New++
+		emit("progress", fmt.Sprintf("공고 %d/%d 가져오는 중...", res.New, len(fresh)))
 	}
 
+	emit("status", "공고에 점수를 매기는 중...")
 	scored, err := s.scoreAll(ctx)
 	if err != nil {
 		return res, err

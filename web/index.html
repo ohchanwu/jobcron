@@ -13,8 +13,8 @@
   </header>
   <p>
     <button id="scrape">스크랩 시작</button>
-    <span id="status"></span>
   </p>
+  <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
   <main>
     {{if .Postings}}
     <ol class="postings">
@@ -32,17 +32,50 @@
     {{end}}
   </main>
   <script>
-    document.getElementById("scrape").addEventListener("click", async () => {
-      const status = document.getElementById("status");
-      status.textContent = "스크랩 중...";
-      try {
-        const resp = await fetch("/api/scrape", { method: "POST" });
-        if (!resp.ok) throw new Error(await resp.text());
-        location.reload();
-      } catch (e) {
-        status.textContent = "스크랩에 실패했어요: " + e.message;
-      }
-    });
+    (function () {
+      const btn = document.getElementById("scrape");
+      const log = document.getElementById("scrape-log");
+      if (!btn) return;
+
+      btn.addEventListener("click", function () {
+        btn.disabled = true;
+        log.textContent = "";
+        const es = new EventSource("/api/scrape");
+
+        function append(msg) {
+          const p = document.createElement("p");
+          p.textContent = msg;
+          log.appendChild(p);
+        }
+        function progress(msg) {
+          let pr = document.getElementById("scrape-progress");
+          if (!pr) {
+            pr = document.createElement("p");
+            pr.id = "scrape-progress";
+            log.appendChild(pr);
+          }
+          pr.textContent = msg;
+        }
+
+        es.addEventListener("status", (e) => append(e.data));
+        es.addEventListener("count", (e) => append(e.data));
+        es.addEventListener("progress", (e) => progress(e.data));
+        es.addEventListener("done", function () {
+          es.close();
+          location.reload();
+        });
+        es.addEventListener("failed", function (e) {
+          es.close();
+          btn.disabled = false;
+          append(e.data || "스크랩에 실패했어요.");
+        });
+        es.addEventListener("error", function () {
+          es.close();
+          btn.disabled = false;
+          append("연결이 끊겼어요. 잠시 후 다시 시도해 주세요.");
+        });
+      });
+    })();
   </script>
 </body>
 </html>

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +40,9 @@ func (f *fakeScraper) FetchDetail(ctx context.Context, p scraper.Posting) (scrap
 	return p, nil
 }
 
+// noopEmit is an SSE emit callback that discards events.
+func noopEmit(event, data string) {}
+
 func listingPosting(sourceID, title string) scraper.Posting {
 	return scraper.Posting{
 		Source: "jumpit", SourcePostingID: sourceID, Title: title,
@@ -74,7 +76,7 @@ func TestRunScrapeStoresAndScoresPostings(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
-	res, err := srv.runScrape(ctx)
+	res, err := srv.runScrape(ctx, noopEmit)
 	if err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
@@ -106,7 +108,7 @@ func TestRunScrapeSkipsDetailForKnownPostings(t *testing.T) {
 		t.Fatalf("seed UpsertPosting: %v", err)
 	}
 
-	if _, err := srv.runScrape(ctx); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if len(f.detailCalls) != 1 || f.detailCalls[0] != "2" {
@@ -117,12 +119,12 @@ func TestRunScrapeSkipsDetailForKnownPostings(t *testing.T) {
 func TestRunScrapeFailsWhenAccessDenied(t *testing.T) {
 	f := &fakeScraper{accessErr: errors.New("robots.txt disallows")}
 	srv, _ := newTestServer(t, f)
-	if _, err := srv.runScrape(context.Background()); err == nil {
+	if _, err := srv.runScrape(context.Background(), noopEmit); err == nil {
 		t.Error("runScrape = nil error, want an error when CheckAccess fails")
 	}
 }
 
-func TestHandleScrapeReturnsJSON(t *testing.T) {
+func TestHandleScrapeStreamsSSE(t *testing.T) {
 	f := &fakeScraper{listing: []scraper.Posting{listingPosting("1", "신입 공고")}}
 	srv, st := newTestServer(t, f)
 	profJSON, _ := profile.Marshal(profile.Profile{})
@@ -131,16 +133,27 @@ func TestHandleScrapeReturnsJSON(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/scrape", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body)
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/scrape", nil))
+
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q, want text/event-stream", ct)
 	}
-	var res ScrapeResult
-	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
-		t.Fatalf("decode response: %v", err)
+	body := rec.Body.String()
+	for _, want := range []string{"event: status", "event: count", "event: done"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SSE stream missing %q\n--- body ---\n%s", want, body)
+		}
 	}
-	if res.New != 1 {
-		t.Errorf("res.New = %d, want 1", res.New)
+}
+
+func TestHandleScrapeRejectsConcurrentScrape(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	srv.flight.tryAcquire("jumpit") // a scrape is already in progress
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/scrape", nil))
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409 when a scrape is already running", rec.Code)
 	}
 }
 
@@ -212,7 +225,7 @@ func TestDashboardShowsScoredPostings(t *testing.T) {
 	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
-	if _, err := srv.runScrape(ctx); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 
