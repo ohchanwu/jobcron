@@ -29,6 +29,9 @@ builds:
 
 archives:
   - id: default
+    # Version-free names so README install URLs (releases/latest/download/...)
+    # stay stable across releases.
+    name_template: "job-scraper_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
     format_overrides:
