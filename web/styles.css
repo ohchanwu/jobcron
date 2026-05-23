@@ -3,6 +3,37 @@
    Light + dark via CSS color-scheme + light-dark(). Override via
    html[data-theme="light|dark"] from the theme toggle. */
 
+/* Vendored fonts — shipped inside the binary so the app renders correctly
+   offline. Paths are relative to this file's URL (/static/styles.css). */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url("vendor/fonts/PretendardVariable.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url("vendor/fonts/JetBrainsMono-Light.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("vendor/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("vendor/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+}
+
 :root { color-scheme: light dark; }
 html[data-theme="light"] { color-scheme: light; }
 html[data-theme="dark"]  { color-scheme: dark; }
