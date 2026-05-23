@@ -12,8 +12,8 @@ import (
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
 
-// requiredObjects are the tables / virtual tables migration 0001 must create.
-var requiredObjects = []string{"postings", "postings_fts", "profile", "scores"}
+// requiredObjects are the tables / virtual tables the migrations must create.
+var requiredObjects = []string{"postings", "postings_fts", "profile", "scores", "bookmarks"}
 
 // newTestStore opens a fresh, migrated database in a temp directory.
 func newTestStore(t *testing.T) *Store {

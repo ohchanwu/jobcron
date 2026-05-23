@@ -20,9 +20,12 @@ import (
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
+	mux.HandleFunc("GET /bookmarks", s.handleBookmarks)
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
+	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
+	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.FS(web.FS))))
 	return mux
@@ -56,6 +59,7 @@ type dashboardPosting struct {
 	Posting     scraper.Posting
 	Total       int
 	Excluded    bool
+	Bookmarked  bool               // user has saved this posting
 	Explanation string             // "React +20 · 신입 +25 ..." (used for excluded rows)
 	Breakdown   []scoring.LineItem // structured line items, rendered as chips
 	Deadline    string             // "오늘 마감" | "마감 D-2" | ""
@@ -108,14 +112,19 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if err != nil {
 		return briefing{}, err
 	}
+	bookmarks, err := s.store.BookmarkedIDs(ctx)
+	if err != nil {
+		return briefing{}, err
+	}
 	b := briefing{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
 		if !sameKSTDay(p.FirstSeenAt, now) || expired(p, now) {
 			continue
 		}
 		dp := dashboardPosting{
-			Posting:  p,
-			Deadline: deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+			Posting:    p,
+			Bookmarked: bookmarks[p.ID],
+			Deadline:   deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total

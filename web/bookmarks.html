@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>북마크 — 오늘의 채용 브리핑</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <p class="eyebrow">저장한</p>
+        <h1>북마크</h1>
+      </div>
+      <div class="head-right">
+        {{.Date}}<br>
+        <a href="/">← 브리핑으로</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" title="테마 (자동·낮·밤)">AUTO</button>
+      </div>
+    </header>
+
+    <div class="scrape-row">
+      <div class="count">저장된 공고 <strong>{{len .Postings}}</strong>개</div>
+    </div>
+
+    <main>
+      {{if .Postings}}
+      <ol class="postings">
+        {{range .Postings}}
+        <li class="posting{{if .Excluded}} posting-dim{{end}}">
+          <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
+          <div class="posting-body">
+            <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
+            <div class="posting-meta">
+              <span>{{.Posting.Company}}</span>
+              {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
+              {{if .Deadline}}<span class="deadline">{{.Deadline}}</span>{{end}}
+            </div>
+            {{if .Breakdown}}
+            <div class="chips">
+              {{range .Breakdown}}<span class="chip">{{.Label}}<span class="v">+{{.Delta}}</span></span>{{end}}
+            </div>
+            {{end}}
+          </div>
+          <button class="bookmark on" type="button"
+                  data-posting-id="{{.Posting.ID}}"
+                  aria-pressed="true"
+                  aria-label="북마크 해제">
+            <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+              <path d="M5 3h10v15l-5-3.5L5 18z" />
+            </svg>
+          </button>
+        </li>
+        {{end}}
+      </ol>
+      {{else}}
+      <div class="empty">
+        <p class="empty-title">아직 저장한 공고가 없어요.</p>
+        <p class="empty-sub">마음에 드는 공고 옆의 북마크 아이콘을 눌러보세요.<br>여기서 다시 모아 볼 수 있어요.</p>
+      </div>
+      {{end}}
+    </main>
+
+    <footer>오늘도 수고하셨어요</footer>
+  </div>
+
+  <script src="/static/theme.js"></script>
+  <script src="/static/bookmark.js"></script>
+</body>
+</html>
