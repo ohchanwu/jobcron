@@ -231,6 +231,32 @@ header h1 {
   margin-left: 0.2rem;
 }
 
+/* Archive page — day-grouped sections. The day header sits above each
+   group's <ol> as a quiet temporal anchor, mirroring the eyebrow style. */
+.archive-day { margin-top: 2.5rem; }
+.archive-day:first-of-type { margin-top: 0.5rem; }
+.day-header {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+}
+.day-today {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  text-transform: none;
+}
+
 /* Dim styling for dealbreaker-excluded rows shown inline (bookmarks /
    archive pages). The dashboard's own excluded list lives inside
    .excluded-box and uses its own rules. */

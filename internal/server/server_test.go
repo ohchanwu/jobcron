@@ -116,6 +116,44 @@ func TestRunScrapeSkipsDetailForKnownPostings(t *testing.T) {
 	}
 }
 
+func TestRunScrapeSweepsStalePostings(t *testing.T) {
+	// One pre-existing posting last seen 10 days ago. The scrape returns
+	// only a fresh listing, so the pre-existing one is not re-seen and
+	// becomes stale relative to the new MAX(last_seen_at).
+	f := &fakeScraper{listing: []scraper.Posting{listingPosting("fresh", "갓 올라온 공고")}}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+
+	stale := listingPosting("stale", "오래 안 보이던 공고")
+	stale.FirstSeenAt = time.Now().Add(-15 * 24 * time.Hour).UTC()
+	stale.LastSeenAt = time.Now().Add(-10 * 24 * time.Hour).UTC()
+	if _, _, err := st.UpsertPosting(ctx, stale); err != nil {
+		t.Fatalf("seed stale posting: %v", err)
+	}
+
+	var sweepStatus string
+	emit := func(event, data string) {
+		if event == "status" && strings.Contains(data, "정리했어요") {
+			sweepStatus = data
+		}
+	}
+	res, err := srv.runScrape(ctx, emit)
+	if err != nil {
+		t.Fatalf("runScrape: %v", err)
+	}
+	if res.Removed != 1 {
+		t.Errorf("ScrapeResult.Removed = %d, want 1 (the stale posting)", res.Removed)
+	}
+	if sweepStatus == "" {
+		t.Error("scrape did not emit a sweep status message when removing postings")
+	}
+
+	postings, _ := st.AllPostings(ctx)
+	if len(postings) != 1 || postings[0].SourcePostingID != "fresh" {
+		t.Errorf("postings after sweep = %+v, want only [fresh]", postings)
+	}
+}
+
 func TestRunScrapeFailsWhenAccessDenied(t *testing.T) {
 	f := &fakeScraper{accessErr: errors.New("robots.txt disallows")}
 	srv, _ := newTestServer(t, f)

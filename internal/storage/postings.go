@@ -103,6 +103,66 @@ func (s *Store) KnownSourceIDs(ctx context.Context, source string) (map[string]b
 	return ids, rows.Err()
 }
 
+// SweepStalePostings removes postings that have probably gone stale.
+//
+// A posting is removed when ALL of the following hold:
+//   - It is not bookmarked. Bookmarks are user-explicit save signals;
+//     they never auto-remove.
+//   - It satisfies at least one of:
+//   - Stale-from-source: last_seen_at < (max last_seen_at − staleWindow).
+//     Measured against the freshest scrape activity, not wall-clock now,
+//     so the user going dark for two weeks does not nuke everything.
+//   - Old-and-not-always-open: first_seen_at < (now − oldWindow) AND
+//     always_open = 0. The source's own "no expiration" flag wins
+//     against the age rule.
+//
+// Returns the number of rows removed. ON DELETE CASCADE on scores and
+// bookmarks (the latter cannot match here by construction) handles the
+// dependent rows; the FTS triggers keep the index in sync.
+func (s *Store) SweepStalePostings(
+	ctx context.Context, now time.Time, staleWindow, oldWindow time.Duration,
+) (int, error) {
+	// modernc.org/sqlite stores time.Time bind values as the Go-default
+	// String() format. Aggregates (MAX) lose the DATETIME column tag, so
+	// sql.NullTime cannot scan the result — read as a string and parse.
+	var maxRaw sql.NullString
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT MAX(last_seen_at) FROM postings`).Scan(&maxRaw); err != nil {
+		return 0, fmt.Errorf("storage: read max last_seen_at: %w", err)
+	}
+	if !maxRaw.Valid {
+		return 0, nil // empty table — nothing to sweep
+	}
+	maxLastSeen, err := time.Parse(timeStoreFormat, maxRaw.String)
+	if err != nil {
+		return 0, fmt.Errorf("storage: parse max last_seen_at %q: %w", maxRaw.String, err)
+	}
+	staleBefore := maxLastSeen.UTC().Add(-staleWindow)
+	oldBefore := now.UTC().Add(-oldWindow)
+
+	res, err := s.db.ExecContext(ctx, `
+DELETE FROM postings
+WHERE id NOT IN (SELECT posting_id FROM bookmarks)
+  AND (
+    last_seen_at < ?
+    OR (first_seen_at < ? AND always_open = 0)
+  )`, staleBefore, oldBefore)
+	if err != nil {
+		return 0, fmt.Errorf("storage: sweep stale postings: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("storage: sweep rows affected: %w", err)
+	}
+	return int(n), nil
+}
+
+// timeStoreFormat matches time.Time.String() — the format modernc.org/sqlite
+// uses when binding a time.Time, and therefore the on-disk representation
+// of every DATETIME column written by this package. Lexically sortable
+// within UTC, so SQLite string comparison agrees with chronological order.
+const timeStoreFormat = "2006-01-02 15:04:05.999999999 -0700 MST"
+
 // AllPostings returns every stored posting, newest first.
 func (s *Store) AllPostings(ctx context.Context) ([]scraper.Posting, error) {
 	rows, err := s.db.QueryContext(ctx,

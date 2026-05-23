@@ -68,13 +68,18 @@ The event names the client listens for: `status`, `count`, `progress`, `done`, `
 1. `CheckAccess` — robots.txt with 24h cache, checks **both** `jumpit.saramin.co.kr` and `jumpit-api.saramin.co.kr` (the API host's robots.txt 404s, which RFC 9309 reads as unrestricted).
 2. `FetchListing` against `/api/positions?career=0&size=500&...` — `career=0` filters 신입 server-side. Pagination is a defensive fallback; the 신입 universe (~57 postings) fits in one page.
 3. For already-seen postings, just bump `last_seen_at`. For new postings (up to `scrapeNewCap = 50`), fetch detail at 1 req/s and persist.
-4. Re-score everything against the current profile.
+4. **Sweep stale postings** — `SweepStalePostings` hard-deletes anything not seen in `sweepStaleWindow=3d` OR first seen more than `sweepOldWindow=90d` ago (the latter only if `always_open=0`). Bookmarked postings are exempt from both rules.
+5. Re-score everything against the current profile.
 
 The 1 req/s pacing is `time.Sleep` in `internal/scraper/jumpit/client.go` — deliberately simpler than `x/time/rate`.
 
+**Sweep semantics worth knowing** — staleness is measured relative to `MAX(last_seen_at)` across the whole table, not wall-clock `now()`. If the user goes on vacation and doesn't scrape for two weeks, nothing becomes stale during the gap because the baseline doesn't move. On the next scrape, the baseline jumps forward and any posting not re-found becomes stale. This avoids needing a `scrape_runs` audit table.
+
 ## Storage layout
 
-The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. The current schema is in `migrations/0001_initial.sql`; `raw_json` is kept on every posting for forward compatibility with v1.1+ parsers.
+The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.1+ parsers.
+
+**modernc.org/sqlite DATETIME quirk** — when you bind a `time.Time` parameter, the driver serializes via Go's default `time.Time.String()` format (`"2006-01-02 15:04:05.999999999 -0700 MST"`), and that is what lands in the column on disk. For a named DATETIME column, `SELECT col` round-trips back to `time.Time` cleanly. But aggregates like `MAX(col)` lose the DATETIME column tag — `sql.NullTime.Scan` will fail. Read the aggregate into a `sql.NullString` and parse with `timeStoreFormat` in `internal/storage/postings.go` (the constant exists for exactly this).
 
 ## Things the design doc explicitly rules out for v1
 

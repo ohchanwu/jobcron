@@ -18,6 +18,15 @@ import (
 // defensive limit; the 점핏 신입 universe is well under it.
 const scrapeNewCap = 50
 
+// Sweep windows. Postings that have not been seen in any scrape for
+// sweepStaleWindow, OR were first seen more than sweepOldWindow ago AND
+// are not always_open, get hard-deleted at the end of every scrape.
+// Bookmarked postings are exempt from both rules.
+const (
+	sweepStaleWindow = 3 * 24 * time.Hour
+	sweepOldWindow   = 90 * 24 * time.Hour
+)
+
 // Server wires storage, a scraper, and the HTTP handlers together.
 type Server struct {
 	store  *storage.Store
@@ -40,9 +49,10 @@ func New(store *storage.Store, scr scraper.Scraper) *Server {
 
 // ScrapeResult summarizes one scrape run.
 type ScrapeResult struct {
-	Listed int `json:"listed"`
-	New    int `json:"new"`
-	Scored int `json:"scored"`
+	Listed  int `json:"listed"`
+	New     int `json:"new"`
+	Scored  int `json:"scored"`
+	Removed int `json:"removed"` // postings hard-deleted by the staleness sweep
 }
 
 // runScrape executes the full pipeline — robots check, listing fetch, a
@@ -96,6 +106,15 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		}
 		res.New++
 		emit("progress", fmt.Sprintf("공고 %d/%d 가져오는 중...", res.New, len(fresh)))
+	}
+
+	removed, err := s.store.SweepStalePostings(ctx, now, sweepStaleWindow, sweepOldWindow)
+	if err != nil {
+		return res, fmt.Errorf("server: sweep stale postings: %w", err)
+	}
+	res.Removed = removed
+	if removed > 0 {
+		emit("status", fmt.Sprintf("오래된 공고 %d개를 정리했어요", removed))
 	}
 
 	emit("status", "공고에 점수를 매기는 중...")
