@@ -56,8 +56,9 @@ type dashboardPosting struct {
 	Posting     scraper.Posting
 	Total       int
 	Excluded    bool
-	Explanation string
-	Deadline    string // "오늘 마감" | "마감 D-2" | ""
+	Explanation string             // "React +20 · 신입 +25 ..." (used for excluded rows)
+	Breakdown   []scoring.LineItem // structured line items, rendered as chips
+	Deadline    string             // "오늘 마감" | "마감 D-2" | ""
 }
 
 // briefing is the daily-briefing view model: postings first seen today, split
@@ -65,6 +66,7 @@ type dashboardPosting struct {
 type briefing struct {
 	Today    []dashboardPosting
 	Excluded []dashboardPosting
+	Date     string // "2026 / 05 / 23" (KST)
 }
 
 // briefingCap bounds how many postings the daily briefing lists.
@@ -106,7 +108,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if err != nil {
 		return briefing{}, err
 	}
-	var b briefing
+	b := briefing{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
 		if !sameKSTDay(p.FirstSeenAt, now) || expired(p, now) {
 			continue
@@ -121,6 +123,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 			var result scoring.ScoreResult
 			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 				dp.Explanation = scoring.Explain(result)
+				dp.Breakdown = result.Breakdown
 			}
 		}
 		if dp.Excluded {

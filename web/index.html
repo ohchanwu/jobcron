@@ -4,37 +4,59 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>오늘의 채용 브리핑</title>
+  <script>
+    /* FOUC prevention: read saved theme synchronously before paint. */
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <div class="wrap">
-    <header class="site-header">
+    <header>
       <div>
-        <h1>오늘의 채용 브리핑</h1>
-        <p class="tagline">신입 IT 채용 공고를, 차분하게 한 페이지로.</p>
+        <p class="eyebrow">오늘의</p>
+        <h1>채용 브리핑</h1>
       </div>
-      <a class="nav-link" href="/profile">프로필</a>
+      <div class="head-right">
+        {{.Date}}<br>
+        <a href="/profile">→ 프로필 설정</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" title="테마 (자동·낮·밤)">AUTO</button>
+      </div>
     </header>
 
-    <section class="scrape">
-      <button id="scrape" class="btn-primary">스크랩 시작</button>
-      <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
-    </section>
+    <div class="scrape-row">
+      <div class="count">새 공고 <strong>{{len .Today}}</strong>개</div>
+      <button id="scrape" class="btn-primary">스크랩 시작 <span class="arrow">→</span></button>
+    </div>
+    <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
 
     <main>
       {{if .Today}}
       <ol class="postings">
         {{range .Today}}
         <li class="posting">
-          <span class="score" title="적합도 점수">{{.Total}}</span>
+          <span class="score">{{.Total}}</span>
           <div class="posting-body">
             <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
             <div class="posting-meta">
-              <span class="company">{{.Posting.Company}}</span>
-              {{if .Posting.Location}}<span class="dot">·</span><span>{{.Posting.Location}}</span>{{end}}
-              {{if .Deadline}}<span class="badge-deadline">{{.Deadline}}</span>{{end}}
+              <span>{{.Posting.Company}}</span>
+              {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
+              {{if .Deadline}}<span class="deadline">{{.Deadline}}</span>{{end}}
             </div>
-            {{if .Explanation}}<p class="why">{{.Explanation}}</p>{{end}}
+            {{if .Breakdown}}
+            <div class="chips">
+              {{range .Breakdown}}<span class="chip">{{.Label}}<span class="v">+{{.Delta}}</span></span>{{end}}
+            </div>
+            {{end}}
           </div>
         </li>
         {{end}}
@@ -42,21 +64,23 @@
       {{else}}
       <div class="empty">
         <p class="empty-title">오늘은 아직 브리핑할 공고가 없어요.</p>
-        <p class="empty-sub">위의 <b>스크랩 시작</b>을 눌러 오늘의 공고를 받아보세요.<br>
-          새 공고가 없는 날도 있어요 — 천천히 가도 괜찮아요.</p>
+        <p class="empty-sub">위의 <b>스크랩 시작</b>을 눌러보세요.<br>새 공고가 없는 날도 있어요 — 천천히 가도 괜찮아요.</p>
       </div>
       {{end}}
 
       {{if .Excluded}}
       <details class="excluded-box">
         <summary>관심 밖으로 분류된 공고 {{len .Excluded}}개</summary>
-        <ol class="postings excluded">
+        <ol class="postings">
           {{range .Excluded}}
           <li class="posting">
+            <span class="score">—</span>
             <div class="posting-body">
               <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
-              <div class="posting-meta"><span class="company">{{.Posting.Company}}</span></div>
-              {{if .Explanation}}<p class="why">{{.Explanation}}</p>{{end}}
+              <div class="posting-meta">
+                <span>{{.Posting.Company}}</span>
+                {{if .Explanation}}<span class="sep">/</span><span>{{.Explanation}}</span>{{end}}
+              </div>
             </div>
           </li>
           {{end}}
@@ -65,53 +89,51 @@
       {{end}}
     </main>
 
-    <footer class="site-footer">
-      <p>오늘도 수고하셨어요.</p>
-    </footer>
+    <footer>오늘도 수고하셨어요</footer>
   </div>
 
+  <script src="/static/theme.js"></script>
   <script>
+    /* Scrape: open EventSource on click, stream events into the log,
+       reload the page on done so the new briefing renders. */
     (function () {
-      const btn = document.getElementById("scrape");
-      const log = document.getElementById("scrape-log");
+      var btn = document.getElementById('scrape');
+      var log = document.getElementById('scrape-log');
       if (!btn) return;
 
-      btn.addEventListener("click", function () {
+      btn.addEventListener('click', function () {
         btn.disabled = true;
-        log.textContent = "";
-        const es = new EventSource("/api/scrape");
+        log.textContent = '';
+        var es = new EventSource('/api/scrape');
 
         function append(msg) {
-          const p = document.createElement("p");
+          var p = document.createElement('p');
           p.textContent = msg;
           log.appendChild(p);
         }
         function progress(msg) {
-          let pr = document.getElementById("scrape-progress");
+          var pr = document.getElementById('scrape-progress');
           if (!pr) {
-            pr = document.createElement("p");
-            pr.id = "scrape-progress";
+            pr = document.createElement('p');
+            pr.id = 'scrape-progress';
             log.appendChild(pr);
           }
           pr.textContent = msg;
         }
 
-        es.addEventListener("status", (e) => append(e.data));
-        es.addEventListener("count", (e) => append(e.data));
-        es.addEventListener("progress", (e) => progress(e.data));
-        es.addEventListener("done", function () {
-          es.close();
-          location.reload();
-        });
-        es.addEventListener("failed", function (e) {
+        es.addEventListener('status',   function (e) { append(e.data); });
+        es.addEventListener('count',    function (e) { append(e.data); });
+        es.addEventListener('progress', function (e) { progress(e.data); });
+        es.addEventListener('done', function () { es.close(); location.reload(); });
+        es.addEventListener('failed', function (e) {
           es.close();
           btn.disabled = false;
-          append(e.data || "스크랩에 실패했어요.");
+          append(e.data || '스크랩에 실패했어요.');
         });
-        es.addEventListener("error", function () {
+        es.addEventListener('error', function () {
           es.close();
           btn.disabled = false;
-          append("연결이 끊겼어요. 잠시 후 다시 시도해 주세요.");
+          append('연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
         });
       });
     })();

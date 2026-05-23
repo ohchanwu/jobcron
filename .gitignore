@@ -22,3 +22,6 @@
 # macOS
 .DS_Store
 .gstack/
+
+# Throwaway design mockups (frontend-design exploration)
+/design/

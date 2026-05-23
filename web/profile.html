@@ -3,20 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>프로필 설정 — 오늘의 채용 브리핑</title>
+  <title>프로필 — 오늘의 채용 브리핑</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <div class="wrap">
-    <header class="site-header">
+    <header>
       <div>
-        <h1>프로필 설정</h1>
-        <p class="form-intro">이 정보로 매일의 공고에 점수를 매겨요. 언제든 다시 바꿀 수 있어요.</p>
+        <p class="eyebrow">프로필</p>
+        <h1>설정</h1>
+      </div>
+      <div class="head-right">
+        <a href="/">← 브리핑으로</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" title="테마 (자동·낮·밤)">AUTO</button>
       </div>
     </header>
 
+    <p class="form-intro">이 정보로 매일의 공고에 점수를 매겨요. 언제든 다시 바꿀 수 있어요.</p>
+
     <form method="post" action="/profile">
-      <label>경력
+      <label>경력 (년)
         <span class="field-hint">햇수로 적어주세요. 신입이면 0.</span>
         <input type="number" name="career_years" min="0" value="{{.CareerYears}}">
       </label>
@@ -70,9 +88,11 @@
         "야근 없음" 같은 부정 표현은 "야근"과 구분하지 못해요. 짧고 분명한 단어가 가장 잘 맞아요.</p>
 
       <div class="form-actions">
-        <button type="submit" class="btn-primary">저장하고 브리핑 보기</button>
+        <button type="submit" class="btn-primary">저장하고 브리핑 보기 <span class="arrow">→</span></button>
       </div>
     </form>
   </div>
+
+  <script src="/static/theme.js"></script>
 </body>
 </html>

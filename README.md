@@ -7,7 +7,10 @@ and it scrapes [점핏 (Jumpit)](https://jumpit.saramin.co.kr), scores every new
 IT posting against your profile, and shows a one-page daily briefing — each match
 explained, no notifications, no setup, no account.
 
-![The daily briefing](docs/dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png">
+  <img src="docs/dashboard.png" alt="The daily briefing — warm cream in light mode, warm charcoal in dark mode, with gold score numerals and chip-style breakdowns">
+</picture>
 
 ## Why
 

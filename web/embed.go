@@ -4,7 +4,7 @@ package web
 
 import "embed"
 
-// FS holds the HTML templates (*.html) and static assets (*.css) for the UI.
+// FS holds the HTML templates and static assets (CSS, JS) for the UI.
 //
-//go:embed *.html *.css
+//go:embed *.html *.css *.js
 var FS embed.FS
