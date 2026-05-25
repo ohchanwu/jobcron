@@ -48,6 +48,7 @@
             <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
             <div class="posting-meta">
               <span>{{.Posting.Company}}</span>
+              <span class="source-badge">{{sourceLabel .Posting.Source}}</span>
               {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
               {{if .Deadline}}<span class="deadline">{{.Deadline}}</span>{{end}}
             </div>

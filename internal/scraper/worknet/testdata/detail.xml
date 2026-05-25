@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wantedRoot>
+  <wanted>
+    <wantedAuthNo>K2026050001</wantedAuthNo>
+    <company>테솔로</company>
+    <busino>1234567890</busino>
+    <indutyNm>소프트웨어 개발 및 공급업</indutyNm>
+    <title>로봇/로보틱스 S/W 엔지니어 신입 모집</title>
+    <salTpNm>연봉제</salTpNm>
+    <sal>3500~4500만원</sal>
+    <region>인천 연수구 컨벤시아대로165, 26층 브이454</region>
+    <empTpNm>정규직</empTpNm>
+    <minEdubg>대학교 졸업</minEdubg>
+    <career>신입</career>
+    <regDt>20260520</regDt>
+    <closeDt>20260620</closeDt>
+    <wantedInfoUrl>https://www.work.go.kr/wantedMain.do?wantedAuthNo=K2026050001</wantedInfoUrl>
+    <jobsCd>2212</jobsCd>
+    <jobsNm>응용소프트웨어 개발자</jobsNm>
+    <jobcont>ROS 기반 자율주행 로봇 S/W 신입 개발자를 모집합니다. C++/Python, Linux 환경 경험자 우대. 야근 없음, 자율 출퇴근.</jobcont>
+  </wanted>
+</wantedRoot>

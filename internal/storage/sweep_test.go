@@ -37,7 +37,7 @@ func TestSweepRemovesStalePostingsRelativeToMax(t *testing.T) {
 		t.Fatalf("UpsertPosting stale: %v", err)
 	}
 
-	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow)
+	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil)
 	if err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestSweepRemovesPostingsOlderThanOldWindow(t *testing.T) {
 		t.Fatalf("UpsertPosting old: %v", err)
 	}
 
-	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow)
+	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil)
 	if err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestSweepExemptsAlwaysOpenFromOldRule(t *testing.T) {
 		t.Fatalf("UpsertPosting: %v", err)
 	}
 
-	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow)
+	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil)
 	if err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestSweepRemovesAlwaysOpenWhenStale(t *testing.T) {
 		t.Fatalf("UpsertPosting stale: %v", err)
 	}
 
-	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow)
+	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil)
 	if err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestSweepExemptsBookmarkedFromBothRules(t *testing.T) {
 		t.Fatalf("SetBookmark old-bmarked: %v", err)
 	}
 
-	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow)
+	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil)
 	if err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestSweepExemptsBookmarkedFromBothRules(t *testing.T) {
 func TestSweepIsNoopOnEmptyTable(t *testing.T) {
 	st := newTestStore(t)
 	now := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
-	removed, err := st.SweepStalePostings(context.Background(), now, testStaleWindow, testOldWindow)
+	removed, err := st.SweepStalePostings(context.Background(), now, testStaleWindow, testOldWindow, nil)
 	if err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestSweepCascadesScores(t *testing.T) {
 		t.Fatalf("UpsertScore: %v", err)
 	}
 
-	if _, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow); err != nil {
+	if _, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil); err != nil {
 		t.Fatalf("SweepStalePostings: %v", err)
 	}
 
@@ -268,5 +268,92 @@ func TestSweepCascadesScores(t *testing.T) {
 	}
 	if scoreCount != 0 {
 		t.Errorf("score row survived posting deletion; ON DELETE CASCADE not engaged")
+	}
+}
+
+func TestSweepUsesPerSourceBaseline(t *testing.T) {
+	// Two sources scraped at very different cadences: one source's freshness
+	// must not stale-out the other source's postings. The per-source MAX
+	// baseline isolates each source's clock.
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
+
+	jumpitFresh := samplePosting()
+	jumpitFresh.Source = "jumpit"
+	jumpitFresh.SourcePostingID = "j-fresh"
+	jumpitFresh.FirstSeenAt = now.Add(-time.Hour)
+	jumpitFresh.LastSeenAt = now
+	if _, _, err := st.UpsertPosting(ctx, jumpitFresh); err != nil {
+		t.Fatalf("UpsertPosting: %v", err)
+	}
+
+	// Worknet posting last seen 10 days ago. If staleness used the GLOBAL
+	// MAX (=jumpit's "now"), this would be deleted as 10 days stale. With
+	// per-source baselines, the worknet baseline IS this posting, so the
+	// stale-window relative to itself is zero and it survives.
+	worknetOld := samplePosting()
+	worknetOld.Source = "worknet"
+	worknetOld.SourcePostingID = "w-old"
+	worknetOld.FirstSeenAt = now.Add(-30 * 24 * time.Hour)
+	worknetOld.LastSeenAt = now.Add(-10 * 24 * time.Hour)
+	wnID, _, err := st.UpsertPosting(ctx, worknetOld)
+	if err != nil {
+		t.Fatalf("UpsertPosting: %v", err)
+	}
+
+	if _, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil); err != nil {
+		t.Fatalf("SweepStalePostings: %v", err)
+	}
+	if _, ok, _ := st.PostingByID(ctx, wnID); !ok {
+		t.Error("worknet posting was swept; per-source baseline should have spared it")
+	}
+}
+
+func TestSweepSkipsDisabledSources(t *testing.T) {
+	// activeSources scopes the sweep — postings from a source not in the
+	// active set are frozen in place so re-enabling does not require a
+	// fresh scrape.
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
+
+	// Fresh jumpit anchor so jumpit's per-source baseline is "now".
+	jumpitFresh := samplePosting()
+	jumpitFresh.Source = "jumpit"
+	jumpitFresh.SourcePostingID = "j-fresh"
+	jumpitFresh.FirstSeenAt = now
+	jumpitFresh.LastSeenAt = now
+	if _, _, err := st.UpsertPosting(ctx, jumpitFresh); err != nil {
+		t.Fatalf("UpsertPosting jumpit: %v", err)
+	}
+
+	// Worknet anchor at the same "now" plus a stale worknet posting 10
+	// days old. Without the active-set filter the stale one would be
+	// removed; with worknet excluded, it survives.
+	worknetAnchor := samplePosting()
+	worknetAnchor.Source = "worknet"
+	worknetAnchor.SourcePostingID = "w-anchor"
+	worknetAnchor.FirstSeenAt = now
+	worknetAnchor.LastSeenAt = now
+	if _, _, err := st.UpsertPosting(ctx, worknetAnchor); err != nil {
+		t.Fatalf("UpsertPosting worknet anchor: %v", err)
+	}
+	worknetStale := samplePosting()
+	worknetStale.Source = "worknet"
+	worknetStale.SourcePostingID = "w-stale"
+	worknetStale.FirstSeenAt = now.Add(-30 * 24 * time.Hour)
+	worknetStale.LastSeenAt = now.Add(-10 * 24 * time.Hour)
+	wsID, _, err := st.UpsertPosting(ctx, worknetStale)
+	if err != nil {
+		t.Fatalf("UpsertPosting worknet stale: %v", err)
+	}
+
+	// Active = jumpit only — worknet must be skipped entirely.
+	if _, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, []string{"jumpit"}); err != nil {
+		t.Fatalf("SweepStalePostings: %v", err)
+	}
+	if _, ok, _ := st.PostingByID(ctx, wsID); !ok {
+		t.Error("stale worknet posting was swept; disabled source should be frozen")
 	}
 }

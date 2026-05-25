@@ -243,6 +243,16 @@ nav.primary a.active {
   align-items: center;
 }
 .posting-meta .sep { color: var(--rule); }
+.source-badge {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--rule);
+  margin-left: 0.2rem;
+}
 .deadline {
   font-family: var(--mono);
   font-size: 0.7rem;
@@ -430,3 +440,17 @@ textarea { resize: vertical; min-height: 4rem; }
   line-height: 1.6;
 }
 .form-actions { margin-top: 2rem; }
+
+.source-toggles {
+  margin: 1.5rem 0 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.source-toggles legend {
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0 0.4rem;
+}
+.source-toggles .field-hint { margin-bottom: 0.7rem; }
+.source-toggles .check { margin-top: 0.4rem; }

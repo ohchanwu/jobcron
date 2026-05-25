@@ -16,6 +16,18 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ---
 
+## AI / ML scoring layer
+
+**What.** Replace (or augment) the current keyword-and-weight scorer with a semantic model — embeddings + cosine similarity between profile and posting, or an LLM that reads each posting and outputs a fit score with a short rationale. Could be local (gguf / ONNX) or hosted (Anthropic / OpenAI / Together).
+
+**Why we want it.** Current matching is token-exact: "개발" doesn't match "개발자", "야근 없음" doesn't get distinguished from "야근", particle-attached forms like "야근이" miss "야근". A semantic model would close most of those gaps and pick up nuance the keyword matcher cannot (e.g. "성장하고 싶은 신입 환영" ≈ "신입 친화적").
+
+**Why not v1.** Three reasons. (1) Breaks the "single-binary, no network at runtime, no API keys" distribution thesis — a hosted LLM means cost handling, key storage, rate limits, offline degradation. (2) Current scoring is intentionally legible — "why did this score 60?" has an obvious answer in the breakdown chips. Semantic scores are opaque ("the model said so"), which fights the calm-and-trustworthy product thesis. (3) You can't tell if an ML scorer is *actually* better without a labelled ground-truth set, and that set doesn't exist until v1 has been running long enough across multiple sources to accumulate "yes/no, was this a good match" signal.
+
+**Build trigger.** v1 has been used for at least 2-3 months across multiple portals AND the user has explicit examples of "the keyword matcher should have flagged this but didn't" / "it scored this high but it's actually irrelevant." Then build a labelled eval set from real usage, then layer the model on top — never as a replacement, always as an additional signal alongside the keyword breakdown.
+
+---
+
 ## Hybrid: structured form + free-form keyword overrides
 
 **What.** Keep the structured profile form as the primary input, but add two free-form fields underneath: "반드시 포함해야 할 키워드" (must-include) and "절대 포함되면 안 되는 키워드" (dealbreakers). Real Korean job preferences have long-tail signals that don't fit any structured field: 병특 transferable, 자유 출퇴근, 노가다 거부, 적대적 완전 재택, 외국계, 스톡옵션, 외국어 사용 환경, etc.

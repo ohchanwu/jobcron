@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/scoring"
+	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
 
 // archiveDay is one calendar day's worth of postings on the archive page,
@@ -40,7 +41,7 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
 // SQL ORDER BY first_seen_at DESC means we can walk the list once and
 // open a new day group every time the KST date changes.
 func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, error) {
-	postings, err := s.store.AllPostings(ctx)
+	allPostings, err := s.store.AllPostings(ctx)
 	if err != nil {
 		return archiveView{}, err
 	}
@@ -51,6 +52,18 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 	bookmarks, err := s.store.BookmarkedIDs(ctx)
 	if err != nil {
 		return archiveView{}, err
+	}
+	prof, _, err := s.loadProfile(ctx)
+	if err != nil {
+		return archiveView{}, err
+	}
+	disabled := s.disabledSourceSet(prof.DisabledSources)
+
+	postings := make([]scraper.Posting, 0, len(allPostings))
+	for _, p := range allPostings {
+		if !disabled[p.Source] {
+			postings = append(postings, p)
+		}
 	}
 
 	view := archiveView{

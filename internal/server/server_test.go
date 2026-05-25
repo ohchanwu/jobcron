@@ -186,7 +186,7 @@ func TestHandleScrapeStreamsSSE(t *testing.T) {
 
 func TestHandleScrapeRejectsConcurrentScrape(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
-	srv.flight.tryAcquire("jumpit") // a scrape is already in progress
+	srv.flight.tryAcquire(scrapeAllKey) // a scrape is already in progress
 
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/scrape", nil))

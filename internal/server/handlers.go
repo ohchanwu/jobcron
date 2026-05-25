@@ -34,13 +34,14 @@ func (s *Server) Handler() http.Handler {
 
 // handleScrapeSSE runs the scrape pipeline, streaming progress to the client
 // as Server-Sent Events. A second concurrent scrape is rejected with 409.
+// The lock is global rather than per-source because the user clicks one
+// button, sees one SSE stream, and would be confused by partial states.
 func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
-	source := s.scr.Source()
-	if !s.flight.tryAcquire(source) {
+	if !s.flight.tryAcquire(scrapeAllKey) {
 		http.Error(w, "이미 스크랩이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
 		return
 	}
-	defer s.flight.release(source)
+	defer s.flight.release(scrapeAllKey)
 
 	sw, err := newSSEWriter(w)
 	if err != nil {
@@ -104,6 +105,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // buildBriefing assembles today's briefing: postings first seen today and not
 // yet past their closing date, each joined with its score, split into the
 // scored list (sorted high to low, capped) and the dealbreaker-excluded list.
+// Postings from sources the user has disabled in their profile are filtered
+// out — disabled sources are invisible everywhere except /bookmarks.
 func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, error) {
 	postings, err := s.store.AllPostings(ctx)
 	if err != nil {
@@ -117,8 +120,16 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if err != nil {
 		return briefing{}, err
 	}
+	prof, _, err := s.loadProfile(ctx)
+	if err != nil {
+		return briefing{}, err
+	}
+	disabled := s.disabledSourceSet(prof.DisabledSources)
 	b := briefing{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
+		if disabled[p.Source] {
+			continue
+		}
 		if !sameKSTDay(p.FirstSeenAt, now) || expired(p, now) {
 			continue
 		}
@@ -191,6 +202,7 @@ type profileForm struct {
 	RemoteOK         bool
 	MustHaveText     string
 	DealbreakersText string
+	Sources          []sourceOption // one row per registered scraper
 }
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
@@ -207,7 +219,9 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.render(w, "profile.html", toProfileForm(p))
+	form := toProfileForm(p)
+	form.Sources = s.sourceOptions(p.DisabledSources)
+	s.render(w, "profile.html", form)
 }
 
 // handleProfileSave parses the submitted form, stores the profile, re-scores
@@ -216,6 +230,17 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	// Sources: the form submits source_<id>=on for each checked box. We
+	// invert that into the DisabledSources opt-out list (registered IDs
+	// the user did NOT check), so a future scraper added in a later
+	// release ships enabled-by-default without a profile rewrite.
+	var disabled []string
+	for _, src := range s.sources {
+		id := src.Source()
+		if r.FormValue("source_"+id) == "" {
+			disabled = append(disabled, id)
+		}
 	}
 	p := profile.Profile{
 		CareerYears:    atoi(r.FormValue("career_years")),
@@ -227,8 +252,9 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 			Weight:   atoi(r.FormValue("location_weight")),
 			RemoteOK: r.FormValue("remote_ok") != "",
 		},
-		MustHave:     parseLines(r.FormValue("must_have")),
-		Dealbreakers: parseLines(r.FormValue("dealbreakers")),
+		MustHave:        parseLines(r.FormValue("must_have")),
+		Dealbreakers:    parseLines(r.FormValue("dealbreakers")),
+		DisabledSources: disabled,
 	}
 	canonical, err := profile.Marshal(p)
 	if err != nil {

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wantedRoot>
+  <total>3</total>
+  <startPage>1</startPage>
+  <display>100</display>
+  <wanted>
+    <wantedAuthNo>K2026050001</wantedAuthNo>
+    <company>테솔로</company>
+    <busino>1234567890</busino>
+    <indutyNm>소프트웨어 개발 및 공급업</indutyNm>
+    <title>로봇/로보틱스 S/W 엔지니어 신입 모집</title>
+    <salTpNm>연봉제</salTpNm>
+    <sal>3500~4500만원</sal>
+    <region>인천 연수구</region>
+    <empTpNm>정규직</empTpNm>
+    <minEdubg>대학교 졸업</minEdubg>
+    <career>신입</career>
+    <regDt>20260520</regDt>
+    <closeDt>20260620</closeDt>
+    <wantedInfoUrl>https://www.work.go.kr/wantedMain.do?wantedAuthNo=K2026050001</wantedInfoUrl>
+    <wantedMobileInfoUrl>https://m.work.go.kr/wantedMain.do?wantedAuthNo=K2026050001</wantedMobileInfoUrl>
+    <jobsCd>2212</jobsCd>
+  </wanted>
+  <wanted>
+    <wantedAuthNo>K2026050002</wantedAuthNo>
+    <company>핀테크코리아</company>
+    <busino>9876543210</busino>
+    <indutyNm>금융정보 처리업</indutyNm>
+    <title>백엔드 개발자 신입 채용</title>
+    <salTpNm>연봉제</salTpNm>
+    <sal></sal>
+    <region>서울 강남구</region>
+    <empTpNm>정규직</empTpNm>
+    <minEdubg>대학교 졸업</minEdubg>
+    <career>신입</career>
+    <regDt>20260518</regDt>
+    <closeDt>99991231</closeDt>
+    <wantedInfoUrl>https://www.work.go.kr/wantedMain.do?wantedAuthNo=K2026050002</wantedInfoUrl>
+    <wantedMobileInfoUrl>https://m.work.go.kr/wantedMain.do?wantedAuthNo=K2026050002</wantedMobileInfoUrl>
+    <jobsCd>2212</jobsCd>
+  </wanted>
+  <wanted>
+    <wantedAuthNo>K2026050003</wantedAuthNo>
+    <company>데이터스튜디오</company>
+    <busino>5555555555</busino>
+    <indutyNm>데이터 분석</indutyNm>
+    <title>데이터 엔지니어 (신입/경력 무관)</title>
+    <salTpNm>월급제</salTpNm>
+    <sal>250~320만원</sal>
+    <region>서울 마포구</region>
+    <empTpNm>정규직</empTpNm>
+    <minEdubg>전문대 졸업</minEdubg>
+    <career>신입~3년</career>
+    <regDt>20260519</regDt>
+    <closeDt>20260605</closeDt>
+    <wantedInfoUrl>https://www.work.go.kr/wantedMain.do?wantedAuthNo=K2026050003</wantedInfoUrl>
+    <wantedMobileInfoUrl>https://m.work.go.kr/wantedMain.do?wantedAuthNo=K2026050003</wantedMobileInfoUrl>
+    <jobsCd>2213</jobsCd>
+  </wanted>
+</wantedRoot>

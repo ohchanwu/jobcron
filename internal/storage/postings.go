@@ -109,52 +109,99 @@ func (s *Store) KnownSourceIDs(ctx context.Context, source string) (map[string]b
 //   - It is not bookmarked. Bookmarks are user-explicit save signals;
 //     they never auto-remove.
 //   - It satisfies at least one of:
-//   - Stale-from-source: last_seen_at < (max last_seen_at − staleWindow).
-//     Measured against the freshest scrape activity, not wall-clock now,
-//     so the user going dark for two weeks does not nuke everything.
+//   - Stale-from-source: last_seen_at < (max last_seen_at − staleWindow)
+//     measured *within that posting's source*. Per-source rather than
+//     global so scraping one source heavily does not prematurely stale
+//     out postings from a source scraped less often.
 //   - Old-and-not-always-open: first_seen_at < (now − oldWindow) AND
 //     always_open = 0. The source's own "no expiration" flag wins
 //     against the age rule.
 //
-// Returns the number of rows removed. ON DELETE CASCADE on scores and
-// bookmarks (the latter cannot match here by construction) handles the
-// dependent rows; the FTS triggers keep the index in sync.
+// activeSources scopes the sweep to sources the user currently has enabled —
+// a disabled source's data is frozen in place so re-enabling it does not
+// require a fresh scrape. Pass nil to sweep every source present in the DB.
+//
+// Returns the number of rows removed across all swept sources. ON DELETE
+// CASCADE on scores and bookmarks (the latter cannot match here by
+// construction) handles the dependent rows; the FTS triggers keep the index
+// in sync.
 func (s *Store) SweepStalePostings(
 	ctx context.Context, now time.Time, staleWindow, oldWindow time.Duration,
+	activeSources []string,
 ) (int, error) {
-	// modernc.org/sqlite stores time.Time bind values as the Go-default
-	// String() format. Aggregates (MAX) lose the DATETIME column tag, so
-	// sql.NullTime cannot scan the result — read as a string and parse.
-	var maxRaw sql.NullString
-	if err := s.db.QueryRowContext(ctx,
-		`SELECT MAX(last_seen_at) FROM postings`).Scan(&maxRaw); err != nil {
-		return 0, fmt.Errorf("storage: read max last_seen_at: %w", err)
-	}
-	if !maxRaw.Valid {
-		return 0, nil // empty table — nothing to sweep
-	}
-	maxLastSeen, err := time.Parse(timeStoreFormat, maxRaw.String)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT source, MAX(last_seen_at) FROM postings GROUP BY source`)
 	if err != nil {
-		return 0, fmt.Errorf("storage: parse max last_seen_at %q: %w", maxRaw.String, err)
+		return 0, fmt.Errorf("storage: read per-source max last_seen_at: %w", err)
 	}
-	staleBefore := maxLastSeen.UTC().Add(-staleWindow)
-	oldBefore := now.UTC().Add(-oldWindow)
+	defer rows.Close()
 
-	res, err := s.db.ExecContext(ctx, `
+	type sourceBaseline struct {
+		source      string
+		maxLastSeen time.Time
+	}
+	var baselines []sourceBaseline
+	for rows.Next() {
+		var src string
+		// modernc.org/sqlite drops the DATETIME column tag on MAX(), so
+		// sql.NullTime cannot scan the result — read as a string and parse.
+		var maxRaw sql.NullString
+		if err := rows.Scan(&src, &maxRaw); err != nil {
+			return 0, fmt.Errorf("storage: scan source baseline: %w", err)
+		}
+		if !maxRaw.Valid {
+			continue
+		}
+		t, err := time.Parse(timeStoreFormat, maxRaw.String)
+		if err != nil {
+			return 0, fmt.Errorf("storage: parse max last_seen_at %q: %w", maxRaw.String, err)
+		}
+		baselines = append(baselines, sourceBaseline{source: src, maxLastSeen: t.UTC()})
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("storage: iterate source baselines: %w", err)
+	}
+
+	active := sourceSet(activeSources)
+	oldBefore := now.UTC().Add(-oldWindow)
+	var total int
+	for _, b := range baselines {
+		if active != nil && !active[b.source] {
+			continue // disabled source: freeze the data, do not sweep
+		}
+		staleBefore := b.maxLastSeen.Add(-staleWindow)
+		res, err := s.db.ExecContext(ctx, `
 DELETE FROM postings
-WHERE id NOT IN (SELECT posting_id FROM bookmarks)
+WHERE source = ?
+  AND id NOT IN (SELECT posting_id FROM bookmarks)
   AND (
     last_seen_at < ?
     OR (first_seen_at < ? AND always_open = 0)
-  )`, staleBefore, oldBefore)
-	if err != nil {
-		return 0, fmt.Errorf("storage: sweep stale postings: %w", err)
+  )`, b.source, staleBefore, oldBefore)
+		if err != nil {
+			return total, fmt.Errorf("storage: sweep %s: %w", b.source, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("storage: sweep %s rows affected: %w", b.source, err)
+		}
+		total += int(n)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("storage: sweep rows affected: %w", err)
+	return total, nil
+}
+
+// sourceSet returns nil for a nil input (caller wants no filtering) and a
+// set-shaped map otherwise. Empty input means "no sources are active" — a
+// no-op sweep — which is the natural interpretation.
+func sourceSet(sources []string) map[string]bool {
+	if sources == nil {
+		return nil
 	}
-	return int(n), nil
+	m := make(map[string]bool, len(sources))
+	for _, s := range sources {
+		m[s] = true
+	}
+	return m
 }
 
 // timeStoreFormat matches time.Time.String() — the format modernc.org/sqlite

@@ -14,6 +14,25 @@ type Profile struct {
 	MaxEducation   EducationLevel `json:"max_education"` // highest level the user has
 	MustHave       []string       `json:"must_have"`     // plain Korean phrases that must all appear
 	Dealbreakers   []string       `json:"dealbreakers"`  // plain Korean phrases; any match excludes
+
+	// DisabledSources are source identifiers (e.g. "worknet") the user has
+	// opted out of. Default empty = every registered source is active. We
+	// store the opt-out list (not an allow-list) so that new sources added
+	// in future releases work for existing users without a profile rewrite.
+	// omitempty keeps existing canonical JSON byte-identical when unset.
+	DisabledSources []string `json:"disabled_sources,omitempty"`
+}
+
+// SourceEnabled reports whether the given source identifier should be active
+// for this profile. Unknown sources are enabled — the opt-out model means a
+// new source ships on by default and the user mutes it if it does not help.
+func (p Profile) SourceEnabled(source string) bool {
+	for _, s := range p.DisabledSources {
+		if s == source {
+			return false
+		}
+	}
+	return true
 }
 
 // StackPref is a desired tech stack and the weight the user assigns it.

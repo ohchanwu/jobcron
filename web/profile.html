@@ -76,6 +76,18 @@
         <input type="checkbox" name="remote_ok"{{if .RemoteOK}} checked{{end}}> 재택근무 가능
       </label>
 
+      {{if .Sources}}
+      <fieldset class="source-toggles">
+        <legend>공고 출처</legend>
+        <span class="field-hint">체크 해제한 출처의 공고는 브리핑과 전체 공고에서 숨겨져요. 저장한 공고는 그대로 보여요.</span>
+        {{range .Sources}}
+        <label class="check">
+          <input type="checkbox" name="source_{{.ID}}"{{if .Enabled}} checked{{end}}> {{.Label}}
+        </label>
+        {{end}}
+      </fieldset>
+      {{end}}
+
       <label>필수 키워드
         <span class="field-hint">한 줄에 하나. 모두 포함된 공고만 점수를 받아요.</span>
         <textarea name="must_have" rows="3">{{.MustHaveText}}</textarea>
