@@ -92,6 +92,11 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		return ScrapeResult{}, nil
 	}
 
+	// Set the expectation up front: the per-source clients pace at 1 req/s
+	// so a 50-posting first scrape takes ~a minute. Without this line a
+	// user staring at the progress counter might think the tool is hung.
+	emit("status", "천천히 가져올게요 — 출처 사이트에 부담을 주지 않으려고 1초에 하나씩 받아와요.")
+
 	now := time.Now().UTC()
 	var res ScrapeResult
 	for _, src := range active {
