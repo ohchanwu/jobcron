@@ -67,12 +67,12 @@ body {
 }
 
 /* Desktop bump — mobile reads fine at 19px; on a desktop viewport the eye
-   sits farther from the screen, so step everything up ~10%. Every other
-   size in this stylesheet is in rem and inherits this scaling. */
+   sits farther from the screen, so step everything up. Every other size
+   in this stylesheet is in rem and inherits this scaling. */
 @media (min-width: 640px) {
-  body { font-size: 21px; }
+  body { font-size: 22px; }
 }
-.wrap { max-width: 760px; margin: 0 auto; padding: 3.5rem 1.5rem 4.5rem; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 3.5rem 1.5rem 4.5rem; }
 a { color: inherit; }
 
 /* Header */
