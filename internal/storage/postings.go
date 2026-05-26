@@ -69,10 +69,15 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 	return id, true, nil
 }
 
+// selectColumns is the column list used by SELECT queries — postingColumns
+// plus the fields that scanPosting reads beyond what UpsertPosting writes
+// (duplicate_of is set later by the server's dedup pass, never on insert).
+const selectColumns = `id, ` + postingColumns + `, duplicate_of`
+
 // PostingByID returns the posting with the given row id, or ok=false if none.
 func (s *Store) PostingByID(ctx context.Context, id int64) (scraper.Posting, bool, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, `+postingColumns+` FROM postings WHERE id = ?`, id)
+		`SELECT `+selectColumns+` FROM postings WHERE id = ?`, id)
 	p, err := scanPosting(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return scraper.Posting{}, false, nil
@@ -210,12 +215,95 @@ func sourceSet(sources []string) map[string]bool {
 // within UTC, so SQLite string comparison agrees with chronological order.
 const timeStoreFormat = "2006-01-02 15:04:05.999999999 -0700 MST"
 
-// AllPostings returns every stored posting, newest first.
+// AllPostings returns every stored posting (canonical + non-canonical),
+// newest first. Used by the dedup pass and tests; the dashboard render
+// path uses CanonicalPostings instead.
 func (s *Store) AllPostings(ctx context.Context) ([]scraper.Posting, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, `+postingColumns+` FROM postings ORDER BY first_seen_at DESC, id DESC`)
+		`SELECT `+selectColumns+` FROM postings ORDER BY first_seen_at DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query postings: %w", err)
+	}
+	defer rows.Close()
+	var postings []scraper.Posting
+	for rows.Next() {
+		p, err := scanPosting(rows)
+		if err != nil {
+			return nil, err
+		}
+		postings = append(postings, p)
+	}
+	return postings, rows.Err()
+}
+
+// CanonicalPostings returns postings the user should see in the list —
+// duplicate_of IS NULL — newest first. Cross-portal duplicates (set by
+// the dedup pass) are filtered out; the canonical's render layer can
+// fetch its DuplicatesOf siblings to render the "also on …" badge.
+func (s *Store) CanonicalPostings(ctx context.Context) ([]scraper.Posting, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+selectColumns+` FROM postings WHERE duplicate_of IS NULL
+ORDER BY first_seen_at DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query canonical postings: %w", err)
+	}
+	defer rows.Close()
+	var postings []scraper.Posting
+	for rows.Next() {
+		p, err := scanPosting(rows)
+		if err != nil {
+			return nil, err
+		}
+		postings = append(postings, p)
+	}
+	return postings, rows.Err()
+}
+
+// MarkDuplicate sets duplicateID's duplicate_of to canonicalID, declaring
+// the row as a cross-portal copy of canonicalID. Called by the dedup pass
+// after sweep, before re-scoring.
+func (s *Store) MarkDuplicate(ctx context.Context, duplicateID, canonicalID int64) error {
+	if duplicateID == canonicalID {
+		return fmt.Errorf("storage: MarkDuplicate: id %d cannot be a duplicate of itself", duplicateID)
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE postings SET duplicate_of = ? WHERE id = ?`,
+		canonicalID, duplicateID)
+	if err != nil {
+		return fmt.Errorf("storage: mark duplicate %d -> %d: %w", duplicateID, canonicalID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("storage: mark duplicate rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("storage: mark duplicate: posting id %d not found", duplicateID)
+	}
+	return nil
+}
+
+// ClearAllDuplicates resets every duplicate_of to NULL. Used at the start
+// of a dedup pass so the rule can be re-evaluated from scratch — cheaper
+// than tracking which pairs changed when the matcher is fast.
+func (s *Store) ClearAllDuplicates(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE postings SET duplicate_of = NULL WHERE duplicate_of IS NOT NULL`)
+	if err != nil {
+		return fmt.Errorf("storage: clear duplicates: %w", err)
+	}
+	return nil
+}
+
+// DuplicatesOf returns postings whose duplicate_of equals canonicalID, in
+// stable order. Used to render the "also on …" badge on the canonical
+// row — only the source is read in practice, but the full posting is
+// returned so the caller can also link to alternate URLs if it wants.
+func (s *Store) DuplicatesOf(ctx context.Context, canonicalID int64) ([]scraper.Posting, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+selectColumns+` FROM postings WHERE duplicate_of = ? ORDER BY first_seen_at, id`,
+		canonicalID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query duplicates of %d: %w", canonicalID, err)
 	}
 	defer rows.Close()
 	var postings []scraper.Posting
@@ -234,8 +322,9 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-// scanPosting reads one posting row whose columns are `id` followed by
-// postingColumns, in that order. It propagates sql.ErrNoRows unwrapped.
+// scanPosting reads one posting row whose columns are selectColumns
+// (`id`, postingColumns, `duplicate_of`). It propagates sql.ErrNoRows
+// unwrapped.
 func scanPosting(row rowScanner) (scraper.Posting, error) {
 	var (
 		p             scraper.Posting
@@ -249,12 +338,13 @@ func scanPosting(row rowScanner) (scraper.Posting, error) {
 		closedAt      sql.NullTime
 		firstSeen     time.Time
 		lastSeen      time.Time
+		duplicateOf   sql.NullInt64
 	)
 	err := row.Scan(
 		&p.ID, &p.Source, &p.SourcePostingID, &p.URL, &p.Title, &p.Company, &location,
 		&p.Newcomer, &p.MinCareer, &p.MaxCareer, &careerLevel, &education, &educationName,
 		&stackJSON, &tagsJSON, &p.Description, &p.RawJSON, &publishedAt, &closedAt,
-		&p.AlwaysOpen, &firstSeen, &lastSeen,
+		&p.AlwaysOpen, &firstSeen, &lastSeen, &duplicateOf,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return scraper.Posting{}, sql.ErrNoRows
@@ -286,6 +376,10 @@ func scanPosting(row rowScanner) (scraper.Posting, error) {
 	}
 	p.FirstSeenAt = firstSeen.UTC()
 	p.LastSeenAt = lastSeen.UTC()
+	if duplicateOf.Valid {
+		v := duplicateOf.Int64
+		p.DuplicateOf = &v
+	}
 	return p, nil
 }
 

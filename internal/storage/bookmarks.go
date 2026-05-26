@@ -72,7 +72,7 @@ func (s *Store) BookmarkedIDs(ctx context.Context) (map[int64]bool, error) {
 // first). Used by the /bookmarks page.
 func (s *Store) BookmarkedPostings(ctx context.Context) ([]scraper.Posting, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT p.id, `+postingColumns+`
+SELECT p.id, `+postingColumns+`, p.duplicate_of
 FROM postings p
 JOIN bookmarks b ON b.posting_id = p.id
 ORDER BY b.bookmarked_at DESC, p.id DESC`)

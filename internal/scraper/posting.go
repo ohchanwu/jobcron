@@ -27,6 +27,7 @@ type Posting struct {
 	AlwaysOpen      bool
 	FirstSeenAt     time.Time
 	LastSeenAt      time.Time
+	DuplicateOf     *int64 // set by the server's dedup pass; nil for canonical
 }
 
 // Tag is a structured semantic tag attached to a posting (salary / welfare /
