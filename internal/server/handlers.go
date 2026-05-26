@@ -58,13 +58,14 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 
 // dashboardPosting is one row of the daily briefing.
 type dashboardPosting struct {
-	Posting     scraper.Posting
-	Total       int
-	Excluded    bool
-	Bookmarked  bool               // user has saved this posting
-	Explanation string             // "React +20 · 신입 +25 ..." (used for excluded rows)
-	Breakdown   []scoring.LineItem // structured line items, rendered as chips
-	Deadline    string             // "오늘 마감" | "마감 D-2" | ""
+	Posting          scraper.Posting
+	Total            int
+	Excluded         bool
+	Bookmarked       bool               // user has saved this posting
+	Explanation      string             // "React +20 · 신입 +25 ..." (used for excluded rows)
+	Breakdown        []scoring.LineItem // structured line items, rendered as chips
+	Deadline         string             // "오늘 마감" | "마감 D-2" | ""
+	DuplicateSources []string           // sources of cross-portal duplicates collapsed into this canonical
 }
 
 // briefing is the daily-briefing view model: postings first seen today, split
@@ -106,9 +107,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // yet past their closing date, each joined with its score, split into the
 // scored list (sorted high to low, capped) and the dealbreaker-excluded list.
 // Postings from sources the user has disabled in their profile are filtered
-// out — disabled sources are invisible everywhere except /bookmarks.
+// out — disabled sources are invisible everywhere except /bookmarks. Cross-
+// portal duplicates are also filtered (only the canonical row is rendered;
+// the dashboardPosting carries its sibling sources via DuplicateSources for
+// the "also on …" badge).
 func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, error) {
-	postings, err := s.store.AllPostings(ctx)
+	postings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return briefing{}, err
 	}
@@ -117,6 +121,10 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 		return briefing{}, err
 	}
 	bookmarks, err := s.store.BookmarkedIDs(ctx)
+	if err != nil {
+		return briefing{}, err
+	}
+	dupSources, err := s.store.DuplicateSourcesByCanonical(ctx)
 	if err != nil {
 		return briefing{}, err
 	}
@@ -134,9 +142,10 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 			continue
 		}
 		dp := dashboardPosting{
-			Posting:    p,
-			Bookmarked: bookmarks[p.ID],
-			Deadline:   deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+			Posting:          p,
+			Bookmarked:       bookmarks[p.ID],
+			Deadline:         deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+			DuplicateSources: dupSources[p.ID],
 		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total

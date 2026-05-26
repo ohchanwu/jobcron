@@ -41,8 +41,12 @@
   function markEmptyPills(container, postings) {
     var counts = {};
     postings.forEach(function (p) {
-      var id = p.dataset.source;
-      counts[id] = (counts[id] || 0) + 1;
+      /* data-source carries a CSV of every source the posting represents
+         — the canonical's own source plus any duplicates collapsed onto
+         it. Each source counts as one occurrence for pill-emptiness. */
+      p.dataset.source.split(',').forEach(function (id) {
+        if (id) counts[id] = (counts[id] || 0) + 1;
+      });
     });
     container.querySelectorAll('.source-pill').forEach(function (pill) {
       var src = pill.dataset.source;
@@ -61,7 +65,11 @@
     var anyVisible = false;
     var allPostings = document.querySelectorAll('.posting[data-source]');
     allPostings.forEach(function (p) {
-      var match = source === ALL_KEY || p.dataset.source === source;
+      /* Posting matches the filter when the selected source is in its
+         CSV — covers cross-portal duplicates collapsed onto a canonical
+         from a different source. */
+      var match = source === ALL_KEY ||
+        (',' + p.dataset.source + ',').indexOf(',' + source + ',') !== -1;
       p.classList.toggle('filter-hidden', !match);
       if (match) anyVisible = true;
     });

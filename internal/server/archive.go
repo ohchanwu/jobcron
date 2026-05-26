@@ -39,9 +39,11 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
 
 // buildArchive groups every stored posting by its first-seen KST day. The
 // SQL ORDER BY first_seen_at DESC means we can walk the list once and
-// open a new day group every time the KST date changes.
+// open a new day group every time the KST date changes. Cross-portal
+// duplicates are hidden — only the canonical row appears — matching the
+// briefing's behavior.
 func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, error) {
-	allPostings, err := s.store.AllPostings(ctx)
+	allPostings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return archiveView{}, err
 	}
@@ -50,6 +52,10 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 		return archiveView{}, err
 	}
 	bookmarks, err := s.store.BookmarkedIDs(ctx)
+	if err != nil {
+		return archiveView{}, err
+	}
+	dupSources, err := s.store.DuplicateSourcesByCanonical(ctx)
 	if err != nil {
 		return archiveView{}, err
 	}
@@ -74,9 +80,10 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 	var currentKey string // YYYY-MM-DD in KST
 	for _, p := range postings {
 		dp := dashboardPosting{
-			Posting:    p,
-			Bookmarked: bookmarks[p.ID],
-			Deadline:   deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+			Posting:          p,
+			Bookmarked:       bookmarks[p.ID],
+			Deadline:         deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+			DuplicateSources: dupSources[p.ID],
 		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total

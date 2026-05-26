@@ -52,10 +52,10 @@
       {{if .Today}}
       <ol class="postings">
         {{range .Today}}
-        <li class="posting" data-source="{{.Posting.Source}}">
+        <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
           <div class="score-cell">
             <span class="score">{{.Total}}</span>
-            <span class="source-stamp">{{sourceLabel .Posting.Source}}</span>
+            <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
           </div>
           <div class="posting-body">
             <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
@@ -93,10 +93,10 @@
         <summary>관심 밖으로 분류된 공고 {{len .Excluded}}개</summary>
         <ol class="postings">
           {{range .Excluded}}
-          <li class="posting" data-source="{{.Posting.Source}}">
+          <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
             <div class="score-cell">
               <span class="score">—</span>
-              <span class="source-stamp">{{sourceLabel .Posting.Source}}</span>
+              <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
             </div>
             <div class="posting-body">
               <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>

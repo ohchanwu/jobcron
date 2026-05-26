@@ -294,6 +294,43 @@ func (s *Store) ClearAllDuplicates(ctx context.Context) error {
 	return nil
 }
 
+// DuplicateSourcesByCanonical returns, for every canonical row that has
+// at least one duplicate, the list of source IDs those duplicates carry.
+// Sources are returned in stable order (by posting id) and deduplicated
+// within each canonical so two rallit copies of the same posting don't
+// stutter into "also on 랠릿, 랠릿".
+//
+// One query for the whole dashboard render instead of N — the briefing
+// can call this once and look up by canonical id while iterating.
+func (s *Store) DuplicateSourcesByCanonical(ctx context.Context) (map[int64][]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT duplicate_of, source FROM postings
+WHERE duplicate_of IS NOT NULL
+ORDER BY duplicate_of, id`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query duplicate sources: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[int64][]string)
+	seen := make(map[int64]map[string]bool)
+	for rows.Next() {
+		var canonical int64
+		var source string
+		if err := rows.Scan(&canonical, &source); err != nil {
+			return nil, fmt.Errorf("storage: scan duplicate source: %w", err)
+		}
+		if seen[canonical] == nil {
+			seen[canonical] = make(map[string]bool)
+		}
+		if seen[canonical][source] {
+			continue
+		}
+		seen[canonical][source] = true
+		out[canonical] = append(out[canonical], source)
+	}
+	return out, rows.Err()
+}
+
 // DuplicatesOf returns postings whose duplicate_of equals canonicalID, in
 // stable order. Used to render the "also on …" badge on the canonical
 // row — only the source is read in practice, but the full posting is

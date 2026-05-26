@@ -52,10 +52,10 @@
           <h2 class="day-header">{{.Date}}{{if .IsToday}} <span class="day-today">오늘</span>{{end}}</h2>
           <ol class="postings">
             {{range .Postings}}
-            <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}">
+            <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
               <div class="score-cell">
                 <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
-                <span class="source-stamp">{{sourceLabel .Posting.Source}}</span>
+                <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
               </div>
               <div class="posting-body">
                 <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>

@@ -59,11 +59,12 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 
 // ScrapeResult summarizes one scrape run across every active source.
 type ScrapeResult struct {
-	Listed  int `json:"listed"`
-	New     int `json:"new"`
-	Scored  int `json:"scored"`
-	Removed int `json:"removed"` // postings hard-deleted by the staleness sweep
-	Failed  int `json:"failed"`  // sources that errored and were skipped this run
+	Listed     int `json:"listed"`
+	New        int `json:"new"`
+	Scored     int `json:"scored"`
+	Removed    int `json:"removed"`    // postings hard-deleted by the staleness sweep
+	Duplicates int `json:"duplicates"` // cross-portal duplicates collapsed onto a canonical
+	Failed     int `json:"failed"`     // sources that errored and were skipped this run
 }
 
 // scrapeAllKey is the singleflight key for a multi-source scrape run. We
@@ -133,6 +134,15 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 	res.Removed = removed
 	if removed > 0 {
 		emit("status", fmt.Sprintf("오래된 공고 %d개를 정리했어요", removed))
+	}
+
+	duplicates, err := s.markCrossPortalDuplicates(ctx)
+	if err != nil {
+		return res, fmt.Errorf("server: dedup pass: %w", err)
+	}
+	res.Duplicates = duplicates
+	if duplicates > 0 {
+		emit("status", fmt.Sprintf("다른 사이트에 똑같이 올라온 공고 %d개를 묶었어요", duplicates))
 	}
 
 	emit("status", "공고에 점수를 매기는 중...")
