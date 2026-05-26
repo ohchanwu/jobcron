@@ -154,11 +154,22 @@ func TestRunScrapeSweepsStalePostings(t *testing.T) {
 	}
 }
 
-func TestRunScrapeFailsWhenAccessDenied(t *testing.T) {
+func TestRunScrapeIsolatesPerSourceFailures(t *testing.T) {
+	// When the only source fails, runScrape now reports it via the result
+	// (Failed=1) and emits a status, rather than returning an error. Real
+	// callers wire multiple sources; a single failure should not abort
+	// the whole briefing.
 	f := &fakeScraper{accessErr: errors.New("robots.txt disallows")}
 	srv, _ := newTestServer(t, f)
-	if _, err := srv.runScrape(context.Background(), noopEmit); err == nil {
-		t.Error("runScrape = nil error, want an error when CheckAccess fails")
+	res, err := srv.runScrape(context.Background(), noopEmit)
+	if err != nil {
+		t.Fatalf("runScrape returned unexpected error: %v", err)
+	}
+	if res.Failed != 1 {
+		t.Errorf("res.Failed = %d, want 1 (the access-denied source)", res.Failed)
+	}
+	if res.New != 0 {
+		t.Errorf("res.New = %d, want 0 (failed source produced nothing)", res.New)
 	}
 }
 

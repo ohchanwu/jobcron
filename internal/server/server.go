@@ -62,6 +62,7 @@ type ScrapeResult struct {
 	New     int `json:"new"`
 	Scored  int `json:"scored"`
 	Removed int `json:"removed"` // postings hard-deleted by the staleness sweep
+	Failed  int `json:"failed"`  // sources that errored and were skipped this run
 }
 
 // scrapeAllKey is the singleflight key for a multi-source scrape run. We
@@ -99,17 +100,29 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 
 	now := time.Now().UTC()
 	var res ScrapeResult
+	// succeeded tracks sources that completed without error this run; only
+	// they get their data swept. A source that failed cannot tell us what
+	// is stale (no fresh baseline this run), so we leave its existing rows
+	// untouched until the next successful scrape.
+	var succeeded []scraper.Scraper
 	for _, src := range active {
 		sub, err := s.runScrapeSource(ctx, src, now, emit)
 		if err != nil {
-			return res, err
+			// Per-source fault isolation: one source's failure must not
+			// abort the whole briefing. Surface the failure as a status
+			// line and move on; the user still gets a working briefing
+			// from every source that did succeed.
+			emit("status", fmt.Sprintf("[%s] 스크랩에 실패했어요 — 다른 출처를 계속할게요.", sourceLabel(src.Source())))
+			res.Failed++
+			continue
 		}
+		succeeded = append(succeeded, src)
 		res.Listed += sub.Listed
 		res.New += sub.New
 	}
 
-	activeIDs := make([]string, 0, len(active))
-	for _, src := range active {
+	activeIDs := make([]string, 0, len(succeeded))
+	for _, src := range succeeded {
 		activeIDs = append(activeIDs, src.Source())
 	}
 	removed, err := s.store.SweepStalePostings(ctx, now, sweepStaleWindow, sweepOldWindow, activeIDs)
