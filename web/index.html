@@ -42,10 +42,11 @@
     <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
 
     <main>
+      <div id="source-filter" class="source-filter"></div>
       {{if .Today}}
       <ol class="postings">
         {{range .Today}}
-        <li class="posting">
+        <li class="posting" data-source="{{.Posting.Source}}">
           <span class="score">{{.Total}}</span>
           <div class="posting-body">
             <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
@@ -84,7 +85,7 @@
         <summary>관심 밖으로 분류된 공고 {{len .Excluded}}개</summary>
         <ol class="postings">
           {{range .Excluded}}
-          <li class="posting">
+          <li class="posting" data-source="{{.Posting.Source}}">
             <span class="score">—</span>
             <div class="posting-body">
               <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
@@ -114,6 +115,7 @@
 
   <script src="/static/theme.js"></script>
   <script src="/static/bookmark.js"></script>
+  <script src="/static/source-filter.js"></script>
   <script>
     /* Scrape: open EventSource on click, stream events into the log,
        reload the page on done so the new briefing renders. */

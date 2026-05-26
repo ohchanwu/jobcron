@@ -39,13 +39,14 @@
     </div>
 
     <main>
+      <div id="source-filter" class="source-filter"></div>
       {{if .Days}}
         {{range .Days}}
         <section class="archive-day">
           <h2 class="day-header">{{.Date}}{{if .IsToday}} <span class="day-today">오늘</span>{{end}}</h2>
           <ol class="postings">
             {{range .Postings}}
-            <li class="posting{{if .Excluded}} posting-dim{{end}}">
+            <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}">
               <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
               <div class="posting-body">
                 <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
@@ -87,5 +88,6 @@
 
   <script src="/static/theme.js"></script>
   <script src="/static/bookmark.js"></script>
+  <script src="/static/source-filter.js"></script>
 </body>
 </html>

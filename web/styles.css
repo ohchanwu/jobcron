@@ -197,6 +197,35 @@ nav.primary a.active {
   letter-spacing: 0.01em;
 }
 
+/* Source-filter pills — appear above the posting list when the page has
+   postings from 2+ sources. Filled in by web/source-filter.js. The bar
+   stays empty (zero height) when JS chooses not to render pills. */
+.source-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.9rem 0 0.2rem;
+}
+.source-filter:empty { display: none; }
+.source-pill {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.25rem 0.8rem;
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.source-pill:hover { color: var(--ink); border-color: var(--ink-soft); }
+.source-pill.on {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.filter-hidden { display: none !important; }
+
 /* Postings */
 .postings { list-style: none; padding: 0; margin: 0; }
 .posting {
