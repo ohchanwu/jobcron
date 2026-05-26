@@ -297,15 +297,22 @@ nav.primary a.active {
   align-items: center;
 }
 .posting-meta .sep { color: var(--rule); }
-.source-badge {
+
+/* Score cell — stacks the score number with a small source-stamp under
+   it. The stamp tells the reader where the posting came from (점핏 /
+   랠릿 / 네이버 / 잡알리오); putting it under the score makes it read
+   as a row-level "source", not as a property of the company. */
+.score-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+.source-stamp {
   font-family: var(--mono);
   font-size: 0.7rem;
   letter-spacing: 0.06em;
   color: var(--ink-soft);
-  text-transform: uppercase;
-  padding-left: 0.4rem;
-  border-left: 1px solid var(--rule);
-  margin-left: 0.2rem;
 }
 .deadline {
   font-family: var(--mono);

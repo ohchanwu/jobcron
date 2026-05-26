@@ -53,12 +53,14 @@
           <ol class="postings">
             {{range .Postings}}
             <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}">
-              <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
+              <div class="score-cell">
+                <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
+                <span class="source-stamp">{{sourceLabel .Posting.Source}}</span>
+              </div>
               <div class="posting-body">
                 <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
                 <div class="posting-meta">
                   <span>{{.Posting.Company}}</span>
-                  <span class="source-badge">{{sourceLabel .Posting.Source}}</span>
                   {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
                   {{if .Deadline}}<span class="deadline">{{.Deadline}}</span>{{end}}
                 </div>
