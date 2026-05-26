@@ -1,83 +1,101 @@
-/* Source filter — adds a "전체 · 점핏 · 랠릿 · …" pill bar above the
-   posting list and toggles posting visibility in-place. Renders only when
-   2+ unique sources appear on the page; single-source pages stay clean.
+/* Source filter — works with server-rendered pills.
 
-   Filter state is ephemeral (per page load) on purpose — fresh page should
-   feel like a fresh briefing, not "the same filter I clicked an hour ago." */
+   Pills are rendered by the template for every registered source plus an
+   always-present "전체" pill. This script:
+     1. Marks each non-전체 pill `.empty` when no visible posting matches
+        its source (so the user can SEE the source exists but knows it
+        has nothing right now).
+     2. Handles click: filter visible postings in-place, and when the
+        filter selection yields zero matches, surface a page-specific
+        empty message ("오늘 X 공고가 없어요" / "X 공고가 없어요" /
+        "저장한 X 공고가 없어요"). The message format string comes from
+        the container's data-empty-template attribute, with {label}
+        substituted at click time.
+
+   Filter state is intentionally ephemeral (no localStorage) — opening
+   the page should feel like a fresh briefing, not "the filter I left
+   on yesterday." */
 (function () {
-  var FILTER_CONTAINER_ID = 'source-filter';
-  var ACTIVE_KEY = 'all';
+  var ALL_KEY = '_all';
 
   function init() {
-    var container = document.getElementById(FILTER_CONTAINER_ID);
+    var container = document.getElementById('source-filter');
     if (!container) return;
+    var emptyMsg = document.getElementById('source-filter-empty');
+    var emptyTemplate = container.dataset.emptyTemplate || '';
 
     var postings = document.querySelectorAll('.posting[data-source]');
-    if (postings.length === 0) return;
-
-    var labelByID = readSourceLabels(postings);
-    var ids = Object.keys(labelByID);
-    if (ids.length < 2) return; // single source: no filter needed
-
-    // Stable display order — alphabetical by label so it does not flip
-    // between renders.
-    ids.sort(function (a, b) { return labelByID[a].localeCompare(labelByID[b]); });
-
-    container.appendChild(buildPill(ACTIVE_KEY, '전체', true));
-    ids.forEach(function (id) {
-      container.appendChild(buildPill(id, labelByID[id], false));
-    });
+    markEmptyPills(container, postings);
 
     container.addEventListener('click', function (e) {
       var pill = e.target.closest('.source-pill');
       if (!pill) return;
-      applyFilter(container, pill.dataset.source);
+      applyFilter(pill.dataset.source, container, emptyMsg, emptyTemplate);
     });
   }
 
-  /* readSourceLabels gathers the unique (id → label) pairs visible on the
-     page. We trust the rendered source-badge text — that is the same label
-     the server-side template func produced, so we do not need to round-trip
-     the mapping into JS. */
-  function readSourceLabels(postings) {
-    var labels = {};
+  /* markEmptyPills counts how many postings each source has on this page
+     and marks the source's pill `.empty` when the count is zero. Empty
+     pills stay clickable (the user might want to confirm it's empty) but
+     are visually muted via CSS. */
+  function markEmptyPills(container, postings) {
+    var counts = {};
     postings.forEach(function (p) {
       var id = p.dataset.source;
-      if (!id || labels[id]) return;
-      var badge = p.querySelector('.source-badge');
-      labels[id] = badge ? badge.textContent.trim() : id;
+      counts[id] = (counts[id] || 0) + 1;
     });
-    return labels;
+    container.querySelectorAll('.source-pill').forEach(function (pill) {
+      var src = pill.dataset.source;
+      if (src === ALL_KEY) return; // "전체" is never empty in this sense
+      pill.classList.toggle('pill-empty', !counts[src]);
+    });
   }
 
-  function buildPill(source, label, active) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'source-pill' + (active ? ' on' : '');
-    btn.dataset.source = source;
-    btn.textContent = label;
-    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    return btn;
-  }
-
-  function applyFilter(container, source) {
+  function applyFilter(source, container, emptyMsg, emptyTemplate) {
     container.querySelectorAll('.source-pill').forEach(function (pill) {
       var on = pill.dataset.source === source;
       pill.classList.toggle('on', on);
       pill.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
 
-    document.querySelectorAll('.posting[data-source]').forEach(function (p) {
-      var match = source === ACTIVE_KEY || p.dataset.source === source;
+    var anyVisible = false;
+    var allPostings = document.querySelectorAll('.posting[data-source]');
+    allPostings.forEach(function (p) {
+      var match = source === ALL_KEY || p.dataset.source === source;
       p.classList.toggle('filter-hidden', !match);
+      if (match) anyVisible = true;
     });
 
-    /* Archive page: hide day-group sections that have no visible postings
-       after filtering, so the day header does not float over nothing. */
+    /* Archive page: hide day-group sections whose postings all got
+       filtered away so the date header does not float over nothing. */
     document.querySelectorAll('.archive-day').forEach(function (day) {
       var visible = day.querySelectorAll('.posting:not(.filter-hidden)').length;
       day.classList.toggle('filter-hidden', visible === 0);
     });
+
+    /* Show / hide the filter-induced empty message. The page's own
+       no-postings-at-all empty state (rendered when the data is empty
+       to begin with) is separate; we only show ours when the filter
+       narrowed a non-empty page down to zero. */
+    /* Only fire the filter-empty message when the page has SOME postings
+       (the filter just hides them all). When the page is empty to begin
+       with, its own empty-state block ("아직 ... 공고가 없어요") already
+       handles it — duplicating would be noise. */
+    if (!emptyMsg) return;
+    var pageHasPostings = allPostings.length > 0;
+    if (source === ALL_KEY || anyVisible || !pageHasPostings) {
+      emptyMsg.hidden = true;
+      emptyMsg.textContent = '';
+    } else {
+      var label = labelFor(container, source);
+      emptyMsg.textContent = emptyTemplate.replace('{label}', label);
+      emptyMsg.hidden = false;
+    }
+  }
+
+  function labelFor(container, source) {
+    var pill = container.querySelector('.source-pill[data-source="' + source + '"]');
+    return pill ? pill.textContent.trim() : source;
   }
 
   if (document.readyState === 'loading') {

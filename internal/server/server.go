@@ -44,16 +44,17 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 	if len(sources) == 0 {
 		panic("server.New: at least one scraper is required")
 	}
-	funcs := template.FuncMap{
-		"sourceLabel": sourceLabel,
-	}
-	tmpl := template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
-	return &Server{
+	srv := &Server{
 		store:   store,
 		sources: sources,
-		tmpl:    tmpl,
 		flight:  newSingleFlight(),
 	}
+	funcs := template.FuncMap{
+		"sourceLabel":       sourceLabel,
+		"registeredSources": srv.allRegisteredSources,
+	}
+	srv.tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
+	return srv
 }
 
 // ScrapeResult summarizes one scrape run across every active source.

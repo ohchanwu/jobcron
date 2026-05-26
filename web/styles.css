@@ -203,6 +203,7 @@ nav.primary a.active {
 .source-filter {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.35rem;
   padding: 0.9rem 0 0.2rem;
 }
@@ -216,6 +217,8 @@ nav.primary a.active {
   font-size: 0.82rem;
   color: var(--ink-soft);
   cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .source-pill:hover { color: var(--ink); border-color: var(--ink-soft); }
@@ -224,7 +227,29 @@ nav.primary a.active {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
+/* Empty pill: the source exists but has nothing visible on this page.
+   Still clickable — the user might want to confirm. Muted so the eye
+   skips past it to the populated pills. */
+.source-pill.pill-empty { opacity: 0.45; }
+.source-pill.pill-empty.on {
+  opacity: 1; /* once selected, no point dimming it */
+  border-color: var(--ink-soft);
+  background: transparent;
+  color: var(--ink-soft);
+}
 .filter-hidden { display: none !important; }
+
+/* Quiet message shown when the active filter selection produces zero
+   visible postings — distinct from the page's own empty state, which
+   fires when there are no postings at all. */
+.source-filter-empty {
+  margin: 1.8rem 0 0;
+  padding: 1.4rem 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  letter-spacing: -0.005em;
+}
 
 /* Postings */
 .postings { list-style: none; padding: 0; margin: 0; }

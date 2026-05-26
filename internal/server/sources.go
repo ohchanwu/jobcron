@@ -68,3 +68,23 @@ func (s *Server) disabledSourceSet(disabled []string) map[string]bool {
 // used by tests and any caller that needs to enumerate without going
 // through the full Scraper interface.
 func (s *Server) registeredSources() []scraper.Scraper { return s.sources }
+
+// allRegisteredSources returns one sourceOption per registered scraper, in
+// registration order. Exposed to templates as `registeredSources` so the
+// dashboard/archive/bookmarks pages can render the full source-filter
+// pill bar regardless of which sources currently have postings visible —
+// users want to SEE every source they could filter to, even when one is
+// currently empty (matches the "the source exists; it's just quiet today"
+// mental model).
+func (s *Server) allRegisteredSources() []sourceOption {
+	opts := make([]sourceOption, 0, len(s.sources))
+	for _, src := range s.sources {
+		id := src.Source()
+		opts = append(opts, sourceOption{
+			ID:      id,
+			Label:   sourceLabel(id),
+			Enabled: true,
+		})
+	}
+	return opts
+}
