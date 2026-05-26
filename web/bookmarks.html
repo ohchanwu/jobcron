@@ -63,7 +63,7 @@
             </div>
             {{if .Breakdown}}
             <div class="chips">
-              {{range .Breakdown}}<span class="chip">{{.Label}}<span class="v">+{{.Delta}}</span></span>{{end}}
+              {{range .Breakdown}}<span class="chip">{{.Label}}{{if gt .Delta 0}}<span class="v">+{{.Delta}}</span>{{end}}</span>{{end}}
             </div>
             {{end}}
           </div>

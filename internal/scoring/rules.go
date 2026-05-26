@@ -75,27 +75,77 @@ func matchStackTag(tags []string, name string) (string, bool) {
 }
 
 // scoreCareer awards career-fit points from the posting's structured
-// newcomer / min-max-career fields: careerExact when the profile's experience
-// falls inside the posting's required range (or both are 신입), and
-// careerNearMiss for an immediately adjacent bracket.
+// newcomer / min-max-career fields, with one twist: if the title or
+// description contains an explicit experience requirement that
+// contradicts those fields, the parsed values are treated as
+// authoritative. This is the "경력무관 but actually 2-5년 경력"
+// failure mode the design doc flags — sources sometimes tag a posting
+// 신입-friendly while the title says otherwise.
+//
+// When the override fires the function always emits a chip (even at
+// Delta=0) so the user can see *why* the career score landed where it
+// did — silently dropping the score in that case would look like a bug.
 func scoreCareer(p scraper.Posting, prof profile.Profile) (LineItem, bool) {
 	years := prof.CareerYears
+	minC, maxC, newcomer := p.MinCareer, p.MaxCareer, p.Newcomer
+
+	override := false
+	if pMin, pMax, parsedOK := scraper.ParseExperienceYears(p.Title, p.Description); parsedOK {
+		if pMin != minC || pMax != maxC {
+			override = true
+			minC, maxC = pMin, pMax
+			// Once we are reading off a parsed range, the source's 신입 tag
+			// is no longer trustworthy — fall back to the range check alone.
+			newcomer = false
+		}
+	}
+
 	switch {
-	case (p.Newcomer && years == 0) || (years >= p.MinCareer && years <= p.MaxCareer):
-		return LineItem{Label: careerLabel(years), Delta: careerExact, Reason: careerReason}, true
-	case years == p.MinCareer-1 || years == p.MaxCareer+1:
-		return LineItem{Label: careerLabel(years), Delta: careerNearMiss, Reason: careerNearReason}, true
+	case (newcomer && years == 0) || (years >= minC && years <= maxC):
+		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerExact, Reason: careerReason}, true
+	case years == minC-1 || years == maxC+1:
+		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerNearMiss, Reason: careerNearReason}, true
+	case override:
+		// Parser contradicted the source category but the user doesn't fit the
+		// parsed range either. Surface a 0-delta chip so the missing career
+		// bonus is explainable instead of mysterious.
+		return LineItem{Label: careerLabel(years, true, minC, maxC), Delta: 0, Reason: careerReason}, true
 	default:
 		return LineItem{}, false
 	}
 }
 
-// careerLabel is the breakdown label for a profile's experience level.
-func careerLabel(years int) string {
+// careerLabel renders the chip text for the career line item. The
+// override path shows what the posting actually requires (so the user
+// can compare it to the source's category badge), while the normal
+// path shows the user's level ("신입" / "경력 3년").
+func careerLabel(years int, override bool, minC, maxC int) string {
+	if override {
+		return "본문 " + formatExperienceRange(minC, maxC)
+	}
 	if years == 0 {
 		return "신입"
 	}
 	return fmt.Sprintf("경력 %d년", years)
+}
+
+// formatExperienceRange renders a parsed (min, max) pair as Korean
+// text. An open-ended upper bound (max >= 99) reads as "N년 이상";
+// equal min and max reads as a single year; otherwise it's the
+// hyphen range. A min of 0 with a positive max means the posting is
+// newcomer-OK but bounded — render as "~N년".
+func formatExperienceRange(minC, maxC int) string {
+	const upperOpen = 99
+	switch {
+	case maxC >= upperOpen:
+		return fmt.Sprintf("%d년 이상", minC)
+	case minC == 0:
+		return fmt.Sprintf("~%d년", maxC)
+	case minC == maxC:
+		return fmt.Sprintf("%d년", minC)
+	default:
+		return fmt.Sprintf("%d-%d년", minC, maxC)
+	}
 }
 
 // scoreLocation awards the profile's location weight (clamped to locationCap)
