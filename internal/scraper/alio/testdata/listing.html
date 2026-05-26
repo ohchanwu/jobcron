@@ -1,0 +1,1912 @@
+
+
+
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ko">
+<head>
+<title>공공기관 채용정보시스템</title>
+<meta charset="UTF-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+<link rel="stylesheet" type="text/css" href="/css/css.css" media="all" />
+<link rel="stylesheet" type="text/css" href="/css/jquery.ui.datepicker.css" />	
+<link rel="stylesheet" type="text/css" href="/css/lib/select2.min.css" />
+<link rel="stylesheet" type="text/css" href="/css/swiper/swiper.min.css" />
+<link rel="stylesheet" type="text/css" href="/css/swiper/swiper2.min.css" />
+
+    <script type="text/javascript" src="/js/js.js"></script>
+
+
+	<script type="text/javascript" src="/js/lib/jquery-1.11.1.min.js"></script>
+	<script type="text/javascript" src="/js/lib/jquery-ui-1.10.3.min.js"></script>
+	<script type="text/javascript" src="/js/lib/jquery.blockUI.js"></script>		
+	<script type="text/javascript" src="/js/lib/jquery.ui.datepicker.js"></script>
+	<script type="text/javascript" src="/js/lib/select2.full.js"></script>
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body>
+
+	
+
+
+
+
+
+
+
+
+
+
+
+<script type="text/javascript">			
+/* 	var Tmenu_2deps_display = "N";//2차메뉴 숨김여부(Y,N)
+	var Tmenu_code = "";//메뉴코드KO_02_01_01
+	var Tmenu_width = "N";//1차메뉴 자동크기
+	var Tmenu_left = [
+		"220",	//01 하위메뉴
+		"180",	//02 하위메뉴
+		"280",	//03 하위메뉴
+		"180",	//04 하위메뉴
+	];
+	Tmenu_setting(Tmenu_2deps_display,Tmenu_code,Tmenu_width,Tmenu_left);//실행		 */
+	
+/* 	 */
+	//접속한기기가 iPhone, iPod, Windows CE, Symbian, BlackBerry, Android일 경우에는 mobile2.jsp로 연결된다.
+	
+	
+	
+	function mobileCheck() {
+		
+		if("" == "sesstionPC"){
+			
+		}else if(navigator.userAgent.match(/iPhone/i)
+			||navigator.userAgent.match(/iPod/i)
+			||navigator.userAgent.match(/Windows CE/i)
+			||navigator.userAgent.match(/Symbian/i)
+			||navigator.userAgent.match(/BlackBerry/i)
+			||navigator.userAgent.match(/Android/i)
+		) {
+			//alert("현재접속한 브라우저는  :"+navigator.userAgent); 		
+			window.location.href="/mobile2021/home.do";
+		} 
+	}
+	mobileCheck();
+/* 	 */
+</script>
+
+
+
+
+<h3 class="dis_hide">건너뛰기영역</h3>
+	<a href="#content" class="skip">본문바로가기</a>
+
+<div id="wrap">						
+	<div class="gnb_bg"></div>
+	<div id="header_wrap">
+		<h1 class="eg">이 누리집은 대한민국 공식 전자정부 누리집입니다.</h1>
+		<div id="header">
+			<h1>
+				<a href="/home.do"><img src="/images/common/img_t_logo.gif" alt="JOB-ALIO 공공기관 채용정보시스템" /></a>
+			</h1>
+			<div id="etc">
+				<ul>
+
+					
+					<li><a href="/login.do">로그인</a></li>
+					<li><a href="/joinagree.do">회원가입</a></li>
+	
+						
+				
+					<li class="etc_end"><a href="/sitemap.do">전체메뉴</a></li>
+				</ul>
+			</div>
+
+			<h2 class="dis_hide">홈페이지 주메뉴</h2>
+			<div id="gnb">
+				<ul>
+					<li><a href="/recruit.do"><img
+							src="/images/common/gnb/gnb_01.gif" alt="공공기관 채용정보" /></a>
+							<ul class="menu01">
+								<li><a href="/recruit.do">공공기관 채용정보</a></li>
+							</ul>
+					</li>
+					<li><a href="/information.do"><img src="/images/common/gnb/gnb_02.gif" alt="공공기관 정보" /></a>
+						<ul class="menu02">
+							<li><a href="/information.do">공공기관이란</a></li>
+							<li><a href="/orginfo.do">공공기관정보</a></li>
+							<li><a href="/orgcompare.do">공공기관비교</a></li>
+						</ul></li>
+					
+					<li><a href="http://www.publicjob.kr" target="_blank"><img
+							src="/images/common/gnb/gnb_03.gif" alt="공공기관 채용정보박람회" /></a>
+						<ul class="menu03">
+							<li><a href="http://www.publicjob.kr" target="_blank">공공기관 채용정보박람회</a></li>
+							<li></li>
+							<li></li>
+							<li></li>
+							<li></li>
+							
+							<!-- <li><a href="/schedule.do">전체일정표</a></li>
+							<li><a href="/map.do">오시는 길</a></li> -->
+						</ul></li>
+					<li><a href="/introduce.do"><img
+							src="/images/common/gnb/gnb_04.gif" alt="JOB-ALIO 소개" /></a>
+						<ul class="menu04">
+							<li><a href="/introduce.do">JOB-ALIO 소개</a></li>
+							<li><a href="/notice.do">공지사항</a></li>
+						</ul></li>
+				</ul>
+			</div>
+		
+	</div>
+	</div>
+				
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+<style type="text/css">
+.wrap-loading {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.2);
+	filter: progid:DXImageTransform.Microsoft.Gradient(startColorstr='#20000000',
+		endColorstr='#20000000');
+}
+
+.wrap-loading div {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	margin-left: -21px;
+	margin-top: -21px;
+}
+
+.display-none {
+	display: none;
+}
+</style>
+<script type="text/javascript" src="/js/lib/jquery.fileDwonload.js"></script>
+<script type="text/javascript">
+		var	data = [{id: 'C0454', text: '(재)예술경영지원센터'},{id: 'C0352', text: '(재)우체국금융개발원'},{id: 'C0368', text: '(재)우체국시설관리단'},{id: 'C0931', text: '(재)일제강제동원피해자지원재단'},{id: 'C1030', text: '(재)축산환경관리원'},{id: 'C1304', text: '(재)한국보건의료정보원'},{id: 'C1060', text: '(재)한국통계정보원'},{id: 'C0887', text: '(재)한국통계진흥원'},{id: 'C0005', text: '(주)강원랜드'},{id: 'C1024', text: '(주)공영홈쇼핑'},{id: 'C0125', text: '(주)한국가스기술공사'},{id: 'C0001', text: '88관광개발(주)'},{id: 'C0437', text: 'KDI국제정책대학원'},{id: 'C1399', text: '가덕도신공항건설공단'},{id: 'C0002', text: '가축위생방역지원본부'},{id: 'C0004', text: '강원대학교병원'},{id: 'C0003', text: '강원대학교치과병원'},{id: 'C0006', text: '건강보험심사평가원'},{id: 'C0672', text: '건설근로자공제회'},{id: 'C0438', text: '건축공간연구원'},{id: 'C0402', text: '게임물관리위원회'},{id: 'C0008', text: '경북대학교병원'},{id: 'C1031', text: '경북대학교치과병원'},{id: 'C0009', text: '경상국립대학교병원'},{id: 'C0010', text: '경제인문사회연구회'},{id: 'C1028', text: '공간정보산업진흥원'},{id: 'C1327', text: '공간정보품질관리원'},{id: 'C0013', text: '공무원연금공단'},{id: 'C1038', text: '과학기술사업화진흥원'},{id: 'C0017', text: '과학기술정책연구원'},{id: 'C0457', text: '국가과학기술인력개발원'},{id: 'C1120', text: '국가생명윤리정책원'},{id: 'C0441', text: '국가수리과학연구소'},{id: 'C1303', text: '국가아동권리보장원'},{id: 'C0191', text: '국가유산진흥원'},{id: 'C0270', text: '국가철도공단'},{id: 'C0410', text: '국가평생교육진흥원'},{id: 'C0021', text: '국립공원공단'},{id: 'C0923', text: '국립광주과학관'},{id: 'C1018', text: '국립낙동강생물자원관'},{id: 'C1375', text: '국립농업박물관'},{id: 'C0924', text: '국립대구과학관'},{id: 'C0344', text: '국립박물관문화재단'},{id: 'C1051', text: '국립부산과학관'},{id: 'C0879', text: '국립생태원'},{id: 'C1362', text: '국립아시아문화전당재단'},{id: 'C0023', text: '국립암센터'},{id: 'C1333', text: '국립울진해양과학관'},{id: 'C1395', text: '국립인천해양박물관'},{id: 'C0446', text: '국립중앙의료원'},{id: 'C1324', text: '국립항공박물관'},{id: 'C1016', text: '국립해양박물관'},{id: 'C1021', text: '국립해양생물자원관'},{id: 'C1334', text: '국립호남권생물자원관'},{id: 'C0026', text: '국민건강보험공단'},{id: 'C0459', text: '국민건강보험공단 일산병원'},{id: 'C0028', text: '국민연금공단'},{id: 'C0345', text: '국방과학연구소'},{id: 'C1402', text: '국방기술진흥연구소'},{id: 'C0347', text: '국방기술품질원'},{id: 'C1027', text: '국방전직교육원'},{id: 'C0406', text: '국악방송'},{id: 'C0031', text: '국제방송교류재단'},{id: 'C0866', text: '국제식물검역인증원'},{id: 'C0318', text: '국토교통과학기술진흥원'},{id: 'C0225', text: '국토안전관리원'},{id: 'C0032', text: '국토연구원'},{id: 'C0357', text: '그랜드코리아레저(주)'},{id: 'C0383', text: '극지연구소'},{id: 'C0035', text: '근로복지공단'},{id: 'C0038', text: '기술보증기금'},{id: 'C0856', text: '기초과학연구원'},{id: 'C0847', text: '남북교류협력지원협회'},{id: 'C0173', text: '노사발전재단'},{id: 'C0860', text: '농림수산식품교육문화정보원'},{id: 'C0404', text: '농림식품기술기획평가원'},{id: 'C0542', text: '농업정책보험금융원'},{id: 'C0894', text: '대구경북첨단의료산업진흥재단'},{id: 'C0051', text: '대외경제정책연구원'},{id: 'C0054', text: '대한무역투자진흥공사'},{id: 'C0055', text: '대한법률구조공단'},{id: 'C0057', text: '대한석탄공사'},{id: 'C0315', text: '대한장애인체육회'},{id: 'C0059', text: '대한적십자사'},{id: 'C0063', text: '대한체육회'},{id: 'C0065', text: '독립기념관'},{id: 'C0448', text: '동남권원자력의학원'},{id: 'C0358', text: '동북아역사재단'},{id: 'C0367', text: '무역안보관리원'},{id: 'C0068', text: '민주화운동기념사업회'},{id: 'C0071', text: '부산대학교병원'},{id: 'C0853', text: '부산대학교치과병원'},{id: 'C0072', text: '부산항만공사'},{id: 'C0449', text: '북한이탈주민지원재단'},{id: 'C0444', text: '분당서울대학교병원'},{id: 'C0075', text: '사립학교교직원연금공단'},{id: 'C0078', text: '산업연구원'},{id: 'C1130', text: '새만금개발공사'},{id: 'C1046', text: '서민금융진흥원'},{id: 'C0083', text: '서울대학교병원'},{id: 'C0084', text: '서울대학교치과병원'},{id: 'C0029', text: '서울올림픽기념국민체육진흥공단'},{id: 'C0939', text: '서울요양원'},{id: 'C0905', text: '선박해양플랜트연구소'},{id: 'C0867', text: '세종학당재단'},{id: 'C0903', text: '소상공인시장진흥공단'},{id: 'C0906', text: '소프트웨어정책연구소'},{id: 'C0089', text: '수도권매립지관리공사'},{id: 'C1331', text: '스포츠윤리센터'},{id: 'C1033', text: '시청자미디어재단'},{id: 'C0661', text: '식품안전정보원'},{id: 'C0091', text: '신용보증기금'},{id: 'C0112', text: '신용보증재단중앙회'},{id: 'C0918', text: '아시아·태평양경제협력체 기후센터'},{id: 'C1398', text: '양육비이행관리원'},{id: 'C0096', text: '에너지경제연구원'},{id: 'C0281', text: '여수광양항만공사'},{id: 'C0050', text: '연구개발특구진흥재단'},{id: 'C0098', text: '영상물등급위원회'},{id: 'C0099', text: '영화진흥위원회'},{id: 'C0101', text: '예금보험공사'},{id: 'C0102', text: '예술의전당'},{id: 'C0896', text: '오송첨단의료산업진흥재단'},{id: 'C0331', text: '우체국물류지원단'},{id: 'C0365', text: '울산항만공사'},{id: 'C0440', text: '육아정책연구소'},{id: 'C1064', text: '의료기관평가인증원'},{id: 'C0105', text: '인천국제공항공사'},{id: 'C0107', text: '인천항만공사'},{id: 'C1401', text: '자동차손해배상진흥원'},{id: 'C1318', text: '재단법인 건설기술교육원'},{id: 'C1108', text: '재단법인 대한건설기계안전관리원'},{id: 'C1017', text: '재단법인 장애인기업종합지원센터'},{id: 'C1102', text: '재단법인 한국공공조직은행'},{id: 'C1109', text: '재단법인 한국에너지재단'},{id: 'C0861', text: '재단법인 한국자활복지개발원'},{id: 'C1103', text: '재단법인 한국장기조직기증원'},{id: 'C1383', text: '재외동포협력센터'},{id: 'C0553', text: '전국재해구호협회'},{id: 'C0113', text: '전남대학교병원'},{id: 'C0114', text: '전북대학교병원'},{id: 'C0115', text: '전쟁기념사업회'},{id: 'C0908', text: '정보통신기획평가원'},{id: 'C0394', text: '정보통신산업진흥원'},{id: 'C0120', text: '정보통신정책연구원'},{id: 'C0376', text: '정부법무공단'},{id: 'C0121', text: '제주국제자유도시개발센터'},{id: 'C0122', text: '제주대학교병원'},{id: 'C1044', text: '주식회사 에스알'},{id: 'C0124', text: '주택관리공단(주)'},{id: 'C0061', text: '주택도시보증공사'},{id: 'C0129', text: '중소기업기술정보진흥원'},{id: 'C0127', text: '중소기업은행'},{id: 'C0884', text: '중소벤처기업연구원'},{id: 'C0130', text: '중소벤처기업진흥공단'},{id: 'C1378', text: '중앙사회서비스원'},{id: 'C1330', text: '차세대수치예보모델개발사업단'},{id: 'C0451', text: '창업진흥원'},{id: 'C0134', text: '축산물품질평가원'},{id: 'C0135', text: '충남대학교병원'},{id: 'C0136', text: '충북대학교병원'},{id: 'C0314', text: '코레일관광개발(주)'},{id: 'C0327', text: '코레일네트웍스(주)'},{id: 'C0140', text: '코레일로지스(주)'},{id: 'C0272', text: '코레일유통(주)'},{id: 'C0387', text: '코레일테크(주)'},{id: 'C0409', text: '태권도진흥재단'},{id: 'C0141', text: '통일연구원'},{id: 'C0144', text: '학교법인한국폴리텍'},{id: 'C0147', text: '한국가스공사'},{id: 'C0148', text: '한국가스안전공사'},{id: 'C0151', text: '한국개발연구원'},{id: 'C0845', text: '한국건강가정진흥원'},{id: 'C0854', text: '한국건강증진개발원'},{id: 'C1319', text: '한국고용노동교육원'},{id: 'C0321', text: '한국고용정보원'},{id: 'C0067', text: '한국고전번역원'},{id: 'C0452', text: '한국공예디자인문화진흥원'},{id: 'C0655', text: '한국공정거래조정원'},{id: 'C0157', text: '한국공항공사'},{id: 'C0158', text: '한국과학기술기획평가원'},{id: 'C0163', text: '한국과학창의재단'},{id: 'C0165', text: '한국관광공사'},{id: 'C1400', text: '한국관세정보원'},{id: 'C1364', text: '한국광해광업공단'},{id: 'C0167', text: '한국교육개발원'},{id: 'C0168', text: '한국교육과정평가원'},{id: 'C0145', text: '한국교육학술정보원'},{id: 'C0019', text: '한국교통안전공단'},{id: 'C0170', text: '한국교통연구원'},{id: 'C0171', text: '한국국방연구원'},{id: 'C0172', text: '한국국제교류재단'},{id: 'C0379', text: '한국국제보건의료재단'},{id: 'C0146', text: '한국국제협력단'},{id: 'C0062', text: '한국국토정보공사'},{id: 'C0864', text: '한국기상산업기술원'},{id: 'C0175', text: '한국기술교육대학교'},{id: 'C0631', text: '한국나노기술원'},{id: 'C0042', text: '한국남동발전(주)'},{id: 'C0043', text: '한국남부발전(주)'},{id: 'C0179', text: '한국노동연구원'},{id: 'C0378', text: '한국노인인력개발원'},{id: 'C0045', text: '한국농수산식품유통공사'},{id: 'C0046', text: '한국농어촌공사'},{id: 'C0422', text: '한국농업기술진흥원'},{id: 'C0181', text: '한국농촌경제연구원'},{id: 'C0527', text: '한국데이터산업진흥원'},{id: 'C0183', text: '한국도로공사'},{id: 'C1294', text: '한국도로공사서비스(주)'},{id: 'C0064', text: '한국도로교통공단'},{id: 'C0922', text: '한국도박문제예방치유원'},{id: 'C0066', text: '한국동서발전(주)'},{id: 'C0844', text: '한국등산·트레킹지원센터'},{id: 'C0184', text: '한국디자인진흥원'},{id: 'C0450', text: '한국로봇산업진흥원'},{id: 'C0185', text: '한국마사회'},{id: 'C0571', text: '한국마약퇴치운동본부'},{id: 'C0222', text: '한국무역보험공사'},{id: 'C0188', text: '한국문학번역원'},{id: 'C0189', text: '한국문화관광연구원'},{id: 'C0320', text: '한국문화예술교육진흥원'},{id: 'C0190', text: '한국문화예술위원회'},{id: 'C0663', text: '한국문화정보원'},{id: 'C0192', text: '한국문화진흥주식회사'},{id: 'C1335', text: '한국물기술인증원'},{id: 'C0348', text: '한국발명진흥회'},{id: 'C0196', text: '한국방송광고진흥공사'},{id: 'C0187', text: '한국방송통신전파진흥원'},{id: 'C0152', text: '한국법무보호복지공단'},{id: 'C0198', text: '한국법제연구원'},{id: 'C0199', text: '한국벤처투자'},{id: 'C0070', text: '한국보건복지인재원'},{id: 'C0200', text: '한국보건사회연구원'},{id: 'C0201', text: '한국보건산업진흥원'},{id: 'C0662', text: '한국보건의료연구원'},{id: 'C0202', text: '한국보건의료인국가시험원'},{id: 'C0203', text: '한국보훈복지의료공단'},{id: 'C0150', text: '한국부동산원'},{id: 'C0205', text: '한국사학진흥재단'},{id: 'C0411', text: '한국사회보장정보원'},{id: 'C0377', text: '한국사회복지협의회'},{id: 'C0456', text: '한국사회적기업진흥원'},{id: 'C1055', text: '한국산림복지진흥원'},{id: 'C0397', text: '한국산업기술기획평가원'},{id: 'C0076', text: '한국산업기술시험원'},{id: 'C0393', text: '한국산업기술진흥원'},{id: 'C0208', text: '한국산업단지공단'},{id: 'C0209', text: '한국산업안전보건공단'},{id: 'C0210', text: '한국산업은행'},{id: 'C0211', text: '한국산업인력공단'},{id: 'C0620', text: '한국상하수도협회'},{id: 'C1367', text: '한국생명존중희망재단'},{id: 'C0082', text: '한국서부발전(주)'},{id: 'C0214', text: '한국석유공사'},{id: 'C0215', text: '한국석유관리원'},{id: 'C0103', text: '한국세라믹기술원'},{id: 'C0217', text: '한국소방산업기술원'},{id: 'C0218', text: '한국소비자원'},{id: 'C0220', text: '한국수력원자력(주)'},{id: 'C1107', text: '한국수목원정원관리원'},{id: 'C0455', text: '한국수산자원공단'},{id: 'C0221', text: '한국수자원공사'},{id: 'C1127', text: '한국수자원조사기술원'},{id: 'C0223', text: '한국수출입은행'},{id: 'C1410', text: '한국스포츠레저(주)'},{id: 'C0224', text: '한국승강기안전공단'},{id: 'C1138', text: '한국식품산업클러스터진흥원'},{id: 'C1100', text: '한국식품안전관리인증원'},{id: 'C0594', text: '한국양성평등교육진흥원'},{id: 'C0335', text: '한국어촌어항공단'},{id: 'C0412', text: '한국언론진흥재단'},{id: 'C0097', text: '한국에너지공단'},{id: 'C0389', text: '한국에너지기술평가원'},{id: 'C0233', text: '한국에너지정보문화재단'},{id: 'C0901', text: '한국여성과학기술인육성재단'},{id: 'C0902', text: '한국여성인권진흥원'},{id: 'C0231', text: '한국여성정책연구원'},{id: 'C0388', text: '한국연구재단'},{id: 'C0232', text: '한국영상자료원'},{id: 'C0849', text: '한국영유아보육·교육진흥원'},{id: 'C0868', text: '한국예술인복지재단'},{id: 'C0354', text: '한국우편사업진흥원'},{id: 'C0916', text: '한국원산지정보원'},{id: 'C0234', text: '한국원자력안전기술원'},{id: 'C0932', text: '한국원자력안전재단'},{id: 'C0104', text: '한국원자력의학원'},{id: 'C0020', text: '한국원자력통제기술원'},{id: 'C0371', text: '한국원자력환경공단'},{id: 'C0865', text: '한국의료기기안전정보원'},{id: 'C0870', text: '한국의료분쟁조정중재원'},{id: 'C0862', text: '한국의약품안전관리원'},{id: 'C0399', text: '한국인터넷진흥원'},{id: 'C0857', text: '한국임업진흥원'},{id: 'C0240', text: '한국자산관리공사'},{id: 'C0859', text: '한국잡월드'},{id: 'C0243', text: '한국장애인개발원'},{id: 'C0242', text: '한국장애인고용공단'},{id: 'C0415', text: '한국장학재단'},{id: 'C1042', text: '한국재정정보원'},{id: 'C1049', text: '한국저작권보호원'},{id: 'C0390', text: '한국저작권위원회'},{id: 'C0244', text: '한국전기안전공사'},{id: 'C0246', text: '한국전력거래소'},{id: 'C0247', text: '한국전력공사'},{id: 'C1070', text: '한국전력국제원자력대학원대학교'},{id: 'C0248', text: '한국전력기술주식회사'},{id: 'C1124', text: '한국제품안전관리원'},{id: 'C0256', text: '한국조세재정연구원'},{id: 'C0257', text: '한국조폐공사'},{id: 'C0258', text: '한국주택금융공사'},{id: 'C0259', text: '한국중부발전(주)'},{id: 'C0126', text: '한국중소벤처기업유통원'},{id: 'C0392', text: '한국지능정보사회진흥원'},{id: 'C0416', text: '한국지식재산보호원'},{id: 'C0407', text: '한국지식재산연구원'},{id: 'C0261', text: '한국지역난방공사'},{id: 'C0264', text: '한국직업능력연구원'},{id: 'C0268', text: '한국철도공사'},{id: 'C0278', text: '한국청소년상담복지개발원'},{id: 'C0276', text: '한국청소년정책연구원'},{id: 'C0447', text: '한국청소년활동진흥원'},{id: 'C0280', text: '한국체육산업개발(주)'},{id: 'C0149', text: '한국출판문화산업진흥원'},{id: 'C1386', text: '한국치산기술협회'},{id: 'C0395', text: '한국콘텐츠진흥원'},{id: 'C1368', text: '한국탄소산업진흥원'},{id: 'C0396', text: '한국토지주택공사'},{id: 'C0284', text: '한국투자공사'},{id: 'C0858', text: '한국특허기술진흥원'},{id: 'C0899', text: '한국특허전략개발원'},{id: 'C0340', text: '한국특허정보원'},{id: 'C0290', text: '한국학중앙연구원'},{id: 'C1053', text: '한국한의약진흥원'},{id: 'C0373', text: '한국항로표지기술원'},{id: 'C0297', text: '한국해양과학기술원'},{id: 'C0087', text: '한국해양교통안전공단'},{id: 'C0295', text: '한국해양수산개발원'},{id: 'C0296', text: '한국해양수산연수원'},{id: 'C0654', text: '한국해양조사협회'},{id: 'C1119', text: '한국해양진흥공사'},{id: 'C1131', text: '한국해외인프라도시개발지원공사'},{id: 'C0298', text: '한국행정연구원'},{id: 'C0299', text: '한국형사·법무정책연구원'},{id: 'C0400', text: '한국환경공단'},{id: 'C1062', text: '한국환경보전원'},{id: 'C0391', text: '한국환경산업기술원'},{id: 'C0302', text: '한국환경연구원'},{id: 'C0920', text: '한식진흥원'},{id: 'C0306', text: '한전KDN'},{id: 'C0305', text: '한전KPS(주)'},{id: 'C1352', text: '한전MCS(주)'},{id: 'C0236', text: '한전원자력연료주식회사'},{id: 'C0900', text: '항공안전기술원'},{id: 'C0374', text: '해양수산과학기술진흥원'},{id: 'C0533', text: '해양환경공단'},];
+	 //var param = javax.servlet.jsp.el.ImplicitObjectELResolver$ImplicitObjects$5@97c52c6;
+	// datepicker script
+		$(function() {
+			$("#s_date, #e_date").datepicker({
+				monthNamesShort: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+				dayNamesMin: ['일', '월', '화', '수', '목', '금', '토'],
+				inline: false,
+				showOn: "both", 
+				buttonImageOnly: true,
+				buttonImage: "/images/common/btn_calendar.gif",
+				dateFormat: "yy.mm.dd",
+				changeYear: true,
+				changeMonth: true
+			});
+			
+			$("#s_date").next("img").attr('alt', '등록일 시작일 달력').attr('title', '등록일 시작일 달력'); 
+			$("#e_date").next("img").attr('alt', '등록일 종료일 달력').attr('title', '등록일 종료일 달력');
+		});
+	
+		
+		$(function() {
+			$('input[name=eduType]').click(function(e){
+				var chkVal = e.target.value;
+				var chkYN = e.target.checked;
+				
+				$('input[name=eduType]').prop("checked", false);
+				if(chkYN == true){
+					$('input#'+chkVal).prop("checked", true);
+				}
+			})
+		});
+		
+	//init
+		$(document).ready(function() {
+			var obj ="";
+			$("#jobDetailDiv").hide();
+			$("#detailCon").hide();
+			$("#testCD").children().change(function(){
+				$("#jobResult").html("&nbsp");
+				$("input[name='detail_code']:checked").each(function() { 
+					$("#jobResult").append($("#"+this.value).html()+", ");
+				})
+			});
+			
+			$('#org_name').select2({
+	  			data: data
+	  			,width: "280px"
+	  		});
+			
+			$('#org_name').css("margin-left","10px");
+			
+// 			
+		});
+	
+		//직종보기
+		function jobDetail(){
+				$( "#jobDetailDiv" ).slideToggle( "middle" );
+		}
+		function jobDetailOpen(){
+				$("#detailOpenImg").html("<a href='#' onclick='jobDetailClose()'><img src='/images/content/btn_searchClose.gif' alt='상세검색 닫기' />");
+				$("#jobDetailDiv").slideDown();
+				$( "#detailCon" ).slideDown( "slow" );
+		}
+		function jobDetailClose(){
+				$("#detailOpenImg").html("<a href='#' onclick='jobDetailOpen()'><img src='/images/content/btn_searchOpen.gif' alt='상세검색 열기' /></a>");
+				$("#jobDetailDiv").slideUp();
+				$( "#detailCon" ).slideUp( "fast" );
+		}
+		
+		var Tmenu_2deps_display = "N";//2차메뉴 숨김여부(Y,N)
+		var Tmenu_code = "KO_01_01_01";//메뉴코드KO_02_01_01
+		var Tmenu_width = "N";//1차메뉴 자동크기
+		var Tmenu_left = [
+			"220",	//01 하위메뉴
+			"180",	//02 하위메뉴
+			"280",	//03 하위메뉴
+			"180",	//04 하위메뉴
+		];
+		Tmenu_setting(Tmenu_2deps_display,Tmenu_code,Tmenu_width,Tmenu_left);//실행	
+		
+	//검색 조건 셋팅
+	$(document).ready(function(){
+	 $(".locationClass").each(function(){
+		 
+	 });
+	 
+	 $(".areaListClass").each(function(){
+		 
+	 });
+	 
+	 $(".detailClass").each(function(){
+		 
+			if($(this).val() == "R600020" ){
+				$(this).attr("checked", true);
+			}
+		 
+	 });
+	 
+	 $(".educationClass").each(function(){
+		 
+	 });
+	 
+	 $(".workClass").each(function(){
+		 
+	 });
+	 
+	 $(".careerClass").each(function(){
+		 
+			if($(this).val() == "R2010" ){
+				$(this).attr("checked", true);
+			}
+		 
+			if($(this).val() == "R2030" ){
+				$(this).attr("checked", true);
+			}
+		 
+	 });
+	 
+	 $(".replaceClass").each(function(){
+		 
+	 });
+	 
+	 $(".ingClass").each(function(){
+		 
+	 });
+	 
+	 init_job();
+	 
+	 
+	});
+		
+	function addRecruit() {
+/* 		var frm = document.frm;
+
+		if( $('input[name=idxs]:checked').size() < 1) {
+			alert("선택한 채용정보가 없습니다.")
+			return;
+		}
+		
+		frm.action = "/insertRecruit.do";
+		frm.submit(); */
+		
+		if( $('input[name=idxs]:checked').size() < 1) {
+			alert("선택한 채용정보가 없습니다.")
+			return;
+		}
+		
+		//22.12.22 ajax로 변경
+		$.ajax({
+			type : "POST",
+			url : "/insertRecruit.do",
+			data : $("#frm").serialize(),
+			dataType: 'json',
+			success: function(data) {
+				if(data.resultmessage == "LN"){
+					alert("로그인 해 주세요.");
+					location.href="/main.do";
+				}else{
+					alert(data.resultmessage);
+				}
+			},
+			error : function(msg) {
+				alert("관심채용정보등록을 실패했습니다.");
+			}
+		}); 
+	}
+	
+	function init_job() {
+		if( $('input[name="detail_code"]:checked').size() > 0) {
+			$("#jobResult").html("&nbsp");
+			$("input[name='detail_code']:checked").each(function(index) { 
+
+				var chk = $("input[name='detail_code']:checked").length-1;
+				
+				if(index != chk){
+					$("#jobResult").append($("#"+this.value).html()+", ");
+				}else{
+					$("#jobResult").append($("#"+this.value).html());
+				}
+			})
+		}
+	}
+	
+	//상세정보 우클릭 새창위한 함수
+	function onRightClick(idx){
+		$('#view_'+idx).attr('href','/recruitview.do?idx='+idx);
+	}
+	
+	//csv 다운로드
+	function goExcelCsv(){
+		$('.wrap-loading').removeClass('display-none');
+		$.fileDownload("/getCSVRecruitList.do", {
+			data : {'fileName' : '채용정보목록'},	
+			httpMethod : "POST",
+//			preparingMessageHtml : "통계자료를 만들고 있습니다.<br/>잠시만 기다려 주세요.",
+//			failMessageHtml: "자료 다운로드 실패입니다.<br/>잠시 후 다시 시도해 주세요.",
+			successCallback : function (url){     
+				$('.wrap-loading').addClass('display-none');
+	        },      
+	        failCallback: function (html, url){    
+	            alert("자료 다운로드 실패입니다. 잠시 후 다시 시도해 주세요.");
+	            $('.wrap-loading').addClass('display-none');
+	        }
+		});
+		
+	}
+	
+	function fnEnterEvent(e, fn){
+		if(e.keyCode == 13){
+			eval(fn);
+			return false;
+		}
+		else{
+			return true;
+		}
+	}
+	</script>
+
+
+
+<div id="container01">
+	<!-- 콘텐츠 시작 -->
+	<div id="content">
+		<h3>공공기관 채용정보</h3>
+
+		<div id="txt">
+			<!-- 상세검색 열기 전 시작 -->
+			
+			<script type="text/javascript">
+					function fn_reset() {
+						$('#searchRecruitYear').val('');
+						$('#searchRecruitMonth').val('');
+						$('#jobResult').html("&nbsp;");
+						$('#jobResult').addClass('bg_inp01');
+						$('#jobResult').html("원하시는 직종을 선택하세요.");
+						$('input[name="detail_code"]').removeAttr('checked');
+						$('input[name="location"]').removeAttr('checked');
+						$('input[name="area"]').removeAttr('checked');
+						$('input[name="work_type"]').removeAttr('checked');
+						$('input[name="career"]').removeAttr('checked');
+						$('input[name="education"]').removeAttr('checked');
+						$('input[name="eduType"]').removeAttr('checked');
+						$('input[name="replacement"]').removeAttr('checked');
+						$('#gi01').val('');
+						$('#org_type').val('');
+						$('#org_name').val('').trigger('change');
+						$('input[name="ing"]').removeAttr('checked');
+						$('#tit01').val('');
+						
+					}
+					
+					function fn_search() {
+						//학력정보를 선택하면 학력정보 구분 값 필수로 입력받게
+						if($('input[name=education]').is(":checked") == true){
+							if($('input[name=eduType]').is(":checked") == false){
+								alert("학력정보 검색조건을 선택해 주세요. (단일/중복)");
+								return;
+							}
+						}
+						
+						var f = document.frm;
+						
+						f.action = "/recruit.do";
+						f.pageNo.value = "1";
+						f.submit();
+					}
+					
+				</script>
+
+			<form id="frm" name="frm" method="get">
+				<input type="hidden" name="pageNo" id="pageNo" value="1" /> 
+				
+				
+				
+				<input type="hidden" name="idx" id="idx" />
+				<div class="tb_round02">
+					<table class="tbl type_01">
+						<caption>공공기관 채용정보 검색</caption>
+						<colgroup>
+							<col style="width: 14%" />
+							<col style="width: auto" />
+							<col style="width: 14%" />
+							<col style="width: auto" />
+						</colgroup>
+						<tbody>
+						
+							<tr>
+								<th class="round_t">등록일</th>
+								<td colspan="3">
+									<input type="text" style="width: 20%; margin-right: 3px; min-height: 25px; vertical-align: middle;" title="시작일을 선택하세요" name="s_date" id="s_date" value="2026.03.26"> ~ <input type="text" style="width: 20%; margin-right: 3px; min-height: 25px; vertical-align: middle;" title="마지막일을 선택하세요" name="e_date" id="e_date" value="2026.05.26">
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">표준직무(NCS)</th>
+								<td colspan="3">
+									<div class="bg_inp01" onclick="jobDetail()" id="jobResult">원하시는 직종을 선택하세요.</div> <!-- 원하시는 직종을 선택하세요 를 클릭하면 노출 -->
+									<div style="display: block" id="jobDetailDiv">
+										<table class="tbl type_02 mt_10">
+											<caption>직군분야 선택</caption>
+											<colgroup>
+												<col style="width: 25%" />
+												<col style="width: 25%" />
+												<col style="width: 25%" />
+												<col style="width: 27%" />
+											</colgroup>
+
+											<tbody id="testCD">
+												<tr>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600001" id="bun01_01" /><label for="bun01_01"><span id="R600001">사업관리</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600002" id="bun01_02" /><label for="bun01_02"><span id="R600002">경영·회계·사무</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600003" id="bun01_03" /><label for="bun01_03"><span id="R600003">금융·보험</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600004" id="bun01_04" /><label for="bun01_04"><span id="R600004">교육·자연·사회과학</span></label></td>
+												</tr>
+												<tr>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600005" id="bun01_05" /><label for="bun01_05"><span id="R600005">법률·경찰·소방·교도·국방</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600006" id="bun01_06" /><label for="bun01_06"><span id="R600006">보건·의료</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600007" id="bun01_07" /><label for="bun01_07"><span id="R600007">사회복지·종교</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600008" id="bun01_08" /><label for="bun01_08"><span id="R600008">문화·예술·디자인·방송</span></label></td>
+												</tr>
+												<tr>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600009" id="bun01_09" /><label for="bun01_09"><span id="R600009">운전·운송</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600010" id="bun01_10" /><label for="bun01_10"><span id="R600010">영업판매</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600011" id="bun01_11" /><label for="bun01_11"><span id="R600011">경비·청소</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600012" id="bun01_12" /><label for="bun01_12"><span id="R600012">이용·숙박·여행·오락·스포츠</span></label></td>
+												</tr>
+												<tr>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600013" id="bun01_13" /><label for="bun01_13"><span id="R600013">음식서비스</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600014" id="bun01_14" /><label for="bun01_14"><span id="R600014">건설</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600015" id="bun01_15" /><label for="bun01_15"><span id="R600015">기계</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600016" id="bun01_16" /><label for="bun01_16"><span id="R600016">재료</span></label></td>
+												</tr>
+												<tr>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600017" id="bun01_17" /><label for="bun01_17"><span id="R600017">화학</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600018" id="bun01_18" /><label for="bun01_18"><span id="R600018">섬유·의복</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600019" id="bun01_19" /><label for="bun01_19"><span id="R600019">전기·전자</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600020" id="bun01_20" /><label for="bun01_20"><span id="R600020">정보통신</span></label></td>
+												</tr>
+												<tr>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600021" id="bun01_21" /><label for="bun01_21"><span id="R600021">식품가공</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600022" id="bun01_22" /><label for="bun01_22"><span id="R600022">인쇄·목재·가구·공예</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600023" id="bun01_23" /><label for="bun01_23"><span id="R600023">환경·에너지·안전</span></label></td>
+													<td class="left"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600024" id="bun01_24" /><label for="bun01_24"><span id="R600024">농림어업</span></label></td>
+												</tr>
+												<tr>
+													<td class="left" colspan="1"><input name="detail_code" type="checkbox" class="ckbox detailClass" value="R600025" id="bun01_25" /><label for="bun01_25"><span id="R600025">연구</span></label></td>
+													<td class="left" colspan="3"></td>
+												</tr>
+
+
+
+
+												
+											</tbody>
+										</table>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								
+								<th scope="row">근무지</th>
+								<td colspan="3">
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location00" value="R3009" /><label for="location00">해외</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location01" value="R3010" /><label for="location01">서울특별시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location02" value="R3011" /><label for="location02">인천광역시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location03" value="R3012" /><label for="location03">대전광역시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location04" value="R3013" /><label for="location04">대구광역시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location05" value="R3014" /><label for="location05">부산광역시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location06" value="R3015" /><label for="location06">광주광역시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location07" value="R3016" /><label for="location07">울산광역시</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location08" value="R3017" /><label for="location08">경기도</label><br /> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location09" value="R3018" /><label for="location09">강원도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location10" value="R3019" /><label for="location10">충청남도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location11" value="R3020" /><label for="location11">충청북도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location12" value="R3021" /><label for="location12">경상북도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location13" value="R3022" /><label for="location13">경상남도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location14" value="R3023" /><label for="location14">전라남도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location15" value="R3024" /><label for="location15">전라북도</label> 
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location16" value="R3025" /><label for="location16">제주특별자치도</label>
+									<input name="location" type="checkbox" class="ckbox locationClass" id="location17" value="R3026" /><label for="location17">세종특별자치시</label>
+								</td>
+							</tr>
+							<tr>								
+								<th scope="row">근무분야</th>
+								<td colspan="3">
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_1" value="R8010" /><label for="area_1">일반직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_2" value="R8011" /><label for="area_2">행정직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_3" value="R8012" /><label for="area_3">경영직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_4" value="R8013" /><label for="area_4">사무직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_5" value="R8014" /><label for="area_5">관리직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_6" value="R8015" /><label for="area_6">연구직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_7" value="R8016" /><label for="area_7">기술직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_8" value="R8017" /><label for="area_8">시설직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_9" value="R8018" /><label for="area_9">전산직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_10" value="R8019" /><label for="area_10">교수직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_11" value="R8020" /><label for="area_11">의사직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_12" value="R8021" /><label for="area_12">간호직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_13" value="R8022" /><label for="area_13">약무직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_14" value="R8023" /><label for="area_14">보건직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_15" value="R8024" /><label for="area_15">위생직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_16" value="R8025" /><label for="area_16">기능직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_17" value="R8026" /><label for="area_17">운영직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_18" value="R8027" /><label for="area_18">공무직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_19" value="R8028" /><label for="area_19">안전직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_20" value="R8029" /><label for="area_20">교원직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_21" value="R8030" /><label for="area_21">별정직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_22" value="R8031" /><label for="area_22">계약직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_23" value="R8032" /><label for="area_23">전문직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_24" value="R8033" /><label for="area_24">운영직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_25" value="R8034" /><label for="area_25">상담직</label>
+									
+										<input name="area" type="checkbox" class="ckbox areaListClass" id="area_26" value="R8099" /><label for="area_26">기타</label>
+																		
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="de01">고용형태</label></th>
+								<td>
+									<input name="work_type" type="checkbox" class="ckbox workClass" value="R1010" id="de01" /><label for="de01">정규직</label> 
+									 
+									<input name="work_type" type="checkbox" class="ckbox workClass" value="R1030" id="de03" /><label for="de03">무기계약직</label> 
+									<input name="work_type" type="checkbox" class="ckbox workClass" value="R1040" id="de04" /><label for="de04">비정규직</label> 
+									<input name="work_type" type="checkbox" class="ckbox workClass" value="R1060" id="de05" /><label for="de05">청년인턴(체험형)</label> 
+									<input name="work_type" type="checkbox" class="ckbox workClass" value="R1070" id="de06" /><label for="de06">청년인턴(채용형)</label>
+								</td>
+								<th scope="row">채용구분</th>
+								<td style="width:105px;">
+									<input name="career" value="R2010" type="checkbox" class="ckbox careerClass" id="sa01" /><label for="sa01">신입</label> 
+									<input name="career" value="R2020" type="checkbox" class="ckbox careerClass" id="sa02" /><label for="sa02">경력</label><br /> 
+									<input name="career" value="R2030" type="checkbox" class="ckbox careerClass" id="sa03" /><label for="sa03">신입+경력</label><br />
+									<input name="career" value="R2040" type="checkbox" class="ckbox careerClass" id="sa04" /><label for="sa04">외국인 전형</label>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="gi01">학력정보</label></th>
+								<td colspan="3">
+									<div style="text-align: center;float: left;">
+										<input type="checkbox" id="edu01" name="education" value="R7010" class="ckbox educationClass"><label for="edu01">학력무관</label> 
+										<input type="checkbox" id="edu02" name="education" value="R7020" class="ckbox educationClass"><label for="edu02">중졸이하</label> 
+										<input type="checkbox" id="edu03" name="education" value="R7030" class="ckbox educationClass"><label for="edu03">고졸</label> 
+										<input type="checkbox" id="edu04" name="education" value="R7040" class="ckbox educationClass"><label for="edu04">대졸(2~3년)</label> 
+										<input type="checkbox" id="edu05" name="education" value="R7050" class="ckbox educationClass"><label for="edu05">대졸(4년)</label> 
+										<input type="checkbox" id="edu06" name="education" value="R7060" class="ckbox educationClass"><label for="edu06">석사</label> 
+										<input type="checkbox" id="edu07" name="education" value="R7070" class="ckbox educationClass"><label for="edu07">박사</label>
+									</div>
+									<span class="edu_line"></span>
+									<div style="text-align: center;">
+										<input type="radio" id="single" name="eduType" value="single" ><label for="single">단일(AND)</label>
+										<input type="radio" id="multi" name="eduType" value="multi" ><label for="multi">중복(OR)</label
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="gi01">대체인력유무</label></th>
+								<td colspan="3">
+									<input name="replacement" value="Y" type="radio" class="ckbox replaceClass" id="gi01"  /><label for="gi01">예</label> 
+									<input name="replacement" value="N" type="radio" class="ckbox replaceClass" id="gi02"  /><label for="gi02">아니오</label>
+								</td>
+							</tr>
+							<tr>
+								<th class="bg_st1">기관유형</th>
+								<td colspan="3" class="bg_inp03">
+									<select title="기관유형 선택" name="org_type" id="org_type" style="width:290px; border:none; border-radius: 15px; padding:4px 16px;">
+										<option selected="selected" value="">전체</option>
+										<option  value="A2001">공기업(시장형)</option>
+										<option  value="A2002">공기업(준시장형)</option>
+										<option  value="A2003">준정부기관(기금관리형)</option>
+										<option  value="A2004">준정부기관(위탁집행형)</option>
+										<option  value="A2005">기타공공기관</option>
+									</select>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="org_name">기관명</label></th>
+								<td class="bg_inp03" style="padding-left: 28px; padding-top: 0px; padding-bottom: 5px; vertical-align: middle;">
+									 
+									<select id="org_name" name="org_name" style="width: 300px; margin: 0 auto;">
+										<option value="">전체</option>
+									</select> 
+									
+								</td>
+								<th scope="row">상태</th>
+								<td style="width:118px;">
+									<input name="ing" type="checkbox" class="ckbox ingClass" value="2" id="ju02"  /><label for="ju02">진행중</label> 
+									<input name="ing" type="checkbox" class="ckbox ingClass" value="3" id="ju03"  /><label for="ju03">마감</label>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row" class="bt round_b"><label for="tit01">키워드</label></th>
+								<td colspan="3" class="bt bg_inp02">
+									<select title="키워드 선택" name="search_type" id="search_type" style="position: absolute; width:175px; border:none; border-radius: 15px; padding:4px 16px;">
+										<option selected="selected" value="">전체</option>
+										<option  value="title">제목</option>
+										<option  value="treat_con">우대조건</option>
+										<option  value="elig">응시자격</option>
+										<option  value="pref_con">우대내용</option>
+									</select>
+									<input type="text" placeholder="키워드를 입력해주세요." id="tit01" name="keyword" class="inps01" style="width:70%; padding:0 0 0 175px !important;" value='' onkeypress="return fnEnterEvent(event,'fn_search()');"/>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				
+				<div class="ser_open" id="detailOpenImg">
+					<a href="javascript:;" onclick="jobDetailOpen()"><img src="/images/content/btn_searchOpen.gif" alt="상세검색 열기" /></a>
+				</div>
+				<!-- 상세검색 열기 전 끝 -->
+
+				<span style="color:#191919; position:relative; top:0px; display:block;height:25px; text-align:center; padding-top:40px; width:80%;margin:0 auto;">*1건의 공고에 여러 직렬 채용을 동시에 공고하는 경우가 있으므로 검색조건을 이용하여 검색한 후 <br> 각 공공기관의 채용공고문 내용을 확인하여 자격조건, 우대조건을 확인하시기 바랍니다</span>
+
+				<div class="center mt_35 mb_30">
+					<a class="btn type_03 icon_01" href="javascript:fn_search();"><span class="icon"></span><span class="text">검색</span></a>&nbsp;&nbsp;<a class="btn type_04 icon_02" href="javascript:fn_reset();"><span class="icon"></span><span class="text">초기화</span></a>
+				</div>
+
+				<div class="bline"></div>
+
+				<div class="b_topArea">
+					<div class="topArea_csv">
+						<span>*제공되는 데이터는 오늘기준 한달치 데이터 입니다. </span> <a onclick="goExcelCsv();" href="javascript:void(0);">CSV 다운로드</a>
+					</div>
+					<h4 style="width: 10%;">채용정보</h4>
+					<div class="r_btnArea" style="width: 80%;">
+						<!-- 로그인 수정 후 주석제거 -->
+						
+						
+						<select name="order" title="정렬순서를 선택하세요" class="select01" onchange="fn_search();">
+							<option value="REG_DATE" >등록일순</option>
+							<option value="TERM_END" >마감일순</option>
+						</select>
+
+						<select name="sort" title="정렬순서를 선택하세요" class="select01" onchange="fn_search();">
+							<option value="DESC" >내림차순</option>
+							<option value="ASC" >오름차순</option>
+						</select>
+						
+						<select name="pageSet" title="게시글 개수를 선택하세요" class="select01" onchange="fn_search();">
+							<option value="10" >10개</option>
+							<option value="20" selected="selected">20개</option>
+							<option value="30" >30개</option>
+							<option value="40" >40개</option>
+							<option value="50" >50개</option>
+						</select>
+					</div>
+				</div>
+				<table class="tbl type_03">
+					<caption>채용정보</caption>
+					<colgroup>
+						<col style="width: 2%" />
+						<col style="width: 5%" />
+						<col />
+						<col style="width: 15%" />
+						<col style="width: 10%" />
+						<col style="width: 8%" />
+						<col style="width: 8%" />
+						<col style="width: 8%" />
+						<col style="width: 8%" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th class="round_f" scope="col" style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox" name="allCheck" id="allCheck" value="Y" onclick="setCheck();" /></label></th>
+							<th scope="col">번호</th>
+							<th scope="col">채용제목</th>
+							<th scope="col">기관명</th>
+							<th scope="col">근무지</th>
+							<th scope="col">고용형태</th>
+							<th scope="col">등록일</th>
+							<th scope="col">마감일</th>
+							<th class="round_e" scope="col">상태</th>
+						</tr>
+					</thead>
+					<tbody>
+
+						
+							
+								
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300948" /></label></td>
+										<td>178</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300948" target="_blank"/>2026년 위촉직(사업수행인력) 근로자 채용 공고</a> 
+										</td>
+										<td>정보통신산업진흥원</td>
+										<td>   
+												
+											  충북 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.26</td>
+										<td>
+											26.06.10</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-14</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300898" /></label></td>
+										<td>177</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300898" target="_blank"/>한전KDN(주) 강원사업처 강릉지사 전력통신 업무보조원 모집공고</a> 
+										</td>
+										<td>한전KDN</td>
+										<td>   
+												
+											  강원 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.26</td>
+										<td>
+											26.06.09</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-13</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300880" /></label></td>
+										<td>176</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300880" target="_blank"/>2026년도 AI·개인정보전문가 및 기간제근로자 채용 공고</a> 
+										</td>
+										<td>한국중부발전(주)</td>
+										<td>   
+												
+											
+												
+											
+												
+											  서울 
+										외 2
+											</td>
+										<td>   
+												
+											
+												
+											  비정규직 
+										외 1
+											</td>
+										<td>2026.05.26</td>
+										<td>
+											26.06.10</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-14</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300864" /></label></td>
+										<td>175</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300864" target="_blank"/>한전KDN(주) 강원사업처 AMI분야 비정규직 모집공고</a> 
+										</td>
+										<td>한전KDN</td>
+										<td>   
+												
+											  강원 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.26</td>
+										<td>
+											26.06.06</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-10</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300803" /></label></td>
+										<td>174</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300803" target="_blank"/>2026년 제2차 한국의료기기안전정보원 직원 채용공고</a> 
+										</td>
+										<td>한국의료기기안전정보원</td>
+										<td>   
+												
+											  서울 </td>
+										<td>   
+												
+											
+												
+											  비정규직 
+										외 1
+											</td>
+										<td>2026.05.26</td>
+										<td>
+											26.06.10</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-14</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300855" /></label></td>
+										<td>173</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300855" target="_blank"/>한전KDN(주) 강원사업처 강릉지사 AMI분야 작업원 모집공고</a> 
+										</td>
+										<td>한전KDN</td>
+										<td>   
+												
+											  강원 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.26</td>
+										<td>
+											26.06.09</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-13</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300933" /></label></td>
+										<td>172</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300933" target="_blank"/>감사실 기간제 계약직(육아휴직 대체인력) 채용 공고</a> 
+										</td>
+										<td>(주)한국가스기술공사</td>
+										<td>   
+												
+											  대전 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.22</td>
+										<td>
+											26.06.05</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-9</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300932" /></label></td>
+										<td>171</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300932" target="_blank"/>2026년 체험형 인턴 모집 공고</a> 
+										</td>
+										<td>한국가스공사</td>
+										<td>   
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											
+												
+											  서울 
+										외 10
+											</td>
+										<td>   
+												
+											  청년인턴(체험형) </td>
+										<td>2026.05.22</td>
+										<td>
+											26.06.05</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-9</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300931" /></label></td>
+										<td>170</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300931" target="_blank"/>[한국수자원공사] 파주수도지사 특수직(수탁운영_지방상수도 시설운영) 채용 공고</a> 
+										</td>
+										<td>한국수자원공사</td>
+										<td>   
+												
+											  경기 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.22</td>
+										<td>
+											26.06.05</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-9</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300901" /></label></td>
+										<td>169</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300901" target="_blank"/>한전KDN(주) 부산본부 전력통신팀 정보통신설비 작업원(현장보조원) 모집공고</a> 
+										</td>
+										<td>한전KDN</td>
+										<td>   
+												
+											  부산 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.22</td>
+										<td>
+											26.06.05</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-9</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300884" /></label></td>
+										<td>168</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300884" target="_blank"/>한전KDN(주) 제주사업처 AMI분야 비정규직 모집공고(긴급)</a> 
+										</td>
+										<td>한전KDN</td>
+										<td>   
+												
+											  제주 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.22</td>
+										<td>
+											26.05.27</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D+0</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300865" /></label></td>
+										<td>167</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300865" target="_blank"/>2026년 한국기술교육대학교 행정직원 공정채용 공고</a> 
+										</td>
+										<td>한국기술교육대학교</td>
+										<td>   
+												
+											
+												
+											  서울 
+										외 1
+											</td>
+										<td>   
+												
+											  정규직 </td>
+										<td>2026.05.22</td>
+										<td>
+											26.06.08</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-12</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300780" /></label></td>
+										<td>166</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300780" target="_blank"/>한전KDN(주) 천안지사 배전분야 작업원 모집공고</a> 
+										</td>
+										<td>한전KDN</td>
+										<td>   
+												
+											  충남 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.22</td>
+										<td>
+											26.06.08</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-12</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300843" /></label></td>
+										<td>165</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300843" target="_blank"/>한국건강가정진흥원 2026년 제2차 직원 채용 공고</a> 
+										</td>
+										<td>한국건강가정진흥원</td>
+										<td>   
+												
+											  서울 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.21</td>
+										<td>
+											26.06.04</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-8</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300846" /></label></td>
+										<td>164</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300846" target="_blank"/>제2026-2회 한국과학기술기획평가원 정규직 공개채용</a> 
+										</td>
+										<td>한국과학기술기획평가원</td>
+										<td>   
+												
+											  충북 </td>
+										<td>   
+												
+											
+												
+											  무기계약직 
+										외 1
+											</td>
+										<td>2026.05.21</td>
+										<td>
+											26.06.05</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-9</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300860" /></label></td>
+										<td>163</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300860" target="_blank"/>[한국수자원공사] 금강유역협력단 홍성현대화사업팀 특수직(기술관리_건설사업) 채용 공고</a> 
+										</td>
+										<td>한국수자원공사</td>
+										<td>   
+												
+											  충남 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.21</td>
+										<td>
+											26.06.04</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-8</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300861" /></label></td>
+										<td>162</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300861" target="_blank"/>[한국수자원공사] 금강유역협력단 계룡현대화사업팀 특수직(기술관리_건설사업) 채용 공고</a> 
+										</td>
+										<td>한국수자원공사</td>
+										<td>   
+												
+											  충남 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.21</td>
+										<td>
+											26.06.04</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-8</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300830" /></label></td>
+										<td>161</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300830" target="_blank"/>[한국직업능력연구원] 2026년도 제2차 직원(전문원) 채용 공고</a> 
+										</td>
+										<td>한국직업능력연구원</td>
+										<td>   
+												
+											  세종 </td>
+										<td>   
+												
+											  무기계약직 </td>
+										<td>2026.05.20</td>
+										<td>
+											26.06.03</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-7</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300775" /></label></td>
+										<td>160</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300775" target="_blank"/>양육비이행관리원 2026년 제3차 직원 채용 공고(제한경쟁, 공개경쟁)</a> 
+										</td>
+										<td>양육비이행관리원</td>
+										<td>   
+												
+											  서울 </td>
+										<td>   
+												
+											
+												
+											
+												
+											  무기계약직 
+										외 2
+											</td>
+										<td>2026.05.20</td>
+										<td>
+											26.06.04</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-8</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+									<tr>
+										<td style="border-left: medium none; background-image: none;"><label><input type="checkbox" class="ckbox idxs" name="idxs" value="300741" /></label></td>
+										<td>159</td>
+										<td class="left">
+											
+											<a href="/recruitview.do?idx=300741" target="_blank"/>한국과학기술기획평가원 제2026-3회  위촉연구직·위촉사무직 공개채용</a> 
+										</td>
+										<td>한국과학기술기획평가원</td>
+										<td>   
+												
+											  충북 </td>
+										<td>   
+												
+											  비정규직 </td>
+										<td>2026.05.20</td>
+										<td>
+											26.06.04</br>
+											
+											
+											
+											
+											
+												
+												
+												
+													<span class="orange" style="font-weight: bold;">D-8</span>
+												
+											
+										</td>
+										
+											
+												
+											
+											
+											
+										
+										<td><span class="orange"> 진행중</span></td>
+										
+									</tr>
+									
+								
+							
+
+							
+						
+					</tbody>
+				</table>
+
+				<div class="page mt_30 center">
+					<a href="#" onclick="return false;" class="start"><img src="/images/common/btn_page_start.gif" alt="처음페이지로 이동" /></a>
+<a href="#" onclick="return false;" class="prev"><img src="/images/common/btn_page_prev.gif" alt="이전페이지로 이동" /></a>
+<a href="#" onclick="return false;" class="current">1</a>
+<a href="#" onclick="goPage(2);return false;" >2</a>
+<a href="#" onclick="goPage(3);return false;" >3</a>
+<a href="#" onclick="goPage(4);return false;" >4</a>
+<a href="#" onclick="goPage(5);return false;" >5</a>
+<a href="#" onclick="goPage(6);return false;" >6</a>
+<a href="#" onclick="goPage(7);return false;" >7</a>
+<a href="#" onclick="goPage(8);return false;" >8</a>
+<a href="#" onclick="goPage(9);return false;" >9</a>
+<a href="#" onclick="return false;" class="next"><img src="/images/common/btn_page_next.gif" alt="다음페이지로 이동" /></a>
+<a href="#" onclick="goPage(9);return false;" class="end"><img src="/images/common/btn_page_end.gif" alt="마지막페이지로 이동" /></a>
+				</div>
+
+			</form>
+
+		</div>
+	</div>
+	<div class="clear"></div>
+</div>
+
+<div class="wrap-loading display-none" style="z-index: 1000000;">
+	<div>
+		<img src="/images/common/ajax_loader.gif" alt="로딩이미지" />
+	</div>
+</div>
+
+<script type="text/javascript">
+		function setCheck(){
+			var obj = document.getElementById("allCheck");
+			if(obj.checked){
+				$(".idxs").each(function(){
+					$(this).prop("checked", true);
+				});
+			} else {
+				$(".idxs").each(function(){
+					$(this).prop("checked", false);	
+				});
+			}
+		}
+	</script>
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script type="text/javascript">
+
+$(document).ready(function () {
+	imgMove();	
+});
+
+	//moveType (0:left / 1:right) 
+	var moveType = 0; 
+	// 이동시간간격 3초 
+	var moveSpeed = 3000; 
+	// 움직이는 작업중 다시 명령 받지 않음 
+	var moveWork = false; 
+	// 일시정지 flag 
+	var movePause = false; 
+	function imgMove(){ 
+		
+	    if(moveWork==false){ 
+	       // 0d\일경우 left방향 
+	      if(moveType==0){ 
+	         // 맨처음 이미지의 폭 
+	         var aWidth = $(".f_banner > div > a:first").width(); 
+	         
+	          
+	         // 맨처음이미지를 왼쪽으로 이동시킨다. 
+	         $(".f_banner > div > a:first").animate({marginLeft:-aWidth},{duration:moveSpeed,step:function(){ 
+	         // 이동중 만약 일시정지 flag가 true라면 
+	         if(movePause==true){ 
+	            // 이동을 멈춘다 
+	            $(this).stop(true, false); 
+	         } 
+	         },complete:function(){ 
+	         // 이동을 마친후 첫번째 a태그를 지워버린다 
+	         $(this).remove(); 
+	     	 // 롤링마지막에 맨처음의 a태그 추가 
+	         $(".f_banner > div").append("<a href=\""+$(".f_banner > div > a:first").attr("href")+ "\" target=\"_blank\">" + $(".f_banner > div > a:first").html()+ "</a>");
+	         // 이미지 움직이는것을 다시 실행 
+	         imgMove(); 
+	      }}); 
+	      }else{ 
+	      // 마지막 a태그의 폭 
+	       var aWidth = $(".f_banner > div > a:last").width(); 
+	       // 맨처음 a태그의 margin-left를 다시 0으로 맞춰준다. 
+	      $(".f_banner > div > a:first").animate({marginLeft:0},{duration:moveSpeed,step:function(){ 
+	       // 이동중 만약 일시정지 flag가 true라면 
+	       if(movePause==true){ 
+	          // 이동을 멈춘다 
+	          $(this).stop(true, false); 
+	       } 
+	       },complete:function(){ 
+	       // 이동을 마친후 마지막 a태그를 지워버린다 
+	       $(".f_banner > div > a:last").remove();
+	    // a태그 앞에 마지막의 a태그를 생성한다 단 스타일은 마지막 a태그의 폭만큼 빼준다 
+	       $("<a href=\"" + $(".f_banner > div > a:last").attr("href")+ "\" style=\"margin-left:-" + aWidth + "px\">" + $(".f_banner > div > a:last").html()+ "</a>").insertBefore(".f_banner > div > a:first")
+	       // 이미지 움직이는것을 다시 실행 
+	       imgMove(); 
+	    }}); 
+	 } 
+	 } 
+	 } 
+	 function goMove(){ 
+	    // 일시정지가 풀려있을 경우를 대비하여 일시정지를 풀러준다 
+	    movePause=false; 
+	    // 0d\일경우 left방향 
+	    if(moveType==0){ 
+	       imgMove(); 
+	       }else{ 
+	       $(".f_banner > div > a:first").animate({marginLeft:0},{duration:moveSpeed,step:function(){ 
+	       // 이동중 만약 일시정지 flag가 true라면 
+	       	if(movePause==true){ 
+	          // 이동을 멈춘다 
+	          $(this).stop(true, false); 
+	      	} 
+	       },complete:function(){ 
+	      // 이동을 마친후 마지막 a태그를 지워버린다 
+	      $(".f_banner > div > a:last").remove(); 
+	      // 이미지 움직이는것을 다시 실행 
+	      imgMove(); 
+	   }});  
+	 } 
+	   
+	}
+	 
+	
+	 
+</script>
+
+	<div id="footer_wrap">
+	
+		<!-- <div class="nav_banner">
+			<button onClick="moveType=0;">왼쪽으로</button>  
+			<button onClick="moveType=1;">오른쪽으로</button>  
+			<button onClick="movePause=true;">일시정지</button>  
+			<button onClick="goMove();">움직이기</button>  
+		</div> -->
+	
+		<div class="f_banner">
+			<!-- <ul>
+				<li><a href="http://www.work.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner01.gif" alt="WORKNET" /></a></li>
+				<li><a href="http://www.gojobs.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner02.gif" alt="나라일터" /></a></li>
+				<li><a href="http://matchingbank.career.co.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner03.gif" alt="대체인력뱅크" /></a></li>
+				<li><a href="http://www.moel.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner04.gif" alt="고용노동부" /></a></li>
+				<li><a href="http://www.worktogether.or.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner05.gif" alt="WORK TOGETHER" /></a></li>
+			</ul> -->
+			<div onmouseover="movePause=true;" onmouseout="goMove();">			
+				<a href="https://www.work24.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner01.gif" alt="WORKNET" /></a>
+				<a href="https://www.hrdb.go.kr/OpenRecommend" target="_blank" title="새창"><img src="/images/common/banner_2018.jpg" alt="국민추천제" /></a>
+				<a href="https://www.gojobs.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner02.gif" alt="나라일터" /></a>
+				<a href="https://matchingbank.career.co.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner03.gif" alt="인재채움뱅크" /></a>
+				<a href="https://www.moel.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner04.gif" alt="고용노동부" /></a>
+				<a href="https://www.youthcenter.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner07.jpg" alt="청년워크넷 온라인청년센터" /></a>
+				<a href="https://www.alioplus.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner08.jpg" alt="알리오플러스" /></a>
+				<a href="https://www.alio.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner09.gif" alt="알리오포털" /></a>
+				<a href="https://opendata.alio.go.kr" target="_blank" title="새창"><img src="/images/common/btn_f_banner12.jpg" alt="청년일자리" /></a>
+				<!-- 접속 불가 사이트 -->
+				
+				
+				
+				
+			</div>
+			
+		</div>
+		<div id="footer">
+			<strong class="dis_hide">하단 이용메뉴</strong>
+			<ul id="bt_menu">
+				
+				<li><a href="/right.do">저작권정책</a></li>
+				<li><a href="/noemail.do">이메일무단수집거부</a></li>
+				<li class="end"><a href="/privacy.do">개인정보처리방침</a></li>
+			</ul>
+			<p class="logo"><img src="/images/common/img_f_logo.gif" alt="재정경제부" /></p>
+			<address>(우)30112 세종특별자치시 도움6로 42 정부세종청사 재정경제부 <br />
+			Copyright © 2011 Ministry of Finance and Economy. Republic of Korea. Some Right Reserved.</address>
+		</div>
+	</div>
+	
+</div>	
+	
+	<form method="post" name="pfileForm" id="pfileForm" target="_blank"> 
+		<input type="hidden" name="spath" id="spath"  value="" />
+		<input type="hidden" name="sfile" id="sfile"  value="" />
+		<input type="hidden" name="dfile" id="dfile"  value="" />
+	</form>	
+	
+	<iframe id="dialogs" name="dialogs" title="데이터제출용" style="display:none;"></iframe>
+	<iframe id="goExcel" name="goExcel" title="데이터제출용" style="display:none;"></iframe>
+	
+<script type="text/javascript">
+	function notice() {
+		alert("기존 회원정보 이관 작업 중 입니다.\n곧 서비스될 예정이오니 양해바랍니다.	");
+	}
+</script>		
+	
+	<div class="wrap-loading display-none" style="z-index: 1000000;">
+	<div>
+		<img src="/images/common/ajax_loader.gif" alt="로딩이미지" />
+	</div>
+</div>
+</body>
+</html>

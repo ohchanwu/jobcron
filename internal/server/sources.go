@@ -12,6 +12,7 @@ var sourceLabels = map[string]string{
 	"worknet": "워크넷",
 	"rallit":  "랠릿",
 	"naver":   "네이버",
+	"alio":    "잡알리오",
 }
 
 // sourceLabel returns the user-facing display name for a source identifier,
