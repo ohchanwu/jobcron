@@ -26,9 +26,9 @@ manual application flow) and similar gated APIs.
 | Portal | Status | Why |
 |---|---|---|
 | **점핏** (jumpit.saramin.co.kr) | ✅ shipped (v1) | Baseline. Clean JSON API, friendly rate. |
-| **랠릿** (rallit.com) | ✅ next target | Dev-focused, lots of 신입, Next.js (likely a usable internal JSON API). robots.txt permits `/positions`. **No credentials required.** |
-| **프로그래머스** (career.programmers.co.kr) | ✅ after rallit | Dev-focused, friendly company posture, JSON API. Lower 신입 volume than rallit per the user's read. No credentials. |
-| **로켓펀치** (rocketpunch.com) | ✅ after programmers | Startup-ecosystem signal; complements 점핏's mid-large bias. No credentials. |
+| **랠릿** (rallit.com) | ✅ shipped | Dev-focused, lots of 신입, JSON API at `/api/v1/position`. No credentials required. |
+| **프로그래머스** (career.programmers.co.kr) | ❌ defunct | **Service shut down 2025-04-28.** `career.programmers.co.kr` no longer resolves. Confirmed via official notice at <https://programmers.co.kr/notices/11584>. Do not revisit. |
+| **로켓펀치** (rocketpunch.com) | ⏸ deferred | CloudFront-fronted (403s to plain curl, needs full browser fingerprint). robots.txt explicitly `Disallow: /*.json$` blocking the Next.js data endpoints, plus a comprehensive scraper-UA blacklist. They've clearly invested in keeping bots out — per the "be respectful to the sites" principle, deferred. |
 | **워크넷** (work.go.kr) | ⏸ deprioritized | Code shipped in v0.2 and works, but requires each user to register at data.go.kr and paste their own OpenAPI key. That setup friction conflicts with the "open the binary, see a briefing" thesis. Left in the repo as dormant scaffolding; not registered by default, not documented in the README, not the path to push on next. |
 | **Direct company pages** (Toss, 당근, 배민, Naver, Kakao, Coupang…) | ✅ later phase | One scraper each, shipped one per release. Companies want their careers page indexed, so posture is friendly. Maintenance burden grows linearly. |
 | **원티드** (wanted.co.kr) | ⏸ deferred | Cloudflare-blocked (returns 403 to robots.txt + bot fingerprint checks). Needs headless browser or paid proxy. |
@@ -48,18 +48,33 @@ manual application flow) and similar gated APIs.
 - Implementation effort: ~1-2 days assuming the JSON endpoint is discoverable.
 - Open question: do they fingerprint/throttle anonymous scrapers? Hit at 1 req/s first and see.
 
-### 프로그래머스 (career.programmers.co.kr) — after rallit
+### 프로그래머스 (career.programmers.co.kr) — defunct
 
-- Dev-only portal, owned by Grepp (the coding-test company). They have a developer-friendly culture.
-- Listing URL: `https://career.programmers.co.kr/job` with filter URL params. Looks like a Next.js / React SPA backed by a JSON API.
-- Lower 신입 volume than rallit per user's general impression — still worth adding for the company-specific listings rallit lacks.
-- robots.txt + ToS need a recon pass before implementation.
+Permanently retired by Grepp on 2025-04-28. The career subdomain no
+longer resolves (NXDOMAIN); the main programmers.co.kr 404s on every
+plausible job path. Official notice: <https://programmers.co.kr/notices/11584>.
+Several alternatives like 커리어리 (careerly.co.kr) have grown in the
+gap — worth a future recon if the user wants more dev-curated signal.
 
-### 로켓펀치 (rocketpunch.com)
+### 로켓펀치 (rocketpunch.com) — deferred
 
-- Startup-community focus, lots of seed-to-Series-B roles 점핏 underweights.
-- Combination job board + LinkedIn-style profiles. Listings live at `/jobs`.
-- Has a long-standing community-permissive posture but ToS should be re-read at implementation time.
+Recon (2026-05-26) revealed a posture much less friendly than the older
+community memory suggested:
+
+- CloudFront-fronted with active bot detection. Plain curl gets 403; only
+  a full Chrome-fidelity header set (User-Agent + Accept-Language +
+  Sec-Fetch-* + Accept-Encoding) gets through.
+- robots.txt explicitly blocks `/*.json$` — which means the Next.js
+  `_next/data/*.json` endpoints, the only clean scrape path, are off-limits.
+- robots.txt also enumerates ~70 scraper user-agents and blanket-disallows
+  them (including `Wget`). They have visibly invested in keeping bots out.
+- The HTML pages technically render server-side with the data inlined, so
+  scraping IS technically possible by parsing HTML — but doing so would
+  violate the spirit of the `/*.json$` rule. The project's "respectful
+  source treatment" ethic argues for deferral, not a workaround.
+
+If the project ever revisits, the legitimate path is contacting rocketpunch
+for a partner-API arrangement, not technical circumvention.
 
 ### Direct company career pages
 
