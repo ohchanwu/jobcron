@@ -20,6 +20,7 @@ import (
 
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 	"github.com/ohchanwu/job-scraper/internal/scraper/jumpit"
+	"github.com/ohchanwu/job-scraper/internal/scraper/naver"
 	"github.com/ohchanwu/job-scraper/internal/scraper/rallit"
 	"github.com/ohchanwu/job-scraper/internal/scraper/worknet"
 	"github.com/ohchanwu/job-scraper/internal/server"
@@ -49,7 +50,7 @@ func main() {
 	}
 	defer store.Close()
 
-	sources := []scraper.Scraper{jumpit.New(), rallit.New()}
+	sources := []scraper.Scraper{jumpit.New(), rallit.New(), naver.New()}
 	if *worknetKey != "" {
 		wn, err := worknet.New(*worknetKey)
 		if err != nil {

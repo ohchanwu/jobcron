@@ -11,6 +11,7 @@ var sourceLabels = map[string]string{
 	"jumpit":  "점핏",
 	"worknet": "워크넷",
 	"rallit":  "랠릿",
+	"naver":   "네이버",
 }
 
 // sourceLabel returns the user-facing display name for a source identifier,
