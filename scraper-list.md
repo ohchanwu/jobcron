@@ -23,34 +23,34 @@ manual application flow) and similar gated APIs.
 
 ## Triage
 
-| Portal | Status | Why |
-|---|---|---|
-| **점핏** (jumpit.saramin.co.kr) | ✅ shipped (v1) | Baseline. Clean JSON API, friendly rate. |
-| **랠릿** (rallit.com) | ✅ shipped | Dev-focused, lots of 신입, JSON API at `/api/v1/position`. No credentials required. |
-| **네이버 careers** (recruit.navercorp.com) | ✅ shipped | Single-phase JSON API at `/rcrt/loadJobList.do`. Covers the whole Naver group (NAVER, NAVER LABS, NAVER WEBTOON, NAVER Cloud, NAVER Financial, NAVER I&S). 신입 volume is small day-to-day because Naver hires 신입 mostly via 공채 cycles; scraper still captures those when they open. |
-| **잡알리오** (job.alio.go.kr) | ✅ next target | Government-run public-sector recruit aggregator. Clean ToS (public-information mandate), no per-user credentials, listings at `/recruit.do` + detail at `/recruitView.do?idx={id}`. Unlocks the 공공기관 신입 IT cohort (전산/정보처리) the existing sources don't reach. Legacy JSP, HTML parsing instead of JSON. |
-| **데모데이** (demoday.co.kr) | ✅ after 잡알리오 | Startup-focused board with active 신입 listings. Next.js App Router (RSC payloads, not `__NEXT_DATA__`). Friendly robots.txt, public sitemap, no known disputes. Cost ~1.5× rallit because RSC payload parsing is heavier than a clean JSON API. |
-| **그룹바이** (groupby.kr) | ✅ after 데모데이 | "국내 1등 스타트업 채용 플랫폼" positioning. Heavy 신입 dev/PM/디자인 mix. Next.js, friendly robots.txt (ChatGPT-User UA explicitly allowed). Listings API is client-side fetch; needs ~1-day devtools recon. |
-| **Direct company pages — others** (Toss, 당근, 배민, etc.) | ✅ later phase | One scraper each, shipped one per release. Companies that want their careers page indexed have friendly postures. |
-| **프로그래머스** (career.programmers.co.kr) | ❌ defunct | **Service shut down 2025-04-28.** `career.programmers.co.kr` no longer resolves. Confirmed via official notice at <https://programmers.co.kr/notices/11584>. Do not revisit. |
-| **워크넷** (work.go.kr) | ⏸ deprioritized | Code shipped in v0.2 and works, but requires each user to register at data.go.kr and paste their own OpenAPI key. That setup friction conflicts with the "open the binary, see a briefing" thesis. Left in the repo as dormant scaffolding. |
-| **로켓펀치** (rocketpunch.com) | ⏸ deferred | CloudFront-fronted (403 to plain curl, needs full browser fingerprint). robots.txt explicitly `Disallow: /*.json$` blocking the Next.js data endpoints, plus a comprehensive scraper-UA blacklist. Visibly invested in keeping bots out. |
-| **카카오 careers** (careers.kakao.com) | ⏸ deferred | Full SPA with all `/api/*` endpoints returning 401 — listing data needs a bootstrap auth token. Plus careers is fragmented across 6+ subsidiary subdomains (KakaoEnterprise, KakaoStyle, KakaoEnt, KakaoPaySec, KakaoBank…), each its own portal. Not worth the reverse-engineering for v1. |
-| **쿠팡 careers** (coupang.jobs) | ⏸ deferred | Cloudflare challenge wall — returns "Attention Required" even with full browser-fidelity headers. Same blocker as 원티드 / 로켓펀치. |
-| **삼성 careers** (sec.wd3.myworkdayjobs.com + samsungcareers.com) | ⏸ deferred | Public Samsung Workday tenant carries 493 jobs across 26 countries but **zero in Korea** (KR jobs live in a separate authenticated portal). samsungcareers.com/jobs returns a 500 wrapped in 200. No accessible signal for Korean 신입 IT roles. |
-| **원티드** (wanted.co.kr) | ⏸ deferred | Cloudflare-blocked (returns 403 to robots.txt + bot fingerprint checks). Needs headless browser or paid proxy. |
-| **자소설닷컴** (jasoseol.com) | ⏸ deferred | Technically clean (Next.js `__NEXT_DATA__` exposes rich data; 11,582+ active recruit URLs; mostly 대졸 신입/인턴). BUT the ToS explicitly prohibits "자동화된 수단(예, 수집로봇, 스파이더, 스크래퍼)" — same posture as 로켓펀치. Excluding for consistency, not technical reasons. |
-| **링커리어** (linkareer.com) | ⏸ defer | 대학생-targeted 공모전/인턴/신입 aggregator with some 공채 signal. CloudFront-fronted but currently passes plain curl. Partial redundancy with 점핏 on 대기업 IT 공채 paths. Re-evaluate when the 공채 calendar feature lands. |
-| **디스콰이엇** (disquiet.io) | ⏸ defer | Small curated maker/PM-leaning board (~50-100 jobs). Friendly robots.txt. Real signal but low absolute volume — better as a "long tail" source in v1.2+. |
-| **캐치** (catch.co.kr) | ⏸ defer | 진학사 operator. Similar 대졸/공채 cohort to 자소설닷컴 but smaller. Needs dedicated ToS pass before any work. |
-| **사람인 main** (saramin.co.kr) | ⏸ skip | Same company as 점핏; mostly duplicate signal; defensive posture on the main site. |
-| **잡코리아** (jobkorea.co.kr) | ❌ skip | Litigious history of pursuing scrapers via legal channels. |
-| **게임잡** (gamejob.co.kr) | ❌ skip | Subsidiary of 잡코리아 — same litigious posture by inheritance. |
-| **잡플래닛 채용** (jobplanet.co.kr/job_postings) | ❌ skip | Cloudflare challenge wall AND operator with separate litigation history around review content. Strictly worse posture than 원티드. |
-| **Indeed Korea** (kr.indeed.com) | ❌ skip | Cloudflare-blocked AND Indeed has a global track record of actively litigating and ToS-banning scrapers. |
-| **커리어리** (careerly.co.kr) | ❌ skip | NOT actually a job board (was floated as a 프로그래머스 replacement). It's a career-content SNS. "Job matching" is account-gated and curated; no public listings index to scrape. |
-| **LinkedIn Korea** | ❌ skip | hiQ v. LinkedIn precedent; aggressive enforcement; CAPTCHA-heavy. |
-| **인크루트** (incruit.com) | ❌ skip | Low signal, defensive posture, dated UX. |
+| Portal                                                            | Status            | Why                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **점핏** (jumpit.saramin.co.kr)                                   | ✅ shipped (v1)   | Baseline. Clean JSON API, friendly rate.                                                                                                                                                                                                                                                                            |
+| **랠릿** (rallit.com)                                             | ✅ shipped        | Dev-focused, lots of 신입, JSON API at `/api/v1/position`. No credentials required.                                                                                                                                                                                                                                 |
+| **네이버 careers** (recruit.navercorp.com)                        | ✅ shipped        | Single-phase JSON API at `/rcrt/loadJobList.do`. Covers the whole Naver group (NAVER, NAVER LABS, NAVER WEBTOON, NAVER Cloud, NAVER Financial, NAVER I&S). 신입 volume is small day-to-day because Naver hires 신입 mostly via 공채 cycles; scraper still captures those when they open.                            |
+| **잡알리오** (job.alio.go.kr)                                     | ✅ next target    | Government-run public-sector recruit aggregator. Clean ToS (public-information mandate), no per-user credentials, listings at `/recruit.do` + detail at `/recruitView.do?idx={id}`. Unlocks the 공공기관 신입 IT cohort (전산/정보처리) the existing sources don't reach. Legacy JSP, HTML parsing instead of JSON. |
+| **데모데이** (demoday.co.kr)                                      | ⏸ deferred        | Recon on 2026-05-27: data is fetched from a public Supabase project (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`), not from demoday.co.kr's own API. Their robots.txt disallows `/api/` AND `/_next/` for `User-Agent: *`, so neither in-app path is polite to crawl. Hitting Supabase directly bypasses the spirit of that disallow; running a headless browser to let the page hydrate is a major architectural shift away from `net/http`-based scrapers. Skipping for now.                                                                                                                                                  |
+| **그룹바이** (groupby.kr)                                         | ✅ after 데모데이 | "국내 1등 스타트업 채용 플랫폼" positioning. Heavy 신입 dev/PM/디자인 mix. Next.js, friendly robots.txt (ChatGPT-User UA explicitly allowed). Listings API is client-side fetch; needs ~1-day devtools recon.                                                                                                       |
+| **Direct company pages — others** (Toss, 당근, 배민, etc.)        | ✅ later phase    | One scraper each, shipped one per release. Companies that want their careers page indexed have friendly postures.                                                                                                                                                                                                   |
+| **프로그래머스** (career.programmers.co.kr)                       | ❌ defunct        | **Service shut down 2025-04-28.** `career.programmers.co.kr` no longer resolves. Confirmed via official notice at <https://programmers.co.kr/notices/11584>. Do not revisit.                                                                                                                                        |
+| **워크넷** (work.go.kr)                                           | ⏸ deprioritized   | Code shipped in v0.2 and works, but requires each user to register at data.go.kr and paste their own OpenAPI key. That setup friction conflicts with the "open the binary, see a briefing" thesis. Left in the repo as dormant scaffolding.                                                                         |
+| **로켓펀치** (rocketpunch.com)                                    | ⏸ deferred        | CloudFront-fronted (403 to plain curl, needs full browser fingerprint). robots.txt explicitly `Disallow: /*.json$` blocking the Next.js data endpoints, plus a comprehensive scraper-UA blacklist. Visibly invested in keeping bots out.                                                                            |
+| **카카오 careers** (careers.kakao.com)                            | ⏸ deferred        | Full SPA with all `/api/*` endpoints returning 401 — listing data needs a bootstrap auth token. Plus careers is fragmented across 6+ subsidiary subdomains (KakaoEnterprise, KakaoStyle, KakaoEnt, KakaoPaySec, KakaoBank…), each its own portal. Not worth the reverse-engineering for v1.                         |
+| **쿠팡 careers** (coupang.jobs)                                   | ⏸ deferred        | Cloudflare challenge wall — returns "Attention Required" even with full browser-fidelity headers. Same blocker as 원티드 / 로켓펀치.                                                                                                                                                                                |
+| **삼성 careers** (sec.wd3.myworkdayjobs.com + samsungcareers.com) | ⏸ deferred        | Public Samsung Workday tenant carries 493 jobs across 26 countries but **zero in Korea** (KR jobs live in a separate authenticated portal). samsungcareers.com/jobs returns a 500 wrapped in 200. No accessible signal for Korean 신입 IT roles.                                                                    |
+| **원티드** (wanted.co.kr)                                         | ⏸ deferred        | Cloudflare-blocked (returns 403 to robots.txt + bot fingerprint checks). Needs headless browser or paid proxy.                                                                                                                                                                                                      |
+| **자소설닷컴** (jasoseol.com)                                     | ⏸ deferred        | Technically clean (Next.js `__NEXT_DATA__` exposes rich data; 11,582+ active recruit URLs; mostly 대졸 신입/인턴). BUT the ToS explicitly prohibits "자동화된 수단(예, 수집로봇, 스파이더, 스크래퍼)" — same posture as 로켓펀치. Excluding for consistency, not technical reasons.                                 |
+| **링커리어** (linkareer.com)                                      | ⏸ defer           | 대학생-targeted 공모전/인턴/신입 aggregator with some 공채 signal. CloudFront-fronted but currently passes plain curl. Partial redundancy with 점핏 on 대기업 IT 공채 paths. Re-evaluate when the 공채 calendar feature lands.                                                                                      |
+| **디스콰이엇** (disquiet.io)                                      | ⏸ defer           | Small curated maker/PM-leaning board (~50-100 jobs). Friendly robots.txt. Real signal but low absolute volume — better as a "long tail" source in v1.2+.                                                                                                                                                            |
+| **캐치** (catch.co.kr)                                            | ⏸ defer           | 진학사 operator. Similar 대졸/공채 cohort to 자소설닷컴 but smaller. Needs dedicated ToS pass before any work.                                                                                                                                                                                                      |
+| **사람인 main** (saramin.co.kr)                                   | ⏸ skip            | Same company as 점핏; mostly duplicate signal; defensive posture on the main site.                                                                                                                                                                                                                                  |
+| **잡코리아** (jobkorea.co.kr)                                     | ❌ skip           | Litigious history of pursuing scrapers via legal channels.                                                                                                                                                                                                                                                          |
+| **게임잡** (gamejob.co.kr)                                        | ❌ skip           | Subsidiary of 잡코리아 — same litigious posture by inheritance.                                                                                                                                                                                                                                                     |
+| **잡플래닛 채용** (jobplanet.co.kr/job_postings)                  | ❌ skip           | Cloudflare challenge wall AND operator with separate litigation history around review content. Strictly worse posture than 원티드.                                                                                                                                                                                  |
+| **Indeed Korea** (kr.indeed.com)                                  | ❌ skip           | Cloudflare-blocked AND Indeed has a global track record of actively litigating and ToS-banning scrapers.                                                                                                                                                                                                            |
+| **커리어리** (careerly.co.kr)                                     | ❌ skip           | NOT actually a job board (was floated as a 프로그래머스 replacement). It's a career-content SNS. "Job matching" is account-gated and curated; no public listings index to scrape.                                                                                                                                   |
+| **LinkedIn Korea**                                                | ❌ skip           | hiQ v. LinkedIn precedent; aggressive enforcement; CAPTCHA-heavy.                                                                                                                                                                                                                                                   |
+| **인크루트** (incruit.com)                                        | ❌ skip           | Low signal, defensive posture, dated UX.                                                                                                                                                                                                                                                                            |
 
 ## Per-portal notes
 
@@ -77,13 +77,51 @@ dev-specific, so the scoring matcher needs to handle "전산" /
 "정보처리" tokens alongside dev stack tags. Worth a Step-0 spike to
 size the work.
 
-### 데모데이 (demoday.co.kr) — after 잡알리오
+### 데모데이 (demoday.co.kr) — deferred (recon 2026-05-27)
 
-Next.js App Router with RSC streaming — data is NOT in `__NEXT_DATA__`.
-Either parse rendered HTML or replay the RSC payload
-(`Accept: text/x-component, RSC: 1`). Sitemap covers `/recruits/{id}` paths.
-Friendly robots.txt with only `/api/`, `/admin/`, `/_next/`, `/recruits/write`
-blocked.
+The earlier read of this site was wrong on two points and the corrected
+picture is what changed the verdict.
+
+What the recon actually found, watching the listings page (`/recruits`)
+load in a real browser:
+
+- The listings HTML is a thin client shell (~30KB, no inline data). Data
+  is fetched after page load from a **Supabase REST endpoint on a
+  different host**:
+  `https://xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits?...`
+  The query returns the list of recruit IDs + lightweight metadata; a
+  follow-up `?id=in.(…)` query fetches full records for the visible page.
+- The same page also fires Next.js RSC requests at `/recruits/{id}?_rsc=…`
+  for prefetch — but those go through `/_next/` semantically and the
+  initial page bootstrap pulls from `/_next/` too.
+
+Their robots.txt is **not** as friendly as previously documented. The
+`User-Agent: *` block explicitly disallows both `/api/` and `/_next/`,
+which is every server-side data path on the demoday.co.kr origin.
+
+That leaves three options, all of which fail the project's polite-and-
+small-binary thesis:
+
+1. **Hit Supabase directly.** Technically out of scope of demoday's
+   robots.txt (different host) and the anon key is embedded in the
+   page, so anyone *could* query it. But the demoday operators clearly
+   chose to disallow `/api/` on their domain — bypassing that intent by
+   going around the front door is the kind of thing this project agreed
+   not to do (see also 자소설닷컴, deferred for the same posture reasons).
+2. **Run a headless browser inside the scraper.** That is the only way
+   to obtain data through an allowed path — wait for the client to fetch
+   Supabase, then read the rendered DOM. Adds a Chromium dependency,
+   breaks the pure-Go + single-binary distribution story, and violates
+   the "no CGO" constraint.
+3. **Parse server-rendered HTML detail pages (`/recruits/{id}`).** Those
+   URLs are allowed by robots, but they're also client shells — the
+   detail data lands via the same Supabase fetch after JS runs. And
+   there is no allowed surface that enumerates the IDs in the first
+   place (the sitemap lists category pages only, not individual recruits).
+
+Revisit if the project later adopts a Playwright-based scraping path
+(would also unlock 카카오, 쿠팡, 원티드), or if 데모데이 publishes an
+RSS / sitemap-of-recruits surface that doesn't depend on Supabase.
 
 ### 그룹바이 (groupby.kr) — after 데모데이
 
@@ -128,7 +166,7 @@ new-grad use case:
   at all.** This tenant carries Samsung's international hiring; KR jobs
   live in a separate authenticated portal.
 - `samsungcareers.com/jobs` — returns `{"code":500,"status":999,"message":"Internal
-  server error"}` wrapped in HTTP 200. Either broken or auth-gated.
+server error"}` wrapped in HTTP 200. Either broken or auth-gated.
 
 The KR-specific marketing page (`samsung.com/sec/about-us/careers/`) is
 HTML only and links into the same auth-gated portal. Samsung's complexity
@@ -212,11 +250,11 @@ source's `API_NOTES.md`.
 
 ### Authentication model
 
-| Portal | Auth |
-|---|---|
-| 점핏 / 랠릿 / 네이버 | None — public endpoints with browser-shaped headers |
-| 워크넷 | Per-user OpenAPI key (data.go.kr). **Disqualifying for v1.x** — see the onboarding-friction principle above. |
-| 카카오 / 쿠팡 / 삼성 KR / 원티드 | Various forms of auth gating or bot defense. **Deferred.** |
+| Portal                           | Auth                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 점핏 / 랠릿 / 네이버             | None — public endpoints with browser-shaped headers                                                          |
+| 워크넷                           | Per-user OpenAPI key (data.go.kr). **Disqualifying for v1.x** — see the onboarding-friction principle above. |
+| 카카오 / 쿠팡 / 삼성 KR / 원티드 | Various forms of auth gating or bot defense. **Deferred.**                                                   |
 
 **Never embed a credential in the binary.** It would be extractable from
 the open-source repo in seconds, and would violate the issuing portal's

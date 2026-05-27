@@ -13,6 +13,7 @@ var sourceLabels = map[string]string{
 	"rallit":  "랠릿",
 	"naver":   "네이버",
 	"alio":    "잡알리오",
+	"demoday": "데모데이",
 }
 
 // sourceLabel returns the user-facing display name for a source identifier,
