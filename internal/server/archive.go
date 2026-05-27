@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/scoring"
@@ -106,6 +107,19 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 		}
 		last := &view.Days[len(view.Days)-1]
 		last.Postings = append(last.Postings, dp)
+	}
+
+	// Within each day group, sort by score descending so the most relevant
+	// postings rise to the top of the day. Matches the dashboard's sort
+	// rule (handlers.go). SliceStable preserves the SQL-layer
+	// `first_seen_at DESC` order as a tie-breaker — for two postings with
+	// the same score, the more recently-found one shows first. Excluded
+	// postings (Total < 0) sink to the bottom of their day naturally.
+	for i := range view.Days {
+		day := &view.Days[i]
+		sort.SliceStable(day.Postings, func(a, b int) bool {
+			return day.Postings[a].Total > day.Postings[b].Total
+		})
 	}
 	return view, nil
 }

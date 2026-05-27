@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ohchanwu/job-scraper/internal/storage"
 )
 
 func TestArchivePageListsEveryPosting(t *testing.T) {
@@ -92,6 +94,56 @@ func TestArchiveEmptyState(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "아직 스크랩한 공고가 없어요") {
 		t.Error("/archive missing the empty-state copy")
+	}
+}
+
+func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+
+	// Three postings on the same KST day, inserted in an order that does
+	// NOT match the score order. Expectation: the day's postings render
+	// score-descending, not insertion-order.
+	day := time.Date(2026, 5, 23, 6, 0, 0, 0, time.UTC) // mid-day KST
+
+	low := listingPosting("low", "낮은 점수")
+	low.FirstSeenAt, low.LastSeenAt = day, day
+	highScore := listingPosting("high", "높은 점수")
+	highScore.FirstSeenAt, highScore.LastSeenAt = day.Add(time.Minute), day.Add(time.Minute)
+	mid := listingPosting("mid", "중간 점수")
+	mid.FirstSeenAt, mid.LastSeenAt = day.Add(2*time.Minute), day.Add(2*time.Minute)
+
+	lowID := mustUpsert(t, st, low)
+	highID := mustUpsert(t, st, highScore)
+	midID := mustUpsert(t, st, mid)
+
+	for id, total := range map[int64]int{lowID: 15, highID: 80, midID: 40} {
+		if err := st.UpsertScore(ctx, storage.Score{
+			PostingID: id, ProfileHash: "test", Total: total,
+			BreakdownJSON: "[]", ComputedAt: time.Now(),
+		}); err != nil {
+			t.Fatalf("UpsertScore id=%d: %v", id, err)
+		}
+	}
+
+	view, err := srv.buildArchive(ctx, day.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("buildArchive: %v", err)
+	}
+	if len(view.Days) != 1 {
+		t.Fatalf("Days = %d, want 1 (all three postings on the same KST day)", len(view.Days))
+	}
+	got := view.Days[0].Postings
+	if len(got) != 3 {
+		t.Fatalf("day has %d postings, want 3", len(got))
+	}
+	wantOrder := []string{"높은 점수", "중간 점수", "낮은 점수"} // 80, 40, 15
+	for i, want := range wantOrder {
+		if got[i].Posting.Title != want {
+			t.Errorf("position %d title = %q, want %q (full order: %v)",
+				i, got[i].Posting.Title, want,
+				[]string{got[0].Posting.Title, got[1].Posting.Title, got[2].Posting.Title})
+		}
 	}
 }
 
