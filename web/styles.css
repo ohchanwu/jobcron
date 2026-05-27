@@ -239,6 +239,30 @@ nav.primary a.active {
 }
 .filter-hidden { display: none !important; }
 
+/* Visual seam between the aggregator pills (left) and the single-
+   company-portal pills (right). 1px solid line, height matches the
+   pill row, with margin so it reads as breathing space rather than
+   a hard divider. Hidden via the inline flex layout when there are
+   no companies to render. */
+.source-pill-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 1.1rem;
+  background: var(--rule);
+  margin: 0 0.45rem;
+  align-self: center;
+}
+
+/* Company-portal pills carry a slightly lighter border-weight to
+   reinforce the group separation visually. Keeps the calm aesthetic
+   — no fill, no badge, just a quieter stroke. */
+.source-pill--company {
+  border-style: dashed;
+}
+.source-pill--company.on {
+  border-style: solid;
+}
+
 /* Quiet message shown when the active filter selection produces zero
    visible postings — distinct from the page's own empty state, which
    fires when there are no postings at all. */

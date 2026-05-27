@@ -41,8 +41,14 @@
     <main>
       <div id="source-filter" class="source-filter" data-empty-template="저장한 {label} 공고가 없어요.">
         <button type="button" class="source-pill on" data-source="_all" aria-pressed="true">전체</button>
-        {{range registeredSources}}
-        <button type="button" class="source-pill" data-source="{{.ID}}" aria-pressed="false">{{.Label}}</button>
+        {{with sourcePillGroups}}
+          {{range .Aggregators}}
+          <button type="button" class="source-pill" data-source="{{.ID}}" aria-pressed="false">{{.Label}}</button>
+          {{end}}
+          {{if and .Aggregators .Companies}}<span class="source-pill-divider" aria-hidden="true"></span>{{end}}
+          {{range .Companies}}
+          <button type="button" class="source-pill source-pill--company" data-source="{{.ID}}" aria-pressed="false">{{.Label}}</button>
+          {{end}}
         {{end}}
       </div>
       <p id="source-filter-empty" class="source-filter-empty" hidden></p>

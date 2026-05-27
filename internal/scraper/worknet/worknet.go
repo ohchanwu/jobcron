@@ -59,6 +59,9 @@ func newScraper(baseURL, authKey string, rateLimit time.Duration) *Scraper {
 // Source returns the stable source identifier.
 func (s *Scraper) Source() string { return Source }
 
+// Kind reports that 워크넷 is a multi-company aggregator (public-sector).
+func (s *Scraper) Kind() scraper.SourceKind { return scraper.SourceKindAggregator }
+
 // CheckAccess verifies that scraping is currently permitted (robots.txt).
 func (s *Scraper) CheckAccess(ctx context.Context) error {
 	return s.client.checkAccess(ctx)

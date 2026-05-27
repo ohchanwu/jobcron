@@ -26,6 +26,7 @@ type fakeScraper struct {
 }
 
 func (f *fakeScraper) Source() string                        { return "jumpit" }
+func (f *fakeScraper) Kind() scraper.SourceKind              { return scraper.SourceKindAggregator }
 func (f *fakeScraper) CheckAccess(ctx context.Context) error { return f.accessErr }
 
 func (f *fakeScraper) FetchListing(ctx context.Context, limit int) ([]scraper.Posting, error) {

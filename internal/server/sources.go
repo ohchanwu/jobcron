@@ -33,11 +33,18 @@ func sourceLabel(source string) string {
 
 // sourceOption is one row of the profile form's source-toggle list — the
 // identifier we round-trip on form submit plus the label shown to the user.
+// Kind distinguishes aggregator sources from single-company sources so
+// the template can group them in the source-pill bar.
 type sourceOption struct {
 	ID      string
 	Label   string
 	Enabled bool
+	Kind    scraper.SourceKind
 }
+
+// IsCompany is a template-side helper for the source-pill template.
+// Returning a bool here keeps the template free of int comparisons.
+func (o sourceOption) IsCompany() bool { return o.Kind == scraper.SourceKindCompany }
 
 // sourceOptions returns one option per registered scraper, with each option
 // flagged enabled when the given profile permits it. Order follows the
@@ -54,6 +61,7 @@ func (s *Server) sourceOptions(disabled []string) []sourceOption {
 			ID:      id,
 			Label:   sourceLabel(id),
 			Enabled: !disabledSet[id],
+			Kind:    src.Kind(),
 		})
 	}
 	return opts
@@ -92,7 +100,35 @@ func (s *Server) allRegisteredSources() []sourceOption {
 			ID:      id,
 			Label:   sourceLabel(id),
 			Enabled: true,
+			Kind:    src.Kind(),
 		})
 	}
 	return opts
+}
+
+// pillGroups returns the sourceOptions partitioned into aggregator
+// and company groups, preserving registration order within each. The
+// template uses this to render the two groups with a divider between
+// them — aggregators on the left, single-company portals on the right.
+type pillGroups struct {
+	Aggregators []sourceOption
+	Companies   []sourceOption
+}
+
+func (s *Server) sourcePillGroups() pillGroups {
+	groups := pillGroups{}
+	for _, src := range s.sources {
+		id := src.Source()
+		opt := sourceOption{
+			ID:    id,
+			Label: sourceLabel(id),
+			Kind:  src.Kind(),
+		}
+		if opt.IsCompany() {
+			groups.Companies = append(groups.Companies, opt)
+		} else {
+			groups.Aggregators = append(groups.Aggregators, opt)
+		}
+	}
+	return groups
 }

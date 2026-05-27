@@ -72,6 +72,9 @@ func newScraper(siteURL, apiBaseURL string, rateLimit time.Duration) *Scraper {
 // Source returns the stable source identifier.
 func (s *Scraper) Source() string { return Source }
 
+// Kind reports that 당근 careers is a single-company source.
+func (s *Scraper) Kind() scraper.SourceKind { return scraper.SourceKindCompany }
+
 // CheckAccess verifies robots.txt on BOTH hosts: team.daangn.com (the
 // public-facing careers page that semantically corresponds to this
 // scraper) and boards-api.greenhouse.io (where the actual requests

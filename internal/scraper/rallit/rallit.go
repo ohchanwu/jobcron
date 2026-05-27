@@ -56,6 +56,9 @@ func newScraper(baseURL string, rateLimit time.Duration) *Scraper {
 // Source returns the stable source identifier.
 func (s *Scraper) Source() string { return Source }
 
+// Kind reports that 랠릿 is a multi-company aggregator.
+func (s *Scraper) Kind() scraper.SourceKind { return scraper.SourceKindAggregator }
+
 // CheckAccess verifies that robots.txt currently permits scraping rallit.
 func (s *Scraper) CheckAccess(ctx context.Context) error {
 	return s.client.checkAccess(ctx)

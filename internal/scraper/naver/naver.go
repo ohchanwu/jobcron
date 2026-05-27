@@ -71,6 +71,9 @@ func newScraper(baseURL string, rateLimit time.Duration) *Scraper {
 // Source returns the stable source identifier.
 func (s *Scraper) Source() string { return Source }
 
+// Kind reports that 네이버 careers is a single-company source.
+func (s *Scraper) Kind() scraper.SourceKind { return scraper.SourceKindCompany }
+
 // CheckAccess verifies robots.txt currently permits scraping. The Naver
 // recruit host's robots.txt 404s historically; per RFC 9309 that is
 // unrestricted (mirrors Jumpit's API-host handling). A 200 with an

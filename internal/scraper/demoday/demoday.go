@@ -156,6 +156,9 @@ func newScraper(siteURL, apiBaseURL string, rateLimit time.Duration) *Scraper {
 // Source returns the stable source identifier.
 func (s *Scraper) Source() string { return Source }
 
+// Kind reports that 데모데이 is a multi-company aggregator (startups).
+func (s *Scraper) Kind() scraper.SourceKind { return scraper.SourceKindAggregator }
+
 // CheckAccess verifies robots.txt on BOTH hosts the scraper touches: the
 // public demoday.co.kr site (whose preferences this scraper effectively
 // represents from the user's mental model) and the Supabase API host

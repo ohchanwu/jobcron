@@ -52,6 +52,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,
 		"registeredSources": srv.allRegisteredSources,
+		"sourcePillGroups":  srv.sourcePillGroups,
 	}
 	srv.tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
 	return srv
