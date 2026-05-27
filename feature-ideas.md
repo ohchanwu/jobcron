@@ -124,22 +124,23 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ---
 
-## Broader experience-level inclusion when one source dominates
+## ~~Broader experience-level inclusion when one source dominates~~ — SHIPPED 2026-05-27
 
-**What.** Per-source policies (or a global mechanism) for safely including "no preference" buckets that would otherwise dominate the daily briefing. Specifically: 데모데이's `experience_level = "any"` carries ~720 of its 1000 rows — many genuinely 신입-friendly, but including them all would let one source flood the dashboard and break the calm-list thesis.
+**Resolution.** Shipped for 데모데이. The `any`-bucket post-filter combines (1) the experience-override parser (drop on 4+ year demand) with (2) an IT/dev keyword gate (drop on no dev signal in title+position). Sampled 200 rows: 3 dropped by (1), 117 dropped by (2), 80 kept (~40% survival), survivors are overwhelmingly dev roles.
 
-**Why we want it.** Excluding `any` outright (which is what the 2026-05-27 scraper does) loses real coverage. There are 신입-friendly postings hiding in that bucket that the user never sees. Same shape may show up on future sources (any aggregator that supports a "no preference" tag).
+Generic mechanism (per-source row cap, AI / embedding filter) deferred — the keyword-gate approach is good enough for v1 and the data didn't justify a heavier knob. Re-open this parking-lot entry if:
 
-**Why not v1.** No good knob exists yet. The right design isn't obvious — candidates include:
+- A second source ships with the same dominant-bucket shape — that's when the generic solution earns its complexity.
+- Users report the keyword gate is too noisy in practice (false positives like "사업개발" → engineer).
+- The keyword set drifts (new dev specializations not in the regex / Korean list).
 
-- **Per-source row cap.** Each source contributes at most N postings to the briefing, weighted by relevance score. Naturally throttles dominant sources but needs scoring tuning to pick the right N postings.
-- **User-configurable toggle.** A profile setting "include broad/no-preference 데모데이 listings" with off-by-default. Honest but adds another decision the user must understand.
-- **Quality filter applied to broad buckets.** Use the experience-override parser already in `internal/scraper/experience.go` to drop `any` postings whose title says "5년 이상" or "시니어"; include the rest. Cheap, leans on existing infrastructure, doesn't add new UI.
-- **Light AI / embedding filter** restricted to "broad buckets" → keep only ones whose title and JD actually read as 신입-friendly. Most expressive option but introduces an ML dependency.
+Original framing kept below for archaeology in case the v1.x decision needs to be revisited.
 
-The override-parser approach (option 3) is probably the right v1.x answer because it reuses what we already have. But the design call needs `/office-hours` before code.
+**Original framing.** Per-source policies (or a global mechanism) for safely including "no preference" buckets that would otherwise dominate the daily briefing. Specifically: 데모데이's `experience_level = "any"` carries ~720 of its 1000 rows — many genuinely 신입-friendly, but including them all would let one source flood the dashboard and break the calm-list thesis.
 
-**Build trigger.** Either the user reports the briefing feels too sparse on 데모데이 day-to-day, OR a second source ships that has the same dominant-bucket shape and the same problem becomes worth a generic solution.
+**Why we wanted it.** Excluding `any` outright (which is what the 2026-05-27 scraper did at first) lost real coverage. There are 신입-friendly postings hiding in that bucket that the user never sees. Same shape may show up on future sources (any aggregator that supports a "no preference" tag).
+
+**The shipped answer** went with a stricter version of option 3: combine the override-parser drop with a small IT-keyword whitelist. Pure option 3 produced 98.5% survival (too lenient — flooded with marketing/design jobs). Keyword gate brought it to 40% (mostly dev roles).
 
 ---
 

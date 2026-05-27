@@ -67,10 +67,54 @@ func resolveAnonKey() string {
 
 // experienceLevels is the set of `experience_level` enum values the
 // scraper accepts as 신입-relevant. `entry` is unambiguously new-grad;
-// `1-3` is the closest "junior" bucket. `any` is deliberately excluded
-// even though many of those rows are new-grad-friendly — it carries ~700
-// records and would dominate the briefing for one source. See API_NOTES.md.
-var experienceLevels = []string{"entry", "1-3"}
+// `1-3` is the closest "junior" bucket. `any` is included but
+// post-filtered by anyBucketKeeps below — the bucket carries ~3000 rows
+// most of which are not IT, so wholesale inclusion would flood the
+// briefing. See API_NOTES.md.
+var experienceLevels = []string{"entry", "1-3", "any"}
+
+// itKeywordEN is a case-insensitive regex of IT/dev signals in English.
+// Bounded by word boundaries so "engineer" matches a 글로벌 SW Engineer
+// but "interior designer" (no engineer/developer/etc. token) does not.
+var itKeywordEN = regexp.MustCompile(
+	`(?i)\b(developer|engineer|programmer|frontend|front-end|backend|back-end|fullstack|full-stack|devops|sre|software|mobile|android|ios|react|vue|angular|svelte|django|spring|flask|fastapi|nodejs|node\.js|typescript|javascript|kotlin|swift|golang|python|machine\s*learning|data\s*(scientist|engineer|analyst))\b`)
+
+// itKeywordKO is the substring-matched Korean token set. Korean words
+// don't have word boundaries, so this is straight strings.Contains.
+var itKeywordKO = []string{
+	"개발자", "개발", "엔지니어",
+	"프론트엔드", "백엔드", "풀스택",
+	"데이터 사이언티스트", "데이터 엔지니어",
+	"머신러닝",
+	"모바일", "안드로이드",
+}
+
+// hasITKeyword reports whether the text contains a clear IT/dev signal.
+// Used only to gate the `any` experience bucket — entry and 1-3 are
+// already 신입-explicit and shouldn't be filtered this way.
+func hasITKeyword(text string) bool {
+	if itKeywordEN.MatchString(text) {
+		return true
+	}
+	for _, k := range itKeywordKO {
+		if strings.Contains(text, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// anyBucketKeeps reports whether an experience_level=any row should
+// survive the post-filter. A row is kept iff (a) it does NOT carry an
+// explicit 4+ year experience demand in title or position, AND (b) the
+// title or position contains an IT/dev signal. Entry and 1-3 rows are
+// always kept (they don't pass through this filter).
+func anyBucketKeeps(title, position string) bool {
+	if minY, _, ok := scraper.ParseExperienceYears(title, position); ok && minY >= 4 {
+		return false
+	}
+	return hasITKeyword(title + " " + position)
+}
 
 // Scraper is the 데모데이 implementation of scraper.Scraper.
 type Scraper struct {
@@ -313,6 +357,14 @@ func parseListing(body []byte, siteURL string) ([]scraper.Posting, error) {
 		if err := json.Unmarshal(raw, &r); err != nil {
 			return nil, fmt.Errorf("parse recruit row: %w", err)
 		}
+		// `any`-bucket rows are post-filtered: they're a huge non-IT
+		// population on demoday (~3000 published rows, ~33% IT-relevant
+		// by sample). We gate on (a) no 4+ year experience demand AND
+		// (b) clear IT/dev keyword. Entry and 1-3 rows pass through.
+		if strings.ToLower(strings.TrimSpace(r.ExperienceLevel)) == "any" &&
+			!anyBucketKeeps(r.Title, r.Position) {
+			continue
+		}
 		p := normalizeRecruit(r, raw, siteURL)
 		out = append(out, p)
 	}
@@ -357,6 +409,8 @@ func normalizeRecruit(r supabaseRecruit, raw json.RawMessage, siteURL string) sc
 //	"entry" → newcomer-true, 0-0
 //	"1-3"   → newcomer-false, 1-3 (a 신입 user near-misses; the scoring
 //	          engine already handles the adjacent bracket)
+//	"any"   → newcomer-true, 0-∞ (no preference; the bucket itself is
+//	          gated to IT/dev rows by anyBucketKeeps before we get here)
 //
 // Other values would have been filtered out at query time; if a new
 // enum value slips through, we conservatively flag it as 1-3.
@@ -364,12 +418,20 @@ func experienceBounds(level string) (min, max int, newcomer bool) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "entry":
 		return 0, 0, true
+	case "any":
+		return 0, anyBucketMaxYears, true
 	case "1-3":
 		return 1, 3, false
 	default:
 		return 1, 3, false
 	}
 }
+
+// anyBucketMaxYears is the synthetic upper bound for `any`-bucket rows.
+// Identical in spirit to the experienceUpperOpen const used in the
+// general parser — chosen to read as "no upper bound" while staying a
+// finite integer the scoring engine handles cleanly.
+const anyBucketMaxYears = 99
 
 // careerLevelLabel renders the source's experience_level as a short
 // Korean label for the CareerLevel field. Kept terse — the UI shows
@@ -380,6 +442,8 @@ func careerLevelLabel(level string) string {
 		return "신입"
 	case "1-3":
 		return "1-3년"
+	case "any":
+		return "경력 무관"
 	default:
 		return level
 	}

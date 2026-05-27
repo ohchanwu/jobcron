@@ -53,7 +53,14 @@ The `recruits` table has an `experience_level` column. Distinct values observed 
 | `1-3`         | 6     |
 | `경력 2~4년` | 1     |
 
-The scraper uses `experience_level=in.(entry,1-3)` to keep the dashboard quiet. `any` is intentionally excluded — it is a real signal in the data (725 of those rows are "no preference" postings, many of which are 신입-friendly), but including it triples the daily-briefing row count for one source, and the experience-override parser introduced in the 2026-05-26 session already catches the inverse case (a posting tagged 신입 / `any` whose title actually demands 5+ years). If the user later wants broader coverage we can flip the constant to `in.(entry,1-3,any)`.
+The scraper uses `experience_level=in.(entry,1-3,any)`. `entry` and `1-3` rows pass through unchanged. `any` rows are post-filtered by `anyBucketKeeps`:
+
+1. Drop if `scraper.ParseExperienceYears(title, position)` returns `ok && minYears >= 4` — explicit 5년 이상 / 시니어 / 경력 5년 / 6년이상 patterns.
+2. Drop if title+position does not match an IT/dev keyword (English regex + Korean substring list — see `itKeywordEN` and `itKeywordKO` in `demoday.go`).
+
+A 200-row sample from `experience_level=any` on 2026-05-27 showed: 3 dropped by (1), 117 dropped by (2), 80 kept (~40% survival). The survivors are overwhelmingly dev/eng roles (Django 백엔드 개발자, Front-end 개발자, Android Developer, AI 데이터 사이언티스트, etc.) with a small false-positive tail from substring matches on "개발" inside compound words like "사업개발" / "고객개발". Acceptable for v1 — the user can disable the source if the briefing feels noisy, and the keyword list is centralized at the top of `demoday.go` for tuning.
+
+The `any`-bucket Posting carries `Newcomer=true`, `MinCareer=0`, `MaxCareer=anyBucketMaxYears` (99 — read as "no upper bound") so scoring treats it as new-grad-friendly.
 
 ## Record shape
 

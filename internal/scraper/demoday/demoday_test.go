@@ -212,8 +212,8 @@ func TestFetchListingAgainstFakeSupabase(t *testing.T) {
 	if gotPath != "/rest/v1/recruits" {
 		t.Errorf("path = %q, want /rest/v1/recruits", gotPath)
 	}
-	if !strings.Contains(gotQuery, "experience_level=in.%28entry%2C1-3%29") {
-		t.Errorf("query missing experience_level filter: %s", gotQuery)
+	if !strings.Contains(gotQuery, "experience_level=in.%28entry%2C1-3%2Cany%29") {
+		t.Errorf("query missing experience_level filter (expected entry,1-3,any): %s", gotQuery)
 	}
 	if !strings.Contains(gotQuery, "status=eq.published") {
 		t.Errorf("query missing status filter: %s", gotQuery)
@@ -353,6 +353,72 @@ func TestResolveAnonKeyOverridesViaEnvVar(t *testing.T) {
 	t.Setenv(anonKeyEnvVar, "  overridden.key  ")
 	if got := resolveAnonKey(); got != "overridden.key" {
 		t.Errorf("with env var set, resolveAnonKey() = %q, want %q (trimmed)", got, "overridden.key")
+	}
+}
+
+func TestAnyBucketKeepsITWithNoExperienceDemand(t *testing.T) {
+	cases := []struct {
+		name     string
+		title    string
+		position string
+		want     bool
+	}{
+		// Clear IT signals — kept.
+		{name: "Korean 개발자 in title", title: "Django 백엔드 개발자 모집", want: true},
+		{name: "English engineer in title", title: "Frontend Engineer (full-time)", want: true},
+		{name: "data scientist", title: "데이터 사이언티스트 채용", want: true},
+		// IT signal but with 5+ year demand — dropped.
+		{name: "engineer + 5년 이상", title: "백엔드 엔지니어 (5년 이상)", want: false},
+		{name: "engineer + 시니어", title: "시니어 백엔드 엔지니어", want: false},
+		{name: "engineer + 경력 5년", title: "프론트엔드 개발자 경력 5년", want: false},
+		// IT signal + 경력 3년 — kept (parsed min=3 < 4).
+		{name: "engineer + 경력 3년", title: "백엔드 개발자 경력 3년", want: true},
+		// No IT signal — dropped, even with no experience demand.
+		{name: "non-IT designer", title: "Office Interior Designer (Lead)", want: false},
+		{name: "marketing role", title: "그로스 마케터 신입 모집", want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := anyBucketKeeps(c.title, c.position); got != c.want {
+				t.Errorf("anyBucketKeeps(%q, %q) = %v, want %v", c.title, c.position, got, c.want)
+			}
+		})
+	}
+}
+
+func TestParseListingDropsAnyBucketWhenFilterFails(t *testing.T) {
+	// Three any-bucket rows; only the one with a clear IT signal AND
+	// no 5+ year demand should survive.
+	body := []byte(`[
+		{"id":1, "title":"Frontend Engineer (intern)", "position":"Frontend",
+		 "experience_level":"any", "company_name":"Acme",
+		 "created_at":"2026-05-26T00:00:00+00:00"},
+		{"id":2, "title":"Office Interior Designer (Lead)", "position":"Design",
+		 "experience_level":"any", "company_name":"BCorp",
+		 "created_at":"2026-05-26T00:00:00+00:00"},
+		{"id":3, "title":"Backend Engineer (5년 이상)", "position":"Backend",
+		 "experience_level":"any", "company_name":"DCorp",
+		 "created_at":"2026-05-26T00:00:00+00:00"}
+	]`)
+	postings, err := parseListing(body, defaultSiteURL)
+	if err != nil {
+		t.Fatalf("parseListing: %v", err)
+	}
+	if len(postings) != 1 {
+		t.Fatalf("got %d postings, want 1 (only the clean IT any-bucket row should survive)", len(postings))
+	}
+	if postings[0].Title != "Frontend Engineer (intern)" {
+		t.Errorf("wrong survivor: %q", postings[0].Title)
+	}
+	// `any` bucket should be tagged with "경력 무관" and newcomer-friendly.
+	if !postings[0].Newcomer {
+		t.Error("any-bucket survivor should be Newcomer=true")
+	}
+	if postings[0].CareerLevel != "경력 무관" {
+		t.Errorf("CareerLevel = %q, want 경력 무관", postings[0].CareerLevel)
+	}
+	if postings[0].MaxCareer != anyBucketMaxYears {
+		t.Errorf("MaxCareer = %d, want anyBucketMaxYears (%d)", postings[0].MaxCareer, anyBucketMaxYears)
 	}
 }
 
