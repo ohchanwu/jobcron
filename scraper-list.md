@@ -28,8 +28,8 @@ manual application flow) and similar gated APIs.
 | **점핏** (jumpit.saramin.co.kr)                                   | ✅ shipped (v1)   | Baseline. Clean JSON API, friendly rate.                                                                                                                                                                                                                                                                            |
 | **랠릿** (rallit.com)                                             | ✅ shipped        | Dev-focused, lots of 신입, JSON API at `/api/v1/position`. No credentials required.                                                                                                                                                                                                                                 |
 | **네이버 careers** (recruit.navercorp.com)                        | ✅ shipped        | Single-phase JSON API at `/rcrt/loadJobList.do`. Covers the whole Naver group (NAVER, NAVER LABS, NAVER WEBTOON, NAVER Cloud, NAVER Financial, NAVER I&S). 신입 volume is small day-to-day because Naver hires 신입 mostly via 공채 cycles; scraper still captures those when they open.                            |
-| **잡알리오** (job.alio.go.kr)                                     | ✅ next target    | Government-run public-sector recruit aggregator. Clean ToS (public-information mandate), no per-user credentials, listings at `/recruit.do` + detail at `/recruitView.do?idx={id}`. Unlocks the 공공기관 신입 IT cohort (전산/정보처리) the existing sources don't reach. Legacy JSP, HTML parsing instead of JSON. |
-| **데모데이** (demoday.co.kr)                                      | ⏸ deferred        | Recon on 2026-05-27: data is fetched from a public Supabase project (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`), not from demoday.co.kr's own API. Their robots.txt disallows `/api/` AND `/_next/` for `User-Agent: *`, so neither in-app path is polite to crawl. Hitting Supabase directly bypasses the spirit of that disallow; running a headless browser to let the page hydrate is a major architectural shift away from `net/http`-based scrapers. Skipping for now.                                                                                                                                                  |
+| **잡알리오** (job.alio.go.kr)                                     | ❌ removed        | Shipped 2026-05-26 then removed 2026-05-27. NCS R600020 (정보통신) filter does not actually deliver IT/dev roles in public-sector data — a 30-row audit found ~7% IT-adjacent (한전KDN AMI 작업원, 수도시설 운영, 마사회 인턴, etc.). Also surfaced an off-by-one parser bug: the live listing dropped the row-index TD that the unit test still includes, so `company` was getting written with the title. Fixing the parser wouldn't change the relevance verdict, so the source was unregistered. See `.claude/sessions/2026-05-27.md` for context.                                       |
+| **데모데이** (demoday.co.kr)                                      | ✅ shipped        | Shipped 2026-05-27 via the embedded Supabase anon key (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`). The robots.txt disallow at `/api/` is scoped to demoday.co.kr; Supabase is a different host whose robots.txt is unrestricted. ~50 신입-friendly postings after excluding the `experience_level=any` bucket (~720 rows hidden — re-evaluation parked in `feature-ideas.md`).                                                                                                                                                                                                       |
 | **그룹바이** (groupby.kr)                                         | ⏸ deferred        | Recon on 2026-05-27: the listings API (`api.groupby.kr/startup-positions`) returns clean JSON in Chromium but **404s every non-browser HTTP client** (curl, Go's `net/http`, even with the full set of browser headers including Origin/Referer/sec-ch-ua). nginx returns an empty 404 body — clear TLS-fingerprint / JA3-style bot detection. Same posture as 원티드 / 쿠팡 — out of reach without a headless browser, which this project explicitly avoids (pure-Go + single-binary distribution).                                                                                                                                                                                                                |
 | **당근** (team.daangn.com)                                        | ✅ shipped        | Greenhouse public board API at `boards-api.greenhouse.io/v1/boards/daangn/jobs?content=true`. No auth. Single request returns ~42 jobs with full HTML body and rich metadata — `Engineer: yes/no` + `Prior Experience: 신입/경력/신입+경력` make filtering trivial. Recon + scraper landed 2026-05-27.                                                                                                                                                                                                                                                                |
 | **Direct company pages — others** (Toss, 배민, 네이버페이)        | ✅ later phase    | One scraper each, shipped one per release. Toss: Greenhouse via api-public.toss.im, 236 jobs but ~0 신입 in titles (Toss hires for experienced engineers). 배민: thin 22KB HTML shell, recon needed. 네이버페이: separate from existing 네이버 scraper, recon needed.                                                                                                                                                                                                                                                                              |
@@ -69,14 +69,32 @@ primarily via 공채 cycles, which is parked separately in
 `feature-ideas.md`. Until that integration lands, this scraper is most
 useful as a "did 공채 just open?" early-warning signal.
 
-### 잡알리오 (job.alio.go.kr) — next target
+### 잡알리오 (job.alio.go.kr) — removed 2026-05-27
 
-Government-run, public-information mandate (공공기관의 운영에 관한 법률).
-Legacy JSP. Listings at `/recruit.do` (HTML), detail at
-`/recruitView.do?idx={id}`. Many postings are "IT 일반" rather than
-dev-specific, so the scoring matcher needs to handle "전산" /
-"정보처리" tokens alongside dev stack tags. Worth a Step-0 spike to
-size the work.
+Shipped 2026-05-26 (commit ca7649e) and removed the next day. Two
+reasons, both surfaced by a 30-row audit:
+
+1. **The NCS R600020 (정보통신) filter does not actually deliver
+   dev/SWE roles in public-sector data.** What it surfaces instead is
+   field workers at 한전KDN AMI sites (metering), 수도시설 운영 (water
+   utility operations), 한국마사회 인턴, 한국식품산업클러스터
+   직원채용, 의료기기안전정보원 직원 — public-sector orgs that touch
+   "telecom" or "IT" peripherally. The 30-row sample landed at ~7%
+   even tangentially IT (주택도시보증공사 AX 전문가 + 한시적계약직
+   전산직). Well past the 90%-not-IT threshold the audit task used.
+2. **The parser had a silent off-by-one.** The live listing HTML
+   dropped the row-index `<td>` cell that the unit test still
+   included, shifting every field by one. As a result every row was
+   stored with `company == title` and `location == actual company`.
+   The big-fixture test only checked field non-emptiness, so it kept
+   passing. Fixing the parser would not change the relevance verdict
+   (the jobs still aren't IT), so the source was unregistered rather
+   than repaired.
+
+Do not revisit unless either (a) 잡알리오 publishes a finer-grained
+NCS sub-code dedicated to dev/SWE roles, or (b) the project picks up
+a 공공기관 cohort focus on its own merits and is willing to take the
+noise.
 
 ### 데모데이 (demoday.co.kr) — deferred (recon 2026-05-27)
 

@@ -12,9 +12,14 @@ var sourceLabels = map[string]string{
 	"worknet": "워크넷",
 	"rallit":  "랠릿",
 	"naver":   "네이버",
-	"alio":    "잡알리오",
 	"demoday": "데모데이",
 	"daangn":  "당근",
+	// 잡알리오 was removed as a registered scraper on 2026-05-27 (NCS R600020
+	// didn't deliver dev/SWE roles in practice). The label is kept so any
+	// existing alio rows in a user's DB render with their proper name until
+	// the sweep clears them. Safe to delete once you're sure no user still
+	// has 잡알리오 rows older than `sweepStaleWindow` (3 days).
+	"alio": "잡알리오",
 }
 
 // sourceLabel returns the user-facing display name for a source identifier,
