@@ -32,7 +32,8 @@ manual application flow) and similar gated APIs.
 | **데모데이** (demoday.co.kr)                                      | ✅ shipped        | Shipped 2026-05-27 via the embedded Supabase anon key (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`). The robots.txt disallow at `/api/` is scoped to demoday.co.kr; Supabase is a different host whose robots.txt is unrestricted. ~50 신입-friendly postings after excluding the `experience_level=any` bucket (~720 rows hidden — re-evaluation parked in `feature-ideas.md`).                                                                                                                                                                                                       |
 | **그룹바이** (groupby.kr)                                         | ⏸ deferred        | Recon on 2026-05-27: the listings API (`api.groupby.kr/startup-positions`) returns clean JSON in Chromium but **404s every non-browser HTTP client** (curl, Go's `net/http`, even with the full set of browser headers including Origin/Referer/sec-ch-ua). nginx returns an empty 404 body — clear TLS-fingerprint / JA3-style bot detection. Same posture as 원티드 / 쿠팡 — out of reach without a headless browser, which this project explicitly avoids (pure-Go + single-binary distribution).                                                                                                                                                                                                                |
 | **당근** (team.daangn.com)                                        | ✅ shipped        | Greenhouse public board API at `boards-api.greenhouse.io/v1/boards/daangn/jobs?content=true`. No auth. Single request returns ~42 jobs with full HTML body and rich metadata — `Engineer: yes/no` + `Prior Experience: 신입/경력/신입+경력` make filtering trivial. Recon + scraper landed 2026-05-27.                                                                                                                                                                                                                                                                |
-| **Direct company pages — others** (Toss, 배민, 네이버페이)        | ✅ later phase    | One scraper each, shipped one per release. Toss: Greenhouse via api-public.toss.im, 236 jobs but ~0 신입 in titles (Toss hires for experienced engineers). 배민: thin 22KB HTML shell, recon needed. 네이버페이: separate from existing 네이버 scraper, recon needed.                                                                                                                                                                                                                                                                              |
+| **Direct company pages — others** (Toss, 네이버페이)              | ✅ later phase    | One scraper each, shipped one per release. Toss: Greenhouse via api-public.toss.im, 236 jobs but ~0 신입 in titles (Toss hires for experienced engineers). 네이버페이: separate from existing 네이버 scraper, recon needed.                                                                                                                                                                                                                                                                                                                                |
+| **배민** (career.woowahan.com)                                    | ⏸ deferred        | Recon 2026-05-27: heavy Vue SPA shell on career.woowahan.com (no SSR). The internal SPA fetches listings from `/w1/recruits` on the same host — BUT the host's `robots.txt` explicitly `Disallow: /w1/**` for `User-Agent: *`. Same posture as the original 데모데이 deferral. No alternate host or sitemap exposes the listings, so without going around the front door this scraper cannot be implemented. Defer until either (a) the project adopts a Playwright-based scraping path (which would also unlock 카카오 / 쿠팡 / 원티드 / 그룹바이), or (b) 배민 publishes a robots-permitted listings surface (sitemap-of-recruits, RSS, etc.). |
 | **프로그래머스** (career.programmers.co.kr)                       | ❌ defunct        | **Service shut down 2025-04-28.** `career.programmers.co.kr` no longer resolves. Confirmed via official notice at <https://programmers.co.kr/notices/11584>. Do not revisit.                                                                                                                                        |
 | **워크넷** (work.go.kr)                                           | ⏸ deprioritized   | Code shipped in v0.2 and works, but requires each user to register at data.go.kr and paste their own OpenAPI key. That setup friction conflicts with the "open the binary, see a briefing" thesis. Left in the repo as dormant scaffolding.                                                                         |
 | **로켓펀치** (rocketpunch.com)                                    | ⏸ deferred        | CloudFront-fronted (403 to plain curl, needs full browser fingerprint). robots.txt explicitly `Disallow: /*.json$` blocking the Next.js data endpoints, plus a comprehensive scraper-UA blacklist. Visibly invested in keeping bots out.                                                                            |
@@ -167,6 +168,51 @@ viable path without rethinking the scraping architecture.
 Revisit if the project later adopts a Playwright-based scraping path
 (would also unlock 데모데이, 카카오, 쿠팡, 원티드), or if 그룹바이 ever
 relaxes the API-layer bot check.
+
+### 배민 (career.woowahan.com) — deferred (recon 2026-05-27)
+
+career.woowahan.com is a Vue SPA — the landing returns a 22KB HTML
+shell with ~200 prefetched chunk scripts and no inline data. The
+single `<div id="app">` is hydrated client-side. Every path returns
+the same shell (the SPA owns routing), so there is no HTML surface
+to parse.
+
+Inside the JS bundles (`chunk-common.3b770d52.js`) the recruitment
+data fetcher is wired to:
+
+```js
+i = { recruit: "/w1/recruits", ... }
+```
+
+That endpoint lives on the same `career.woowahan.com` host. But the
+host's `robots.txt`:
+
+```
+User-agent: *
+Allow: /
+Disallow: sign-in/**
+Disallow: mypage/**
+Disallow: /w1/**
+```
+
+explicitly disallows `/w1/**` for the wildcard user-agent. The only
+known data endpoint is the only disallowed one. There is no second
+host (Supabase-style) hosting the same data, and no sitemap, RSS,
+or static enumeration of postings on the allowed surface.
+
+Defer cleanly. Options the project might adopt later:
+
+1. **Playwright path.** Run a headless browser, let the SPA hydrate,
+   read the rendered DOM. Same trigger as 데모데이 / 그룹바이 / 카카오 /
+   쿠팡 / 원티드 — adopting this unlocks several sources at once.
+2. **Wait for 배민 to publish a robots-allowed listings surface.**
+   Sitemap-of-recruits, RSS feed, or moving listings out of `/w1/`
+   would all qualify.
+
+Do not write a scraper that hits `/w1/recruits` directly without
+either of those conditions being met — that would be the kind of
+"impolite scraping for one bullet point of coverage" this project
+agreed not to do (see also 자소설닷컴, 로켓펀치).
 
 ### 프로그래머스 (career.programmers.co.kr) — defunct
 
