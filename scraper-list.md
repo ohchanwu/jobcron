@@ -27,7 +27,7 @@ manual application flow) and similar gated APIs.
 | ----------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **점핏** (jumpit.saramin.co.kr)                                   | ✅ shipped (v1)   | Baseline. Clean JSON API, friendly rate.                                                                                                                                                                                                                                                                            |
 | **랠릿** (rallit.com)                                             | ✅ shipped        | Dev-focused, lots of 신입, JSON API at `/api/v1/position`. No credentials required.                                                                                                                                                                                                                                 |
-| **네이버 careers** (recruit.navercorp.com)                        | ✅ shipped        | Single-phase JSON API at `/rcrt/loadJobList.do`. Covers the whole Naver group (NAVER, NAVER LABS, NAVER WEBTOON, NAVER Cloud, NAVER Financial, NAVER I&S). 신입 volume is small day-to-day because Naver hires 신입 mostly via 공채 cycles; scraper still captures those when they open.                            |
+| **네이버 careers** (recruit.navercorp.com)                        | ❌ removed        | Shipped 2026-05-25, removed 2026-05-27 after a click-through audit. The JSON listing API is fine, but the detail-page URLs the scraper stores **categorically don't deep-link for 신입 postings** — `recruit.navercorp.com` runs JavaScript on `view.do` that detects direct navigations and redirects to `/rcrt/list.do` (the generic listings page). Verified via playwright: a fresh 경력 annoId deep-links fine; every 신입 annoId (the only entType this scraper collects) redirects. Without a workable click destination there is no point shipping the source. See `.claude/sessions/2026-05-27-link-audit.md` for the recon trail.                                                                                              |
 | **잡알리오** (job.alio.go.kr)                                     | ❌ removed        | Shipped 2026-05-26 then removed 2026-05-27. NCS R600020 (정보통신) filter does not actually deliver IT/dev roles in public-sector data — a 30-row audit found ~7% IT-adjacent (한전KDN AMI 작업원, 수도시설 운영, 마사회 인턴, etc.). Also surfaced an off-by-one parser bug: the live listing dropped the row-index TD that the unit test still includes, so `company` was getting written with the title. Fixing the parser wouldn't change the relevance verdict, so the source was unregistered. See `.claude/sessions/2026-05-27.md` for context.                                       |
 | **데모데이** (demoday.co.kr)                                      | ✅ shipped        | Shipped 2026-05-27 via the embedded Supabase anon key (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`). The robots.txt disallow at `/api/` is scoped to demoday.co.kr; Supabase is a different host whose robots.txt is unrestricted. ~50 신입-friendly postings after excluding the `experience_level=any` bucket (~720 rows hidden — re-evaluation parked in `feature-ideas.md`).                                                                                                                                                                                                       |
 | **그룹바이** (groupby.kr)                                         | ⏸ deferred        | Recon on 2026-05-27: the listings API (`api.groupby.kr/startup-positions`) returns clean JSON in Chromium but **404s every non-browser HTTP client** (curl, Go's `net/http`, even with the full set of browser headers including Origin/Referer/sec-ch-ua). nginx returns an empty 404 body — clear TLS-fingerprint / JA3-style bot detection. Same posture as 원티드 / 쿠팡 — out of reach without a headless browser, which this project explicitly avoids (pure-Go + single-binary distribution).                                                                                                                                                                                                                |
@@ -56,19 +56,39 @@ manual application flow) and similar gated APIs.
 
 ## Per-portal notes
 
-### 네이버 careers — shipped
+### 네이버 careers — removed 2026-05-27
 
-Endpoint: `GET https://recruit.navercorp.com/rcrt/loadJobList.do`. JSON, no
-auth, robots-permitted (the host's robots.txt 404s, RFC 9309 = unrestricted).
-Single-phase: the listing carries every field we use, so `FetchDetail` is a
-no-op. See `internal/scraper/naver/API_NOTES.md` for the field semantics and
-the `entTypeCd` filter quirk (multi-value array filtering is silently
-ignored; we filter `0010` 신입 + `0030` 무관 client-side).
+Shipped 2026-05-25 (commit 19c0dfa) and removed 2026-05-27 after a
+deeper click-through audit caught a fatal data-quality issue.
 
-Reality check: most days the 신입 universe is 0-3 postings. Naver hires 신입
-primarily via 공채 cycles, which is parked separately in
-`feature-ideas.md`. Until that integration lands, this scraper is most
-useful as a "did 공채 just open?" early-warning signal.
+What the audit found (recon via playwright + curl):
+
+- The listing JSON API at `/rcrt/loadJobList.do` returns clean rows
+  with `jobDetailLink: "https://recruit.navercorp.com/rcrt/view.do?annoId=N"`.
+  The scraper stored that link verbatim.
+- Directly navigating to that link in a fresh browser tab serves a
+  page that runs JS and **redirects to `/rcrt/list.do`** (the generic
+  listings page) instead of rendering the posting. A `curl -L` follows
+  the redirect, lands on `list.do` whose HTML contains the posting
+  title from the listings array — which is exactly why the earlier
+  curl-based audit gave false positives.
+- Testing a fresh **경력** annoId pulled from today's listing: deep-link
+  works, no redirect. Testing the live **신입** annoIds (the only kind
+  this scraper collects): they redirect even when still in the live
+  listing. The redirect is specifically gated on 신입 entType.
+- Removing the redirect is impossible without controlling 네이버's
+  JS — every URL the scraper stores will be effectively broken from
+  the user's perspective.
+
+So every 네이버 posting our app would have surfaced ends on the wrong
+page when clicked. The scraper code is correct; the upstream careers
+site is hostile to direct 신입 deep-links by design. Same posture as
+잡알리오 — remove rather than ship a broken click destination.
+
+Do not revisit unless either (a) 네이버 stops gating 신입 deep-links
+on referer/cookie state, or (b) the project adopts a Playwright
+scraping path that can also drive clicks (which is the same trigger
+that would unlock 카카오 / 쿠팡 / 원티드 / 그룹바이 / 배민 / 데모데이-original).
 
 ### 잡알리오 (job.alio.go.kr) — removed 2026-05-27
 
