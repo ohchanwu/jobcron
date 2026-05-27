@@ -341,3 +341,37 @@ func TestApplicationDeadlineNullMeansAlwaysOpen(t *testing.T) {
 
 // fmt import used only when debugging during test development.
 var _ = fmt.Sprintf
+
+func TestResolveAnonKeyFallsBackToBakedIn(t *testing.T) {
+	t.Setenv(anonKeyEnvVar, "")
+	if got := resolveAnonKey(); got != bakedInSupabaseAnonKey {
+		t.Errorf("with empty env var, resolveAnonKey() = %q, want bakedInSupabaseAnonKey", got)
+	}
+}
+
+func TestResolveAnonKeyOverridesViaEnvVar(t *testing.T) {
+	t.Setenv(anonKeyEnvVar, "  overridden.key  ")
+	if got := resolveAnonKey(); got != "overridden.key" {
+		t.Errorf("with env var set, resolveAnonKey() = %q, want %q (trimmed)", got, "overridden.key")
+	}
+}
+
+func TestFetchListing401ReportsRotatedKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"invalid api key"}`))
+	}))
+	defer srv.Close()
+
+	s := newScraper(defaultSiteURL, srv.URL, 0)
+	_, err := s.FetchListing(context.Background(), 0)
+	if err == nil {
+		t.Fatal("FetchListing did not error on 401")
+	}
+	msg := err.Error()
+	for _, want := range []string{"401", "rotated", anonKeyEnvVar, "bakedInSupabaseAnonKey"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("401 error message missing %q\nfull message: %s", want, msg)
+		}
+	}
+}

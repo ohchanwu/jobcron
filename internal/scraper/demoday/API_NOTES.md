@@ -24,7 +24,14 @@ The 데모데이 site is a Next.js front end, but the job-posting data does NOT 
    ```
    Returns the full record for each visible posting.
 
-Both calls require two Supabase auth headers — `apikey` and `Authorization: Bearer <key>` — both set to the project's anonymous key. That key is publicly visible in the page bundle (`x-application-name: demoday-app`); it is not a secret. The scraper embeds it as a constant.
+Both calls require two Supabase auth headers — `apikey` and `Authorization: Bearer <key>` — both set to the project's anonymous key. That key is publicly visible in the page bundle (`x-application-name: demoday-app`); it is not a secret.
+
+The scraper picks the key in this order:
+
+1. Env var `JOBSCRAPER_DEMODAY_ANON_KEY` if set (use this when 데모데이 rotates the key — paste the new value from a current page bundle).
+2. `bakedInSupabaseAnonKey` constant in `demoday.go` otherwise.
+
+If both end up stale, the next scrape returns HTTP 401 with a message that points at both rotation paths. That's the rotation contract for this scraper; there's no recovery beyond replacing the key.
 
 ## Robots.txt picture
 

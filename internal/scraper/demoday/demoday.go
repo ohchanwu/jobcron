@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,14 +34,36 @@ const (
 	requestTimeout    = 30 * time.Second
 )
 
-// supabaseAnonKey is the Supabase project's anonymous API key. Embedded in
-// the 데모데이 page bundle and required on every REST call (both as the
-// `apikey` header and as a Bearer token). It is publicly visible and rotates
-// only when 데모데이 reissues their anon key — at which point the scraper
-// would 401 and need a refresh here.
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+// bakedInSupabaseAnonKey is the Supabase project's anonymous API key as
+// it was when shipped. Embedded in the 데모데이 page bundle and required
+// on every REST call (both as the `apikey` header and as a Bearer
+// token). It's publicly visible — it's not a credential leak, it's a
+// maintainability target: when 데모데이 rotates the key, every user's
+// scrape will 401 until the binary is updated.
+//
+// The scraper picks the key in this order:
+//  1. JOBSCRAPER_DEMODAY_ANON_KEY env var, if set and non-empty.
+//  2. This baked-in constant otherwise.
+//
+// The env-var path lets the user paste a fresh key from a current
+// demoday.co.kr page bundle and keep the scraper working without
+// waiting for a project release. The 401 handler in `get` surfaces
+// both paths in the error message.
+const bakedInSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
 	"eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5cHNyeWlqZGxscmhmY3RuZWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MDc4MzcsImV4cCI6MjA2NTI4MzgzN30." +
 	"cYTA9nOmjVbwVF784xr8BjGK1pkyFAA4_aQzfV73LhU"
+
+// anonKeyEnvVar is the env var that overrides the baked-in key.
+const anonKeyEnvVar = "JOBSCRAPER_DEMODAY_ANON_KEY"
+
+// resolveAnonKey returns the env-var key when set, falling back to the
+// baked-in default. Pulled into a function so tests can swap it.
+func resolveAnonKey() string {
+	if v := strings.TrimSpace(os.Getenv(anonKeyEnvVar)); v != "" {
+		return v
+	}
+	return bakedInSupabaseAnonKey
+}
 
 // experienceLevels is the set of `experience_level` enum values the
 // scraper accepts as 신입-relevant. `entry` is unambiguously new-grad;
@@ -81,7 +104,7 @@ func newScraper(siteURL, apiBaseURL string, rateLimit time.Duration) *Scraper {
 		client:     &http.Client{Timeout: requestTimeout},
 		siteURL:    siteURL,
 		apiBaseURL: apiBaseURL,
-		anonKey:    supabaseAnonKey,
+		anonKey:    resolveAnonKey(),
 		rateLimit:  rateLimit,
 	}
 }
@@ -220,6 +243,13 @@ func (s *Scraper) get(ctx context.Context, path string) ([]byte, error) {
 	// success cases for us — we only requested a small set and use the
 	// first 1000 rows in either case.
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		if resp.StatusCode == http.StatusUnauthorized {
+			return nil, fmt.Errorf(
+				"demoday: GET %s: status 401 — 데모데이's Supabase anon key likely rotated. "+
+					"Refresh it by either (a) setting %s to the new key (visible in demoday.co.kr's page bundle), "+
+					"or (b) updating bakedInSupabaseAnonKey in internal/scraper/demoday/demoday.go and rebuilding.",
+				path, anonKeyEnvVar)
+		}
 		return nil, fmt.Errorf("demoday: GET %s: status %d", path, resp.StatusCode)
 	}
 	return body, nil
