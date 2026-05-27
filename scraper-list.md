@@ -30,7 +30,7 @@ manual application flow) and similar gated APIs.
 | **네이버 careers** (recruit.navercorp.com)                        | ✅ shipped        | Single-phase JSON API at `/rcrt/loadJobList.do`. Covers the whole Naver group (NAVER, NAVER LABS, NAVER WEBTOON, NAVER Cloud, NAVER Financial, NAVER I&S). 신입 volume is small day-to-day because Naver hires 신입 mostly via 공채 cycles; scraper still captures those when they open.                            |
 | **잡알리오** (job.alio.go.kr)                                     | ✅ next target    | Government-run public-sector recruit aggregator. Clean ToS (public-information mandate), no per-user credentials, listings at `/recruit.do` + detail at `/recruitView.do?idx={id}`. Unlocks the 공공기관 신입 IT cohort (전산/정보처리) the existing sources don't reach. Legacy JSP, HTML parsing instead of JSON. |
 | **데모데이** (demoday.co.kr)                                      | ⏸ deferred        | Recon on 2026-05-27: data is fetched from a public Supabase project (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`), not from demoday.co.kr's own API. Their robots.txt disallows `/api/` AND `/_next/` for `User-Agent: *`, so neither in-app path is polite to crawl. Hitting Supabase directly bypasses the spirit of that disallow; running a headless browser to let the page hydrate is a major architectural shift away from `net/http`-based scrapers. Skipping for now.                                                                                                                                                  |
-| **그룹바이** (groupby.kr)                                         | ✅ after 데모데이 | "국내 1등 스타트업 채용 플랫폼" positioning. Heavy 신입 dev/PM/디자인 mix. Next.js, friendly robots.txt (ChatGPT-User UA explicitly allowed). Listings API is client-side fetch; needs ~1-day devtools recon.                                                                                                       |
+| **그룹바이** (groupby.kr)                                         | ⏸ deferred        | Recon on 2026-05-27: the listings API (`api.groupby.kr/startup-positions`) returns clean JSON in Chromium but **404s every non-browser HTTP client** (curl, Go's `net/http`, even with the full set of browser headers including Origin/Referer/sec-ch-ua). nginx returns an empty 404 body — clear TLS-fingerprint / JA3-style bot detection. Same posture as 원티드 / 쿠팡 — out of reach without a headless browser, which this project explicitly avoids (pure-Go + single-binary distribution).                                                                                                                                                                                                                |
 | **Direct company pages — others** (Toss, 당근, 배민, etc.)        | ✅ later phase    | One scraper each, shipped one per release. Companies that want their careers page indexed have friendly postures.                                                                                                                                                                                                   |
 | **프로그래머스** (career.programmers.co.kr)                       | ❌ defunct        | **Service shut down 2025-04-28.** `career.programmers.co.kr` no longer resolves. Confirmed via official notice at <https://programmers.co.kr/notices/11584>. Do not revisit.                                                                                                                                        |
 | **워크넷** (work.go.kr)                                           | ⏸ deprioritized   | Code shipped in v0.2 and works, but requires each user to register at data.go.kr and paste their own OpenAPI key. That setup friction conflicts with the "open the binary, see a briefing" thesis. Left in the repo as dormant scaffolding.                                                                         |
@@ -123,13 +123,31 @@ Revisit if the project later adopts a Playwright-based scraping path
 (would also unlock 카카오, 쿠팡, 원티드), or if 데모데이 publishes an
 RSS / sitemap-of-recruits surface that doesn't depend on Supabase.
 
-### 그룹바이 (groupby.kr) — after 데모데이
+### 그룹바이 (groupby.kr) — deferred (recon 2026-05-27)
 
-Next.js with client-side fetch (no listings in `__NEXT_DATA__` initial).
-Listings API is on the same origin (probably `/_next/data/{buildId}/positions.json`
-or a private endpoint — needs devtools recon). Position IDs visible in
-sitemap. robots.txt allows ChatGPT-User UA explicitly — signal of low
-scraper hostility.
+The HTTP-layer picture is friendly: a clean JSON API at
+`https://api.groupby.kr/startup-positions` returns `{status, data:{total,
+items}}` with no authentication required, paginated by `limit`+`offset`.
+groupby.kr's robots.txt enumerates many named bot UAs (ClaudeBot,
+GPTBot, ChatGPT-User, Perplexity, etc.) plus the wildcard `*`, all with
+the same Allow `/` and Disallow `/api/` `/_next/` posture, and the API
+host's robots.txt 404s = unrestricted.
+
+The TLS-layer picture kills it: any non-browser HTTP client (curl, Go's
+`net/http`) gets `HTTP/2 404` with an empty body and `server: nginx/
+1.21.5`, regardless of how complete a browser-shaped header set we
+send (Origin, Referer, full `sec-ch-ua-*` block, Accept, Accept-
+Language, Accept-Encoding, all of it). The page works in real Chromium
+because of TLS / JA3 / HTTP-fingerprint detection at the proxy layer.
+
+That is the same blocker class as 원티드 / 쿠팡 / 잡플래닛 — would need
+a headless browser or a TLS-fingerprint-spoofing client (utls/CycleTLS),
+both of which break the pure-Go + single-binary distribution thesis. No
+viable path without rethinking the scraping architecture.
+
+Revisit if the project later adopts a Playwright-based scraping path
+(would also unlock 데모데이, 카카오, 쿠팡, 원티드), or if 그룹바이 ever
+relaxes the API-layer bot check.
 
 ### 프로그래머스 (career.programmers.co.kr) — defunct
 
