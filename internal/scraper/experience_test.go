@@ -35,9 +35,12 @@ func TestParseExperienceYears(t *testing.T) {
 			wantMin: 3, wantMax: experienceUpperOpen, wantOK: true,
 		},
 		{
-			name:    "career N (exact)",
+			// "경력 N년" reads as a minimum on real postings ("at least
+			// N years"), not an exact value. A user with 6 years still
+			// fits, and a 신입 user is still correctly out.
+			name:    "career N (open-bounded minimum)",
 			title:   "AI 엔지니어 경력 5년",
-			wantMin: 5, wantMax: 5, wantOK: true,
+			wantMin: 5, wantMax: experienceUpperOpen, wantOK: true,
 		},
 		{
 			name:    "+년 suffix",

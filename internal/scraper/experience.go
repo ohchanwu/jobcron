@@ -42,8 +42,12 @@ var reExperienceRange = regexp.MustCompile(`(\d+)\s*[-~−]\s*(\d+)\s*년`)
 // admits 신입 explicitly but caps at N years. Returns one digit group.
 var reExperienceShinipRange = regexp.MustCompile(`신입\s*[-~−]\s*(\d+)\s*년`)
 
-// reExperienceCareerN matches "경력 N년" — typically used as an exact
-// expectation. Conservative: treat as min = max = N.
+// reExperienceCareerN matches "경력 N년" — used in the wild as a
+// minimum, not an exact expectation. "경력 3년" reads as "at least
+// 3 years" on real public-sector and SI postings, so the matcher
+// returns (N, ∞) rather than (N, N). Treating it as an exact value
+// near-misses every 4+ year applicant on a posting that's actually
+// open to them.
 var reExperienceCareerN = regexp.MustCompile(`경력\s*(\d+)\s*년`)
 
 // reExperienceSenior / reExperienceJunior catch the unquantified labels
@@ -56,6 +60,18 @@ var reExperienceJunior = regexp.MustCompile(`(?:^|[^a-zA-Z가-힣])주니어(?:[
 // matches that don't put a ceiling on years. 99 sits comfortably above
 // any realistic IT career length and reads as "no upper bound".
 const experienceUpperOpen = 99
+
+// Year-range heuristics for the unquantified labels 시니어 / 주니어.
+// These are arbitrary placeholders chosen on 2026-05-26 because the
+// labels themselves do not carry a numeric value; tuning them requires
+// looking at real chip-emission data over a few weeks. Exposing them
+// as named constants makes the tuning a one-line edit when the time
+// comes, rather than a magic-number hunt.
+const (
+	seniorMinYears = 5
+	juniorMinYears = 1
+	juniorMaxYears = 3
+)
 
 // ParseExperienceYears reads title and description and tries to extract a
 // concrete (minYears, maxYears) experience requirement.
@@ -111,14 +127,14 @@ func parseExperienceText(text string) (minYears, maxYears int, ok bool) {
 	}
 	if m := reExperienceCareerN.FindStringSubmatch(text); m != nil {
 		if n, err := strconv.Atoi(m[1]); err == nil {
-			return n, n, true
+			return n, experienceUpperOpen, true
 		}
 	}
 	if reExperienceSenior.MatchString(text) {
-		return 5, experienceUpperOpen, true
+		return seniorMinYears, experienceUpperOpen, true
 	}
 	if reExperienceJunior.MatchString(text) {
-		return 1, 3, true
+		return juniorMinYears, juniorMaxYears, true
 	}
 	return 0, 0, false
 }
