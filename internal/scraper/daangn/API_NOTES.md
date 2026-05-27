@@ -12,7 +12,7 @@ GET https://boards-api.greenhouse.io/v1/boards/daangn/jobs?content=true
 
 - **No authentication required.** Plain `GET`, no headers beyond a User-Agent.
 - **One call returns everything.** Pass `?content=true` and the response includes the full HTML body for each posting alongside metadata and location. No per-posting detail round trip is needed — `FetchDetail` is a no-op.
-- **`absolute_url` points to about.daangn.com** with the `gh_jid` query param. The scraper uses that as the canonical Posting URL.
+- **`absolute_url` points to `about.daangn.com?gh_jid=...`** which **does NOT resolve to a job page** — it lands on the daangn marketing home for every job, regardless of the id. Verified 2026-05-27 against all 4 stored postings. The scraper ignores `absolute_url` and builds the click URL from the careers site instead: `https://team.daangn.com/jobs/{id}/` (trailing slash required — the careers site redirects the slashless form). The Greenhouse field is still kept on `RawJSON` for forward compatibility.
 
 The 당근 careers domain (`team.daangn.com`) is a separate Gatsby surface that *also* renders the same jobs, but its `/page-data/jobs/page-data.json` only exposes a sparse `{corporate, employmentType}` shape — useless for our purposes. Always go through Greenhouse.
 
@@ -57,7 +57,7 @@ Why not include `경력` with Newcomer=false: those are pure-experienced posting
 | ------------------------- | ---------------- | ------------------------------------------------------------------ |
 | `id` (int)                | `SourcePostingID`| Stringified.                                                       |
 | `title`                   | `Title`          |                                                                    |
-| `absolute_url`            | `URL`            | `https://about.daangn.com?gh_jid={id}` — canonical for clicks.    |
+| `id`                      | `URL`            | URL is built as `{siteURL}/jobs/{id}/` (where `siteURL` is `https://team.daangn.com`), NOT from Greenhouse's `absolute_url` — that field is dead. See the section above. |
 | `location.name`           | `Location`       | Often just "SEOUL" — normalized to "서울" for the score chip.     |
 | `company_name`            | (overridden)     | Greenhouse returns the parent corp; we use the `Corporate` metadata field instead because that captures the subsidiary (e.g. "당근알바"). |
 | `first_published`         | `PublishedAt`    | ISO timestamp.                                                     |

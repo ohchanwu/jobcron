@@ -138,7 +138,7 @@ func (s *Scraper) FetchListing(ctx context.Context, limit int) ([]scraper.Postin
 	if err != nil {
 		return nil, err
 	}
-	postings, err := parseListing(body)
+	postings, err := parseListing(body, s.siteURL)
 	if err != nil {
 		return nil, err
 	}
@@ -231,8 +231,11 @@ type ghMeta struct {
 }
 
 // parseListing decodes the Greenhouse response, filters to 신입 IT, and
-// converts each survivor to a Posting.
-func parseListing(body []byte) ([]scraper.Posting, error) {
+// converts each survivor to a Posting. siteURL is the root of the
+// careers site (e.g. "https://team.daangn.com") and is used to build
+// the click-through URL — Greenhouse's `absolute_url` field points at a
+// dead `about.daangn.com?gh_jid=...` page and is ignored.
+func parseListing(body []byte, siteURL string) ([]scraper.Posting, error) {
 	var resp listingResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("parse listing JSON: %w", err)
@@ -247,7 +250,7 @@ func parseListing(body []byte) ([]scraper.Posting, error) {
 		if !isShinipIT(md) {
 			continue
 		}
-		out = append(out, normalizeJob(j, md, raw))
+		out = append(out, normalizeJob(j, md, raw, siteURL))
 	}
 	return out, nil
 }
@@ -285,7 +288,7 @@ func isShinipIT(md map[string]any) bool {
 // normalizeJob maps a Greenhouse job into the project's shared Posting
 // model. `raw` is the original JSON bytes — stored on RawJSON so a
 // future parser can lift additional fields without re-scraping.
-func normalizeJob(j ghJob, md map[string]any, raw json.RawMessage) scraper.Posting {
+func normalizeJob(j ghJob, md map[string]any, raw json.RawMessage, siteURL string) scraper.Posting {
 	id := strconv.FormatInt(j.ID, 10)
 
 	location := ""
@@ -293,10 +296,13 @@ func normalizeJob(j ghJob, md map[string]any, raw json.RawMessage) scraper.Posti
 		location = normalizeLocation(j.Location.Name)
 	}
 
-	url := j.AbsoluteURL
-	if url == "" {
-		url = "https://about.daangn.com?gh_jid=" + id
-	}
+	// Greenhouse's absolute_url points at about.daangn.com?gh_jid={id},
+	// which no longer resolves to a job page — it lands on the marketing
+	// home. The careers site at team.daangn.com/jobs/{id}/ is what users
+	// can actually read, so we build the URL ourselves and ignore the
+	// Greenhouse field. See the 2026-05-27 link audit for the evidence.
+	url := siteURL + "/jobs/" + id + "/"
+	_ = j.AbsoluteURL // kept on RawJSON for forward compat
 
 	company := stringMeta(md, "Corporate")
 	if company == "" {

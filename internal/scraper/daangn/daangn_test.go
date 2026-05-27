@@ -21,7 +21,7 @@ func TestParseListingFiltersToShinipIT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	postings, err := parseListing(body)
+	postings, err := parseListing(body, defaultSiteURL)
 	if err != nil {
 		t.Fatalf("parseListing: %v", err)
 	}
@@ -55,6 +55,19 @@ func TestParseListingFiltersToShinipIT(t *testing.T) {
 		}
 		if p.URL == "" {
 			t.Errorf("[%d] URL is empty", i)
+		}
+		// URL must point at the careers site, not Greenhouse's
+		// about.daangn.com?gh_jid=... pattern (which is a dead link
+		// — it lands on the marketing home, not the job page).
+		wantPrefix := defaultSiteURL + "/jobs/"
+		if !strings.HasPrefix(p.URL, wantPrefix) {
+			t.Errorf("[%d] URL = %q, want prefix %q", i, p.URL, wantPrefix)
+		}
+		if !strings.HasSuffix(p.URL, "/") {
+			t.Errorf("[%d] URL = %q, want trailing slash", i, p.URL)
+		}
+		if !strings.Contains(p.URL, p.SourcePostingID) {
+			t.Errorf("[%d] URL = %q does not embed posting id %q", i, p.URL, p.SourcePostingID)
 		}
 		// Description should be HTML-stripped — no '<' or '>' characters.
 		if strings.ContainsAny(p.Description, "<>") {
@@ -265,7 +278,7 @@ func TestParseListingHandlesNullApplicationDeadline(t *testing.T) {
 		},
 	}
 	raw, _ := json.Marshal(map[string]any{"jobs": []any{row}})
-	postings, err := parseListing(raw)
+	postings, err := parseListing(raw, defaultSiteURL)
 	if err != nil {
 		t.Fatalf("parseListing: %v", err)
 	}
