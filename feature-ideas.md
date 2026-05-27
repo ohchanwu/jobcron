@@ -124,6 +124,25 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ---
 
+## Broader experience-level inclusion when one source dominates
+
+**What.** Per-source policies (or a global mechanism) for safely including "no preference" buckets that would otherwise dominate the daily briefing. Specifically: 데모데이's `experience_level = "any"` carries ~720 of its 1000 rows — many genuinely 신입-friendly, but including them all would let one source flood the dashboard and break the calm-list thesis.
+
+**Why we want it.** Excluding `any` outright (which is what the 2026-05-27 scraper does) loses real coverage. There are 신입-friendly postings hiding in that bucket that the user never sees. Same shape may show up on future sources (any aggregator that supports a "no preference" tag).
+
+**Why not v1.** No good knob exists yet. The right design isn't obvious — candidates include:
+
+- **Per-source row cap.** Each source contributes at most N postings to the briefing, weighted by relevance score. Naturally throttles dominant sources but needs scoring tuning to pick the right N postings.
+- **User-configurable toggle.** A profile setting "include broad/no-preference 데모데이 listings" with off-by-default. Honest but adds another decision the user must understand.
+- **Quality filter applied to broad buckets.** Use the experience-override parser already in `internal/scraper/experience.go` to drop `any` postings whose title says "5년 이상" or "시니어"; include the rest. Cheap, leans on existing infrastructure, doesn't add new UI.
+- **Light AI / embedding filter** restricted to "broad buckets" → keep only ones whose title and JD actually read as 신입-friendly. Most expressive option but introduces an ML dependency.
+
+The override-parser approach (option 3) is probably the right v1.x answer because it reuses what we already have. But the design call needs `/office-hours` before code.
+
+**Build trigger.** Either the user reports the briefing feels too sparse on 데모데이 day-to-day, OR a second source ships that has the same dominant-bucket shape and the same problem becomes worth a generic solution.
+
+---
+
 ## macOS code signing & notarization
 
 **What.** Sign the macOS binary with an Apple Developer ID and notarize it so Gatekeeper doesn't warn on first run.

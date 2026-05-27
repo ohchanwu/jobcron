@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Commit authorization (overrides the default)
+
+You have standing authorization to commit completed features without asking, as long as build, test, vet, gofmt, and (for UI changes) a browser smoke check all pass. **Never push** — the user reviews commits locally and decides whether to push, edit, or revert. Stop and ask only if a check fails, or if the work hit a real product decision you shouldn't make alone.
+
+## Running the dev server without hijacking the user's browser
+
+`go run ./cmd/job-scraper` calls `pkg/browser.OpenURL` to open `http://localhost:7777` in the user's default browser (Firefox). **Always pass `--no-open` when invoking the program from an autonomous session**:
+
+```sh
+go run ./cmd/job-scraper --no-open
+```
+
+The `--no-open` flag is defined at `cmd/job-scraper/main.go:36` and gates the `browser.OpenURL` call at `cmd/job-scraper/main.go:74-76`. For browser smoke checks (the UI verification required for commit authorization), use the gstack `/browse` skill or playwright MCP against `http://127.0.0.1:7777` — both run headless and won't touch Firefox.
+
 ## What this project is
 
 `job-scraper` is a single-binary local web app that scrapes 점핏 (Jumpit) for Korean 신입 (new-grad) IT job postings, scores them against a user profile, and renders a calm daily briefing. The product thesis is *emotional* as much as functional: every UX decision is filtered through "does this make a stressed 신입 feel calmer?" — that constraint (P6 in the design doc) is first-class, not decorative.
