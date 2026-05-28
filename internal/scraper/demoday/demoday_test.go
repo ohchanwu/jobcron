@@ -3,7 +3,6 @@ package demoday
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -340,9 +339,6 @@ func TestApplicationDeadlineNullMeansAlwaysOpen(t *testing.T) {
 		t.Errorf("AlwaysOpen posting has ClosedAt = %v, want nil", postings[0].ClosedAt)
 	}
 }
-
-// fmt import used only when debugging during test development.
-var _ = fmt.Sprintf
 
 func TestResolveAnonKeyFallsBackToBakedIn(t *testing.T) {
 	t.Setenv(anonKeyEnvVar, "")
