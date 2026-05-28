@@ -367,6 +367,22 @@ func TestAnyBucketKeepsITWithNoExperienceDemand(t *testing.T) {
 		{name: "Korean 개발자 in title", title: "Django 백엔드 개발자 모집", want: true},
 		{name: "English engineer in title", title: "Frontend Engineer (full-time)", want: true},
 		{name: "data scientist", title: "데이터 사이언티스트 채용", want: true},
+		// New compound dev tokens — all kept.
+		{name: "프론트 개발 (spaced)", title: "프론트 개발 신입 모집", want: true},
+		{name: "백엔드 개발 (spaced)", title: "백엔드 개발 채용", want: true},
+		{name: "앱 개발", title: "iOS 앱 개발 신입", want: true},
+		{name: "웹 개발", title: "웹 개발 인턴", want: true},
+		{name: "서버 개발", title: "서버 개발 채용", want: true},
+		{name: "게임 개발", title: "게임 개발 신입", want: true},
+		{name: "AI 개발", title: "AI 개발 채용", want: true},
+		{name: "임베디드", title: "임베디드 SW 채용", want: true},
+		{name: "딥러닝", title: "딥러닝 리서치 엔지니어", want: true},
+		{name: "프로그래머", title: "C++ 프로그래머 모집", want: true},
+		// False-positive guards: bare 개발 in non-dev compounds now drops.
+		{name: "사업개발 매니저 (was false positive)", title: "사업개발 매니저", want: false},
+		{name: "고객개발 매니저 (was false positive)", title: "고객개발 매니저", want: false},
+		{name: "연구개발 직원 (was false positive)", title: "연구개발 직원 채용", want: false},
+		{name: "조직개발 담당자 (was false positive)", title: "조직개발 담당자", want: false},
 		// IT signal but with 5+ year demand — dropped.
 		{name: "engineer + 5년 이상", title: "백엔드 엔지니어 (5년 이상)", want: false},
 		{name: "engineer + 시니어", title: "시니어 백엔드 엔지니어", want: false},

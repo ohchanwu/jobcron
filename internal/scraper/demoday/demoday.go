@@ -81,9 +81,19 @@ var itKeywordEN = regexp.MustCompile(
 
 // itKeywordKO is the substring-matched Korean token set. Korean words
 // don't have word boundaries, so this is straight strings.Contains.
+//
+// Bare "개발" is deliberately NOT in this list. It would substring-match
+// non-dev compounds like 사업개발 (business development), 고객개발
+// (customer development), 연구개발 (R&D), 조직개발 (org development),
+// letting business / customer / research roles slip through the
+// any-bucket filter. We add the explicit dev compounds we DO want
+// ("프론트 개발", "백엔드 개발", etc.) below instead.
 var itKeywordKO = []string{
-	"개발자", "개발", "엔지니어",
+	"개발자", "엔지니어",
 	"프론트엔드", "백엔드", "풀스택",
+	"프론트 개발", "백엔드 개발", "풀스택 개발",
+	"앱 개발", "웹 개발", "서버 개발", "게임 개발", "AI 개발",
+	"임베디드", "딥러닝", "프로그래머",
 	"데이터 사이언티스트", "데이터 엔지니어",
 	"머신러닝",
 	"모바일", "안드로이드",
