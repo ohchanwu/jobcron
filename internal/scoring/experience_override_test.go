@@ -87,6 +87,36 @@ func TestScoreCareerOverride(t *testing.T) {
 			// User (0 years) still falls inside [0, 99] → +25 with override label.
 			wantLabelPrefix: "본문 0년 이상",
 		},
+		{
+			name: "신입 user vs '경력 3년' (parser → 3,∞) — not matched, not dealbroken, 0-delta override chip",
+			// Guard for the 2026-05-27 parser change in commit 08b8d5d that
+			// flipped "경력 N년" from (N, N) to (N, ∞). The intent was that
+			// a 신입 user no longer near-misses a posting demanding ≥N years.
+			// This case asserts the new behavior end-to-end through the
+			// scoring engine: parser returns (3, 99); override fires
+			// (differs from the source's (0, 0) + Newcomer=true); user with
+			// 0 years falls outside [3, 99] and outside the near-miss
+			// neighborhood (minC-1=2 ≠ 0, maxC+1=100 ≠ 0); so the result
+			// is the override 0-delta chip and Total = 0. No dealbreaker,
+			// no misleading near-miss, no silent +25 from the source's
+			// stale Newcomer flag.
+			title:    "공공기관 시스템 개발자 (경력 3년)",
+			newcomer: true, min: 0, max: 0,
+			years:           0,
+			wantTotal:       0,
+			wantLabelPrefix: "본문 3년 이상",
+		},
+		{
+			name: "3년 user vs '경력 3년' — exact match through the parser, +25",
+			// Same posting shape as above, different user: a 3-year user
+			// hits the lower bound of the parsed range. Confirms the open-
+			// upper-bound doesn't accidentally exclude in-range users.
+			title:    "공공기관 시스템 개발자 (경력 3년)",
+			newcomer: true, min: 0, max: 0,
+			years:           3,
+			wantTotal:       25,
+			wantLabelPrefix: "본문 3년 이상",
+		},
 	}
 
 	for _, c := range cases {
