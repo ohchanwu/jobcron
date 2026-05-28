@@ -327,6 +327,62 @@ func TestDashboardShowsOnlyTodaysPostings(t *testing.T) {
 	}
 }
 
+// TestDashboardHidesPostingsBelowMinScore covers the 2026-05-28 soft-hide
+// knob: a posting whose Total falls below Profile.MinScore should land in
+// the dealbreaker-excluded section, not the main "Today" list. Setting
+// MinScore = 0 disables the hide; nil falls back to DefaultMinScore.
+func TestDashboardHidesPostingsBelowMinScore(t *testing.T) {
+	// Engineered so the posting scores exactly 25 (career exact, no
+	// stacks/location/salary). A profile of {} hides it; MinScore=0
+	// shows it.
+	mk := func(t *testing.T, minScore *int) string {
+		t.Helper()
+		srv, st := newTestServer(t, &fakeScraper{})
+		ctx := context.Background()
+		prof := profile.Profile{MinScore: minScore}
+		profJSON, _ := profile.Marshal(prof)
+		if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+			t.Fatalf("SaveProfile: %v", err)
+		}
+		p := listingPosting("score25", "신입 백엔드 일반 공고")
+		p.FirstSeenAt = time.Now().UTC()
+		p.LastSeenAt = p.FirstSeenAt
+		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+		if _, err := srv.scoreAll(ctx); err != nil {
+			t.Fatalf("scoreAll: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+		return rec.Body.String()
+	}
+
+	// Default (MinScore=nil → 40). The 25-point posting is hidden under
+	// the "관심 밖" excluded section but appears in the body.
+	bodyDefault := mk(t, nil)
+	if !strings.Contains(bodyDefault, "신입 백엔드 일반 공고") {
+		t.Error("default profile: posting absent from body entirely")
+	}
+	if !strings.Contains(bodyDefault, "관심 밖") {
+		t.Error("default profile: 관심 밖 (excluded) section not rendered when a low-scoring posting exists")
+	}
+
+	// MinScore=0 explicitly shows everything. With no low-scoring rows
+	// hidden, the 관심 밖 section should NOT render.
+	zero := 0
+	bodyZero := mk(t, &zero)
+	if !strings.Contains(bodyZero, "신입 백엔드 일반 공고") {
+		t.Error("MinScore=0: posting absent from body")
+	}
+	if strings.Contains(bodyZero, "관심 밖") {
+		t.Error("MinScore=0: 관심 밖 section rendered despite no rows below threshold")
+	}
+}
+
 func TestDashboardShowsScoredPostings(t *testing.T) {
 	f := &fakeScraper{listing: []scraper.Posting{listingPosting("1", "백엔드 신입 개발자")}}
 	srv, st := newTestServer(t, f)

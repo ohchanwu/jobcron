@@ -56,6 +56,11 @@
         <input type="number" name="salary_weight" min="0" value="{{.SalaryWeight}}">
       </label>
 
+      <label>최저 점수
+        <span class="field-hint">이 점수 미만의 공고는 숨겨요 — 기본 40, 0이면 모두 보여요.</span>
+        <input type="number" name="min_score" min="0" value="{{.MinScore}}">
+      </label>
+
       <label>최종 학력
         <span class="field-hint">요구 학력이 이보다 높은 공고는 조용히 제외돼요.</span>
         <select name="max_education">

@@ -70,6 +70,8 @@ Categories cap at maxes (Stack 50, Career = `Profile.CareerWeight` default 25, L
 
 `CareerWeight` and `SalaryWeight` were added 2026-05-28 as part of the per-category weights effort. The old fixed constants are gone — they live now as `DefaultCareerWeight` and `DefaultSalaryWeight` in `internal/profile/profile.go`, applied by `Profile.EffectiveCareerWeight` / `EffectiveSalaryWeight` when the user hasn't set them (which preserves scores byte-identical for any saved profile predating the change). Near-miss/ambiguous awards scale proportionally: career near-miss = round(weight × 2/5), salary ambiguous = round(weight ÷ 2), keeping the historical 25→10 and 10→5 ratios exact when the user accepts defaults.
 
+`Profile.MinScore` (also added 2026-05-28) hides low-scoring rows from the main "Today" briefing — postings with `Total < EffectiveMinScore()` land in the collapsible `관심 밖으로 분류된 공고` section instead of the main list. Default `DefaultMinScore = 40`; `MinScore = 0` shows everything (no hiding). The field is a pointer (`*int`) so `nil` (profile predates the field) differs from explicit 0 (user opted in to "show everything"). The 0005_min_score migration backfills 40 into the profile JSON for old profiles — Go's `EffectiveMinScore` would default to 40 anyway, but the migration keeps the persisted state self-describing. Low-score postings stay in the DB (still visible on `/archive`) — MinScore only collapses the briefing surface.
+
 When the profile changes, scores become stale (their `profile_hash` no longer matches the current one). `handleProfileSave` re-scores every posting in the same request; on dashboard render, mismatched-hash scores are recomputed. There is no score history — old values are overwritten by design.
 
 ## SSE conventions

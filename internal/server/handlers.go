@@ -149,7 +149,12 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total
-			dp.Excluded = sc.Total < 0
+			// Dealbreaker hits (Total = -1) are always excluded. The
+			// MinScore knob collapses additional low-scoring rows out of
+			// the main "Today" list — the user can still find them under
+			// the expandable "제외된 공고" section. MinScore = 0 disables
+			// the soft-hide entirely.
+			dp.Excluded = sc.Total < 0 || sc.Total < prof.EffectiveMinScore()
 			var result scoring.ScoreResult
 			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 				dp.Explanation = scoring.Explain(result)
@@ -206,6 +211,7 @@ type profileForm struct {
 	CareerWeight     int
 	SalaryFloorMan   int
 	SalaryWeight     int
+	MinScore         int
 	MaxEducation     int
 	StacksText       string
 	CitiesText       string
@@ -253,11 +259,13 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 			disabled = append(disabled, id)
 		}
 	}
+	minScore := atoi(r.FormValue("min_score"))
 	p := profile.Profile{
 		CareerYears:    atoi(r.FormValue("career_years")),
 		CareerWeight:   atoi(r.FormValue("career_weight")),
 		SalaryFloorKRW: atoi(r.FormValue("salary_floor_man")) * 10000,
 		SalaryWeight:   atoi(r.FormValue("salary_weight")),
+		MinScore:       &minScore,
 		MaxEducation:   profile.EducationLevel(atoi(r.FormValue("max_education"))),
 		Stacks:         parseStacks(r.FormValue("stacks")),
 		Location: profile.LocationPref{
@@ -296,6 +304,7 @@ func toProfileForm(p profile.Profile) profileForm {
 		CareerWeight:     p.EffectiveCareerWeight(),
 		SalaryFloorMan:   p.SalaryFloorKRW / 10000,
 		SalaryWeight:     p.EffectiveSalaryWeight(),
+		MinScore:         p.EffectiveMinScore(),
 		MaxEducation:     int(p.MaxEducation),
 		StacksText:       strings.Join(stacks, "\n"),
 		CitiesText:       strings.Join(p.Location.Cities, ", "),

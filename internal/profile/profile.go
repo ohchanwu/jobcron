@@ -12,6 +12,12 @@ import (
 const (
 	DefaultCareerWeight = 25
 	DefaultSalaryWeight = 10
+
+	// DefaultMinScore is the briefing's default "hide rows below this"
+	// threshold for new profiles and any saved profile that predates the
+	// field. The user can override to 0 ("show everything") via the
+	// profile form — see EffectiveMinScore.
+	DefaultMinScore = 40
 )
 
 // Profile is the user's job-matching preferences, scored against each posting.
@@ -25,6 +31,12 @@ type Profile struct {
 	MaxEducation   EducationLevel `json:"max_education"` // highest level the user has
 	MustHave       []string       `json:"must_have"`     // plain Korean phrases that must all appear
 	Dealbreakers   []string       `json:"dealbreakers"`  // plain Korean phrases; any match excludes
+
+	// MinScore is the briefing's "hide rows below this score" threshold.
+	// Pointer so that nil (field absent in JSON) differs from explicit 0
+	// (the user opted in to "show everything"). Use EffectiveMinScore to
+	// get the value with the DefaultMinScore fallback applied.
+	MinScore *int `json:"min_score,omitempty"`
 
 	// DisabledSources are source identifiers (e.g. "worknet") the user has
 	// opted out of. Default empty = every registered source is active. We
@@ -51,6 +63,16 @@ func (p Profile) EffectiveSalaryWeight() int {
 		return p.SalaryWeight
 	}
 	return DefaultSalaryWeight
+}
+
+// EffectiveMinScore returns MinScore when set (including explicit 0,
+// which means "show every non-dealbroken row"), falling back to
+// DefaultMinScore for profiles that predate the field.
+func (p Profile) EffectiveMinScore() int {
+	if p.MinScore != nil {
+		return *p.MinScore
+	}
+	return DefaultMinScore
 }
 
 // SourceEnabled reports whether the given source identifier should be active
