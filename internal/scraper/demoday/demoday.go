@@ -67,15 +67,27 @@ func resolveAnonKey() string {
 
 // experienceLevels is the set of `experience_level` enum values the
 // scraper accepts as 신입-relevant. `entry` is unambiguously new-grad;
-// `1-3` is the closest "junior" bucket. `any` is included but
-// post-filtered by anyBucketKeeps below — the bucket carries ~3000 rows
-// most of which are not IT, so wholesale inclusion would flood the
-// briefing. See API_NOTES.md.
+// `1-3` is the closest "junior" bucket. `any` carries no preference and
+// passes through the same IT/SWE post-filter as the other buckets. See
+// API_NOTES.md for the bucket distribution.
 var experienceLevels = []string{"entry", "1-3", "any"}
+
+// itPositionCategories is the set of `position_tags[0]` values 데모데이
+// uses for IT/SWE roles. Every record carries an ordered position_tags
+// array whose first element is the top-level job family — these three
+// values cover ~95% of the SWE-relevant population with very few false
+// positives. See tmp/demoday_audit_2026-05-28.md for the 1000-row audit.
+var itPositionCategories = map[string]struct{}{
+	"개발":    {},
+	"게임 제작": {},
+	"정보보호":  {},
+}
 
 // itKeywordEN is a case-insensitive regex of IT/dev signals in English.
 // Bounded by word boundaries so "engineer" matches a 글로벌 SW Engineer
 // but "interior designer" (no engineer/developer/etc. token) does not.
+//
+// Used only as a fallback when a record lacks structured position_tags.
 var itKeywordEN = regexp.MustCompile(
 	`(?i)\b(developer|engineer|programmer|frontend|front-end|backend|back-end|fullstack|full-stack|devops|sre|software|mobile|android|ios|react|vue|angular|svelte|django|spring|flask|fastapi|nodejs|node\.js|typescript|javascript|kotlin|swift|golang|python|machine\s*learning|data\s*(scientist|engineer|analyst))\b`)
 
@@ -85,9 +97,11 @@ var itKeywordEN = regexp.MustCompile(
 // Bare "개발" is deliberately NOT in this list. It would substring-match
 // non-dev compounds like 사업개발 (business development), 고객개발
 // (customer development), 연구개발 (R&D), 조직개발 (org development),
-// letting business / customer / research roles slip through the
-// any-bucket filter. We add the explicit dev compounds we DO want
-// ("프론트 개발", "백엔드 개발", etc.) below instead.
+// letting business / customer / research roles slip through. We add the
+// explicit dev compounds we DO want ("프론트 개발", "백엔드 개발", etc.)
+// below instead.
+//
+// Used only as a fallback when a record lacks structured position_tags.
 var itKeywordKO = []string{
 	"개발자", "엔지니어",
 	"프론트엔드", "백엔드", "풀스택",
@@ -100,8 +114,6 @@ var itKeywordKO = []string{
 }
 
 // hasITKeyword reports whether the text contains a clear IT/dev signal.
-// Used only to gate the `any` experience bucket — entry and 1-3 are
-// already 신입-explicit and shouldn't be filtered this way.
 func hasITKeyword(text string) bool {
 	if itKeywordEN.MatchString(text) {
 		return true
@@ -114,14 +126,32 @@ func hasITKeyword(text string) bool {
 	return false
 }
 
-// anyBucketKeeps reports whether an experience_level=any row should
-// survive the post-filter. A row is kept iff (a) it does NOT carry an
-// explicit 4+ year experience demand in title or position, AND (b) the
-// title or position contains an IT/dev signal. Entry and 1-3 rows are
-// always kept (they don't pass through this filter).
-func anyBucketKeeps(title, position string) bool {
+// keepsITSWE reports whether a 데모데이 row should survive the IT/SWE
+// post-filter. The rule is shared across all experience buckets (entry,
+// 1-3, any) because the recruit table is a general-purpose job board —
+// every bucket is dominated by non-SWE roles (marketing, MD, sales, HR,
+// hardware engineering) that the user does not want in their briefing.
+//
+// A row is kept iff:
+//
+//  1. The title/position do NOT carry an explicit 4+ year experience
+//     demand (시니어, 5년 이상, etc.), AND
+//  2. EITHER positionTags[0] is one of the IT/SWE job-family categories
+//     (개발, 게임 제작, 정보보호 — see itPositionCategories), OR — when
+//     positionTags is empty/missing — the title+position match the
+//     fallback IT keyword filter.
+//
+// The position-tags signal is preferred because it's structured upstream
+// data: "engineer" / "엔지니어" in the keyword filter matches mechanical,
+// RF, and aerospace engineers too. position_tags[0] sorts those into
+// "엔지니어링·설계" and out of our scope cleanly.
+func keepsITSWE(positionTags []string, title, position string) bool {
 	if minY, _, ok := scraper.ParseExperienceYears(title, position); ok && minY >= 4 {
 		return false
+	}
+	if len(positionTags) > 0 && strings.TrimSpace(positionTags[0]) != "" {
+		_, ok := itPositionCategories[strings.TrimSpace(positionTags[0])]
+		return ok
 	}
 	return hasITKeyword(title + " " + position)
 }
@@ -370,12 +400,11 @@ func parseListing(body []byte, siteURL string) ([]scraper.Posting, error) {
 		if err := json.Unmarshal(raw, &r); err != nil {
 			return nil, fmt.Errorf("parse recruit row: %w", err)
 		}
-		// `any`-bucket rows are post-filtered: they're a huge non-IT
-		// population on demoday (~3000 published rows, ~33% IT-relevant
-		// by sample). We gate on (a) no 4+ year experience demand AND
-		// (b) clear IT/dev keyword. Entry and 1-3 rows pass through.
-		if strings.ToLower(strings.TrimSpace(r.ExperienceLevel)) == "any" &&
-			!anyBucketKeeps(r.Title, r.Position) {
+		// Every bucket (entry / 1-3 / any) gets the same IT/SWE filter —
+		// each is dominated by non-SWE roles (marketing, MD, sales,
+		// hardware engineering) the user doesn't want. See keepsITSWE
+		// for the rule (position_tags[0] primary, keyword fallback).
+		if !keepsITSWE(r.PositionTags, r.Title, r.Position) {
 			continue
 		}
 		p := normalizeRecruit(r, raw, siteURL)
@@ -422,8 +451,8 @@ func normalizeRecruit(r supabaseRecruit, raw json.RawMessage, siteURL string) sc
 //	"entry" → newcomer-true, 0-0
 //	"1-3"   → newcomer-false, 1-3 (a 신입 user near-misses; the scoring
 //	          engine already handles the adjacent bracket)
-//	"any"   → newcomer-true, 0-∞ (no preference; the bucket itself is
-//	          gated to IT/dev rows by anyBucketKeeps before we get here)
+//	"any"   → newcomer-true, 0-∞ (no preference; the bucket is gated to
+//	          IT/SWE rows by keepsITSWE before we get here)
 //
 // Other values would have been filtered out at query time; if a new
 // enum value slips through, we conservatively flag it as 1-3.

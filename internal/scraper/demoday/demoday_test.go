@@ -14,9 +14,10 @@ import (
 )
 
 // TestParseListing exercises the JSON → Posting normalization against
-// the captured fixture (testdata/listing_fixture.json, 3 real records
-// pulled on 2026-05-27). The assertions pin the fields the scoring
-// engine reads.
+// the captured fixture (testdata/listing_fixture.json — 3 real
+// position_tags[0]="개발" records pulled on 2026-05-28: an entry-level
+// 소프트웨어 담당자, a 1-3 QA 담당자, and an entry-level 백엔드 엔지니어).
+// The assertions pin the fields the scoring engine reads.
 func TestParseListing(t *testing.T) {
 	body, err := os.ReadFile(filepath.Join("testdata", "listing_fixture.json"))
 	if err != nil {
@@ -30,22 +31,22 @@ func TestParseListing(t *testing.T) {
 		t.Fatalf("got %d postings, want 3", len(postings))
 	}
 
-	// Posting 0: id=16967, 라라비치, entry → Newcomer=true, MinCareer=0.
+	// Posting 0: id=17041, 마바산업, entry → Newcomer=true, MinCareer=0.
 	p0 := postings[0]
 	if p0.Source != "demoday" {
 		t.Errorf("Source = %q, want demoday", p0.Source)
 	}
-	if p0.SourcePostingID != "16967" {
-		t.Errorf("SourcePostingID = %q, want 16967", p0.SourcePostingID)
+	if p0.SourcePostingID != "17041" {
+		t.Errorf("SourcePostingID = %q, want 17041", p0.SourcePostingID)
 	}
-	if p0.URL != "https://demoday.co.kr/recruits/16967" {
+	if p0.URL != "https://demoday.co.kr/recruits/17041" {
 		t.Errorf("URL = %q, want canonical recruits URL", p0.URL)
 	}
-	if !strings.Contains(p0.Title, "라라비치") {
-		t.Errorf("Title %q missing 라라비치", p0.Title)
+	if !strings.Contains(p0.Title, "마바산업") {
+		t.Errorf("Title %q missing 마바산업", p0.Title)
 	}
-	if p0.Company != "라라비치" {
-		t.Errorf("Company = %q, want 라라비치", p0.Company)
+	if p0.Company != "마바산업" {
+		t.Errorf("Company = %q, want 마바산업", p0.Company)
 	}
 	if !p0.Newcomer {
 		t.Error("entry-level posting was not flagged Newcomer")
@@ -60,17 +61,14 @@ func TestParseListing(t *testing.T) {
 	if strings.ContainsAny(p0.Description, "<>") {
 		t.Errorf("Description still contains HTML: %q", p0.Description[:80])
 	}
-	if !strings.Contains(p0.Description, "라라비치") {
-		t.Errorf("Description missing 라라비치 from stripped content")
-	}
 	if p0.RawJSON == "" {
 		t.Error("RawJSON not populated")
 	}
 
-	// Posting 1: id=16966, 스팩스페이스, 1-3 → Newcomer=false, range 1-3.
+	// Posting 1: id=17163, 널리소프트, 1-3 → Newcomer=false, range 1-3.
 	p1 := postings[1]
-	if p1.SourcePostingID != "16966" {
-		t.Errorf("[1] SourcePostingID = %q, want 16966", p1.SourcePostingID)
+	if p1.SourcePostingID != "17163" {
+		t.Errorf("[1] SourcePostingID = %q, want 17163", p1.SourcePostingID)
 	}
 	if p1.Newcomer {
 		t.Error("[1] 1-3 posting was wrongly flagged Newcomer")
@@ -320,16 +318,20 @@ func TestCheckAccessAllowsWhenBothHostsAreClean(t *testing.T) {
 func TestApplicationDeadlineNullMeansAlwaysOpen(t *testing.T) {
 	row := map[string]any{
 		"id":                   1,
-		"title":                "test",
+		"title":                "백엔드 개발자",
 		"company_name":         "company",
 		"experience_level":     "entry",
 		"created_at":           "2026-05-27T00:00:00+00:00",
 		"application_deadline": nil,
+		"position_tags":        []string{"개발", "백엔드 개발자"},
 	}
 	rawArr, _ := json.Marshal([]any{row})
 	postings, err := parseListing(rawArr, defaultSiteURL)
 	if err != nil {
 		t.Fatalf("parseListing: %v", err)
+	}
+	if len(postings) != 1 {
+		t.Fatalf("parseListing dropped IT row: got %d postings", len(postings))
 	}
 	if !postings[0].AlwaysOpen {
 		t.Error("null application_deadline did not produce AlwaysOpen=true")
@@ -356,7 +358,45 @@ func TestResolveAnonKeyOverridesViaEnvVar(t *testing.T) {
 	}
 }
 
-func TestAnyBucketKeepsITWithNoExperienceDemand(t *testing.T) {
+// TestKeepsITSWEByPositionTags exercises the structured-tag path —
+// position_tags[0] is the dominant signal once 데모데이 returns
+// structured data on every row, which has been true since at least
+// 2026-05-28 (1000/1000 sample).
+func TestKeepsITSWEByPositionTags(t *testing.T) {
+	cases := []struct {
+		name     string
+		tags     []string
+		title    string
+		position string
+		want     bool
+	}{
+		// IT job-family tags — kept regardless of title content.
+		{name: "개발 category", tags: []string{"개발", "백엔드 개발자"}, title: "백엔드 개발자", want: true},
+		{name: "정보보호 category", tags: []string{"정보보호", "보안 컨설턴트"}, title: "보안 컨설턴트", want: true},
+		{name: "게임 제작 category", tags: []string{"게임 제작", "게임 클라이언트 프로그래머"}, title: "게임 프로그래머", want: true},
+		// Non-IT categories — dropped even with engineer/developer in title.
+		{name: "엔지니어링·설계 (mechanical)", tags: []string{"엔지니어링·설계", "기계 엔지니어"}, title: "Mechanical Engineer", want: false},
+		{name: "마케팅·광고", tags: []string{"마케팅·광고", "마케터"}, title: "그로스 마케터", want: false},
+		{name: "경영·비즈니스 (BD)", tags: []string{"경영·비즈니스", "PM·PO"}, title: "Business Developer", want: false},
+		{name: "디자인", tags: []string{"디자인", "UI,GUI 디자이너"}, title: "UI 디자이너", want: false},
+		// 4+ year experience demand short-circuits even within an IT category.
+		{name: "개발 + 5년 이상", tags: []string{"개발", "백엔드 개발자"}, title: "백엔드 엔지니어 (5년 이상)", want: false},
+		{name: "개발 + 시니어", tags: []string{"개발", "백엔드 개발자"}, title: "시니어 백엔드 엔지니어", want: false},
+		{name: "개발 + 경력 3년 (kept)", tags: []string{"개발", "백엔드 개발자"}, title: "백엔드 개발자 경력 3년", want: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := keepsITSWE(c.tags, c.title, c.position); got != c.want {
+				t.Errorf("keepsITSWE(%v, %q, %q) = %v, want %v", c.tags, c.title, c.position, got, c.want)
+			}
+		})
+	}
+}
+
+// TestKeepsITSWEFallsBackToKeywordsWhenTagsMissing covers the defensive
+// fallback path — should position_tags ever go empty on real records (it
+// has not in any 2026-05-28 sample), the keyword filter still works.
+func TestKeepsITSWEFallsBackToKeywordsWhenTagsMissing(t *testing.T) {
 	cases := []struct {
 		name     string
 		title    string
@@ -367,7 +407,7 @@ func TestAnyBucketKeepsITWithNoExperienceDemand(t *testing.T) {
 		{name: "Korean 개발자 in title", title: "Django 백엔드 개발자 모집", want: true},
 		{name: "English engineer in title", title: "Frontend Engineer (full-time)", want: true},
 		{name: "data scientist", title: "데이터 사이언티스트 채용", want: true},
-		// New compound dev tokens — all kept.
+		// Compound dev tokens — all kept.
 		{name: "프론트 개발 (spaced)", title: "프론트 개발 신입 모집", want: true},
 		{name: "백엔드 개발 (spaced)", title: "백엔드 개발 채용", want: true},
 		{name: "앱 개발", title: "iOS 앱 개발 신입", want: true},
@@ -378,32 +418,34 @@ func TestAnyBucketKeepsITWithNoExperienceDemand(t *testing.T) {
 		{name: "임베디드", title: "임베디드 SW 채용", want: true},
 		{name: "딥러닝", title: "딥러닝 리서치 엔지니어", want: true},
 		{name: "프로그래머", title: "C++ 프로그래머 모집", want: true},
-		// False-positive guards: bare 개발 in non-dev compounds now drops.
-		{name: "사업개발 매니저 (was false positive)", title: "사업개발 매니저", want: false},
-		{name: "고객개발 매니저 (was false positive)", title: "고객개발 매니저", want: false},
-		{name: "연구개발 직원 (was false positive)", title: "연구개발 직원 채용", want: false},
-		{name: "조직개발 담당자 (was false positive)", title: "조직개발 담당자", want: false},
+		// False-positive guards: bare 개발 in non-dev compounds drops.
+		{name: "사업개발 매니저", title: "사업개발 매니저", want: false},
+		{name: "고객개발 매니저", title: "고객개발 매니저", want: false},
+		{name: "연구개발 직원", title: "연구개발 직원 채용", want: false},
+		{name: "조직개발 담당자", title: "조직개발 담당자", want: false},
 		// IT signal but with 5+ year demand — dropped.
 		{name: "engineer + 5년 이상", title: "백엔드 엔지니어 (5년 이상)", want: false},
 		{name: "engineer + 시니어", title: "시니어 백엔드 엔지니어", want: false},
 		{name: "engineer + 경력 5년", title: "프론트엔드 개발자 경력 5년", want: false},
-		// IT signal + 경력 3년 — kept (parsed min=3 < 4).
+		// IT signal + 경력 3년 — kept.
 		{name: "engineer + 경력 3년", title: "백엔드 개발자 경력 3년", want: true},
-		// No IT signal — dropped, even with no experience demand.
+		// No IT signal — dropped.
 		{name: "non-IT designer", title: "Office Interior Designer (Lead)", want: false},
 		{name: "marketing role", title: "그로스 마케터 신입 모집", want: false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := anyBucketKeeps(c.title, c.position); got != c.want {
-				t.Errorf("anyBucketKeeps(%q, %q) = %v, want %v", c.title, c.position, got, c.want)
+			// nil position_tags forces the keyword fallback.
+			if got := keepsITSWE(nil, c.title, c.position); got != c.want {
+				t.Errorf("keepsITSWE(nil, %q, %q) = %v, want %v", c.title, c.position, got, c.want)
 			}
 		})
 	}
 }
 
 func TestParseListingDropsAnyBucketWhenFilterFails(t *testing.T) {
-	// Three any-bucket rows; only the one with a clear IT signal AND
+	// Three any-bucket rows with no structured position_tags so the
+	// keyword fallback runs; only the one with a clear IT signal AND
 	// no 5+ year demand should survive.
 	body := []byte(`[
 		{"id":1, "title":"Frontend Engineer (intern)", "position":"Frontend",
@@ -435,6 +477,52 @@ func TestParseListingDropsAnyBucketWhenFilterFails(t *testing.T) {
 	}
 	if postings[0].MaxCareer != anyBucketMaxYears {
 		t.Errorf("MaxCareer = %d, want anyBucketMaxYears (%d)", postings[0].MaxCareer, anyBucketMaxYears)
+	}
+}
+
+// TestParseListingAppliesFilterAcrossBuckets is the regression test for
+// the 2026-05-28 audit finding: 데모데이's `entry` and `1-3` buckets are
+// dominated by non-SWE roles too, so the IT/SWE filter must apply to
+// every bucket — not just `any` as it did before. The 마케팅·광고 entry
+// row in the fixture has to be dropped despite being an `entry`-level
+// posting.
+func TestParseListingAppliesFilterAcrossBuckets(t *testing.T) {
+	body := []byte(`[
+		{"id":1, "title":"[entry] 마케터", "position":"마케터",
+		 "experience_level":"entry", "company_name":"A",
+		 "position_tags":["마케팅·광고","마케터"],
+		 "created_at":"2026-05-26T00:00:00+00:00"},
+		{"id":2, "title":"[1-3] 백엔드 개발자", "position":"백엔드 개발자",
+		 "experience_level":"1-3", "company_name":"B",
+		 "position_tags":["개발","백엔드 개발자"],
+		 "created_at":"2026-05-26T00:00:00+00:00"},
+		{"id":3, "title":"[entry] HR 담당자", "position":"HR 담당자",
+		 "experience_level":"entry", "company_name":"C",
+		 "position_tags":["HR","HR 담당자"],
+		 "created_at":"2026-05-26T00:00:00+00:00"},
+		{"id":4, "title":"[any] 시니어 개발자 (5년 이상)", "position":"개발자",
+		 "experience_level":"any", "company_name":"D",
+		 "position_tags":["개발","백엔드 개발자"],
+		 "created_at":"2026-05-26T00:00:00+00:00"},
+		{"id":5, "title":"[entry] 정보보호 분석가", "position":"보안 분석가",
+		 "experience_level":"entry", "company_name":"E",
+		 "position_tags":["정보보호","보안 컨설턴트"],
+		 "created_at":"2026-05-26T00:00:00+00:00"}
+	]`)
+	postings, err := parseListing(body, defaultSiteURL)
+	if err != nil {
+		t.Fatalf("parseListing: %v", err)
+	}
+	if len(postings) != 2 {
+		var got []string
+		for _, p := range postings {
+			got = append(got, p.Title)
+		}
+		t.Fatalf("got %d postings %v, want 2 (개발 entry + 정보보호 entry)", len(postings), got)
+	}
+	if postings[0].SourcePostingID != "2" || postings[1].SourcePostingID != "5" {
+		t.Errorf("wrong survivors: ids %q,%q (want 2,5)",
+			postings[0].SourcePostingID, postings[1].SourcePostingID)
 	}
 }
 

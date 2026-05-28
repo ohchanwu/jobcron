@@ -40,25 +40,25 @@ If both end up stale, the next scrape returns HTTP 401 with a message that point
 
 `CheckAccess` therefore checks BOTH hosts: the Supabase host is the one whose disallows could actually block our requests, and the demoday host is the one our scraper "represents" from the user's mental model. If either turns hostile, the scraper aborts cleanly.
 
-## Filtering down to 신입
+## Filtering down to 신입 IT/SWE
 
-The `recruits` table has an `experience_level` column. Distinct values observed on 2026-05-27 across the first 1000 rows:
+The `recruits` table has an `experience_level` column. The 2026-05-28 distribution across 1000 published+active rows shifted markedly from earlier samples:
 
-| value         | count |
-| ------------- | ----- |
-| `any`         | 726   |
-| `5+`          | 208   |
-| `3-5`         | 37    |
-| `entry`       | 22    |
-| `1-3`         | 6     |
-| `경력 2~4년` | 1     |
+| value | count |
+| ----- | ----- |
+| entry | 662   |
+| 1-3   | 334   |
+| any   | 4     |
 
-The scraper uses `experience_level=in.(entry,1-3,any)`. `entry` and `1-3` rows pass through unchanged. `any` rows are post-filtered by `anyBucketKeeps`:
+The scraper uses `experience_level=in.(entry,1-3,any)`, so all three buckets enter the post-filter `keepsITSWE`:
 
 1. Drop if `scraper.ParseExperienceYears(title, position)` returns `ok && minYears >= 4` — explicit 5년 이상 / 시니어 / 경력 5년 / 6년이상 patterns.
-2. Drop if title+position does not match an IT/dev keyword (English regex + Korean substring list — see `itKeywordEN` and `itKeywordKO` in `demoday.go`).
+2. **Primary signal**: keep iff `position_tags[0] ∈ {개발, 게임 제작, 정보보호}`. Every observed record carries a `position_tags` array whose first element is the top-level job family. The category distribution on 2026-05-28 is heavily skewed toward non-SWE roles (마케팅·광고 255, 경영·비즈니스 196, 고객서비스·리테일 105, 영업 86, 디자인 79, HR 25, …) — the three IT categories together account for 167/1000 = 16.7% of the sample.
+3. **Fallback (only when `position_tags` is empty/missing)**: keyword filter on title+position. Uses `itKeywordEN` (regex with word boundaries) and `itKeywordKO` (Korean substring set). Bare `개발` is deliberately not in `itKeywordKO` because it substring-matches non-dev compounds like 사업개발 (business development), 고객개발, 연구개발, 조직개발 — the explicit dev compounds (`프론트 개발`, `백엔드 개발`, `앱 개발`, etc.) are listed individually instead.
 
-A 200-row sample from `experience_level=any` on 2026-05-27 showed: 3 dropped by (1), 117 dropped by (2), 80 kept (~40% survival). On 2026-05-28 the Korean keyword list was tightened: bare `개발` was removed because it was substring-matching non-dev compounds like `사업개발` (business development), `고객개발` (customer development), `연구개발` (R&D), `조직개발` (org development) and letting marketing/customer/biotech roles through. In its place we added explicit dev compounds (`프론트 개발`, `백엔드 개발`, `풀스택 개발`, `앱 개발`, `웹 개발`, `서버 개발`, `게임 개발`, `AI 개발`) plus standalone tokens (`임베디드`, `딥러닝`, `프로그래머`). A fresh 200-row simulation against the same `any` bucket on 2026-05-28 still kept 80 rows (~40% survival) but with a cleaner mix: marketing/business-development roles are now correctly dropped, while game/C/firmware programmers that previously slipped through (titled `프로그래머` only) are now caught. Manual spot-check of the 80 survivors: ~95% are clearly dev/eng roles, well above the 90% target.
+This is a 2026-05-28 rewrite. The previous filter ran only on the `any` bucket — that was correct when `any` carried the majority of rows, but the bucket distribution flipped and ~996/1000 rows now bypass it. The structured `position_tags[0]` signal is preferred over the keyword filter even where both work: "engineer" / "엔지니어" match mechanical, RF, aerospace, and semiconductor engineers (all sorted into `엔지니어링·설계` upstream), and "모바일" matches "모바일게임 로컬라이징 매니저".
+
+Survivor classification of the 167 IT-category records on 2026-05-28: roughly 6 are non-SWE (game graphic designers, game planner, hotel-ops manager with "IT skills preferred", localization manager). That's ~96% clean SWE rate, well above the 90% target. Audit detail in `tmp/demoday_audit_2026-05-28.md`.
 
 The `any`-bucket Posting carries `Newcomer=true`, `MinCareer=0`, `MaxCareer=anyBucketMaxYears` (99 — read as "no upper bound") so scoring treats it as new-grad-friendly.
 
