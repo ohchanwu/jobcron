@@ -159,6 +159,21 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 ---
 
+## Toss (토스) careers scraper
+
+**What.** Scrape `toss.im/career/jobs` for 신입 IT postings. Backing ATS appears to be Greenhouse (URL pattern is `?job_id=N`, similar to gh_jid).
+
+**Why we want it.** Toss is a top-tier Korean fintech destination; 신입 engineers consider it a primary target.
+
+**Why not v1 (or v1.1).** Recon on 2026-05-28 found two compounding reasons:
+
+1. **Zero IT/dev 신입 postings.** Of 229 active postings on `/career/jobs`, only 6 carry a 신입 or 주니어 tag — and **all 6 are Customer Service, Sales/MD, Product Operations, Securities Settlement, or 온라인검수** roles. Not a single dev/engineering 신입 listing. Toss is hiring extensively, but new-grad pipeline appears to be elsewhere (referrals, internal program).
+2. **robots.txt discourages job-detail crawling.** The bare listing `/career/jobs` is explicitly allowed, but `Disallow: /career/jobs?*` blocks any filtered listing, and `Disallow: /career/job-detail?gh_jid=5599901003` signals intent that individual job pages should not be crawled (even though our project's literal prefix matcher would let `/career/job-detail?job_id=X` through). A respectful crawler should honor the intent, not just the literal rule.
+
+**Re-recon trigger.** Re-check the 신입/주니어 dev tag count in 6 months. If IT/dev new-grad listings appear AND Toss revises robots.txt to clarify the job-detail policy, revisit. Otherwise leave deferred.
+
+---
+
 ## macOS code signing & notarization
 
 **What.** Sign the macOS binary with an Apple Developer ID and notarize it so Gatekeeper doesn't warn on first run.
