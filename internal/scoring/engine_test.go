@@ -67,6 +67,56 @@ func TestScoreStacksCapsAt50(t *testing.T) {
 	}
 }
 
+// TestScoreCareerHonorsCustomWeight is the regression guard for the
+// 2026-05-28 per-category-weights change: a profile with no CareerWeight
+// set still scores the historical 25/10, and bumping CareerWeight to 40
+// scales both the exact and near-miss awards by the same ratio.
+func TestScoreCareerHonorsCustomWeight(t *testing.T) {
+	p := basePosting()
+	p.Newcomer, p.MinCareer, p.MaxCareer = true, 0, 0
+	prof := baseProfile() // CareerWeight=0 → Effective=25
+	if r := Score(p, prof); r.Total != 25 {
+		t.Errorf("default CareerWeight → Total = %d, want 25", r.Total)
+	}
+
+	prof.CareerWeight = 40
+	if r := Score(p, prof); r.Total != 40 {
+		t.Errorf("CareerWeight=40 → Total = %d, want 40 (exact match award)", r.Total)
+	}
+
+	// Near-miss: 신입 profile, 1-3년 posting (adjacent). Near-miss
+	// award is round(weight * 2/5): 40 * 2/5 = 16.
+	p.Newcomer, p.MinCareer, p.MaxCareer = false, 1, 3
+	if r := Score(p, prof); r.Total != 16 {
+		t.Errorf("CareerWeight=40 near-miss → Total = %d, want 16 (40 * 2/5)", r.Total)
+	}
+}
+
+// TestScoreSalaryHonorsCustomWeight mirrors TestScoreCareerHonorsCustomWeight
+// for the salary category. Clear-award is the user's SalaryWeight;
+// ambiguous-award is half (round-half-up).
+func TestScoreSalaryHonorsCustomWeight(t *testing.T) {
+	p := basePosting()
+	p.Tags = []scraper.Tag{{Category: "salary", Name: "평균연봉 5,000 이상"}}
+
+	prof := baseProfile() // SalaryWeight=0 → Effective=10
+	prof.SalaryFloorKRW = 40_000_000
+	if r := Score(p, prof); r.Total != 10 {
+		t.Errorf("default SalaryWeight → Total = %d, want 10", r.Total)
+	}
+
+	prof.SalaryWeight = 30
+	if r := Score(p, prof); r.Total != 30 {
+		t.Errorf("SalaryWeight=30 → Total = %d, want 30 (clear-award)", r.Total)
+	}
+
+	// Ambiguous (rate-only) — half of clear, rounded: 30 / 2 = 15.
+	p.Tags = []scraper.Tag{{Category: "salary", Name: "연봉상승률 15% 이상"}}
+	if r := Score(p, prof); r.Total != 15 {
+		t.Errorf("SalaryWeight=30 ambiguous → Total = %d, want 15 (30 / 2)", r.Total)
+	}
+}
+
 func TestScoreCareer(t *testing.T) {
 	cases := []struct {
 		name     string

@@ -5,12 +5,23 @@ import (
 	"fmt"
 )
 
+// Default scoring weights — applied when a profile field is zero. The
+// values reproduce the fixed point caps the scorer used before per-
+// category weights were introduced (DefaultCareerWeight = the old
+// careerExact, DefaultSalaryWeight = the old salaryClear).
+const (
+	DefaultCareerWeight = 25
+	DefaultSalaryWeight = 10
+)
+
 // Profile is the user's job-matching preferences, scored against each posting.
 type Profile struct {
 	Stacks         []StackPref    `json:"stacks"`
 	Location       LocationPref   `json:"location"`
 	CareerYears    int            `json:"career_years"` // years of experience; 0 = 신입
+	CareerWeight   int            `json:"career_weight,omitempty"`
 	SalaryFloorKRW int            `json:"salary_floor_krw"`
+	SalaryWeight   int            `json:"salary_weight,omitempty"`
 	MaxEducation   EducationLevel `json:"max_education"` // highest level the user has
 	MustHave       []string       `json:"must_have"`     // plain Korean phrases that must all appear
 	Dealbreakers   []string       `json:"dealbreakers"`  // plain Korean phrases; any match excludes
@@ -21,6 +32,25 @@ type Profile struct {
 	// in future releases work for existing users without a profile rewrite.
 	// omitempty keeps existing canonical JSON byte-identical when unset.
 	DisabledSources []string `json:"disabled_sources,omitempty"`
+}
+
+// EffectiveCareerWeight returns CareerWeight when set, falling back to
+// DefaultCareerWeight when the field is zero. Lets old profiles (saved
+// before the field existed) score identically to defaults.
+func (p Profile) EffectiveCareerWeight() int {
+	if p.CareerWeight > 0 {
+		return p.CareerWeight
+	}
+	return DefaultCareerWeight
+}
+
+// EffectiveSalaryWeight is the SalaryWeight counterpart of
+// EffectiveCareerWeight.
+func (p Profile) EffectiveSalaryWeight() int {
+	if p.SalaryWeight > 0 {
+		return p.SalaryWeight
+	}
+	return DefaultSalaryWeight
 }
 
 // SourceEnabled reports whether the given source identifier should be active

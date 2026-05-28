@@ -203,7 +203,9 @@ func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) string {
 // matching the HTML inputs.
 type profileForm struct {
 	CareerYears      int
+	CareerWeight     int
 	SalaryFloorMan   int
+	SalaryWeight     int
 	MaxEducation     int
 	StacksText       string
 	CitiesText       string
@@ -253,7 +255,9 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	}
 	p := profile.Profile{
 		CareerYears:    atoi(r.FormValue("career_years")),
+		CareerWeight:   atoi(r.FormValue("career_weight")),
 		SalaryFloorKRW: atoi(r.FormValue("salary_floor_man")) * 10000,
+		SalaryWeight:   atoi(r.FormValue("salary_weight")),
 		MaxEducation:   profile.EducationLevel(atoi(r.FormValue("max_education"))),
 		Stacks:         parseStacks(r.FormValue("stacks")),
 		Location: profile.LocationPref{
@@ -289,7 +293,9 @@ func toProfileForm(p profile.Profile) profileForm {
 	}
 	return profileForm{
 		CareerYears:      p.CareerYears,
+		CareerWeight:     p.EffectiveCareerWeight(),
 		SalaryFloorMan:   p.SalaryFloorKRW / 10000,
+		SalaryWeight:     p.EffectiveSalaryWeight(),
 		MaxEducation:     int(p.MaxEducation),
 		StacksText:       strings.Join(stacks, "\n"),
 		CitiesText:       strings.Join(p.Location.Cities, ", "),

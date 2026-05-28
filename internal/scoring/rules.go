@@ -10,19 +10,46 @@ import (
 )
 
 // Scoring point caps. Stack and location award user-assigned weights bounded
-// by their caps; career and salary award fixed points.
+// by their caps; career and salary award the per-profile weights
+// (Profile.CareerWeight / Profile.SalaryWeight) — defaulting to 25/10 when
+// the user has not customized them, which preserves the historical
+// fixed-cap math.
 const (
 	maxTotal = 100
 	stackCap = 50
 
-	careerExact    = 25
-	careerNearMiss = 10
+	// careerNearMissNum/Den derive the near-miss award from the career
+	// weight: near = round(weight * Num/Den). The 2/5 ratio reproduces the
+	// old 25→10 mapping exactly.
+	careerNearMissNum = 2
+	careerNearMissDen = 5
 
 	locationCap = 15
 
-	salaryClear     = 10
-	salaryAmbiguous = 5
+	// salaryAmbiguousNum/Den derive the ambiguous-salary award from
+	// SalaryWeight (the clear-salary award). 1/2 reproduces the old 10→5.
+	salaryAmbiguousNum = 1
+	salaryAmbiguousDen = 2
 )
+
+// careerExactAward returns the chip Delta for an exact career match: the
+// user's CareerWeight, defaulted via EffectiveCareerWeight.
+func careerExactAward(prof profile.Profile) int { return prof.EffectiveCareerWeight() }
+
+// careerNearMissAward returns the near-miss award (one bracket off): a
+// fraction of the exact award, rounded to keep totals integer.
+func careerNearMissAward(prof profile.Profile) int {
+	exact := careerExactAward(prof)
+	return (exact*careerNearMissNum + careerNearMissDen/2) / careerNearMissDen
+}
+
+// salaryClearAward / salaryAmbiguousAward mirror the career awards for
+// the salary category.
+func salaryClearAward(prof profile.Profile) int { return prof.EffectiveSalaryWeight() }
+func salaryAmbiguousAward(prof profile.Profile) int {
+	clear := salaryClearAward(prof)
+	return (clear*salaryAmbiguousNum + salaryAmbiguousDen/2) / salaryAmbiguousDen
+}
 
 // Dealbreaker kinds, recorded on DealbreakerHit.
 const (
@@ -102,9 +129,9 @@ func scoreCareer(p scraper.Posting, prof profile.Profile) (LineItem, bool) {
 
 	switch {
 	case (newcomer && years == 0) || (years >= minC && years <= maxC):
-		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerExact, Reason: careerReason}, true
+		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerExactAward(prof), Reason: careerReason}, true
 	case years == minC-1 || years == maxC+1:
-		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerNearMiss, Reason: careerNearReason}, true
+		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerNearMissAward(prof), Reason: careerNearReason}, true
 	case override:
 		// Parser contradicted the source category but the user doesn't fit the
 		// parsed range either. Surface a 0-delta chip so the missing career
@@ -194,9 +221,9 @@ func scoreSalary(p scraper.Posting, prof profile.Profile) (LineItem, bool) {
 	case !hasSalaryTag:
 		return LineItem{}, false
 	case krw == 0:
-		return LineItem{Label: "연봉", Delta: salaryAmbiguous, Reason: salaryAmbiguousReason}, true
+		return LineItem{Label: "연봉", Delta: salaryAmbiguousAward(prof), Reason: salaryAmbiguousReason}, true
 	case krw >= prof.SalaryFloorKRW:
-		return LineItem{Label: "연봉", Delta: salaryClear, Reason: salaryReason}, true
+		return LineItem{Label: "연봉", Delta: salaryClearAward(prof), Reason: salaryReason}, true
 	default:
 		return LineItem{}, false
 	}

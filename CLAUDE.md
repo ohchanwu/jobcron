@@ -66,7 +66,9 @@ Stack matching uses a separate code path (`scoreStacks`) — case-insensitive ex
 
 ## Scoring math
 
-Categories cap at fixed maxes (Stack 50, Career 25, Location 15, Salary 10), sum to ≤ 100. A dealbreaker hit short-circuits to `Total: -1` regardless of other deltas. Education is a *soft filter* — when `MaxEducation` is set and a posting demands more, that's a `DealbreakerHit{Kind: "education"}`, not a scored line item. See `internal/scoring/rules.go` for the per-category logic.
+Categories cap at maxes (Stack 50, Career = `Profile.CareerWeight` default 25, Location = `Profile.Location.Weight` clamped to 15, Salary = `Profile.SalaryWeight` default 10). Sum to ≤ 100 in the default configuration. A dealbreaker hit short-circuits to `Total: -1` regardless of other deltas. Education is a *soft filter* — when `MaxEducation` is set and a posting demands more, that's a `DealbreakerHit{Kind: "education"}`, not a scored line item. See `internal/scoring/rules.go` for the per-category logic.
+
+`CareerWeight` and `SalaryWeight` were added 2026-05-28 as part of the per-category weights effort. The old fixed constants are gone — they live now as `DefaultCareerWeight` and `DefaultSalaryWeight` in `internal/profile/profile.go`, applied by `Profile.EffectiveCareerWeight` / `EffectiveSalaryWeight` when the user hasn't set them (which preserves scores byte-identical for any saved profile predating the change). Near-miss/ambiguous awards scale proportionally: career near-miss = round(weight × 2/5), salary ambiguous = round(weight ÷ 2), keeping the historical 25→10 and 10→5 ratios exact when the user accepts defaults.
 
 When the profile changes, scores become stale (their `profile_hash` no longer matches the current one). `handleProfileSave` re-scores every posting in the same request; on dashboard render, mismatched-hash scores are recomputed. There is no score history — old values are overwritten by design.
 
