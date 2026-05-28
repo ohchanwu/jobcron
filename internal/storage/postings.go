@@ -19,12 +19,19 @@ const postingColumns = `source, source_posting_id, url, title, company, location
 	always_open, first_seen_at, last_seen_at`
 
 // UpsertPosting inserts p as a new posting or, when a posting with the same
-// (Source, SourcePostingID) already exists, refreshes its last_seen_at. It
-// reports the row id and whether the posting was newly inserted.
+// (Source, SourcePostingID) already exists, refreshes its listing-derived
+// fields and last_seen_at. It reports the row id and whether the posting was
+// newly inserted.
 //
-// On the already-seen path only last_seen_at advances: per the design's
-// scrape flow, postings already in the DB are not re-fetched, so no other
-// field has fresh data to write.
+// On the already-seen path we refresh url, title, company, and location —
+// every scrape re-fetches the listing for these fields, so they're always
+// fresh. If a source changes its URL scheme (as 당근 did when its scraper
+// moved from `about.daangn.com` to `team.daangn.com`) or rewords a posting
+// title, the next scrape picks up the change without needing a one-shot
+// data-migration. Fields that only arrive via FetchDetail (description,
+// stack tags, education, raw JSON) are NOT touched on this path — the
+// already-seen branch skips the detail fetch, so we have no fresh values
+// for them.
 func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64, isNew bool, err error) {
 	var existingID int64
 	err = s.db.QueryRowContext(ctx,
@@ -37,9 +44,11 @@ func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64,
 		return 0, false, fmt.Errorf("storage: look up posting: %w", err)
 	default:
 		if _, err := s.db.ExecContext(ctx,
-			`UPDATE postings SET last_seen_at = ? WHERE id = ?`,
-			p.LastSeenAt.UTC(), existingID); err != nil {
-			return 0, false, fmt.Errorf("storage: update last_seen_at: %w", err)
+			`UPDATE postings
+			    SET url = ?, title = ?, company = ?, location = ?, last_seen_at = ?
+			  WHERE id = ?`,
+			p.URL, p.Title, p.Company, p.Location, p.LastSeenAt.UTC(), existingID); err != nil {
+			return 0, false, fmt.Errorf("storage: update already-seen posting: %w", err)
 		}
 		return existingID, false, nil
 	}

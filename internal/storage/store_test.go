@@ -202,6 +202,71 @@ func TestUpsertPostingUpdatesLastSeenOnConflict(t *testing.T) {
 	}
 }
 
+func TestUpsertPostingRefreshesListingFieldsOnConflict(t *testing.T) {
+	// The 당근 URL repair landed as a one-shot migration in 0004 because
+	// UpsertPosting used to only advance last_seen_at on the already-seen
+	// path. This test guards the structural fix that replaced the migration:
+	// the already-seen branch now refreshes url/title/company/location from
+	// the fresh listing every scrape, so a source changing any of those
+	// fields propagates without needing a migration.
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	first := samplePosting()
+	first.URL = "https://about.daangn.com?gh_jid=123"
+	first.Title = "Backend Engineer"
+	first.Company = "당근"
+	first.Location = "서울 관악구"
+	id1, isNew, err := st.UpsertPosting(ctx, first)
+	if err != nil || !isNew {
+		t.Fatalf("first UpsertPosting: id=%d isNew=%v err=%v", id1, isNew, err)
+	}
+
+	// Same posting on a later scrape — listing now reports a corrected URL
+	// (scraper bug fix) and a slightly reworded title/company/location.
+	again := samplePosting()
+	again.URL = "https://team.daangn.com/jobs/123/"
+	again.Title = "Backend Engineer (Platform)"
+	again.Company = "당근마켓"
+	again.Location = "서울 관악구 봉천동"
+	later := first.LastSeenAt.Add(24 * time.Hour)
+	again.FirstSeenAt = later
+	again.LastSeenAt = later
+	id2, isNew, err := st.UpsertPosting(ctx, again)
+	if err != nil {
+		t.Fatalf("second UpsertPosting: %v", err)
+	}
+	if isNew {
+		t.Errorf("isNew = true, want false on the already-seen path")
+	}
+	if id2 != id1 {
+		t.Errorf("id = %d, want %d (same posting)", id2, id1)
+	}
+
+	got, ok, err := st.PostingByID(ctx, id1)
+	if err != nil || !ok {
+		t.Fatalf("PostingByID: ok=%v err=%v", ok, err)
+	}
+	if got.URL != again.URL {
+		t.Errorf("URL = %q, want %q (must refresh)", got.URL, again.URL)
+	}
+	if got.Title != again.Title {
+		t.Errorf("Title = %q, want %q (must refresh)", got.Title, again.Title)
+	}
+	if got.Company != again.Company {
+		t.Errorf("Company = %q, want %q (must refresh)", got.Company, again.Company)
+	}
+	if got.Location != again.Location {
+		t.Errorf("Location = %q, want %q (must refresh)", got.Location, again.Location)
+	}
+	if !got.LastSeenAt.Equal(later) {
+		t.Errorf("LastSeenAt = %v, want %v (must advance)", got.LastSeenAt, later)
+	}
+	if !got.FirstSeenAt.Equal(first.FirstSeenAt) {
+		t.Errorf("FirstSeenAt = %v, want %v (must NOT change)", got.FirstSeenAt, first.FirstSeenAt)
+	}
+}
+
 func TestUpsertScoreInsertsScore(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
