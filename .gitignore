@@ -25,3 +25,4 @@
 # macOS
 .DS_Store
 .gstack/
+tmp/
