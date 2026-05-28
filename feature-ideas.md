@@ -144,6 +144,21 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 ---
 
+## 네이버페이 (네이버파이낸셜) careers scraper
+
+**What.** Scrape `recruit.naverfincorp.com` (the NAVER FINANCIAL Careers portal — covers 네이버페이 결제·대출·보험·카드·증권·부동산 hiring) for 신입 IT postings.
+
+**Why we want it.** Originally identified as the highest-EV company-careers target after the 네이버 main-careers attempt failed yesterday — 네이버페이 is widely considered a top destination for new-grad fintech engineers in Korea.
+
+**Why not v1 (or v1.1).** Recon on 2026-05-28 found two blockers:
+
+1. **Zero active postings.** The `entTypeCdArr=0010` (신입) filter returns 0 rows. Even with no filter, the list page renders "진행 중인 공고가 없습니다" (no postings in progress). Implementing a scraper against an empty source is pure overhead.
+2. **Same Saramin-style portal as 네이버 main-careers.** The listing is at `/rcrt/list.do`, click handlers are `onclick="show(annoId)"` (JS POST to `/rcrt/view.do`), and the deep-link pattern in `copyUrl()` is `/rcrt/view.do?annoId=X&lang=ko` via GET. Couldn't verify whether the GET form actually renders the posting body (no live data to test against). This is exactly the architecture we deferred 네이버 careers for yesterday.
+
+**Re-recon trigger.** Re-check `recruit.naverfincorp.com/rcrt/list.do?entTypeCdArr=0010` in 3-6 months. If the 신입 count is non-zero, verify the deep-link via real browser click-through against `/rcrt/view.do?annoId=X&lang=ko`. If the body renders, the scraper is viable; if it redirects to `/rcrt/list.do` (the 네이버 main-careers failure mode), defer permanently. JSON API: `GET /rcrt/loadJobList.do?entTypeCdArr=0010&firstIndex=0` returns `{result, list[], totalSize}`; robots.txt 404s (unrestricted per RFC 9309).
+
+---
+
 ## macOS code signing & notarization
 
 **What.** Sign the macOS binary with an Apple Developer ID and notarize it so Gatekeeper doesn't warn on first run.
