@@ -174,6 +174,20 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 ---
 
+## 쿠팡 (Coupang) careers scraper
+
+**What.** Scrape `www.coupang.jobs/kr/jobs/` (the Korean-language Coupang careers portal) for 신입 IT postings.
+
+**Why we want it.** 쿠팡 is one of Korea's largest tech employers; expected meaningful 신입 IT pipeline.
+
+**Why not v1 (or v1.1).** Recon on 2026-05-28 found a hard structural blocker: **Cloudflare anti-bot challenge.** Both `https://www.coupang.jobs/` and `https://www.coupang.jobs/kr/jobs/` return HTTP 403 with the "Attention Required! | Cloudflare" challenge page — for both a vanilla `curl` and a gstack headless Chromium. robots.txt is permissive (`User-agent: * Allow: /`), so the blocker isn't policy; it's anti-bot infrastructure.
+
+This is structurally identical to 원티드 (already noted under "Additional scrapers" above). Bypassing Cloudflare reliably needs either a paid residential-IP proxy, a stealth-headless browser with anti-detection (puppeteer-stealth, Playwright Firefox with fingerprint masking), or Cloudflare's official scraping allowlist — none of which fit v1's pure-Go, no-CGO, no-external-dependency design.
+
+**Re-recon trigger.** When the project adopts an opt-in stealth-headless scraping path (e.g. a `JOBSCRAPER_USE_HEADLESS=1` flag that activates a Chromium subprocess), 쿠팡 and 원티드 become viable together. Until then, hard-blocked.
+
+---
+
 ## macOS code signing & notarization
 
 **What.** Sign the macOS binary with an Apple Developer ID and notarize it so Gatekeeper doesn't warn on first run.
