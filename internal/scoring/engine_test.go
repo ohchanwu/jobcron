@@ -323,6 +323,15 @@ func TestScoreLocation(t *testing.T) {
 		want     int
 	}{
 		{"city substring match", "서울 강남구 테헤란로", nil, []string{"서울"}, 15, false, 15},
+		// User-reported gap (2026-05-28): entering 강남 in cities should
+		// match a posting in 강남구. Both directions of the prefix should
+		// also work — entering 강남구 should match a posting that lists
+		// just 강남, and 서울 should match 서울특별시.
+		{"강남 matches 강남구", "서울 강남구 역삼동", nil, []string{"강남"}, 15, false, 15},
+		{"강남구 matches 강남구", "서울 강남구 역삼동", nil, []string{"강남구"}, 15, false, 15},
+		{"서울 matches 서울특별시", "서울특별시 송파구", nil, []string{"서울"}, 15, false, 15},
+		// Adjacent district must NOT match — 강남 should not accept 강북.
+		{"강남 does NOT match 강북구", "서울 강북구 미아동", nil, []string{"강남"}, 15, false, 0},
 		{"no city match", "부산 해운대구", nil, []string{"서울", "판교"}, 15, false, 0},
 		{"weight below the cap", "서울 마포구", nil, []string{"서울"}, 10, false, 10},
 		{"weight above the cap clamps", "서울 마포구", nil, []string{"서울"}, 99, false, 15},
