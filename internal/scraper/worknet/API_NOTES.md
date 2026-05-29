@@ -115,7 +115,7 @@ Fields TBD until the first detail fixture is captured.
 
 ## Occupation codes (KECO 직종)
 
-The IT cluster lives under the 22xx series. For v1.1 we hard-code these
+The IT cluster lives under the 22xx series. For v1.6 we hard-code these
 four codes, which cover the bulk of 신입 software/engineering postings:
 
 | Code | Korean | English |

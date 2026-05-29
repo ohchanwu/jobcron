@@ -1,4 +1,4 @@
-# Scraper List — v1.1+ Source Roadmap
+# Scraper List — v1.6+ Source Roadmap
 
 The shipping `Scraper` interface (`internal/scraper/scraper.go`) lets us add
 sources incrementally. This file tracks which portals we've evaluated, which

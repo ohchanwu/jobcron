@@ -150,7 +150,7 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 **Why we want it.** Originally identified as the highest-EV company-careers target after the 네이버 main-careers attempt failed yesterday — 네이버페이 is widely considered a top destination for new-grad fintech engineers in Korea.
 
-**Why not v1 (or v1.1).** Recon on 2026-05-28 found two blockers:
+**Why not v1 (or v1.6).** Recon on 2026-05-28 found two blockers:
 
 1. **Zero active postings.** The `entTypeCdArr=0010` (신입) filter returns 0 rows. Even with no filter, the list page renders "진행 중인 공고가 없습니다" (no postings in progress). Implementing a scraper against an empty source is pure overhead.
 2. **Same Saramin-style portal as 네이버 main-careers.** The listing is at `/rcrt/list.do`, click handlers are `onclick="show(annoId)"` (JS POST to `/rcrt/view.do`), and the deep-link pattern in `copyUrl()` is `/rcrt/view.do?annoId=X&lang=ko` via GET. Couldn't verify whether the GET form actually renders the posting body (no live data to test against). This is exactly the architecture we deferred 네이버 careers for yesterday.
@@ -165,7 +165,7 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 **Why we want it.** Toss is a top-tier Korean fintech destination; 신입 engineers consider it a primary target.
 
-**Why not v1 (or v1.1).** Recon on 2026-05-28 found two compounding reasons:
+**Why not v1 (or v1.6).** Recon on 2026-05-28 found two compounding reasons:
 
 1. **Zero IT/dev 신입 postings.** Of 229 active postings on `/career/jobs`, only 6 carry a 신입 or 주니어 tag — and **all 6 are Customer Service, Sales/MD, Product Operations, Securities Settlement, or 온라인검수** roles. Not a single dev/engineering 신입 listing. Toss is hiring extensively, but new-grad pipeline appears to be elsewhere (referrals, internal program).
 2. **robots.txt discourages job-detail crawling.** The bare listing `/career/jobs` is explicitly allowed, but `Disallow: /career/jobs?*` blocks any filtered listing, and `Disallow: /career/job-detail?gh_jid=5599901003` signals intent that individual job pages should not be crawled (even though our project's literal prefix matcher would let `/career/job-detail?job_id=X` through). A respectful crawler should honor the intent, not just the literal rule.
@@ -180,7 +180,7 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 **Why we want it.** 쿠팡 is one of Korea's largest tech employers; expected meaningful 신입 IT pipeline.
 
-**Why not v1 (or v1.1).** Recon on 2026-05-28 found a hard structural blocker: **Cloudflare anti-bot challenge.** Both `https://www.coupang.jobs/` and `https://www.coupang.jobs/kr/jobs/` return HTTP 403 with the "Attention Required! | Cloudflare" challenge page — for both a vanilla `curl` and a gstack headless Chromium. robots.txt is permissive (`User-agent: * Allow: /`), so the blocker isn't policy; it's anti-bot infrastructure.
+**Why not v1 (or v1.6).** Recon on 2026-05-28 found a hard structural blocker: **Cloudflare anti-bot challenge.** Both `https://www.coupang.jobs/` and `https://www.coupang.jobs/kr/jobs/` return HTTP 403 with the "Attention Required! | Cloudflare" challenge page — for both a vanilla `curl` and a gstack headless Chromium. robots.txt is permissive (`User-agent: * Allow: /`), so the blocker isn't policy; it's anti-bot infrastructure.
 
 This is structurally identical to 원티드 (already noted under "Additional scrapers" above). Bypassing Cloudflare reliably needs either a paid residential-IP proxy, a stealth-headless browser with anti-detection (puppeteer-stealth, Playwright Firefox with fingerprint masking), or Cloudflare's official scraping allowlist — none of which fit v1's pure-Go, no-CGO, no-external-dependency design.
 

@@ -51,7 +51,7 @@ To run a single test: `go test ./internal/scoring/ -run TestScoreStacks -v`.
 - **Pure Go, no CGO.** `modernc.org/sqlite` is the SQLite driver specifically because it builds statically without a C toolchain — that's what makes the single-binary distribution story work. GoReleaser sets `CGO_ENABLED=0`. Do not introduce `mattn/go-sqlite3` or any other CGO dependency without confirming with the user; it would break cross-compilation.
 - **FTS5 is available** in `modernc.org/sqlite` v1.50.1 — the Step 0 spike confirmed it on 2026-05-21. The schema in `internal/storage/migrations/0001_initial.sql` uses an external-content FTS5 virtual table over `title + company + description` with `tokenize='unicode61 remove_diacritics 0'` and three sync triggers. Despite that, Korean phrase matching in `internal/scoring/match.go` is implemented in Go (not via `MATCH` SQL) — see the Matching section below.
 - **Single concrete `*storage.Store`** — no repository interface. The design doc explicitly chose this for v1 simplicity; do not add a `StorageInterface` for "testability."
-- **`scraper.Scraper` IS an interface.** This is the seam for v1.1+ adding 원티드 / 프로그래머스 / company pages. New sources go under `internal/scraper/<name>/` and register themselves through `Scraper`. The `internal/scraper` package owns the shared `Posting` and `Tag` domain types.
+- **`scraper.Scraper` IS an interface.** This is the seam for v1.6+ adding 원티드 / 프로그래머스 / company pages. New sources go under `internal/scraper/<name>/` and register themselves through `Scraper`. The `internal/scraper` package owns the shared `Posting` and `Tag` domain types.
 - **One scrape at a time, per source.** `internal/server/singleflight.go` holds a mutex per source key; concurrent POSTs to `/api/scrape` return `409 Conflict`. The HTMX button uses `hx-disabled-elt` for the client side.
 
 ## Korean matching semantics (do not casually change)
@@ -95,7 +95,7 @@ The 1 req/s pacing is `time.Sleep` in `internal/scraper/jumpit/client.go` — de
 
 ## Storage layout
 
-The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.1+ parsers.
+The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.6+ parsers.
 
 **modernc.org/sqlite DATETIME quirk** — when you bind a `time.Time` parameter, the driver serializes via Go's default `time.Time.String()` format (`"2006-01-02 15:04:05.999999999 -0700 MST"`), and that is what lands in the column on disk. For a named DATETIME column, `SELECT col` round-trips back to `time.Time` cleanly. But aggregates like `MAX(col)` lose the DATETIME column tag — `sql.NullTime.Scan` will fail. Read the aggregate into a `sql.NullString` and parse with `timeStoreFormat` in `internal/storage/postings.go` (the constant exists for exactly this).
 
@@ -108,4 +108,4 @@ Don't add (parked in `feature-ideas.md`):
 - Code signing/notarization, Homebrew/Docker/auto-update.
 - A `storage.Storage` interface for testability.
 
-If a change request implies any of these, surface that it's a v1.1+ item before implementing.
+If a change request implies any of these, surface that it's a later-version item — v2.0 for the AI/LLM line, otherwise a future v1.x minor (v1.6+) — before implementing.
