@@ -52,6 +52,55 @@ func TestSweepRemovesStalePostingsRelativeToMax(t *testing.T) {
 	}
 }
 
+// TestSweepThreeDayBoundary pins the exact stale cut: a posting last seen
+// just under 3 days before the freshest one survives; one last seen just over
+// 3 days is swept. The cut is `last_seen_at < MAX(last_seen_at) - 3d`.
+func TestSweepThreeDayBoundary(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+
+	fresh := samplePosting()
+	fresh.SourcePostingID = "fresh"
+	fresh.FirstSeenAt = now.Add(-time.Hour)
+	fresh.LastSeenAt = now // defines the baseline
+	if _, _, err := st.UpsertPosting(ctx, fresh); err != nil {
+		t.Fatalf("UpsertPosting fresh: %v", err)
+	}
+
+	underID := upsertSweepProbe(t, st, "under", now.Add(-(testStaleWindow - time.Hour))) // 2d23h → survives
+	overID := upsertSweepProbe(t, st, "over", now.Add(-(testStaleWindow + time.Hour)))   // 3d1h  → swept
+
+	removed, err := st.SweepStalePostings(ctx, now, testStaleWindow, testOldWindow, nil)
+	if err != nil {
+		t.Fatalf("SweepStalePostings: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("removed = %d, want 1 (only the just-over-3-day posting)", removed)
+	}
+	if _, ok, _ := st.PostingByID(ctx, underID); !ok {
+		t.Error("posting last seen 2d23h ago was swept; just-under-3-days must survive")
+	}
+	if _, ok, _ := st.PostingByID(ctx, overID); ok {
+		t.Error("posting last seen 3d1h ago survived; just-over-3-days must be swept")
+	}
+}
+
+// upsertSweepProbe inserts a posting last seen at lastSeen (first seen well
+// before the old-window so only the stale rule is in play) and returns its id.
+func upsertSweepProbe(t *testing.T, st *Store, id string, lastSeen time.Time) int64 {
+	t.Helper()
+	p := samplePosting()
+	p.SourcePostingID = id
+	p.FirstSeenAt = lastSeen.Add(-24 * time.Hour)
+	p.LastSeenAt = lastSeen
+	rowID, _, err := st.UpsertPosting(context.Background(), p)
+	if err != nil {
+		t.Fatalf("UpsertPosting %s: %v", id, err)
+	}
+	return rowID
+}
+
 func TestSweepRemovesPostingsOlderThanOldWindow(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
