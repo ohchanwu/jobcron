@@ -140,6 +140,29 @@ func TestMutedBookmarkStaysOnBookmarksPage(t *testing.T) {
 	}
 }
 
+// TestProfileFormShowsDerivedWeightHints verifies the profile form renders the
+// near-miss / ambiguous derived awards next to the weight inputs. Default
+// weights (25 / 10) derive to 10 / 5.
+func TestProfileFormShowsDerivedWeightHints(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	twenty5, ten := 25, 10
+	prof := profile.Profile{CareerWeight: twenty5, SalaryWeight: ten}
+	profJSON, _ := profile.Marshal(prof)
+	if _, _, err := st.SaveProfile(context.Background(), profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="derive-career">10<`) {
+		t.Error("/profile career near-miss hint missing or not 10 for CareerWeight=25")
+	}
+	if !strings.Contains(body, `id="derive-salary">5<`) {
+		t.Error("/profile salary ambiguous hint missing or not 5 for SalaryWeight=10")
+	}
+}
+
 // TestProfileFormListsMutedPostings verifies the profile page surfaces an
 // unmute list of every muted posting.
 func TestProfileFormListsMutedPostings(t *testing.T) {

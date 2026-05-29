@@ -537,6 +537,14 @@ form label.check {
   font-size: 0.82rem;
   margin: 0.15rem 0 0;
 }
+/* Derived-value hint shown under a weight input — the live-updated number
+   gets the gold mono treatment so it reads as a computed value. */
+.field-hint.derived { margin-top: 0.4rem; }
+.field-hint.derived strong {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-weight: 500;
+}
 input[type="text"], input[type="number"], select, textarea {
   width: 100%;
   margin-top: 0.45rem;

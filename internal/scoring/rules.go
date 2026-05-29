@@ -39,16 +39,29 @@ func careerExactAward(prof profile.Profile) int { return prof.EffectiveCareerWei
 // careerNearMissAward returns the near-miss award (one bracket off): a
 // fraction of the exact award, rounded to keep totals integer.
 func careerNearMissAward(prof profile.Profile) int {
-	exact := careerExactAward(prof)
-	return (exact*careerNearMissNum + careerNearMissDen/2) / careerNearMissDen
+	return NearMissCareerAward(careerExactAward(prof))
+}
+
+// NearMissCareerAward derives the career near-miss award from a career weight
+// w, using the scorer's round-half-up rule (round(w × 2/5)). Exposed so the
+// profile form can preview the value a given weight produces — keeping the UI
+// hint and the scorer in lockstep with no duplicated formula.
+func NearMissCareerAward(w int) int {
+	return (w*careerNearMissNum + careerNearMissDen/2) / careerNearMissDen
 }
 
 // salaryClearAward / salaryAmbiguousAward mirror the career awards for
 // the salary category.
 func salaryClearAward(prof profile.Profile) int { return prof.EffectiveSalaryWeight() }
 func salaryAmbiguousAward(prof profile.Profile) int {
-	clear := salaryClearAward(prof)
-	return (clear*salaryAmbiguousNum + salaryAmbiguousDen/2) / salaryAmbiguousDen
+	return AmbiguousSalaryAward(salaryClearAward(prof))
+}
+
+// AmbiguousSalaryAward derives the ambiguous-salary award from a salary weight
+// w (round(w ÷ 2)), the AmbiguousSalaryAward counterpart of
+// NearMissCareerAward. Exposed for the profile form's live preview.
+func AmbiguousSalaryAward(w int) int {
+	return (w*salaryAmbiguousNum + salaryAmbiguousDen/2) / salaryAmbiguousDen
 }
 
 // Dealbreaker kinds, recorded on DealbreakerHit.

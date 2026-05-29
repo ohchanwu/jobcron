@@ -219,8 +219,10 @@ func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) string {
 type profileForm struct {
 	CareerYears      int
 	CareerWeight     int
+	CareerNearMiss   int // derived: round(CareerWeight × 2/5), shown as a hint
 	SalaryFloorMan   int
 	SalaryWeight     int
+	SalaryAmbiguous  int // derived: round(SalaryWeight ÷ 2), shown as a hint
 	MinScore         int
 	MaxEducation     int
 	StacksText       string
@@ -329,8 +331,10 @@ func toProfileForm(p profile.Profile) profileForm {
 	return profileForm{
 		CareerYears:      p.CareerYears,
 		CareerWeight:     p.EffectiveCareerWeight(),
+		CareerNearMiss:   scoring.NearMissCareerAward(p.EffectiveCareerWeight()),
 		SalaryFloorMan:   p.SalaryFloorKRW / 10000,
 		SalaryWeight:     p.EffectiveSalaryWeight(),
+		SalaryAmbiguous:  scoring.AmbiguousSalaryAward(p.EffectiveSalaryWeight()),
 		MinScore:         p.EffectiveMinScore(),
 		MaxEducation:     int(p.MaxEducation),
 		StacksText:       strings.Join(stacks, "\n"),
