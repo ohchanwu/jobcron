@@ -41,12 +41,20 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 	if err != nil {
 		return bookmarksView{}, err
 	}
+	// A bookmarked posting can also be muted ("관심 없음"); it stays visible
+	// here (unlike on the briefing / 관심 공고 list) but renders its mute
+	// toggle in the on state so the user can un-mute it from here too.
+	muted, err := s.store.NotInterestedIDs(ctx)
+	if err != nil {
+		return bookmarksView{}, err
+	}
 	view := bookmarksView{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
 		dp := dashboardPosting{
-			Posting:    p,
-			Bookmarked: true, // every row here is bookmarked by definition
-			Deadline:   deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
+			Posting:       p,
+			Bookmarked:    true, // every row here is bookmarked by definition
+			NotInterested: muted[p.ID],
+			Deadline:      deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total

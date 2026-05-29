@@ -440,6 +440,43 @@ nav.primary a.active {
 .bookmark.on svg path { fill: var(--accent); }
 .bookmark:disabled { cursor: default; opacity: 0.6; }
 
+/* Action cluster — the mute ("관심 없음") and bookmark buttons share the
+   third grid column of .posting, sitting close together at the row's edge. */
+.posting-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+
+/* "관심 없음" mute icon — Lucide eye-off, stroke-based (the bookmark fills;
+   this one stays an outline). Hover stays neutral rather than gold: saving a
+   posting is encouraged, hiding one is merely available — the calm thesis
+   says don't nudge people to dismiss. Once muted, the gold "on" tint matches
+   every other active toggle in the app. */
+.not-interested {
+  background: none;
+  border: 0;
+  padding: 0.3rem;
+  margin-top: 0.2rem;
+  cursor: pointer;
+  color: var(--ink-soft);
+  line-height: 0;
+  border-radius: 3px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.not-interested svg { display: block; }
+.not-interested:hover { color: var(--ink); background: var(--accent-soft); }
+.not-interested.on { color: var(--accent); }
+.not-interested:disabled { cursor: default; opacity: 0.6; }
+
+/* Gentle exit for a card the user just muted (or a profile row just
+   un-muted): fade before the JS removes the node from the DOM. */
+.posting.removing,
+.muted-item.removing {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
 /* Empty state */
 .empty { text-align: center; padding: 4rem 1rem; }
 .empty-title { font-weight: 600; font-size: 1.05rem; margin: 0 0 0.5rem; }
@@ -542,3 +579,43 @@ textarea { resize: vertical; min-height: 4rem; }
 }
 .source-toggles .field-hint { margin-bottom: 0.7rem; }
 .source-toggles .check { margin-top: 0.4rem; }
+
+/* Profile "관심 없음" unmute list — postings the user has muted, with a
+   one-click restore. Mirrors the .source-toggles card framing. */
+.muted-list {
+  margin: 2.5rem 0 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.muted-list h2 {
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin: 0;
+}
+.muted-list .field-hint { margin: 0.15rem 0 0.7rem; }
+.muted-list ul { list-style: none; padding: 0; margin: 0; }
+.muted-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--rule);
+}
+.muted-item:first-child { border-top: 0; }
+.muted-item .not-interested { margin-top: 0; flex: 0 0 auto; }
+.muted-item-body { min-width: 0; }
+.muted-item-title {
+  display: block;
+  font-weight: 500;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.muted-item-company {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}

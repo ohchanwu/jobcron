@@ -28,7 +28,7 @@
 
     <nav class="primary">
       <a href="/">데일리 브리핑</a>
-      <a href="/archive">전체 공고</a>
+      <a href="/archive">관심 공고</a>
       <a href="/bookmarks">북마크</a>
       <a href="/profile" class="active">프로필 설정</a>
     </nav>
@@ -94,7 +94,7 @@
       {{if .Sources}}
       <fieldset class="source-toggles">
         <legend>공고 출처</legend>
-        <span class="field-hint">체크 해제한 출처의 공고는 브리핑과 전체 공고에서 숨겨져요. 저장한 공고는 그대로 보여요.</span>
+        <span class="field-hint">체크 해제한 출처의 공고는 브리핑과 관심 공고에서 숨겨져요. 저장한 공고는 그대로 보여요.</span>
         {{range .Sources}}
         <label class="check">
           <input type="checkbox" name="source_{{.ID}}"{{if .Enabled}} checked{{end}}> {{.Label}}
@@ -120,8 +120,37 @@
         <button type="submit" class="btn-primary">저장하고 브리핑 보기 <span class="arrow">→</span></button>
       </div>
     </form>
+
+    {{if .Muted}}
+    <section class="muted-list">
+      <h2>관심 없음</h2>
+      <p class="field-hint">관심 없음으로 표시한 공고예요. 다시 보고 싶으면 옆의 버튼을 눌러 해제하세요.</p>
+      <ul>
+        {{range .Muted}}
+        <li class="muted-item">
+          <div class="muted-item-body">
+            <span class="muted-item-title">{{.Title}}</span>
+            <span class="muted-item-company">{{.Company}}</span>
+          </div>
+          <button class="not-interested on" type="button"
+                  data-posting-id="{{.ID}}"
+                  aria-pressed="true"
+                  aria-label="관심 없음 해제">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+              <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+              <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+              <line x1="2" x2="22" y1="2" y2="22" />
+            </svg>
+          </button>
+        </li>
+        {{end}}
+      </ul>
+    </section>
+    {{end}}
   </div>
 
   <script src="/static/theme.js"></script>
+  <script src="/static/not-interested.js"></script>
 </body>
 </html>

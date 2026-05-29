@@ -20,11 +20,12 @@ type archiveDay struct {
 	Postings []dashboardPosting
 }
 
-// archiveView is the view model for the /archive page.
+// archiveView is the view model for the /archive (관심 공고) page.
 type archiveView struct {
-	Today string // header date, mirroring the briefing view's Date field
-	Days  []archiveDay
-	Total int // total posting count across all days, for the header counter
+	Today    string // header date, mirroring the briefing view's Date field
+	Days     []archiveDay
+	Excluded []dashboardPosting // below-MinScore / dealbreaker rows, collapsed
+	Total    int                // total posting count (main + excluded), for the header counter
 }
 
 // handleArchive renders every posting the scraper has ever stored, grouped
@@ -56,6 +57,10 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 	if err != nil {
 		return archiveView{}, err
 	}
+	muted, err := s.store.NotInterestedIDs(ctx)
+	if err != nil {
+		return archiveView{}, err
+	}
 	dupSources, err := s.store.DuplicateSourcesByCanonical(ctx)
 	if err != nil {
 		return archiveView{}, err
@@ -65,10 +70,13 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 		return archiveView{}, err
 	}
 	disabled := s.disabledSourceSet(prof.DisabledSources)
+	minScore := prof.EffectiveMinScore()
 
+	// Muted ("관심 없음") postings vanish from this page entirely, just like
+	// the briefing — they are not merely demoted into the 관심 밖 collapsible.
 	postings := make([]scraper.Posting, 0, len(allPostings))
 	for _, p := range allPostings {
-		if !disabled[p.Source] {
+		if !disabled[p.Source] && !muted[p.ID] {
 			postings = append(postings, p)
 		}
 	}
@@ -88,12 +96,22 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 		}
 		if sc, ok := scores[p.ID]; ok {
 			dp.Total = sc.Total
-			dp.Excluded = sc.Total < 0
+			// Mirror the briefing's split: dealbreaker hits (Total < 0) and
+			// rows below the MinScore threshold drop out of the day-grouped
+			// list into a single "관심 밖으로 분류된 공고" collapsible, instead
+			// of the old inline-dimmed treatment. MinScore = 0 keeps every
+			// non-dealbreaker row in the main list.
+			dp.Excluded = sc.Total < 0 || sc.Total < minScore
 			var result scoring.ScoreResult
 			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 				dp.Explanation = scoring.Explain(result)
 				dp.Breakdown = result.Breakdown
 			}
+		}
+
+		if dp.Excluded {
+			view.Excluded = append(view.Excluded, dp)
+			continue
 		}
 
 		seenKST := p.FirstSeenAt.In(kstZone)

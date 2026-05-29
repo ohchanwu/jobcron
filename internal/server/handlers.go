@@ -27,6 +27,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
 	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
 	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)
+	mux.HandleFunc("PUT /api/not-interested/{id}", s.handleNotInterestedAdd)
+	mux.HandleFunc("DELETE /api/not-interested/{id}", s.handleNotInterestedRemove)
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.FS(web.FS))))
 	return mux
@@ -62,6 +64,7 @@ type dashboardPosting struct {
 	Total            int
 	Excluded         bool
 	Bookmarked       bool               // user has saved this posting
+	NotInterested    bool               // user has muted this posting ("관심 없음")
 	Explanation      string             // "React +20 · 신입 +25 ..." (used for excluded rows)
 	Breakdown        []scoring.LineItem // structured line items, rendered as chips
 	Deadline         string             // "오늘 마감" | "마감 D-2" | ""
@@ -124,6 +127,10 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if err != nil {
 		return briefing{}, err
 	}
+	muted, err := s.store.NotInterestedIDs(ctx)
+	if err != nil {
+		return briefing{}, err
+	}
 	dupSources, err := s.store.DuplicateSourcesByCanonical(ctx)
 	if err != nil {
 		return briefing{}, err
@@ -135,7 +142,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	disabled := s.disabledSourceSet(prof.DisabledSources)
 	b := briefing{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
-		if disabled[p.Source] {
+		if disabled[p.Source] || muted[p.ID] {
 			continue
 		}
 		if !sameKSTDay(p.FirstSeenAt, now) || expired(p, now) {
@@ -220,6 +227,15 @@ type profileForm struct {
 	MustHaveText     string
 	DealbreakersText string
 	Sources          []sourceOption // one row per registered scraper
+	Muted            []mutedPosting // postings the user marked 관심 없음
+}
+
+// mutedPosting is a single row in the profile form's "관심 없음" unmute list:
+// just enough to identify the posting and target the unmute endpoint.
+type mutedPosting struct {
+	ID      int64
+	Title   string
+	Company string
 }
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
@@ -238,6 +254,14 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 	}
 	form := toProfileForm(p)
 	form.Sources = s.sourceOptions(p.DisabledSources)
+	mutedPostings, err := s.store.NotInterestedPostings(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, mp := range mutedPostings {
+		form.Muted = append(form.Muted, mutedPosting{ID: mp.ID, Title: mp.Title, Company: mp.Company})
+	}
 	s.render(w, "profile.html", form)
 }
 

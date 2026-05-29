@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/storage"
 )
 
@@ -101,6 +102,15 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 
+	// MinScore = 0 keeps every row in the main day list — this test is about
+	// sort order, not the below-MinScore split (see
+	// TestArchiveRoutesBelowMinScoreToExcluded for that).
+	zero := 0
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
 	// Three postings on the same KST day, inserted in an order that does
 	// NOT match the score order. Expectation: the day's postings render
 	// score-descending, not insertion-order.
@@ -145,6 +155,110 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 				[]string{got[0].Posting.Title, got[1].Posting.Title, got[2].Posting.Title})
 		}
 	}
+}
+
+// TestArchiveRoutesBelowMinScoreToExcluded covers task 1(b): the 관심 공고
+// page mirrors the briefing's MinScore split. A posting scoring 35 with
+// MinScore = 40 lands in the collapsible Excluded list, not the main
+// day-grouped list; a 50 stays in the main list.
+func TestArchiveRoutesBelowMinScoreToExcluded(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+
+	forty := 40
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	day := time.Date(2026, 5, 29, 6, 0, 0, 0, time.UTC)
+	low := listingPosting("low", "낮은 점수 공고")
+	low.FirstSeenAt, low.LastSeenAt = day, day
+	high := listingPosting("high", "높은 점수 공고")
+	high.FirstSeenAt, high.LastSeenAt = day, day
+	lowID := mustUpsert(t, st, low)
+	highID := mustUpsert(t, st, high)
+	for id, total := range map[int64]int{lowID: 35, highID: 50} {
+		if err := st.UpsertScore(ctx, storage.Score{
+			PostingID: id, ProfileHash: "test", Total: total,
+			BreakdownJSON: "[]", ComputedAt: time.Now(),
+		}); err != nil {
+			t.Fatalf("UpsertScore id=%d: %v", id, err)
+		}
+	}
+
+	view, err := srv.buildArchive(ctx, day.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("buildArchive: %v", err)
+	}
+
+	if len(view.Excluded) != 1 || view.Excluded[0].Posting.Title != "낮은 점수 공고" {
+		t.Errorf("Excluded = %v, want exactly [낮은 점수 공고]", postingTitles(view.Excluded))
+	}
+	var dayTitles []string
+	for _, d := range view.Days {
+		for _, p := range d.Postings {
+			dayTitles = append(dayTitles, p.Posting.Title)
+		}
+	}
+	if len(dayTitles) != 1 || dayTitles[0] != "높은 점수 공고" {
+		t.Errorf("main day list = %v, want exactly [높은 점수 공고]", dayTitles)
+	}
+	// Total counts both the main and excluded postings.
+	if view.Total != 2 {
+		t.Errorf("Total = %d, want 2 (main + excluded)", view.Total)
+	}
+}
+
+// TestArchiveHidesMutedPostings covers task 1(c): a muted ("관심 없음")
+// posting vanishes from 관심 공고 entirely — not into the Excluded
+// collapsible, but gone from both lists.
+func TestArchiveHidesMutedPostings(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+
+	zero := 0
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	day := time.Date(2026, 5, 29, 6, 0, 0, 0, time.UTC)
+	shown := listingPosting("shown", "보이는 공고")
+	shown.FirstSeenAt, shown.LastSeenAt = day, day
+	hidden := listingPosting("hidden", "숨긴 공고")
+	hidden.FirstSeenAt, hidden.LastSeenAt = day, day
+	mustUpsert(t, st, shown)
+	hiddenID := mustUpsert(t, st, hidden)
+	if err := st.SetNotInterested(ctx, hiddenID, time.Now()); err != nil {
+		t.Fatalf("SetNotInterested: %v", err)
+	}
+
+	view, err := srv.buildArchive(ctx, day.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("buildArchive: %v", err)
+	}
+	if view.Total != 1 {
+		t.Errorf("Total = %d, want 1 (the muted posting is gone)", view.Total)
+	}
+	all := postingTitles(view.Excluded)
+	for _, d := range view.Days {
+		all = append(all, postingTitles(d.Postings)...)
+	}
+	for _, title := range all {
+		if title == "숨긴 공고" {
+			t.Errorf("muted posting still present in archive view: %v", all)
+		}
+	}
+}
+
+// postingTitles is a test helper: pull the titles out of a slice of rows.
+func postingTitles(rows []dashboardPosting) []string {
+	out := make([]string, 0, len(rows))
+	for _, p := range rows {
+		out = append(out, p.Posting.Title)
+	}
+	return out
 }
 
 func TestArchiveMarksBookmarkedRows(t *testing.T) {

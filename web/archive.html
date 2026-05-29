@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>전체 공고 — 오늘의 채용 브리핑</title>
+  <title>관심 공고 — 오늘의 채용 브리핑</title>
   <script>
     (function () {
       try {
@@ -19,7 +19,7 @@
     <header>
       <div>
         <p class="eyebrow">그동안의</p>
-        <h1>전체 공고</h1>
+        <h1>관심 공고</h1>
       </div>
       <div class="head-right">
         {{.Today}}
@@ -29,7 +29,7 @@
 
     <nav class="primary">
       <a href="/">데일리 브리핑</a>
-      <a href="/archive" class="active">전체 공고</a>
+      <a href="/archive" class="active">관심 공고</a>
       <a href="/bookmarks">북마크</a>
       <a href="/profile">프로필 설정</a>
     </nav>
@@ -52,15 +52,15 @@
         {{end}}
       </div>
       <p id="source-filter-empty" class="source-filter-empty" hidden></p>
-      {{if .Days}}
+      {{if or .Days .Excluded}}
         {{range .Days}}
         <section class="archive-day">
           <h2 class="day-header">{{.Date}}{{if .IsToday}} <span class="day-today">오늘</span>{{end}}</h2>
           <ol class="postings">
             {{range .Postings}}
-            <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
+            <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
               <div class="score-cell">
-                <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
+                <span class="score">{{.Total}}</span>
                 <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
               </div>
               <div class="posting-body">
@@ -76,18 +76,74 @@
                 </div>
                 {{end}}
               </div>
-              <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button"
-                      data-posting-id="{{.Posting.ID}}"
-                      aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}"
-                      aria-label="북마크">
-                <svg viewBox="0 0 20 20" width="24" height="24" aria-hidden="true">
-                  <path d="M5 3h10v15l-5-3.5L5 18z" />
-                </svg>
-              </button>
+              <div class="posting-actions">
+                <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"
+                        data-posting-id="{{.Posting.ID}}"
+                        aria-pressed="{{if .NotInterested}}true{{else}}false{{end}}"
+                        aria-label="관심 없음">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                    <line x1="2" x2="22" y1="2" y2="22" />
+                  </svg>
+                </button>
+                <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button"
+                        data-posting-id="{{.Posting.ID}}"
+                        aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}"
+                        aria-label="북마크">
+                  <svg viewBox="0 0 20 20" width="24" height="24" aria-hidden="true">
+                    <path d="M5 3h10v15l-5-3.5L5 18z" />
+                  </svg>
+                </button>
+              </div>
             </li>
             {{end}}
           </ol>
         </section>
+        {{end}}
+        {{if .Excluded}}
+        <details class="excluded-box">
+          <summary>관심 밖으로 분류된 공고 {{len .Excluded}}개</summary>
+          <ol class="postings">
+            {{range .Excluded}}
+            <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
+              <div class="score-cell">
+                <span class="score">—</span>
+                <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
+              </div>
+              <div class="posting-body">
+                <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
+                <div class="posting-meta">
+                  <span>{{.Posting.Company}}</span>
+                  {{if .Explanation}}<span class="sep">/</span><span>{{.Explanation}}</span>{{end}}
+                </div>
+              </div>
+              <div class="posting-actions">
+                <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"
+                        data-posting-id="{{.Posting.ID}}"
+                        aria-pressed="{{if .NotInterested}}true{{else}}false{{end}}"
+                        aria-label="관심 없음">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                    <line x1="2" x2="22" y1="2" y2="22" />
+                  </svg>
+                </button>
+                <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button"
+                        data-posting-id="{{.Posting.ID}}"
+                        aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}"
+                        aria-label="북마크">
+                  <svg viewBox="0 0 20 20" width="24" height="24" aria-hidden="true">
+                    <path d="M5 3h10v15l-5-3.5L5 18z" />
+                  </svg>
+                </button>
+              </div>
+            </li>
+            {{end}}
+          </ol>
+        </details>
         {{end}}
       {{else}}
         <div class="empty">
@@ -102,6 +158,7 @@
 
   <script src="/static/theme.js"></script>
   <script src="/static/bookmark.js"></script>
+  <script src="/static/not-interested.js"></script>
   <script src="/static/source-filter.js"></script>
 </body>
 </html>
