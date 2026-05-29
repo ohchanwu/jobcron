@@ -29,6 +29,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)
 	mux.HandleFunc("PUT /api/not-interested/{id}", s.handleNotInterestedAdd)
 	mux.HandleFunc("DELETE /api/not-interested/{id}", s.handleNotInterestedRemove)
+	// Browsers request /favicon.ico at the root regardless of the <link>
+	// tags; redirect those to the embedded asset so they stop 404ing.
+	mux.Handle("GET /favicon.ico", http.RedirectHandler("/static/favicon.ico", http.StatusMovedPermanently))
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.FS(web.FS))))
 	return mux

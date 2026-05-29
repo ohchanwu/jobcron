@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="오늘의 채용 브리핑">
+  <!-- Self-contained tile in the app's neutral-dark bg, so the gold mark
+       stays legible on any browser-tab background (light or dark). -->
+  <rect width="32" height="32" rx="7" fill="#15120d"/>
+  <g stroke="#d4ad5a" stroke-width="2" stroke-linecap="round" fill="none">
+    <!-- sunrise rays -->
+    <line x1="16" y1="5" x2="16" y2="8"/>
+    <line x1="7.7" y1="9.3" x2="9.8" y2="11.4"/>
+    <line x1="24.3" y1="9.3" x2="22.2" y2="11.4"/>
+    <!-- horizon -->
+    <line x1="6" y1="23" x2="26" y2="23"/>
+  </g>
+  <!-- half sun rising above the horizon -->
+  <path d="M9.5 20.5 a6.5 6.5 0 0 1 13 0 Z" fill="#d4ad5a"/>
+</svg>

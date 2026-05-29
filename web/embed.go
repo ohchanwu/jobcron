@@ -4,9 +4,9 @@ package web
 
 import "embed"
 
-// FS holds the HTML templates and static assets (CSS, JS, vendored fonts)
-// for the UI. Fonts are vendored under vendor/fonts/ so the app renders
-// correctly offline — no CDN fetches at runtime.
+// FS holds the HTML templates and static assets (CSS, JS, favicons,
+// vendored fonts) for the UI. Fonts are vendored under vendor/fonts/ so the
+// app renders correctly offline — no CDN fetches at runtime.
 //
-//go:embed *.html *.css *.js vendor/fonts/*.woff2
+//go:embed *.html *.css *.js *.svg *.ico vendor/fonts/*.woff2
 var FS embed.FS
