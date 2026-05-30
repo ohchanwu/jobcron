@@ -100,8 +100,10 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 			// rows below the MinScore threshold drop out of the day-grouped
 			// list into a single "관심 밖으로 분류된 공고" collapsible, instead
 			// of the old inline-dimmed treatment. MinScore = 0 keeps every
-			// non-dealbreaker row in the main list.
-			dp.Excluded = sc.Total < 0 || sc.Total < minScore
+			// non-dealbreaker row in the main list. A bookmarked posting is
+			// exempt from the soft MinScore hide (the user saved it) but not
+			// from the dealbreaker hide — Total < 0 stays unconditional.
+			dp.Excluded = sc.Total < 0 || (sc.Total < minScore && !bookmarks[p.ID])
 			var result scoring.ScoreResult
 			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 				dp.Explanation = scoring.Explain(result)

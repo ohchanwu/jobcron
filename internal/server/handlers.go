@@ -163,8 +163,10 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 			// MinScore knob collapses additional low-scoring rows out of
 			// the main "Today" list — the user can still find them under
 			// the expandable "제외된 공고" section. MinScore = 0 disables
-			// the soft-hide entirely.
-			dp.Excluded = sc.Total < 0 || sc.Total < prof.EffectiveMinScore()
+			// the soft-hide entirely. A bookmarked posting is exempt from
+			// the soft MinScore hide (the user deliberately saved it) but
+			// NOT from the dealbreaker hide — Total < 0 stays unconditional.
+			dp.Excluded = sc.Total < 0 || (sc.Total < prof.EffectiveMinScore() && !bookmarks[p.ID])
 			var result scoring.ScoreResult
 			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 				dp.Explanation = scoring.Explain(result)
