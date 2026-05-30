@@ -45,6 +45,11 @@ func TestAmbiguousSalaryAward(t *testing.T) {
 // returns the derived awards for a profile's effective weights, sharing the
 // same formula the per-posting scorer applies. Defaults (25 / 10) → (10 / 5).
 func TestWeightHints(t *testing.T) {
+	// Zero-value profile: the effective-weight defaults (25 / 10) feed the
+	// formula, so the hints are the historical 10 / 5 even with weights unset.
+	if career, salary := WeightHints(profile.Profile{}); career != 10 || salary != 5 {
+		t.Errorf("WeightHints(zero value) = (%d, %d), want (10, 5) via effective defaults", career, salary)
+	}
 	if career, salary := WeightHints(profile.Profile{CareerWeight: 25, SalaryWeight: 10}); career != 10 || salary != 5 {
 		t.Errorf("WeightHints(defaults) = (%d, %d), want (10, 5)", career, salary)
 	}

@@ -97,3 +97,58 @@ func TestHiddenPageHasNavLink(t *testing.T) {
 		t.Error("/hidden missing the active 숨긴 공고 nav link")
 	}
 }
+
+// TestHiddenOrdersByMostRecentlyMuted locks the ordering contract buildHidden
+// relies on (storage muted_at DESC): the most recently hidden posting is first.
+func TestHiddenOrdersByMostRecentlyMuted(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	base := time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC)
+	first := mustUpsert(t, st, listingPosting("a", "먼저 숨긴 공고"))
+	second := mustUpsert(t, st, listingPosting("b", "그다음 숨긴 공고"))
+	third := mustUpsert(t, st, listingPosting("c", "마지막에 숨긴 공고"))
+	// Mute in ascending time order; expect descending (latest first) in the view.
+	if err := st.SetNotInterested(ctx, first, base); err != nil {
+		t.Fatalf("mute first: %v", err)
+	}
+	if err := st.SetNotInterested(ctx, second, base.Add(time.Hour)); err != nil {
+		t.Fatalf("mute second: %v", err)
+	}
+	if err := st.SetNotInterested(ctx, third, base.Add(2*time.Hour)); err != nil {
+		t.Fatalf("mute third: %v", err)
+	}
+
+	view, err := srv.buildHidden(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("buildHidden: %v", err)
+	}
+	got := postingTitles(view.Postings)
+	want := []string{"마지막에 숨긴 공고", "그다음 숨긴 공고", "먼저 숨긴 공고"}
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("/hidden order = %v, want %v (most-recently-muted first)", got, want)
+	}
+}
+
+// TestHiddenMarksDealbreakerExcluded verifies a muted posting that is a
+// dealbreaker hit (Total < 0) is flagged Excluded, so /hidden renders it dimmed
+// with "—" rather than a bogus score.
+func TestHiddenMarksDealbreakerExcluded(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	id := mustUpsert(t, st, listingPosting("db", "제외 점수 숨긴 공고"))
+	if err := st.SetNotInterested(ctx, id, time.Now()); err != nil {
+		t.Fatalf("SetNotInterested: %v", err)
+	}
+	scoreEach(t, st, map[int64]int{id: -1})
+
+	view, err := srv.buildHidden(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("buildHidden: %v", err)
+	}
+	if len(view.Postings) != 1 {
+		t.Fatalf("want 1 posting, got %d", len(view.Postings))
+	}
+	if !view.Postings[0].Excluded {
+		t.Error("dealbreaker-hit muted posting should be marked Excluded (dimmed with —) on /hidden")
+	}
+}

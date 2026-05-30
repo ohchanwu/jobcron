@@ -189,3 +189,33 @@ func TestArchiveMutedBookmarkStaysHidden(t *testing.T) {
 		t.Errorf("Total = %d, want 0 (the muted posting is filtered before the partition)", view.Total)
 	}
 }
+
+// TestBookmarksShowBelowMinScore is the counterpart to the bookmark exemption:
+// /bookmarks ignores MinScore entirely (it dims only dealbreaker hits), so a
+// bookmarked posting scoring below MinScore stays fully visible there — the
+// page is the deliberate keep-list, not a scored briefing.
+func TestBookmarksShowBelowMinScore(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	forty := 40
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	id := mustUpsert(t, st, listingPosting("bm", "저점수 북마크 공고"))
+	if err := st.SetBookmark(ctx, id, time.Now()); err != nil {
+		t.Fatalf("SetBookmark: %v", err)
+	}
+	scoreEach(t, st, map[int64]int{id: 10}) // below MinScore 40
+
+	view, err := srv.buildBookmarks(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("buildBookmarks: %v", err)
+	}
+	if len(view.Postings) != 1 || view.Postings[0].Posting.Title != "저점수 북마크 공고" {
+		t.Errorf("/bookmarks should show a below-MinScore bookmark; got %v", postingTitles(view.Postings))
+	}
+	if view.Postings[0].Excluded {
+		t.Error("a below-MinScore (non-dealbreaker) bookmark must not be dimmed on /bookmarks")
+	}
+}

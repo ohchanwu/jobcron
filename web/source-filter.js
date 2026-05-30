@@ -40,12 +40,13 @@
     });
 
     /* The 관심 밖 collapsible (only on / and /archive) and its count span. We
-       remember whether WE opened the box for a search so clearing the search
-       collapses it again — without stomping a box the user opened themselves. */
+       snapshot the box's open state when a search becomes active and restore it
+       when the search clears, so search can drive the box open/closed during a
+       query without losing whatever the user had set before they typed. */
     var excludedBox = document.querySelector('.excluded-box');
     var countEl = excludedBox ? excludedBox.querySelector('.excluded-count') : null;
     var originalCount = countEl ? countEl.textContent : null;
-    var boxOpenedBySearch = false;
+    var preSearchOpen = null;
 
     markEmptyPills(container, cards);
 
@@ -97,18 +98,19 @@
     function updateExcludedBox(q) {
       if (!excludedBox) return;
       if (q !== '') {
+        // Snapshot the user's open state once, when the search begins.
+        if (preSearchOpen === null) preSearchOpen = excludedBox.open;
         var visibleInside = excludedBox.querySelectorAll('.posting:not(.filter-hidden)').length;
-        if (visibleInside > 0) {
-          if (!excludedBox.open) { excludedBox.open = true; boxOpenedBySearch = true; }
-        } else if (boxOpenedBySearch) {
-          excludedBox.open = false;
-          boxOpenedBySearch = false;
-        }
+        // Search-driven: open the box iff a match lives inside it — so a match
+        // is never stranded behind a collapsed summary, and the box never stays
+        // expanded over zero matching content (even if the user opened it).
+        excludedBox.open = visibleInside > 0;
         if (countEl) countEl.textContent = visibleInside;
       } else {
-        if (boxOpenedBySearch) {
-          excludedBox.open = false;
-          boxOpenedBySearch = false;
+        // Search cleared: restore exactly what the user had before they typed.
+        if (preSearchOpen !== null) {
+          excludedBox.open = preSearchOpen;
+          preSearchOpen = null;
         }
         if (countEl && originalCount !== null) countEl.textContent = originalCount;
       }
