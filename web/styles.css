@@ -492,10 +492,9 @@ nav.primary a.active {
 .not-interested.on { color: var(--accent); }
 .not-interested:disabled { cursor: default; opacity: 0.6; }
 
-/* Gentle exit for a card the user just muted (or a profile row just
-   un-muted): fade before the JS removes the node from the DOM. */
-.posting.removing,
-.muted-item.removing {
+/* Gentle exit for a card the user just muted or un-hid: fade before the JS
+   removes the node from the DOM. */
+.posting.removing {
   opacity: 0;
   transition: opacity 0.22s ease;
 }
@@ -610,43 +609,3 @@ textarea { resize: vertical; min-height: 4rem; }
 }
 .source-toggles .field-hint { margin-bottom: 0.7rem; }
 .source-toggles .check { margin-top: 0.4rem; }
-
-/* Profile "관심 없음" unmute list — postings the user has muted, with a
-   one-click restore. Mirrors the .source-toggles card framing. */
-.muted-list {
-  margin: 2.5rem 0 0;
-  padding: 0.9rem 1rem 1rem;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-}
-.muted-list h2 {
-  font-weight: 600;
-  font-size: 0.92rem;
-  margin: 0;
-}
-.muted-list .field-hint { margin: 0.15rem 0 0.7rem; }
-.muted-list ul { list-style: none; padding: 0; margin: 0; }
-.muted-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.5rem 0;
-  border-top: 1px solid var(--rule);
-}
-.muted-item:first-child { border-top: 0; }
-.muted-item .not-interested { margin-top: 0; flex: 0 0 auto; }
-.muted-item-body { min-width: 0; }
-.muted-item-title {
-  display: block;
-  font-weight: 500;
-  font-size: 0.92rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.muted-item-company {
-  display: block;
-  color: var(--ink-soft);
-  font-size: 0.8rem;
-}

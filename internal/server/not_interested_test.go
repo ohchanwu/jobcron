@@ -164,27 +164,3 @@ func TestProfileFormShowsDerivedWeightHints(t *testing.T) {
 		t.Error("/profile salary ambiguous hint missing or not 5 for SalaryWeight=10")
 	}
 }
-
-// TestProfileFormListsMutedPostings verifies the profile page surfaces an
-// unmute list of every muted posting.
-func TestProfileFormListsMutedPostings(t *testing.T) {
-	srv, st := newTestServer(t, &fakeScraper{})
-	ctx := context.Background()
-	id := mustUpsert(t, st, listingPosting("m1", "관심 없앤 공고"))
-	if err := st.SetNotInterested(ctx, id, time.Now()); err != nil {
-		t.Fatalf("SetNotInterested: %v", err)
-	}
-
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "<h2>관심 없음</h2>") {
-		t.Error("/profile missing the 관심 없음 unmute section")
-	}
-	if !strings.Contains(body, "관심 없앤 공고") {
-		t.Error("/profile unmute list missing the muted posting title")
-	}
-}

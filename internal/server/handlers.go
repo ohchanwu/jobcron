@@ -235,15 +235,6 @@ type profileForm struct {
 	MustHaveText     string
 	DealbreakersText string
 	Sources          []sourceOption // one row per registered scraper
-	Muted            []mutedPosting // postings the user marked 관심 없음
-}
-
-// mutedPosting is a single row in the profile form's "관심 없음" unmute list:
-// just enough to identify the posting and target the unmute endpoint.
-type mutedPosting struct {
-	ID      int64
-	Title   string
-	Company string
 }
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
@@ -262,14 +253,6 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 	}
 	form := toProfileForm(p)
 	form.Sources = s.sourceOptions(p.DisabledSources)
-	mutedPostings, err := s.store.NotInterestedPostings(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	for _, mp := range mutedPostings {
-		form.Muted = append(form.Muted, mutedPosting{ID: mp.ID, Title: mp.Title, Company: mp.Company})
-	}
 	s.render(w, "profile.html", form)
 }
 

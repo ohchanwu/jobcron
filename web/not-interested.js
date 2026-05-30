@@ -8,8 +8,7 @@
      muted posting stays (it is bookmarked), so the card is kept and only the
      icon state flips.
    - On the 숨긴 공고 page (/hidden), every card is muted; un-muting one means
-     it no longer belongs there, so fade the .posting card out.
-   - In the profile page's 관심 없음 list, un-muting removes the row. */
+     it no longer belongs there, so fade the .posting card out. */
 (function () {
   function fadeRemove(el) {
     if (!el) return;
@@ -49,13 +48,10 @@
         btn.setAttribute('aria-pressed', String(muted));
 
         var card = btn.closest('.posting');
-        var item = btn.closest('.muted-item');
         if (muted && card && location.pathname !== '/bookmarks') {
           fadeRemove(card); // muted: leaves the briefing / 관심 공고 view
         } else if (!muted && location.pathname === '/hidden' && card) {
           fadeRemove(card); // un-hidden: leaves the 숨긴 공고 page
-        } else if (!muted && item) {
-          fadeRemove(item); // un-muted from the profile list
         }
       })
       .catch(function () {

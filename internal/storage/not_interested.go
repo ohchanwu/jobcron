@@ -69,7 +69,7 @@ func (s *Store) NotInterestedIDs(ctx context.Context) (map[int64]bool, error) {
 
 // NotInterestedPostings returns every muted posting joined with the posting
 // row, ordered by muted_at descending (most recently muted first). Used by
-// the profile form's unmute list.
+// the 숨긴 공고 page (/hidden).
 func (s *Store) NotInterestedPostings(ctx context.Context) ([]scraper.Posting, error) {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT p.id, `+postingColumns+`, p.duplicate_of
