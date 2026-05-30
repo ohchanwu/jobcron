@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>오늘의 채용 브리핑</title>
+  <title>숨긴 공고 — 오늘의 채용 브리핑</title>
   <script>
-    /* FOUC prevention: read saved theme synchronously before paint. */
     (function () {
       try {
         var t = localStorage.getItem('theme');
@@ -37,8 +36,8 @@
   <div class="wrap">
     <header>
       <div>
-        <p class="eyebrow">오늘의</p>
-        <h1>채용 브리핑</h1>
+        <p class="eyebrow">관심 밖으로 둔</p>
+        <h1>숨긴 공고</h1>
       </div>
       <div class="head-right">
         {{.Date}}
@@ -47,21 +46,19 @@
     </header>
 
     <nav class="primary">
-      <a href="/" class="active">데일리 브리핑</a>
+      <a href="/">데일리 브리핑</a>
       <a href="/archive">관심 공고</a>
       <a href="/bookmarks">북마크</a>
-      <a href="/hidden">숨긴 공고</a>
+      <a href="/hidden" class="active">숨긴 공고</a>
       <a href="/profile">프로필 설정</a>
     </nav>
 
     <div class="scrape-row">
-      <div class="count">새 공고 <strong>{{len .Today}}</strong>개</div>
-      <button id="scrape" class="btn-primary">스크랩 시작 <span class="arrow">→</span></button>
+      <div class="count">숨긴 공고 <strong>{{len .Postings}}</strong>개</div>
     </div>
-    <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
 
     <main>
-      <div id="source-filter" class="source-filter" data-empty-template="오늘 {label} 공고가 없어요.">
+      <div id="source-filter" class="source-filter" data-empty-template="숨긴 {label} 공고가 없어요.">
         <button type="button" class="source-pill on" data-source="_all" aria-pressed="true">전체</button>
         {{with sourcePillGroups}}
           {{range .Aggregators}}
@@ -74,12 +71,12 @@
         {{end}}
       </div>
       <p id="source-filter-empty" class="source-filter-empty" hidden></p>
-      {{if .Today}}
+      {{if .Postings}}
       <ol class="postings">
-        {{range .Today}}
-        <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
+        {{range .Postings}}
+        <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
           <div class="score-cell">
-            <span class="score">{{.Total}}</span>
+            <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
             <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
           </div>
           <div class="posting-body">
@@ -114,46 +111,9 @@
       </ol>
       {{else}}
       <div class="empty">
-        <p class="empty-title">오늘은 아직 브리핑할 공고가 없어요.</p>
-        <p class="empty-sub">위의 <b>스크랩 시작</b>을 눌러보세요.<br>새 공고가 없는 날도 있어요 — 천천히 가도 괜찮아요.</p>
+        <p class="empty-title">아직 숨긴 공고가 없어요.</p>
+        <p class="empty-sub">공고 옆의 눈 아이콘을 누르면 여기로 들어와요.<br>마음이 바뀌면 언제든 다시 꺼낼 수 있어요.</p>
       </div>
-      {{end}}
-
-      {{if .Excluded}}
-      <details class="excluded-box">
-        <summary>관심 밖으로 분류된 공고 {{len .Excluded}}개</summary>
-        <ol class="postings">
-          {{range .Excluded}}
-          <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
-            <div class="score-cell">
-              <span class="score">—</span>
-              <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
-            </div>
-            <div class="posting-body">
-              <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
-              <div class="posting-meta">
-                <span>{{.Posting.Company}}</span>
-                {{if .Explanation}}<span class="sep">/</span><span>{{.Explanation}}</span>{{end}}
-              </div>
-            </div>
-            <div class="posting-actions">
-              <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"
-                      data-posting-id="{{.Posting.ID}}"
-                      aria-pressed="{{if .NotInterested}}true{{else}}false{{end}}"
-                      aria-label="관심 없음">
-                <svg width="22" height="22" aria-hidden="true"><use href="#icon-eye-off"/></svg>
-              </button>
-              <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button"
-                      data-posting-id="{{.Posting.ID}}"
-                      aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}"
-                      aria-label="북마크">
-                <svg width="24" height="24" aria-hidden="true"><use href="#icon-bookmark"/></svg>
-              </button>
-            </div>
-          </li>
-          {{end}}
-        </ol>
-      </details>
       {{end}}
     </main>
 
@@ -164,50 +124,5 @@
   <script src="/static/bookmark.js"></script>
   <script src="/static/not-interested.js"></script>
   <script src="/static/source-filter.js"></script>
-  <script>
-    /* Scrape: open EventSource on click, stream events into the log,
-       reload the page on done so the new briefing renders. */
-    (function () {
-      var btn = document.getElementById('scrape');
-      var log = document.getElementById('scrape-log');
-      if (!btn) return;
-
-      btn.addEventListener('click', function () {
-        btn.disabled = true;
-        log.textContent = '';
-        var es = new EventSource('/api/scrape');
-
-        function append(msg) {
-          var p = document.createElement('p');
-          p.textContent = msg;
-          log.appendChild(p);
-        }
-        function progress(msg) {
-          var pr = document.getElementById('scrape-progress');
-          if (!pr) {
-            pr = document.createElement('p');
-            pr.id = 'scrape-progress';
-            log.appendChild(pr);
-          }
-          pr.textContent = msg;
-        }
-
-        es.addEventListener('status',   function (e) { append(e.data); });
-        es.addEventListener('count',    function (e) { append(e.data); });
-        es.addEventListener('progress', function (e) { progress(e.data); });
-        es.addEventListener('done', function () { es.close(); location.reload(); });
-        es.addEventListener('failed', function (e) {
-          es.close();
-          btn.disabled = false;
-          append(e.data || '스크랩에 실패했어요.');
-        });
-        es.addEventListener('error', function () {
-          es.close();
-          btn.disabled = false;
-          append('연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
-        });
-      });
-    })();
-  </script>
 </body>
 </html>

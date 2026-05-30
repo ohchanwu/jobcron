@@ -92,7 +92,9 @@ func TestMutedPostingHiddenFromBriefing(t *testing.T) {
 	shown := listingPosting("shown", "보이는 공고")
 	shown.FirstSeenAt = time.Now().UTC()
 	shown.LastSeenAt = shown.FirstSeenAt
-	hidden := listingPosting("hidden", "숨긴 공고")
+	// Title avoids the literal "숨긴 공고", which now appears in every page's
+	// navbar (the 숨긴 공고 link) — a body substring check would false-match it.
+	hidden := listingPosting("hidden", "음소거한 공고")
 	hidden.FirstSeenAt = time.Now().UTC()
 	hidden.LastSeenAt = hidden.FirstSeenAt
 	mustUpsert(t, st, shown)
@@ -110,7 +112,7 @@ func TestMutedPostingHiddenFromBriefing(t *testing.T) {
 	if !strings.Contains(body, "보이는 공고") {
 		t.Error("dashboard dropped the un-muted posting")
 	}
-	if strings.Contains(body, "숨긴 공고") {
+	if strings.Contains(body, "음소거한 공고") {
 		t.Error("dashboard still shows a muted posting")
 	}
 }

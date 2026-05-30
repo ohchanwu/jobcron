@@ -22,6 +22,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 	mux.HandleFunc("GET /archive", s.handleArchive)
 	mux.HandleFunc("GET /bookmarks", s.handleBookmarks)
+	mux.HandleFunc("GET /hidden", s.handleHidden)
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
