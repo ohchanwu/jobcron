@@ -278,6 +278,26 @@ nav.primary a.active {
   letter-spacing: -0.005em;
 }
 
+/* Text search box — sits above the source pills on /, /archive, /bookmarks.
+   A quiet rounded input; web/source-filter.js ANDs the query with the active
+   source pill, so the two filters compose. */
+.posting-search {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin: 0.9rem 0 0;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  transition: border-color 0.15s ease;
+}
+.posting-search:focus { outline: none; border-color: var(--accent); }
+.posting-search::placeholder { color: var(--ink-soft); }
+
 /* Postings */
 .postings { list-style: none; padding: 0; margin: 0; }
 .posting {
