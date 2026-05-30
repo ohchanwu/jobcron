@@ -1,6 +1,10 @@
 package scoring
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ohchanwu/job-scraper/internal/profile"
+)
 
 // TestNearMissCareerAward locks the round(w × 2/5) derivation the profile UI
 // previews and the scorer applies. The two must never drift.
@@ -14,8 +18,8 @@ func TestNearMissCareerAward(t *testing.T) {
 		{40, 16},
 	}
 	for _, c := range cases {
-		if got := NearMissCareerAward(c.w); got != c.want {
-			t.Errorf("NearMissCareerAward(%d) = %d, want %d", c.w, got, c.want)
+		if got := nearMissCareerAward(c.w); got != c.want {
+			t.Errorf("nearMissCareerAward(%d) = %d, want %d", c.w, got, c.want)
 		}
 	}
 }
@@ -31,8 +35,20 @@ func TestAmbiguousSalaryAward(t *testing.T) {
 		{20, 10},
 	}
 	for _, c := range cases {
-		if got := AmbiguousSalaryAward(c.w); got != c.want {
-			t.Errorf("AmbiguousSalaryAward(%d) = %d, want %d", c.w, got, c.want)
+		if got := ambiguousSalaryAward(c.w); got != c.want {
+			t.Errorf("ambiguousSalaryAward(%d) = %d, want %d", c.w, got, c.want)
 		}
+	}
+}
+
+// TestWeightHints covers the exported entry point the profile form uses: it
+// returns the derived awards for a profile's effective weights, sharing the
+// same formula the per-posting scorer applies. Defaults (25 / 10) → (10 / 5).
+func TestWeightHints(t *testing.T) {
+	if career, salary := WeightHints(profile.Profile{CareerWeight: 25, SalaryWeight: 10}); career != 10 || salary != 5 {
+		t.Errorf("WeightHints(defaults) = (%d, %d), want (10, 5)", career, salary)
+	}
+	if career, salary := WeightHints(profile.Profile{CareerWeight: 30, SalaryWeight: 21}); career != 12 || salary != 11 {
+		t.Errorf("WeightHints(30, 21) = (%d, %d), want (12, 11)", career, salary)
 	}
 }

@@ -331,13 +331,14 @@ func toProfileForm(p profile.Profile) profileForm {
 	for _, sp := range p.Stacks {
 		stacks = append(stacks, sp.Name+","+strconv.Itoa(sp.Weight))
 	}
+	careerNearMiss, salaryAmbiguous := scoring.WeightHints(p)
 	return profileForm{
 		CareerYears:      p.CareerYears,
 		CareerWeight:     p.EffectiveCareerWeight(),
-		CareerNearMiss:   scoring.NearMissCareerAward(p.EffectiveCareerWeight()),
+		CareerNearMiss:   careerNearMiss,
 		SalaryFloorMan:   p.SalaryFloorKRW / 10000,
 		SalaryWeight:     p.EffectiveSalaryWeight(),
-		SalaryAmbiguous:  scoring.AmbiguousSalaryAward(p.EffectiveSalaryWeight()),
+		SalaryAmbiguous:  salaryAmbiguous,
 		MinScore:         p.EffectiveMinScore(),
 		MaxEducation:     int(p.MaxEducation),
 		StacksText:       strings.Join(stacks, "\n"),

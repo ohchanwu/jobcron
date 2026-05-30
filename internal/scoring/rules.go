@@ -39,14 +39,14 @@ func careerExactAward(prof profile.Profile) int { return prof.EffectiveCareerWei
 // careerNearMissAward returns the near-miss award (one bracket off): a
 // fraction of the exact award, rounded to keep totals integer.
 func careerNearMissAward(prof profile.Profile) int {
-	return NearMissCareerAward(careerExactAward(prof))
+	return nearMissCareerAward(careerExactAward(prof))
 }
 
-// NearMissCareerAward derives the career near-miss award from a career weight
-// w, using the scorer's round-half-up rule (round(w × 2/5)). Exposed so the
-// profile form can preview the value a given weight produces — keeping the UI
-// hint and the scorer in lockstep with no duplicated formula.
-func NearMissCareerAward(w int) int {
+// nearMissCareerAward derives the career near-miss award from a career weight
+// w, using the scorer's round-half-up rule (round(w × 2/5)). The profile form's
+// preview reaches it through WeightHints, so the UI hint and the scorer share
+// this one formula with no duplication.
+func nearMissCareerAward(w int) int {
 	return (w*careerNearMissNum + careerNearMissDen/2) / careerNearMissDen
 }
 
@@ -54,14 +54,21 @@ func NearMissCareerAward(w int) int {
 // the salary category.
 func salaryClearAward(prof profile.Profile) int { return prof.EffectiveSalaryWeight() }
 func salaryAmbiguousAward(prof profile.Profile) int {
-	return AmbiguousSalaryAward(salaryClearAward(prof))
+	return ambiguousSalaryAward(salaryClearAward(prof))
 }
 
-// AmbiguousSalaryAward derives the ambiguous-salary award from a salary weight
-// w (round(w ÷ 2)), the AmbiguousSalaryAward counterpart of
-// NearMissCareerAward. Exposed for the profile form's live preview.
-func AmbiguousSalaryAward(w int) int {
+// ambiguousSalaryAward derives the ambiguous-salary award from a salary weight
+// w (round(w ÷ 2)), the salary counterpart of nearMissCareerAward.
+func ambiguousSalaryAward(w int) int {
 	return (w*salaryAmbiguousNum + salaryAmbiguousDen/2) / salaryAmbiguousDen
+}
+
+// WeightHints returns the derived award values the profile form previews next
+// to the weight inputs: the career near-miss award and the ambiguous-salary
+// award for the profile's effective weights. Exposed so the form hint and the
+// scorer share one rounding formula rather than duplicating it in the server.
+func WeightHints(prof profile.Profile) (careerNearMiss, salaryAmbiguous int) {
+	return careerNearMissAward(prof), salaryAmbiguousAward(prof)
 }
 
 // Dealbreaker kinds, recorded on DealbreakerHit.
