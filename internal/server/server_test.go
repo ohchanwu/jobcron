@@ -278,21 +278,79 @@ func TestDeadlineBadge(t *testing.T) {
 		name       string
 		closedAt   *time.Time
 		alwaysOpen bool
-		want       string
+		wantText   string
+		wantKind   string
 	}{
-		{"closes today", at(2026, 5, 22), false, "오늘 마감"},
-		{"closes tomorrow", at(2026, 5, 23), false, "마감 D-1"},
-		{"closes in 3 days", at(2026, 5, 25), false, "마감 D-3"},
-		{"closes in 10 days", at(2026, 6, 1), false, ""},
-		{"always open", nil, true, ""},
-		{"no closing date", nil, false, ""},
+		{"closes today", at(2026, 5, 22), false, "오늘 마감", "urgent"},
+		{"closes tomorrow", at(2026, 5, 23), false, "마감 D-1", "urgent"},
+		{"closes in 3 days", at(2026, 5, 25), false, "마감 D-3", "urgent"},
+		{"closes in 4 days is calm", at(2026, 5, 26), false, "마감 D-4", "calm"},
+		{"closes in 10 days is calm", at(2026, 6, 1), false, "마감 D-10", "calm"},
+		{"closes in 30 days is calm", at(2026, 6, 21), false, "마감 D-30", "calm"},
+		{"already past its deadline", at(2026, 5, 21), false, "마감", "urgent"},
+		{"always open", nil, true, "상시채용", "open"},
+		{"always open ignores a stray closed date", at(2026, 6, 1), true, "상시채용", "open"},
+		{"no closing date on file", nil, false, "마감 정보 없음", "none"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := deadlineBadge(tc.closedAt, tc.alwaysOpen, now); got != tc.want {
-				t.Errorf("deadlineBadge = %q, want %q", got, tc.want)
+			got := deadlineBadge(tc.closedAt, tc.alwaysOpen, now)
+			if got.Text != tc.wantText || got.Kind != tc.wantKind {
+				t.Errorf("deadlineBadge = {Text:%q Kind:%q}, want {Text:%q Kind:%q}",
+					got.Text, got.Kind, tc.wantText, tc.wantKind)
 			}
 		})
+	}
+}
+
+// TestDeadlineBadgeRendersTieredClasses verifies the template wiring end to
+// end: each deadline state must reach the rendered HTML as the right label
+// inside a deadline-<kind> class, so the CSS can tier the urgency. Covers the
+// four non-past states on the briefing (past "마감" is exercised on /archive by
+// TestArchiveRoutesExpiredToExcluded, since expired rows never reach /).
+func TestDeadlineBadgeRendersTieredClasses(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	zero := 0
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	now := time.Date(2026, 5, 22, 6, 0, 0, 0, time.UTC) // 15:00 KST May 22
+	kst := time.FixedZone("KST", 9*3600)
+	mk := func(id, title string, alwaysOpen, noClose bool, closeDay int) {
+		p := listingPosting(id, title)
+		p.FirstSeenAt, p.LastSeenAt = now, now
+		p.AlwaysOpen = alwaysOpen
+		if !alwaysOpen && !noClose {
+			c := time.Date(2026, 5, closeDay, 23, 59, 59, 0, kst)
+			p.ClosedAt = &c
+		}
+		mustUpsert(t, st, p)
+	}
+	mk("open", "상시 공고", true, false, 0)     // 상시채용  → deadline-open
+	mk("none", "정보없음 공고", false, true, 0)   // 마감 정보 없음 → deadline-none
+	mk("urgent", "급한 공고", false, false, 24) // 마감 D-2  → deadline-urgent
+	mk("calm", "여유 공고", false, false, 42)   // 마감 D-20 (May 42 = Jun 11) → deadline-calm
+
+	b, err := srv.buildBriefing(ctx, now)
+	if err != nil {
+		t.Fatalf("buildBriefing: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	srv.render(rec, "index.html", b)
+	body := rec.Body.String()
+
+	for _, want := range []string{
+		`class="deadline deadline-open">상시채용`,
+		`class="deadline deadline-none">마감 정보 없음`,
+		`class="deadline deadline-urgent">마감 D-2`,
+		`class="deadline deadline-calm">마감 D-20`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("briefing HTML missing %q\n--- body ---\n%s", want, body)
+		}
 	}
 }
 

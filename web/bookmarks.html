@@ -85,7 +85,7 @@
             <div class="posting-meta">
               <span>{{.Posting.Company}}</span>
               {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
-              {{if .Deadline}}<span class="deadline">{{.Deadline}}</span>{{end}}
+              {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
             </div>
             {{if .Breakdown}}
             <div class="chips">

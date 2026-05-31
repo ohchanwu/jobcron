@@ -361,15 +361,23 @@ nav.primary a.active {
   letter-spacing: 0.06em;
   color: var(--ink-soft);
 }
+/* Deadline badge — tiered by urgency so a far-off or rolling deadline doesn't
+   shout in the same alarm color as one closing today (P6 calm thesis). The
+   base holds the layout; the kind classes set the color + left accent bar. The
+   2px transparent base border keeps every tier the same width, so the badge
+   never causes a layout jump (e.g. "마감 D-2" vs "마감 정보 없음"). */
 .deadline {
   font-family: var(--mono);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
-  color: var(--highlight);
-  border-left: 2px solid var(--highlight);
+  border-left: 2px solid transparent;
   padding-left: 0.55rem;
   text-transform: uppercase;
 }
+.deadline-urgent { color: var(--highlight); border-left-color: var(--highlight); } /* 오늘 마감 · 마감 D-1~3 · 마감 */
+.deadline-calm   { color: var(--ink-soft);  border-left-color: var(--ink-soft); }  /* 마감 D-4+ */
+.deadline-open   { color: var(--accent);    border-left-color: var(--accent); }    /* 상시채용 */
+.deadline-none   { color: var(--ink-soft); }                                       /* 마감 정보 없음 — faintest, no bar */
 .chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 .chip {
   font-size: 0.73rem;

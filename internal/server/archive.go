@@ -111,6 +111,16 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 			}
 		}
 
+		// Past-deadline postings drop into the 관심 밖 collapsible regardless of
+		// score — they're closed, so they leave the live day list but stay
+		// findable here (and badged "마감"). Mirrors the briefing, which filters
+		// expired postings out of the daily list entirely. 데모데이 keeps
+		// re-serving published-but-past rows, so without this they would sit in
+		// the main 관심 공고 list with a normal score and no closure cue.
+		if expired(p, now) {
+			dp.Excluded = true
+		}
+
 		if dp.Excluded {
 			view.Excluded = append(view.Excluded, dp)
 			continue

@@ -71,7 +71,7 @@ type dashboardPosting struct {
 	NotInterested    bool               // user has muted this posting ("관심 없음")
 	Explanation      string             // "React +20 · 신입 +25 ..." (used for excluded rows)
 	Breakdown        []scoring.LineItem // structured line items, rendered as chips
-	Deadline         string             // "오늘 마감" | "마감 D-2" | ""
+	Deadline         deadlineBadgeInfo  // closing-date badge: text + urgency tier
 	DuplicateSources []string           // sources of cross-portal duplicates collapsed into this canonical
 }
 
@@ -198,22 +198,48 @@ func expired(p scraper.Posting, now time.Time) bool {
 	return !p.AlwaysOpen && p.ClosedAt != nil && p.ClosedAt.Before(now)
 }
 
-// deadlineBadge returns a gentle closing-soon badge for a posting closing
-// within three calendar days (KST), or "" otherwise.
-func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) string {
-	if alwaysOpen || closedAt == nil {
-		return ""
+// deadlineBadgeInfo is a rendered closing-date badge: a short Korean label
+// plus an urgency tier the template maps to a CSS class (deadline-<Kind>).
+type deadlineBadgeInfo struct {
+	Text string // "오늘 마감" | "마감 D-10" | "상시채용" | "마감 정보 없음" | "마감"
+	Kind string // "urgent" | "calm" | "open" | "none"
+}
+
+// deadlineBadge returns the closing-date badge for a posting. It is total —
+// every posting gets exactly one badge, tiered by urgency so a job closing in
+// a month doesn't shout in the same alarm color as one closing today (the P6
+// calm thesis):
+//
+//	always-open               → "상시채용"       (open)    — rolling hiring, good news
+//	no closing date on file   → "마감 정보 없음"  (none)    — usually an unparsed deadline
+//	already past its deadline → "마감"           (urgent)
+//	closes today              → "오늘 마감"       (urgent)
+//	closes within 3 days      → "마감 D-N"        (urgent)
+//	closes in 4+ days         → "마감 D-N"        (calm)
+//
+// Day counts are on KST calendar boundaries (so "D-1" means closes tomorrow
+// regardless of the wall-clock time today); the past check uses the actual
+// instant so it agrees with expired().
+func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) deadlineBadgeInfo {
+	if alwaysOpen {
+		return deadlineBadgeInfo{Text: "상시채용", Kind: "open"}
+	}
+	if closedAt == nil {
+		return deadlineBadgeInfo{Text: "마감 정보 없음", Kind: "none"}
+	}
+	if closedAt.Before(now) {
+		return deadlineBadgeInfo{Text: "마감", Kind: "urgent"}
 	}
 	c, n := closedAt.In(kstZone), now.In(kstZone)
 	closeDay := time.Date(c.Year(), c.Month(), c.Day(), 0, 0, 0, 0, kstZone)
 	today := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, kstZone)
 	switch days := int(closeDay.Sub(today).Hours() / 24); {
 	case days == 0:
-		return "오늘 마감"
-	case days >= 1 && days <= 3:
-		return fmt.Sprintf("마감 D-%d", days)
+		return deadlineBadgeInfo{Text: "오늘 마감", Kind: "urgent"}
+	case days <= 3:
+		return deadlineBadgeInfo{Text: fmt.Sprintf("마감 D-%d", days), Kind: "urgent"}
 	default:
-		return ""
+		return deadlineBadgeInfo{Text: fmt.Sprintf("마감 D-%d", days), Kind: "calm"}
 	}
 }
 

@@ -210,6 +210,65 @@ func TestArchiveRoutesBelowMinScoreToExcluded(t *testing.T) {
 	}
 }
 
+// TestArchiveRoutesExpiredToExcluded covers the expired-listings task: a
+// posting past its closing date drops into the 관심 밖 collapsible regardless
+// of score (it's closed, so it leaves the live day list but stays findable),
+// and carries the "마감" badge. A still-open posting with the same score stays
+// in the main day list.
+func TestArchiveRoutesExpiredToExcluded(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+
+	zero := 0
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	day := time.Date(2026, 5, 29, 6, 0, 0, 0, time.UTC)
+	now := day.Add(time.Hour)
+
+	open := listingPosting("open", "열린 공고")
+	open.FirstSeenAt, open.LastSeenAt = day, day
+	openClose := now.Add(72 * time.Hour)
+	open.ClosedAt = &openClose
+
+	past := listingPosting("past", "마감된 공고")
+	past.FirstSeenAt, past.LastSeenAt = day, day
+	pastClose := now.Add(-24 * time.Hour)
+	past.ClosedAt = &pastClose
+
+	openID := mustUpsert(t, st, open)
+	pastID := mustUpsert(t, st, past)
+	for id, total := range map[int64]int{openID: 80, pastID: 80} {
+		if err := st.UpsertScore(ctx, storage.Score{
+			PostingID: id, ProfileHash: "test", Total: total,
+			BreakdownJSON: "[]", ComputedAt: time.Now(),
+		}); err != nil {
+			t.Fatalf("UpsertScore id=%d: %v", id, err)
+		}
+	}
+
+	view, err := srv.buildArchive(ctx, now)
+	if err != nil {
+		t.Fatalf("buildArchive: %v", err)
+	}
+
+	if len(view.Excluded) != 1 || view.Excluded[0].Posting.Title != "마감된 공고" {
+		t.Fatalf("Excluded = %v, want exactly [마감된 공고]", postingTitles(view.Excluded))
+	}
+	if got := view.Excluded[0].Deadline; got.Text != "마감" || got.Kind != "urgent" {
+		t.Errorf("expired row badge = {Text:%q Kind:%q}, want {마감 urgent}", got.Text, got.Kind)
+	}
+	var dayTitles []string
+	for _, d := range view.Days {
+		dayTitles = append(dayTitles, postingTitles(d.Postings)...)
+	}
+	if len(dayTitles) != 1 || dayTitles[0] != "열린 공고" {
+		t.Errorf("main day list = %v, want exactly [열린 공고]", dayTitles)
+	}
+}
+
 // TestArchiveHidesMutedPostings covers task 1(c): a muted ("관심 없음")
 // posting vanishes from 관심 공고 entirely — not into the Excluded
 // collapsible, but gone from both lists.
