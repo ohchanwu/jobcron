@@ -375,8 +375,8 @@ nav.primary a.active {
   text-transform: uppercase;
 }
 .deadline-urgent { color: var(--highlight); border-left-color: var(--highlight); } /* 오늘 마감 · 마감 D-1~3 · 마감 */
-.deadline-calm   { color: var(--ink-soft);  border-left-color: var(--ink-soft); }  /* 마감 D-4+ */
-.deadline-open   { color: var(--accent);    border-left-color: var(--accent); }    /* 상시채용 */
+.deadline-calm   { color: var(--accent);    border-left-color: var(--accent); }    /* 마감 D-4+ */
+.deadline-open   { color: var(--ink-soft);  border-left-color: var(--ink-soft); }  /* 상시채용 */
 .deadline-none   { color: var(--ink-soft); }                                       /* 마감 정보 없음 — faintest, no bar */
 .chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 .chip {
