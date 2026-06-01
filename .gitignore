@@ -20,8 +20,8 @@
 # and out of git per user request.
 /ai-integration-plan.md
 
-# Claude Code local settings
-/.claude/settings.local.json
+# Claude Code local config (settings, session state, skills)
+/.claude/
 
 # Playwright MCP screenshots (Tier C UI verification runs)
 /.playwright-mcp/
