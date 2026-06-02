@@ -28,16 +28,21 @@ const (
 	sweepOldWindow   = 90 * 24 * time.Hour
 )
 
-// maxRunInputTokensDefault is the per-run AI token budget. It is a generous
-// in-memory ceiling so one scrape can't run away on cost; the persisted daily
-// ledger and a user-configurable cap are T9. Exceeding it halts AI for the
-// rest of the run and falls back to regex scoring.
+// defaultRunTokenCap is the per-run AI token ceiling (input + output). A
+// generous in-memory limit so one scrape or re-rate can't run away on cost.
+// Exceeding it halts AI for the rest of the run and falls back to regex scoring.
 //
-// The ceiling is SOFT: a call is admitted while remaining > 0 and debited
+// The ceiling is SOFT: a call is admitted while there is headroom and debited
 // after it returns, so the last admitted call can overspend by up to its own
-// cost before the next canSpend() halts. That's fine for a generous run cap;
-// the hard, persisted enforcement is T9's ai_usage ledger.
-const maxRunInputTokensDefault = 150_000
+// cost before the next canSpend() halts. That's fine for a generous cap; the
+// hard, persisted, cross-run enforcement is the ai_usage daily ledger below.
+// (Renamed from maxRunInputTokensDefault — it counts input+output, not just
+// input.)
+const defaultRunTokenCap = 150_000
+
+// aiRateLimit paces live provider calls, mirroring the scrapers' 1-req/s
+// politeness. Tests pass 0 to the provider constructor to disable pacing.
+const aiRateLimit = time.Second
 
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
 type Server struct {
@@ -46,25 +51,91 @@ type Server struct {
 	tmpl    *template.Template
 	flight  *singleFlight
 
-	// AI extraction (BYOK, v2.0 Stage 1). ai is nil when no provider is
-	// configured — the default — and the pipeline behaves exactly like v1.5
-	// (regex scoring, no provider calls). Wiring a real provider from
-	// ai_keys.json + a chosen model is the /profile settings work in T9.
-	ai            ai.Provider
-	aiModel       string
-	aiVersion     string // ai.AIVersion(ai.Name(), aiModel), precomputed
-	aiRunTokenCap int
+	// AI extraction (BYOK, v2.0). ai is nil when no provider is configured —
+	// the default — and the pipeline behaves exactly like v1.5 (regex scoring,
+	// no provider calls). ReconfigureAI builds the provider from ai_keys.json +
+	// the profile's chosen provider/model; main.go calls it at startup and
+	// handleProfileSave on every save, so a key entered in the form goes live
+	// without a restart.
+	ai              ai.Provider
+	aiModel         string
+	aiVersion       string // ai.AIVersion(ai.Name(), aiModel), precomputed
+	aiRunTokenCap   int    // per-run, in-memory
+	aiDailyTokenCap int    // rolling daily, enforced against the persisted ai_usage ledger
+	aiKeysPath      string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
 }
 
-// SetAIProvider enables AI extraction with the given provider and model. A nil
-// provider (the default) leaves AI off. Called after New (the constructor is
-// variadic over scrapers, so AI config rides a setter).
+// SetAIProvider enables AI with the given provider and model. A nil provider
+// (the default) leaves AI off. Called after New (the constructor is variadic
+// over scrapers, so AI config rides a setter) and by ReconfigureAI. Tests call
+// it directly with a stub.
 func (s *Server) SetAIProvider(p ai.Provider, model string) {
 	s.ai = p
 	s.aiModel = model
 	if p != nil {
 		s.aiVersion = ai.AIVersion(p.Name(), model)
 	}
+}
+
+// SetAIKeysPath overrides where ReconfigureAI reads/writes the BYOK key file.
+// Empty (the default) uses ai.DefaultKeysPath(). Tests point this at a temp dir
+// so they never touch the real ~/.../job-scraper/ai_keys.json.
+func (s *Server) SetAIKeysPath(path string) { s.aiKeysPath = path }
+
+// keysPath returns the configured ai_keys.json path, falling back to the OS
+// default.
+func (s *Server) keysPath() (string, error) {
+	if s.aiKeysPath != "" {
+		return s.aiKeysPath, nil
+	}
+	return ai.DefaultKeysPath()
+}
+
+// ReconfigureAI (re)builds the AI provider from the saved profile + ai_keys.json
+// and applies the profile's daily token cap. It is the single wiring point:
+// main.go calls it once at startup, handleProfileSave on every save. AI is left
+// OFF (provider nil, silent regex fallback) when the profile selects no provider
+// or the selected provider has no saved key. A bad provider name / build error
+// also leaves AI off and is returned for the caller to log — never fatal.
+func (s *Server) ReconfigureAI(ctx context.Context) error {
+	prof, ok, err := s.loadProfile(ctx)
+	if err != nil {
+		return err
+	}
+	if ok && prof.EffectiveAIDailyTokenCap() > 0 {
+		s.aiDailyTokenCap = prof.EffectiveAIDailyTokenCap()
+	}
+	if !ok || prof.AIProvider == "" {
+		s.SetAIProvider(nil, "")
+		return nil
+	}
+	path, err := s.keysPath()
+	if err != nil {
+		s.SetAIProvider(nil, "")
+		return err
+	}
+	keys, err := ai.LoadKeys(path)
+	if err != nil {
+		s.SetAIProvider(nil, "")
+		return err
+	}
+	key := keys[prof.AIProvider]
+	if key == "" {
+		// Provider chosen but no key yet → silent regex fallback (D4).
+		s.SetAIProvider(nil, "")
+		return nil
+	}
+	model := prof.AIModel
+	if model == "" {
+		model = ai.DefaultModel(prof.AIProvider)
+	}
+	p, err := ai.New(prof.AIProvider, key, model, aiRateLimit)
+	if err != nil {
+		s.SetAIProvider(nil, "")
+		return err
+	}
+	s.SetAIProvider(p, model)
+	return nil
 }
 
 // New builds a Server over the given storage and one or more scrapers. The
@@ -77,10 +148,11 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		panic("server.New: at least one scraper is required")
 	}
 	srv := &Server{
-		store:         store,
-		sources:       sources,
-		flight:        newSingleFlight(),
-		aiRunTokenCap: maxRunInputTokensDefault,
+		store:           store,
+		sources:         sources,
+		flight:          newSingleFlight(),
+		aiRunTokenCap:   defaultRunTokenCap,
+		aiDailyTokenCap: profile.DefaultDailyTokenCap,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,
@@ -138,7 +210,7 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 	var res ScrapeResult
 	// One AI token budget for the whole run (persists across sources). nil
 	// when AI is off, so no per-posting budget bookkeeping happens at all.
-	budget := s.newAIBudget()
+	budget := s.newAIBudget(ctx)
 	// succeeded tracks sources that completed without error this run; only
 	// they get their data swept. A source that failed cannot tell us what
 	// is stale (no fresh baseline this run), so we leave its existing rows
@@ -198,39 +270,68 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 	return res, nil
 }
 
-// aiRunBudget is the per-run, in-memory AI token counter (T4). The persisted
-// daily ledger (ai_usage) and the user-configurable cap are T9.
-type aiRunBudget struct {
-	remaining int
-	degraded  bool // true once the budget was exhausted mid-run
+// aiBudget gates AI spending for one run against two ceilings: a per-run,
+// in-memory cap (runCap) and a rolling daily cap (dailyCap) enforced against the
+// persisted ai_usage ledger. The daily total at the run's START is read once
+// (dailyAtStart); each admitted call's tokens are added to runSpent AND written
+// through to the ledger, so the cap holds across process restarts and across
+// runs in the same day. (Within a single day, concurrent AI runs are kept from
+// double-spending the daily budget by the scrape⟷re-rate exclusion — T7.)
+type aiBudget struct {
+	store        *storage.Store
+	day          string // UTC date, e.g. "2026-06-03"
+	runCap       int
+	dailyCap     int
+	dailyAtStart int  // ledger total (input+output) when the run began
+	runSpent     int  // input+output debited this run
+	degraded     bool // true once either cap was hit mid-run
 }
 
 // newAIBudget returns a fresh per-run budget, or nil when AI is off (so the
-// scrape loop skips all AI bookkeeping).
-func (s *Server) newAIBudget() *aiRunBudget {
+// scrape loop skips all AI bookkeeping). It reads the day's ledger total once so
+// the daily cap accounts for spend from earlier runs (and earlier process
+// lifetimes) the same day.
+func (s *Server) newAIBudget(ctx context.Context) *aiBudget {
 	if s.ai == nil {
 		return nil
 	}
-	return &aiRunBudget{remaining: s.aiRunTokenCap}
+	day := time.Now().UTC().Format("2006-01-02")
+	in, out, err := s.store.AIUsageForDay(ctx, day)
+	if err != nil {
+		in, out = 0, 0 // a ledger read error must not block scoring — start from 0
+	}
+	return &aiBudget{
+		store:        s.store,
+		day:          day,
+		runCap:       s.aiRunTokenCap,
+		dailyCap:     s.aiDailyTokenCap,
+		dailyAtStart: in + out,
+	}
 }
 
-// canSpend reports whether the budget has headroom for another call, marking
-// the run degraded the first time it does not.
-func (b *aiRunBudget) canSpend() bool {
-	if b.remaining <= 0 {
+// canSpend reports whether either cap still has headroom, marking the run
+// degraded the first time it does not (so the caller surfaces the calm banner).
+func (b *aiBudget) canSpend() bool {
+	if b.runSpent >= b.runCap || b.dailyAtStart+b.runSpent >= b.dailyCap {
 		b.degraded = true
 		return false
 	}
 	return true
 }
 
-// debit subtracts a call's token usage from the remaining budget.
-func (b *aiRunBudget) debit(u ai.Usage) { b.remaining -= u.InputTokens + u.OutputTokens }
+// debit records a call's token usage: against the in-memory run counter and
+// (best-effort) through to the persisted daily ledger. A ledger write failure is
+// swallowed — it must never fail a scrape — but the in-memory run cap still
+// holds for the rest of this run.
+func (b *aiBudget) debit(ctx context.Context, u ai.Usage) {
+	b.runSpent += u.InputTokens + u.OutputTokens
+	_ = b.store.AddAIUsage(ctx, b.day, u.InputTokens, u.OutputTokens)
+}
 
 // runScrapeSource scrapes one source, emitting source-prefixed status events
 // so the user can tell which source is currently active in the stream.
 func (s *Server) runScrapeSource(
-	ctx context.Context, src scraper.Scraper, now time.Time, budget *aiRunBudget, emit func(event, data string),
+	ctx context.Context, src scraper.Scraper, now time.Time, budget *aiBudget, emit func(event, data string),
 ) (ScrapeResult, error) {
 	label := sourceLabel(src.Source())
 	emit("status", fmt.Sprintf("[%s] robots.txt 확인 중...", label))
@@ -289,7 +390,7 @@ func (s *Server) runScrapeSource(
 // if AI is enabled and the per-run budget has headroom. It writes only the
 // ai_extractions cache row — the postings columns stay a faithful source
 // mirror (D2). Every failure path is silent (regex fallback at score time).
-func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting, now time.Time, budget *aiRunBudget) {
+func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting, now time.Time, budget *aiBudget) {
 	if s.ai == nil || budget == nil || !budget.canSpend() {
 		return
 	}
@@ -304,7 +405,7 @@ func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting,
 	if err != nil {
 		return // timeout / 5xx / malformed JSON / out-of-range → regex fallback
 	}
-	budget.debit(usage)
+	budget.debit(ctx, usage)
 	// Best-effort cache write; a failure here just means a regex score this pass.
 	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, s.aiVersion, ext, now)
 }

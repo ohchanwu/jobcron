@@ -131,7 +131,38 @@
         <label>장기 목표
           <textarea name="long_term_goals" rows="2">{{.LongTermGoals}}</textarea>
         </label>
-        {{/* v2.0 Stage 2 (T9/T6): AI 키 · provider/model · 토큰 예산 controls go inside this fieldset. */}}
+
+        <label>AI 제공자
+          <span class="field-hint">키는 이 기기에만 0600 권한 파일로 저장돼요. "없음"이면 일반 점수만 매겨요.</span>
+          <select name="ai_provider">
+            <option value=""{{if eq .AIProvider ""}} selected{{end}}>없음 (끄기)</option>
+            <option value="anthropic"{{if eq .AIProvider "anthropic"}} selected{{end}}>Anthropic (Claude)</option>
+            <option value="openai"{{if eq .AIProvider "openai"}} selected{{end}}>OpenAI</option>
+          </select>
+        </label>
+
+        <label>모델
+          <span class="field-hint">비워두면 기본값을 써요. 예: claude-haiku-4-5-20251001 / gpt-4o-mini</span>
+          <input type="text" name="ai_model" value="{{.AIModel}}" autocomplete="off">
+        </label>
+
+        <label>API 키
+          {{if .AIKeySaved}}
+          <span class="field-hint">현재 <strong>•••• 저장됨</strong> — 바꾸려면 새 키를 입력하세요. 비워두면 그대로 둬요.</span>
+          {{else}}
+          <span class="field-hint">제공자에서 발급받은 키를 붙여넣으세요.</span>
+          {{end}}
+          <input type="password" name="ai_key" value="" autocomplete="off"
+                 placeholder="{{if .AIKeySaved}}변경하려면 새 키 입력{{else}}sk-...{{end}}">
+        </label>
+
+        <label>일일 토큰 예산
+          <span class="field-hint">하루에 쓸 AI 토큰 상한 (입력+출력). 비우면 기본 {{.AIDailyCapEffective}}.</span>
+          <input type="number" name="ai_daily_token_cap" min="0"
+                 value="{{if .AIDailyTokenCap}}{{.AIDailyTokenCap}}{{end}}"
+                 placeholder="{{.AIDailyCapEffective}}">
+          <span class="field-hint derived">오늘 사용 {{.AITokensUsedToday}} · 남은 예산 {{.AIRemainingToday}} 토큰</span>
+        </label>
       </fieldset>
 
       <div class="form-actions">

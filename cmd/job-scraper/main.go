@@ -63,6 +63,12 @@ func main() {
 			"전체 출처를 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
+	// Wire BYOK AI from the saved profile + ai_keys.json. Non-fatal: any error
+	// (or simply no key configured) leaves AI off and the briefing falls back to
+	// the v1.5 offline scoring. The user enables AI on /profile.
+	if err := srv.ReconfigureAI(context.Background()); err != nil {
+		log.Printf("job-scraper: AI 설정을 불러오지 못해 일반 점수로 시작해요: %v", err)
+	}
 
 	ln, addr, err := listen(*port)
 	if err != nil {

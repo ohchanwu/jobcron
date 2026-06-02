@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ohchanwu/job-scraper/internal/ai"
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scoring"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
@@ -264,6 +266,17 @@ type profileForm struct {
 	ShortTermGoals   string
 	LongTermGoals    string
 	Sources          []sourceOption // one row per registered scraper
+
+	// AI settings (v2.0 BYOK). The API key value is NEVER placed here — only
+	// AIKeySaved (whether a key exists for the selected provider) crosses to the
+	// template, so the secret is never re-rendered (design §5).
+	AIProvider          string // "" | "anthropic" | "openai"
+	AIModel             string
+	AIKeySaved          bool
+	AIDailyTokenCap     int // raw (0 = use default); the form input value
+	AIDailyCapEffective int // the cap actually in force, for the remaining line
+	AITokensUsedToday   int
+	AIRemainingToday    int
 }
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
@@ -282,7 +295,31 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 	}
 	form := toProfileForm(p)
 	form.Sources = s.sourceOptions(p.DisabledSources)
+	s.fillAIFormState(r.Context(), &form, p)
 	s.render(w, "profile.html", form)
+}
+
+// fillAIFormState populates the AI section of the profile form: whether a key is
+// already saved for the selected provider (so the form shows "•••• 저장됨"
+// instead of an empty field), the effective daily cap, and today's usage /
+// remaining. Read failures degrade quietly to "no key / zero used" — the form
+// must still render.
+func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profile.Profile) {
+	form.AIDailyCapEffective = p.EffectiveAIDailyTokenCap()
+	if p.AIProvider != "" {
+		if path, err := s.keysPath(); err == nil {
+			if keys, err := ai.LoadKeys(path); err == nil && keys[p.AIProvider] != "" {
+				form.AIKeySaved = true
+			}
+		}
+	}
+	in, out, err := s.store.AIUsageForDay(ctx, time.Now().UTC().Format("2006-01-02"))
+	if err == nil {
+		form.AITokensUsedToday = in + out
+	}
+	if rem := form.AIDailyCapEffective - form.AITokensUsedToday; rem > 0 {
+		form.AIRemainingToday = rem
+	}
 }
 
 // handleProfileSave parses the submitted form, stores the profile, re-scores
@@ -304,6 +341,13 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	minScore := atoi(r.FormValue("min_score"))
+	// A submitted daily cap equal to the default is stored as 0 so an unchanged
+	// default stays absent from the canonical JSON (omitempty) — AI-off profiles
+	// keep byte-identical bytes.
+	dailyCap := atoi(r.FormValue("ai_daily_token_cap"))
+	if dailyCap == profile.DefaultDailyTokenCap {
+		dailyCap = 0
+	}
 	p := profile.Profile{
 		CareerYears:    atoi(r.FormValue("career_years")),
 		CareerWeight:   atoi(r.FormValue("career_weight")),
@@ -323,6 +367,16 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		ShortTermGoals:  strings.TrimSpace(r.FormValue("short_term_goals")),
 		LongTermGoals:   strings.TrimSpace(r.FormValue("long_term_goals")),
 		DisabledSources: disabled,
+		AIProvider:      aiProviderValue(r.FormValue("ai_provider")),
+		AIModel:         strings.TrimSpace(r.FormValue("ai_model")),
+		AIDailyTokenCap: dailyCap,
+	}
+	// Persist a newly-entered API key to the 0600 ai_keys.json (never the DB). A
+	// blank key field keeps the existing key — the form shows "•••• 저장됨" and
+	// the user only types here to change it.
+	if err := s.saveAIKey(p.AIProvider, r.FormValue("ai_key")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	canonical, err := profile.Marshal(p)
 	if err != nil {
@@ -333,11 +387,51 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Re-wire AI from the just-saved provider/model + key so a key entered here
+	// goes live immediately (no restart). A configuration error leaves AI off;
+	// surface it rather than 500ing — the profile saved fine.
+	if err := s.ReconfigureAI(r.Context()); err != nil {
+		log.Printf("server: AI reconfigure after profile save: %v", err)
+	}
 	if _, err := s.scoreAll(r.Context()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// aiProviderValue normalizes the provider select value: only the known provider
+// ids pass through; anything else (including the "없음/끄기" empty option) means
+// AI off.
+func aiProviderValue(v string) string {
+	switch strings.TrimSpace(v) {
+	case "anthropic":
+		return "anthropic"
+	case "openai":
+		return "openai"
+	default:
+		return ""
+	}
+}
+
+// saveAIKey writes a newly-entered key for provider into ai_keys.json at 0600,
+// preserving every other provider's key. A blank key (the common case — the user
+// didn't retype the saved secret) is a no-op. An empty provider is also a no-op.
+func (s *Server) saveAIKey(provider, key string) error {
+	key = strings.TrimSpace(key)
+	if provider == "" || key == "" {
+		return nil
+	}
+	path, err := s.keysPath()
+	if err != nil {
+		return err
+	}
+	keys, err := ai.LoadKeys(path)
+	if err != nil {
+		return err
+	}
+	keys[provider] = key
+	return ai.SaveKeys(path, keys)
 }
 
 // toProfileForm converts a stored profile into the flat form view model.
@@ -365,6 +459,9 @@ func toProfileForm(p profile.Profile) profileForm {
 		JobDislikes:      p.JobDislikes,
 		ShortTermGoals:   p.ShortTermGoals,
 		LongTermGoals:    p.LongTermGoals,
+		AIProvider:       p.AIProvider,
+		AIModel:          p.AIModel,
+		AIDailyTokenCap:  p.AIDailyTokenCap, // raw: 0 renders as an empty input
 	}
 }
 

@@ -183,7 +183,7 @@ func TestExtractStage1CacheHitSkipsProvider(t *testing.T) {
 		t.Fatalf("seed extraction: %v", err)
 	}
 
-	srv.extractStage1(ctx, id, p, time.Now().UTC(), srv.newAIBudget())
+	srv.extractStage1(ctx, id, p, time.Now().UTC(), srv.newAIBudget(ctx))
 	if stub.Calls != 0 {
 		t.Errorf("Extract called %d times on a cache hit; want 0", stub.Calls)
 	}

@@ -23,6 +23,12 @@ const (
 	// field. The user can override to 0 ("show everything") via the
 	// profile form — see EffectiveMinScore.
 	DefaultMinScore = 40
+
+	// DefaultDailyTokenCap is the rolling-daily AI token ceiling (input +
+	// output) applied when the user has not set AIDailyTokenCap. Generous by
+	// design (D5): a normal day's scrape + a re-rate stay well under it, but a
+	// runaway can't burn unbounded BYOK spend.
+	DefaultDailyTokenCap = 1_000_000
 )
 
 // Profile is the user's job-matching preferences, scored against each posting.
@@ -51,6 +57,17 @@ type Profile struct {
 	// (the user opted in to "show everything"). Use EffectiveMinScore to
 	// get the value with the DefaultMinScore fallback applied.
 	MinScore *int `json:"min_score,omitempty"`
+
+	// AI settings (v2.0 BYOK). Non-secret app config: the active provider
+	// ("anthropic"|"openai"; empty = AI off), the model id, and the rolling
+	// daily token cap (0 = DefaultDailyTokenCap). The API key itself lives in
+	// the 0600 ai_keys.json, NEVER here. These are deliberately NOT read by
+	// BuildStage2ProfileText, so changing the cap or model never churns the
+	// goal-keyed AI cache (a model change is partitioned by ai_version instead).
+	// omitempty keeps a pre-v2.0 / AI-off profile's canonical JSON unchanged.
+	AIProvider      string `json:"ai_provider,omitempty"`
+	AIModel         string `json:"ai_model,omitempty"`
+	AIDailyTokenCap int    `json:"ai_daily_token_cap,omitempty"`
 
 	// DisabledSources are source identifiers (e.g. "worknet") the user has
 	// opted out of. Default empty = every registered source is active. We
@@ -87,6 +104,16 @@ func (p Profile) EffectiveMinScore() int {
 		return *p.MinScore
 	}
 	return DefaultMinScore
+}
+
+// EffectiveAIDailyTokenCap returns AIDailyTokenCap when the user has set a
+// positive value, else DefaultDailyTokenCap. A zero/absent field means "use the
+// default," so AI-off and pre-v2.0 profiles get the generous default.
+func (p Profile) EffectiveAIDailyTokenCap() int {
+	if p.AIDailyTokenCap > 0 {
+		return p.AIDailyTokenCap
+	}
+	return DefaultDailyTokenCap
 }
 
 // SourceEnabled reports whether the given source identifier should be active
