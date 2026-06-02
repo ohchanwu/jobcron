@@ -16,9 +16,6 @@ var ErrUnknownProvider = errors.New("ai: unknown provider")
 // Provider is the seam for a BYOK AI backend. It is data-in/data-out: a
 // posting's model text goes in, structured facts come out. No tool-use, no
 // streaming — that contract is what lets the one-host egress pin hold.
-//
-// Stage 1 defines Name + Extract. ScoreDelta (Stage 2 / T5) is added to this
-// interface when the per-signal delta path lands.
 type Provider interface {
 	// Name is the stable provider id, e.g. "anthropic" or "openai".
 	Name() string
@@ -26,8 +23,15 @@ type Provider interface {
 	// Extract reads one posting's assembled model text and returns the
 	// structured career/education extraction. A non-nil error means the
 	// caller must fall back to the offline regex path and persist no cache
-	// row. Usage carries the token counts the (deferred) ledger debits.
+	// row. Usage carries the token counts the ledger debits.
 	Extract(ctx context.Context, modelText string) (Extraction, Usage, error)
+
+	// ScoreDelta weighs one posting (modelText) against the applicant's
+	// free-form goals (profileText) and returns the raw, un-gated per-signal
+	// items. A non-nil error means the caller applies no delta for that
+	// posting. The returned items are NOT citation-gated — the caller passes
+	// them through GateDelta before trusting any of them.
+	ScoreDelta(ctx context.Context, modelText, profileText string) ([]RawDeltaItem, Usage, error)
 }
 
 // Extraction is the validated Stage-1 result, mirroring the ai_extractions

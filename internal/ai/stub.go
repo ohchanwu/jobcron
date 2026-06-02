@@ -3,15 +3,17 @@ package ai
 import "context"
 
 // StubProvider is a no-network Provider for the offline test suite (D9). Set
-// ExtractFn to return canned output; a nil ExtractFn returns ErrNotImplemented.
-// The whole Stage-2 offline suite leans on this seam.
+// ExtractFn / ScoreDeltaFn to return canned output; a nil func returns
+// ErrNotImplemented. The whole AI offline suite leans on this seam.
 type StubProvider struct {
-	NameVal   string
-	ExtractFn func(ctx context.Context, modelText string) (Extraction, Usage, error)
+	NameVal      string
+	ExtractFn    func(ctx context.Context, modelText string) (Extraction, Usage, error)
+	ScoreDeltaFn func(ctx context.Context, modelText, profileText string) ([]RawDeltaItem, Usage, error)
 
-	// Calls counts how many times Extract was invoked — lets tests assert the
+	// Calls / ScoreDeltaCalls count invocations — lets tests assert the
 	// cache/budget short-circuits actually avoided a provider call.
-	Calls int
+	Calls           int
+	ScoreDeltaCalls int
 }
 
 // StubProvider implements Provider.
@@ -33,4 +35,14 @@ func (s *StubProvider) Extract(ctx context.Context, modelText string) (Extractio
 		return Extraction{}, Usage{}, ErrNotImplemented
 	}
 	return s.ExtractFn(ctx, modelText)
+}
+
+// ScoreDelta delegates to ScoreDeltaFn, counting the call. A nil ScoreDeltaFn
+// returns ErrNotImplemented.
+func (s *StubProvider) ScoreDelta(ctx context.Context, modelText, profileText string) ([]RawDeltaItem, Usage, error) {
+	s.ScoreDeltaCalls++
+	if s.ScoreDeltaFn == nil {
+		return nil, Usage{}, ErrNotImplemented
+	}
+	return s.ScoreDeltaFn(ctx, modelText, profileText)
 }
