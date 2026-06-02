@@ -22,9 +22,12 @@ The `--no-open` flag is defined at `cmd/job-scraper/main.go:36` and gates the `b
 
 Korean UI strings are inlined in Go and templates by design; do not introduce i18n machinery in v1.
 
-## The design doc is the source of truth
+## Design docs — peers, newest wins on conflict
 
-`~/.gstack/projects/job-scraper/chanbla11mit-main-design-20260519-183759.md` is the round-5 design doc with full rationale: the three-tier scraping plan, scoring math and weight caps, the Step 0 FTS5 spike result, SSE gotchas, Non-goals, and Reviewer Concerns. Read it before architectural changes — it pre-resolves a lot of "should we add X?" questions.
+Design docs live in `~/.gstack/projects/job-scraper/`. They are **peers, not a hierarchy** — no single doc is "the source of truth." On a *minor* contradiction between docs, prefer the **newest** one (older docs may be outdated), use your judgement, and log the choice for review; on a *significant* contradiction, surface it for review before proceeding.
+
+- `chanbla11mit-main-design-20260519-183759.md` (round-5) holds the original v1 rationale: the three-tier scraping plan, scoring math and weight caps, the Step 0 FTS5 spike result, SSE gotchas, Non-goals, and Reviewer Concerns. Still the best reference for *why* v1 is shaped the way it is — but its contents may be stale where later work moved on. Read it before architectural changes, then check for a newer doc that extends or supersedes it.
+- `chanbla11mit-main-design-20260601-180235.md` is the **v2.0 BYOK-AI design** (APPROVED 2026-06-01): an evidence-cited score delta on a quiet-fixer foundation. Read it before any AI-integration work.
 
 `feature-ideas.md` is the parking lot for ideas that are intentionally *not* in v1 (résumé parsing, multi-portal, notifications, etc.). When the user floats an idea that's already parked there, the answer is usually "park it, don't ship it."
 
