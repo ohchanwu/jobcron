@@ -32,6 +32,11 @@ const (
 // in-memory ceiling so one scrape can't run away on cost; the persisted daily
 // ledger and a user-configurable cap are T9. Exceeding it halts AI for the
 // rest of the run and falls back to regex scoring.
+//
+// The ceiling is SOFT: a call is admitted while remaining > 0 and debited
+// after it returns, so the last admitted call can overspend by up to its own
+// cost before the next canSpend() halts. That's fine for a generous run cap;
+// the hard, persisted enforcement is T9's ai_usage ledger.
 const maxRunInputTokensDefault = 150_000
 
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
