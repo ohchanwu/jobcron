@@ -108,11 +108,6 @@
       </fieldset>
       {{end}}
 
-      <label>필수 키워드
-        <span class="field-hint">한 줄에 하나. 모두 포함된 공고만 점수를 받아요.</span>
-        <textarea name="must_have" rows="3">{{.MustHaveText}}</textarea>
-      </label>
-
       <label>제외 키워드
         <span class="field-hint">한 줄에 하나. 하나라도 있으면 공고를 제외해요.</span>
         <textarea name="dealbreakers" rows="3">{{.DealbreakersText}}</textarea>
@@ -120,6 +115,24 @@
 
       <p class="hint">키워드는 어근만 적어주세요. "개발자"는 "개발"과 다르게 취급되고,
         "야근 없음" 같은 부정 표현은 "야근"과 구분하지 못해요. 짧고 분명한 단어가 가장 잘 맞아요.</p>
+
+      <fieldset class="ai-goals">
+        <legend>AI 분석 (선택)</legend>
+        <span class="field-hint">설정하지 않아도 점수는 매겨져요. AI 키를 설정하면 이 항목으로 더 잘 분석해요.</span>
+        <label>좋아하는 업무
+          <textarea name="job_likes" rows="2">{{.JobLikes}}</textarea>
+        </label>
+        <label>피하고 싶은 업무
+          <textarea name="job_dislikes" rows="2">{{.JobDislikes}}</textarea>
+        </label>
+        <label>단기 목표
+          <textarea name="short_term_goals" rows="2">{{.ShortTermGoals}}</textarea>
+        </label>
+        <label>장기 목표
+          <textarea name="long_term_goals" rows="2">{{.LongTermGoals}}</textarea>
+        </label>
+        {{/* v2.0 Stage 2 (T9/T6): AI 키 · provider/model · 토큰 예산 controls go inside this fieldset. */}}
+      </fieldset>
 
       <div class="form-actions">
         <button type="submit" class="btn-primary">저장하고 브리핑 보기 <span class="arrow">→</span></button>

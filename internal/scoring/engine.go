@@ -16,7 +16,7 @@ type LineItem struct {
 
 // DealbreakerHit records why a posting was excluded from scoring.
 type DealbreakerHit struct {
-	Kind   string // "keyword" | "must_have_missing" | "education"
+	Kind   string // "keyword" | "education"
 	Phrase string // the offending or missing phrase
 }
 

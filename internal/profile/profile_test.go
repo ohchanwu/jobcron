@@ -2,6 +2,7 @@ package profile
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -12,8 +13,9 @@ func TestProfileMarshalRoundTrip(t *testing.T) {
 		CareerYears:    0,
 		SalaryFloorKRW: 50_000_000,
 		MaxEducation:   EducationBachelor,
-		MustHave:       []string{"React"},
 		Dealbreakers:   []string{"병역특례"},
+		JobLikes:       "백엔드 API 설계",
+		LongTermGoals:  "플랫폼 엔지니어로 성장",
 	}
 	s, err := Marshal(p)
 	if err != nil {
@@ -30,9 +32,10 @@ func TestProfileMarshalRoundTrip(t *testing.T) {
 
 func TestProfileMarshalIsDeterministic(t *testing.T) {
 	p := Profile{
-		Stacks:       []StackPref{{Name: "React", Weight: 20}},
-		MustHave:     []string{"a", "b"},
-		MaxEducation: EducationAssociate,
+		Stacks:         []StackPref{{Name: "React", Weight: 20}},
+		MaxEducation:   EducationAssociate,
+		JobLikes:       "a",
+		ShortTermGoals: "b",
 	}
 	first, err := Marshal(p)
 	if err != nil {
@@ -46,5 +49,87 @@ func TestProfileMarshalIsDeterministic(t *testing.T) {
 		if again != first {
 			t.Fatalf("Marshal is not deterministic:\n %q\n %q", again, first)
 		}
+	}
+}
+
+// TestProfileMarshalEmptyGoalsByteIdentical guards the omitempty discipline:
+// adding the four goal fields must NOT change the canonical JSON of a profile
+// that leaves them empty (so existing score hashes don't churn). MustHave was
+// removed (no omitempty), so must_have is also absent — that removal does
+// change the hash, but it is a one-time re-score and never alters a Total (an
+// empty must-have list never excluded anything).
+func TestProfileMarshalEmptyGoalsByteIdentical(t *testing.T) {
+	s, err := Marshal(Profile{})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, key := range []string{"job_likes", "job_dislikes", "short_term_goals", "long_term_goals", "must_have"} {
+		if strings.Contains(s, key) {
+			t.Errorf("zero profile JSON should omit %q, got: %s", key, s)
+		}
+	}
+	want := `{"stacks":null,"location":{"cities":null,"weight":0,"remote_ok":false},"career_years":0,"salary_floor_krw":0,"max_education":0,"dealbreakers":null}`
+	if s != want {
+		t.Errorf("canonical empty profile JSON drift (a change here invalidates every score hash):\n got = %s\nwant = %s", s, want)
+	}
+}
+
+// TestProfileUnmarshalIgnoresLegacyMustHave: an old persisted profile that
+// still carries "must_have" must unmarshal cleanly (the key is now unknown and
+// silently ignored).
+func TestProfileUnmarshalIgnoresLegacyMustHave(t *testing.T) {
+	legacy := `{"stacks":[],"max_education":0,"must_have":["React","재택"],"dealbreakers":null}`
+	got, err := Unmarshal(legacy)
+	if err != nil {
+		t.Fatalf("Unmarshal legacy profile with must_have: %v", err)
+	}
+	if got.JobLikes != "" {
+		t.Errorf("legacy must_have must not bleed into a goal field, got JobLikes=%q", got.JobLikes)
+	}
+}
+
+func TestBuildStage2ProfileText(t *testing.T) {
+	if got := BuildStage2ProfileText(Profile{}); got != "" {
+		t.Errorf("empty goals should produce empty text, got %q", got)
+	}
+
+	p := Profile{JobLikes: "백엔드 API", JobDislikes: "잦은 야근", ShortTermGoals: "신입 입사", LongTermGoals: "테크리드"}
+	text := BuildStage2ProfileText(p)
+	for _, want := range []string{"좋아하는 업무: 백엔드 API", "피하고 싶은 업무: 잦은 야근", "단기 목표: 신입 입사", "장기 목표: 테크리드"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text missing %q:\n%s", want, text)
+		}
+	}
+	// Deterministic.
+	if BuildStage2ProfileText(p) != text {
+		t.Error("BuildStage2ProfileText is not deterministic")
+	}
+}
+
+// TestAIInputHashInvariants is the core T1/D10 cache invariant: the hash
+// changes only on a GOAL edit, never on a weight/MinScore/stack tweak.
+func TestAIInputHashInvariants(t *testing.T) {
+	base := Profile{JobLikes: "백엔드", ShortTermGoals: "신입"}
+	h := AIInputHash(base)
+	if len(h) != 12 {
+		t.Fatalf("AIInputHash = %q, want 12 hex chars", h)
+	}
+
+	// Weight / MinScore / stack changes must NOT move the hash.
+	min := 80
+	noChurn := base
+	noChurn.CareerWeight = 40
+	noChurn.SalaryWeight = 25
+	noChurn.MinScore = &min
+	noChurn.Stacks = []StackPref{{Name: "Go", Weight: 50}}
+	if AIInputHash(noChurn) != h {
+		t.Error("weight/MinScore/stack tweaks must not change ai_input_hash (would re-spend AI tokens)")
+	}
+
+	// A goal edit MUST move the hash.
+	goalEdit := base
+	goalEdit.JobLikes = "프론트엔드"
+	if AIInputHash(goalEdit) == h {
+		t.Error("a goal edit must change ai_input_hash (stale AI delta)")
 	}
 }

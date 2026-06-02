@@ -74,7 +74,6 @@ func WeightHints(prof profile.Profile) (careerNearMiss, salaryAmbiguous int) {
 // Dealbreaker kinds, recorded on DealbreakerHit.
 const (
 	dealbreakerKeyword   = "keyword"
-	dealbreakerMustHave  = "must_have_missing"
 	dealbreakerEducation = "education"
 )
 
@@ -299,19 +298,14 @@ func parseManwon(s string) int {
 func isASCIIDigit(r rune) bool { return r >= '0' && r <= '9' }
 
 // checkDealbreakers returns the first reason the posting must be excluded, or
-// nil. Checks run in order: dealbreaker keywords, missing must-haves, then an
-// unmet education requirement.
+// nil. Checks run in order: dealbreaker keywords, then an unmet education
+// requirement.
 func checkDealbreakers(p scraper.Posting, prof profile.Profile) *DealbreakerHit {
 	text := p.Title + " " + p.Company + " " + p.Description
 
 	for _, phrase := range prof.Dealbreakers {
 		if textContains(text, phrase) {
 			return &DealbreakerHit{Kind: dealbreakerKeyword, Phrase: phrase}
-		}
-	}
-	for _, phrase := range prof.MustHave {
-		if !textContains(text, phrase) {
-			return &DealbreakerHit{Kind: dealbreakerMustHave, Phrase: phrase}
 		}
 	}
 	if req, ok := educationDealbreaker(p, prof); ok {

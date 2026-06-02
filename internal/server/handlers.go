@@ -258,8 +258,11 @@ type profileForm struct {
 	CitiesText       string
 	LocationWeight   int
 	RemoteOK         bool
-	MustHaveText     string
 	DealbreakersText string
+	JobLikes         string // v2.0 AI goal fields (free text)
+	JobDislikes      string
+	ShortTermGoals   string
+	LongTermGoals    string
 	Sources          []sourceOption // one row per registered scraper
 }
 
@@ -314,8 +317,11 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 			Weight:   atoi(r.FormValue("location_weight")),
 			RemoteOK: r.FormValue("remote_ok") != "",
 		},
-		MustHave:        parseLines(r.FormValue("must_have")),
 		Dealbreakers:    parseLines(r.FormValue("dealbreakers")),
+		JobLikes:        strings.TrimSpace(r.FormValue("job_likes")),
+		JobDislikes:     strings.TrimSpace(r.FormValue("job_dislikes")),
+		ShortTermGoals:  strings.TrimSpace(r.FormValue("short_term_goals")),
+		LongTermGoals:   strings.TrimSpace(r.FormValue("long_term_goals")),
 		DisabledSources: disabled,
 	}
 	canonical, err := profile.Marshal(p)
@@ -354,8 +360,11 @@ func toProfileForm(p profile.Profile) profileForm {
 		CitiesText:       strings.Join(p.Location.Cities, ", "),
 		LocationWeight:   p.Location.Weight,
 		RemoteOK:         p.Location.RemoteOK,
-		MustHaveText:     strings.Join(p.MustHave, "\n"),
 		DealbreakersText: strings.Join(p.Dealbreakers, "\n"),
+		JobLikes:         p.JobLikes,
+		JobDislikes:      p.JobDislikes,
+		ShortTermGoals:   p.ShortTermGoals,
+		LongTermGoals:    p.LongTermGoals,
 	}
 }
 

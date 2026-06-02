@@ -1,8 +1,13 @@
 package profile
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Default scoring weights — applied when a profile field is zero. The
@@ -29,8 +34,17 @@ type Profile struct {
 	SalaryFloorKRW int            `json:"salary_floor_krw"`
 	SalaryWeight   int            `json:"salary_weight,omitempty"`
 	MaxEducation   EducationLevel `json:"max_education"` // highest level the user has
-	MustHave       []string       `json:"must_have"`     // plain Korean phrases that must all appear
 	Dealbreakers   []string       `json:"dealbreakers"`  // plain Korean phrases; any match excludes
+
+	// Goal fields (v2.0) are optional free-text the Stage-2 AI prompt reads.
+	// omitempty keeps an empty-goals profile's canonical JSON byte-identical to
+	// a pre-v2.0 profile (so adding them does not invalidate every score hash).
+	// They are the ONLY inputs to BuildStage2ProfileText / AIInputHash — weight
+	// and MinScore tweaks must not churn the AI cache.
+	JobLikes       string `json:"job_likes,omitempty"`
+	JobDislikes    string `json:"job_dislikes,omitempty"`
+	ShortTermGoals string `json:"short_term_goals,omitempty"`
+	LongTermGoals  string `json:"long_term_goals,omitempty"`
 
 	// MinScore is the briefing's "hide rows below this score" threshold.
 	// Pointer so that nil (field absent in JSON) differs from explicit 0
@@ -130,4 +144,39 @@ func Unmarshal(s string) (Profile, error) {
 		return Profile{}, fmt.Errorf("profile: unmarshal: %w", err)
 	}
 	return p, nil
+}
+
+// BuildStage2ProfileText assembles the four goal fields into the canonical
+// text the Stage-2 AI prompt reads — and the input to AIInputHash. It reads
+// ONLY the goal fields (NFC-normalized, empty fields omitted), so weight or
+// MinScore changes leave it byte-stable and never invalidate the AI cache;
+// only a goal edit changes it. The output is also the literal Korean text the
+// model sees, so the labels read naturally.
+func BuildStage2ProfileText(p Profile) string {
+	var b strings.Builder
+	add := func(label, val string) {
+		if val = strings.TrimSpace(val); val == "" {
+			return
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(label)
+		b.WriteString(": ")
+		b.WriteString(val)
+	}
+	add("좋아하는 업무", p.JobLikes)
+	add("피하고 싶은 업무", p.JobDislikes)
+	add("단기 목표", p.ShortTermGoals)
+	add("장기 목표", p.LongTermGoals)
+	return norm.NFC.String(b.String())
+}
+
+// AIInputHash is the Stage-2 cache key: the first 12 hex chars of
+// sha256(BuildStage2ProfileText(p)), mirroring storage.profileHash. Because it
+// hashes only the goal text, weight/MinScore tweaks keep the cached AI delta
+// fresh; only a goal edit marks it stale.
+func AIInputHash(p Profile) string {
+	sum := sha256.Sum256([]byte(BuildStage2ProfileText(p)))
+	return hex.EncodeToString(sum[:])[:12]
 }

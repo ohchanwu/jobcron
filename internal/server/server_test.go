@@ -218,8 +218,8 @@ func TestHandleProfileSaveThenLoad(t *testing.T) {
 	form.Set("cities", "서울, 판교")
 	form.Set("location_weight", "15")
 	form.Set("remote_ok", "on")
-	form.Set("must_have", "React")
 	form.Set("dealbreakers", "병역특례")
+	form.Set("job_likes", "백엔드 API 설계")
 
 	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -249,11 +249,18 @@ func TestHandleProfileSaveThenLoad(t *testing.T) {
 	if len(p.Dealbreakers) != 1 || p.Dealbreakers[0] != "병역특례" {
 		t.Errorf("dealbreakers = %v", p.Dealbreakers)
 	}
+	if p.JobLikes != "백엔드 API 설계" {
+		t.Errorf("job_likes = %q, want the saved goal text", p.JobLikes)
+	}
 
 	rec2 := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/profile", nil))
-	if rec2.Code != http.StatusOK || !strings.Contains(rec2.Body.String(), "병역특례") {
+	body := rec2.Body.String()
+	if rec2.Code != http.StatusOK || !strings.Contains(body, "병역특례") || !strings.Contains(body, "백엔드 API 설계") {
 		t.Errorf("GET /profile: code=%d, body missing saved data", rec2.Code)
+	}
+	if strings.Contains(body, `name="must_have"`) {
+		t.Error("GET /profile still renders the removed 필수 키워드 textarea")
 	}
 }
 

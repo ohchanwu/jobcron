@@ -10,9 +10,6 @@ import (
 // excluded by a dealbreaker.
 func Explain(r ScoreResult) string {
 	if r.DealbreakerHit != nil {
-		if r.DealbreakerHit.Kind == dealbreakerMustHave {
-			return r.DealbreakerHit.Phrase + " 누락 ⛔"
-		}
 		return r.DealbreakerHit.Phrase + " ⛔"
 	}
 	parts := make([]string, 0, len(r.Breakdown))

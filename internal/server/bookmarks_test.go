@@ -105,7 +105,7 @@ func TestDashboardMarksBookmarkedRows(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 
-	profileJSON := `{"stacks":[],"location":{"cities":[],"weight":0,"remote_ok":false},"career_years":0,"salary_floor_krw":0,"max_education":0,"must_have":null,"dealbreakers":null}`
+	profileJSON := `{"stacks":[],"location":{"cities":[],"weight":0,"remote_ok":false},"career_years":0,"salary_floor_krw":0,"max_education":0,"dealbreakers":null}`
 	if _, _, err := st.SaveProfile(ctx, profileJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}

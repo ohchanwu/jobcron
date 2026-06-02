@@ -258,32 +258,6 @@ func TestScoreDealbreakerKeywordIsTokenExact(t *testing.T) {
 	}
 }
 
-func TestScoreMustHaveMissing(t *testing.T) {
-	p := basePosting()
-	p.Description = "React 개발자를 찾습니다."
-	prof := baseProfile()
-	prof.MustHave = []string{"react", "재택"} // 재택 is absent
-
-	r := Score(p, prof)
-	if r.Total != -1 {
-		t.Errorf("Total = %d, want -1 (a must-have phrase is missing)", r.Total)
-	}
-	if r.DealbreakerHit == nil || r.DealbreakerHit.Kind != "must_have_missing" ||
-		r.DealbreakerHit.Phrase != "재택" {
-		t.Errorf("DealbreakerHit = %+v, want {must_have_missing 재택}", r.DealbreakerHit)
-	}
-}
-
-func TestScoreMustHaveAllPresent(t *testing.T) {
-	p := basePosting()
-	p.Description = "React 개발, 완전 재택 근무 가능"
-	prof := baseProfile()
-	prof.MustHave = []string{"react", "재택"}
-	if r := Score(p, prof); r.Total == -1 {
-		t.Error("Total = -1, want >= 0 — every must-have phrase is present")
-	}
-}
-
 func TestScoreEducationDealbreaker(t *testing.T) {
 	cases := []struct {
 		name    string

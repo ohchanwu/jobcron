@@ -604,16 +604,19 @@ textarea { resize: vertical; min-height: 4rem; }
 }
 .form-actions { margin-top: 2rem; }
 
-.source-toggles {
+.source-toggles,
+.ai-goals {
   margin: 1.5rem 0 0;
   padding: 0.9rem 1rem 1rem;
   border: 1px solid var(--rule);
   border-radius: 4px;
 }
-.source-toggles legend {
+.source-toggles legend,
+.ai-goals legend {
   font-weight: 600;
   font-size: 0.92rem;
   padding: 0 0.4rem;
 }
-.source-toggles .field-hint { margin-bottom: 0.7rem; }
+.source-toggles .field-hint,
+.ai-goals .field-hint { margin-bottom: 0.7rem; }
 .source-toggles .check { margin-top: 0.4rem; }

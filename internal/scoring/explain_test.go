@@ -19,8 +19,8 @@ func TestExplain(t *testing.T) {
 		t.Errorf("Explain(keyword) = %q, want \"병특 ⛔\"", got)
 	}
 
-	missing := ScoreResult{Total: -1, DealbreakerHit: &DealbreakerHit{Kind: "must_have_missing", Phrase: "재택"}}
-	if got := Explain(missing); got != "재택 누락 ⛔" {
-		t.Errorf("Explain(missing) = %q, want \"재택 누락 ⛔\"", got)
+	edu := ScoreResult{Total: -1, DealbreakerHit: &DealbreakerHit{Kind: "education", Phrase: "대학교졸업(4년) 이상"}}
+	if got := Explain(edu); got != "대학교졸업(4년) 이상 ⛔" {
+		t.Errorf("Explain(edu) = %q, want \"대학교졸업(4년) 이상 ⛔\"", got)
 	}
 }
