@@ -1,0 +1,36 @@
+{{/*
+  scoreChips renders a posting's score breakdown as chips. It is shared by all
+  four listing surfaces (/, /archive, /bookmarks, /hidden) — a deliberate
+  exception to the project's "duplicate templates" convention, because the AI
+  chip is a keyboard-accessible popover whose markup and ARIA must stay identical
+  everywhere (drift across four copies would be a real a11y bug).
+
+  Dot is the .Breakdown slice ([]scoring.LineItem). An item carrying Evidence is
+  the merged "AI 분석" line: it renders as a clickable chip that toggles an inline
+  disclosure of its cited signals (ai-popover.js). Every other item is a plain
+  static chip, unchanged from v1.5.
+
+  Signed value rendering (design §1): positive → gold .v (+N); negative → muted
+  .v.neg with the real U+2212 minus (−N). Terracotta is reserved for deadlines,
+  so a demerit never shouts louder than a closing date.
+*/}}
+{{define "deltaValue"}}{{if gt . 0}}<span class="v">+{{.}}</span>{{else if lt . 0}}<span class="v neg">−{{absInt .}}</span>{{end}}{{end}}
+
+{{define "scoreChips"}}{{if .}}<div class="chips">
+{{- range .}}
+{{- if .Evidence}}
+  <span class="chip-ai-wrap">
+    <button type="button" class="chip chip-ai{{if .Stale}} is-stale{{end}}" aria-expanded="false" aria-label="AI 분석 근거 보기">
+      <span class="chip-label">AI 분석</span>{{template "deltaValue" .Delta}}{{if .Stale}}<span class="chip-stale-note">(이전 프로필 기준)</span>{{end}}<span class="chip-caret" aria-hidden="true">▸</span>
+    </button>
+    <div class="ai-evidence" hidden>
+      {{- range .Evidence}}
+      <p class="ai-evidence-item">{{template "deltaValue" .Delta}}<span class="ai-evidence-text">{{if .Quote}}{{.Quote}}{{else}}관련 언급 없음 (코드 확인){{end}}</span>{{if .MatchedGoal}}<span class="ai-evidence-goal">{{.MatchedGoal}}</span>{{end}}</p>
+      {{- end}}
+    </div>
+  </span>
+{{- else}}
+  <span class="chip">{{.Label}}{{if gt .Delta 0}}<span class="v">+{{.Delta}}</span>{{end}}</span>
+{{- end}}
+{{- end}}
+</div>{{end}}{{end}}

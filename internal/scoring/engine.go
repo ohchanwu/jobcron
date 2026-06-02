@@ -72,7 +72,11 @@ func Score(p scraper.Posting, prof profile.Profile, ext *ai.Extraction, delta *a
 	if li, ok := scoreSalary(p, prof); ok {
 		breakdown = append(breakdown, li)
 	}
-	if delta != nil {
+	// Append the AI line only when at least one signal survived the citation
+	// gate. A delta with no surviving items contributes nothing and must show no
+	// chip — the calm surface stays silent rather than rendering an empty
+	// "AI 분석" chip (design §c).
+	if delta != nil && len(delta.Items) > 0 {
 		breakdown = append(breakdown, aiLineItem(*delta))
 	}
 

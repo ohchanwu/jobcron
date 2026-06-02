@@ -478,6 +478,16 @@ func atoi(s string) int {
 	return n
 }
 
+// absInt is a template helper: the absolute value of an int, used to render a
+// negative AI delta as "−N" (the template supplies the U+2212 minus sign and
+// the muted styling, so the magnitude is all that's needed here).
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 // parseLines splits textarea input into trimmed, non-empty lines.
 func parseLines(text string) []string {
 	var out []string

@@ -97,11 +97,104 @@ func TestScoreFloorClamp(t *testing.T) {
 	prof := baseProfile()
 	prof.Stacks = []profile.StackPref{{Name: "React", Weight: 30}}
 
-	if r := Score(p, prof, nil, &ai.Delta{NetDelta: -100}); r.Total != 0 {
+	// A delta's net is the sum of its surviving items (an items-less delta emits
+	// no line at all — §c), so exercise the floor/cap through real items.
+	neg := &ai.Delta{NetDelta: -100, Items: []ai.DeltaItem{{Signal: "감점", Kind: "presence", Delta: -100, Evidence: "x"}}}
+	if r := Score(p, prof, nil, neg); r.Total != 0 {
 		t.Fatalf("negative net delta: Total = %d, want 0 (floored, never -1)", r.Total)
 	}
-	if r := Score(p, prof, nil, &ai.Delta{NetDelta: 1000}); r.Total != maxTotal {
+	pos := &ai.Delta{NetDelta: 1000, Items: []ai.DeltaItem{{Signal: "가점", Kind: "presence", Delta: 1000, Evidence: "y"}}}
+	if r := Score(p, prof, nil, pos); r.Total != maxTotal {
 		t.Fatalf("huge positive delta: Total = %d, want %d (capped)", r.Total, maxTotal)
+	}
+}
+
+// TestAIEmptyDeltaEmitsNoLine: a delta with no surviving items adds no
+// "AI 분석" chip — the calm surface stays silent (§c). nil and empty both apply.
+func TestAIEmptyDeltaEmitsNoLine(t *testing.T) {
+	p := basePosting()
+	p.StackTags = []string{"React"}
+	prof := baseProfile()
+	prof.Stacks = []profile.StackPref{{Name: "React", Weight: 30}}
+
+	for name, delta := range map[string]*ai.Delta{
+		"nil delta":   nil,
+		"empty items": {NetDelta: 0, Items: nil},
+	} {
+		r := Score(p, prof, nil, delta)
+		if _, ok := lineDelta(r, aiLineLabel); ok {
+			t.Errorf("%s produced an AI line, want none", name)
+		}
+		if r.Total != 30 {
+			t.Errorf("%s: Total = %d, want 30 (React only)", name, r.Total)
+		}
+	}
+}
+
+// TestAIChipsSumToTotal: every rendered chip's Delta sums to the posting's
+// Total — the user-visible invariant the briefing relies on (CLAUDE.md). The
+// AI line carries the net of its surviving items.
+func TestAIChipsSumToTotal(t *testing.T) {
+	p := basePosting()
+	p.StackTags = []string{"React"}
+	prof := baseProfile()
+	prof.Stacks = []profile.StackPref{{Name: "React", Weight: 30}}
+
+	delta := &ai.Delta{NetDelta: -5, Items: []ai.DeltaItem{
+		{Signal: "백엔드 중심", Kind: ai.KindPresence, Delta: 7, Evidence: "서버 개발"},
+		{Signal: "야근", Kind: ai.KindAbsence, Delta: -12, Evidence: "'야근' 등 관련 언급 없음 (코드 확인)"},
+	}}
+	r := Score(p, prof, nil, delta)
+
+	sum := 0
+	for _, li := range r.Breakdown {
+		sum += li.Delta
+	}
+	if sum != r.Total {
+		t.Fatalf("chips sum to %d but Total is %d", sum, r.Total)
+	}
+	if r.Total != 25 { // React 30 + AI net -5
+		t.Fatalf("Total = %d, want 25", r.Total)
+	}
+	aiDelta, ok := lineDelta(r, aiLineLabel)
+	if !ok || aiDelta != -5 {
+		t.Fatalf("AI line delta = %d (present=%v), want -5", aiDelta, ok)
+	}
+	// The popover carries every surviving signal.
+	for _, li := range r.Breakdown {
+		if li.Label == aiLineLabel && len(li.Evidence) != 2 {
+			t.Fatalf("AI line Evidence has %d items, want 2", len(li.Evidence))
+		}
+	}
+}
+
+// TestAIStaleFlowsToLineItem: a stale delta marks its LineItem stale (T6 renders
+// the "(이전 프로필 기준)" chrome) and is still summed into the Total (T1).
+func TestAIStaleFlowsToLineItem(t *testing.T) {
+	p := basePosting()
+	p.StackTags = []string{"React"}
+	prof := baseProfile()
+	prof.Stacks = []profile.StackPref{{Name: "React", Weight: 30}}
+
+	delta := &ai.Delta{NetDelta: 8, Stale: true, Items: []ai.DeltaItem{
+		{Signal: "성장", Kind: ai.KindPresence, Delta: 8, Evidence: "빠르게 성장하는 팀"},
+	}}
+	r := Score(p, prof, nil, delta)
+
+	var found bool
+	for _, li := range r.Breakdown {
+		if li.Label == aiLineLabel {
+			found = true
+			if !li.Stale {
+				t.Error("stale delta must produce a Stale=true LineItem")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("stale delta produced no AI line")
+	}
+	if r.Total != 38 { // React 30 + stale AI +8 (still counted)
+		t.Fatalf("Total = %d, want 38 (a stale delta is still summed)", r.Total)
 	}
 }
 

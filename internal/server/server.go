@@ -158,6 +158,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		"sourceLabel":       sourceLabel,
 		"registeredSources": srv.allRegisteredSources,
 		"sourcePillGroups":  srv.sourcePillGroups,
+		"absInt":            absInt,
 	}
 	srv.tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
 	return srv
@@ -446,12 +447,27 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// Batch-load the Stage-1 AI extractions once (no N+1) when AI is enabled;
-	// scoreCareer/educationDealbreaker prefer them. Stage-2 deltas are not
-	// wired yet (the delta arg stays nil until T5–T7).
-	var exts map[int64]ai.Extraction
+	// Batch-load the Stage-1 extractions and Stage-2 deltas once (no N+1) when
+	// AI is enabled; scoreCareer/educationDealbreaker prefer the extractions,
+	// and the deltas merge as the "AI 분석" line item. This is merge-only — D10:
+	// scoreAll NEVER calls the provider; the provider runs only at scrape time
+	// (Stage 1) and on a 재평가 (Stage 2, T7).
+	var (
+		exts         map[int64]ai.Extraction
+		freshDeltas  map[int64]ai.Delta // keyed by the CURRENT goal text (ai_input_hash)
+		latestDeltas map[int64]ai.Delta // newest per posting, any goal text — the stale fallback
+	)
 	if s.ai != nil {
 		exts, err = s.store.AIExtractionsByPostingID(ctx, s.aiVersion)
+		if err != nil {
+			return 0, err
+		}
+		aiInputHash := profile.AIInputHash(prof)
+		freshDeltas, err = s.store.AIScoresByPostingID(ctx, aiInputHash, s.aiVersion)
+		if err != nil {
+			return 0, err
+		}
+		latestDeltas, err = s.store.LatestAIScoresByPostingID(ctx, s.aiVersion)
 		if err != nil {
 			return 0, err
 		}
@@ -461,7 +477,18 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 		if e, ok := exts[p.ID]; ok {
 			ext = &e
 		}
-		result := scoring.Score(p, prof, ext, nil)
+		// Prefer a delta computed against the CURRENT goal text (fresh); else
+		// fall back to the latest delta from a prior goal text, marked Stale so
+		// the chip reads "(이전 프로필 기준)" — still summed into the Total (T1).
+		var delta *ai.Delta
+		if d, ok := freshDeltas[p.ID]; ok {
+			d.Stale = false
+			delta = &d
+		} else if d, ok := latestDeltas[p.ID]; ok {
+			d.Stale = true
+			delta = &d
+		}
+		result := scoring.Score(p, prof, ext, delta)
 		breakdown, err := json.Marshal(result)
 		if err != nil {
 			return 0, fmt.Errorf("server: marshal score: %w", err)

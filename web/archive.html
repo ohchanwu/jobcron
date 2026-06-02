@@ -90,11 +90,7 @@
                   {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
                   {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
                 </div>
-                {{if .Breakdown}}
-                <div class="chips">
-                  {{range .Breakdown}}<span class="chip">{{.Label}}{{if gt .Delta 0}}<span class="v">+{{.Delta}}</span>{{end}}</span>{{end}}
-                </div>
-                {{end}}
+                {{template "scoreChips" .Breakdown}}
               </div>
               <div class="posting-actions">
                 <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"
@@ -167,5 +163,6 @@
   <script src="/static/bookmark.js"></script>
   <script src="/static/not-interested.js"></script>
   <script src="/static/source-filter.js"></script>
+  <script src="/static/ai-popover.js"></script>
 </body>
 </html>
