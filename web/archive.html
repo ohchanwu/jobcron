@@ -56,6 +56,7 @@
     <div class="scrape-row">
       <div class="count">모은 공고 <strong>{{.Total}}</strong>개</div>
     </div>
+    {{template "rerateButton" .Rerate}}
 
     <main>
       <input type="search" id="posting-search" class="posting-search" placeholder="제목·회사로 찾기" aria-label="공고 검색" autocomplete="off">
@@ -164,5 +165,6 @@
   <script src="/static/not-interested.js"></script>
   <script src="/static/source-filter.js"></script>
   <script src="/static/ai-popover.js"></script>
+  <script src="/static/ai-rerate.js"></script>
 </body>
 </html>

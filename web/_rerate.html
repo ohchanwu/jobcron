@@ -1,0 +1,16 @@
+{{/*
+  rerateButton renders the 재평가 control for a surface. Dot is the .Rerate field
+  (*rerateInfo) — nil when no AI key is configured, so the button is HIDDEN
+  entirely (design §4: no dead control). It is a ghost/secondary button, never a
+  second primary. When visible rows are stale (computed against a prior profile),
+  it takes a gold attention treatment with a count: "재평가 ·N".
+  Shared by /, /archive, /bookmarks (an a11y/SSE control that must stay
+  identical, like the AI chip — a deliberate exception to "duplicate templates").
+*/}}
+{{define "rerateButton"}}{{with .}}
+<div class="rerate-row">
+  <button id="rerate" type="button" class="btn-ghost{{if .StaleCount}} has-stale{{end}}" data-surface="{{.Surface}}">재평가{{if .StaleCount}} ·{{.StaleCount}}{{end}}</button>
+  <span class="rerate-hint">AI로 화면에 보이는 공고를 다시 분석해요{{if .StaleCount}} · 프로필이 바뀐 공고 {{.StaleCount}}개{{end}}</span>
+</div>
+<div id="rerate-log" class="scrape-log" aria-live="polite"></div>
+{{end}}{{end}}

@@ -59,6 +59,7 @@
       <button id="scrape" class="btn-primary">스크랩 시작 <span class="arrow">→</span></button>
     </div>
     <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
+    {{template "rerateButton" .Rerate}}
 
     <main>
       <input type="search" id="posting-search" class="posting-search" placeholder="제목·회사로 찾기" aria-label="공고 검색" autocomplete="off">
@@ -163,6 +164,7 @@
   <script src="/static/not-interested.js"></script>
   <script src="/static/source-filter.js"></script>
   <script src="/static/ai-popover.js"></script>
+  <script src="/static/ai-rerate.js"></script>
   <script>
     /* Scrape: open EventSource on click, stream events into the log,
        reload the page on done so the new briefing renders. */

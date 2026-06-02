@@ -13,7 +13,8 @@ import (
 // bookmarksView is the view model for the /bookmarks page.
 type bookmarksView struct {
 	Postings []dashboardPosting
-	Date     string // today's date, for header symmetry with the briefing
+	Date     string      // today's date, for header symmetry with the briefing
+	Rerate   *rerateInfo // re-rate button state; nil = no AI key (button hidden)
 }
 
 // handleBookmarks renders the user's saved postings, most recently saved
@@ -67,6 +68,7 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 		}
 		view.Postings = append(view.Postings, dp)
 	}
+	view.Rerate = s.buildRerateInfo("bookmarks", view.Postings)
 	return view, nil
 }
 

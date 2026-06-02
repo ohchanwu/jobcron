@@ -26,6 +26,7 @@ type archiveView struct {
 	Days     []archiveDay
 	Excluded []dashboardPosting // below-MinScore / dealbreaker rows, collapsed
 	Total    int                // total posting count (main + excluded), for the header counter
+	Rerate   *rerateInfo        // re-rate button state; nil = no AI key (button hidden)
 }
 
 // handleArchive renders every posting the scraper has ever stored, grouped
@@ -151,5 +152,10 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 			return day.Postings[a].Total > day.Postings[b].Total
 		})
 	}
+	lists := make([][]dashboardPosting, 0, len(view.Days))
+	for _, day := range view.Days {
+		lists = append(lists, day.Postings)
+	}
+	view.Rerate = s.buildRerateInfo("archive", lists...)
 	return view, nil
 }

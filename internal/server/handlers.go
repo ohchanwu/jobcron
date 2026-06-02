@@ -28,6 +28,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
+	mux.HandleFunc("GET /api/rerate", s.handleRerateSSE)
 	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
 	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)
 	mux.HandleFunc("PUT /api/not-interested/{id}", s.handleNotInterestedAdd)
@@ -82,7 +83,8 @@ type dashboardPosting struct {
 type briefing struct {
 	Today    []dashboardPosting
 	Excluded []dashboardPosting
-	Date     string // "2026 / 05 / 23" (KST)
+	Date     string      // "2026 / 05 / 23" (KST)
+	Rerate   *rerateInfo // re-rate button state; nil = no AI key (button hidden)
 }
 
 // briefingCap bounds how many postings the daily briefing lists.
@@ -186,6 +188,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if len(b.Today) > briefingCap {
 		b.Today = b.Today[:briefingCap]
 	}
+	b.Rerate = s.buildRerateInfo("today", b.Today)
 	return b, nil
 }
 
