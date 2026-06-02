@@ -72,12 +72,8 @@ func newHTTPProvider(spec providerSpec, apiKey, model, baseURL string, rateLimit
 // Name reports the provider id.
 func (p *httpProvider) Name() string { return p.spec.name }
 
-// Extract is filled in T2 (extraction prompt + JSON/range gate on top of
-// complete). Stage 1 leaves it unimplemented so the package compiles and the
-// transport/pacing/pin/keys can be tested in isolation.
-func (p *httpProvider) Extract(ctx context.Context, modelText string) (Extraction, Usage, error) {
-	return Extraction{}, Usage{}, ErrNotImplemented
-}
+// Extract is implemented in extract.go (the prompt + JSON/range gate on top
+// of complete).
 
 // waitForRateLimit blocks until at least rateLimit has elapsed since the
 // previous request began, reserving the next slot under the mutex so

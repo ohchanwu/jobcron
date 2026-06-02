@@ -13,7 +13,10 @@ import (
 )
 
 // requiredObjects are the tables / virtual tables the migrations must create.
-var requiredObjects = []string{"postings", "postings_fts", "profile", "scores", "bookmarks"}
+var requiredObjects = []string{
+	"postings", "postings_fts", "profile", "scores", "bookmarks",
+	"ai_extractions", "ai_scores", "ai_usage", // migration 0008 (BYOK AI v2.0)
+}
 
 // newTestStore opens a fresh, migrated database in a temp directory.
 func newTestStore(t *testing.T) *Store {

@@ -1,0 +1,158 @@
+package ai
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/ohchanwu/job-scraper/internal/scraper"
+)
+
+func TestBuildModelTextTruncationAndHashStability(t *testing.T) {
+	short := scraper.Posting{Title: "신입 백엔드", Company: "가나다", Description: "서버 개발자를 찾습니다"}
+	text, hash, truncated := ModelInput(short)
+	if truncated {
+		t.Fatal("short body should not truncate")
+	}
+	if !strings.Contains(text, "신입 백엔드") || !strings.Contains(text, "서버 개발자") {
+		t.Fatalf("model text missing posting fields: %q", text)
+	}
+	if len(hash) != 12 {
+		t.Fatalf("content hash = %q, want 12 hex chars", hash)
+	}
+
+	t.Run("NFC-equivalent inputs hash identically", func(t *testing.T) {
+		composed := scraper.Posting{Title: "caf\u00e9", Company: "x", Description: "y"}    // é as one code point
+		decomposed := scraper.Posting{Title: "cafe\u0301", Company: "x", Description: "y"} // e + combining acute
+		_, h1, _ := ModelInput(composed)
+		_, h2, _ := ModelInput(decomposed)
+		if h1 != h2 {
+			t.Fatalf("NFC-equivalent titles hashed differently: %s vs %s", h1, h2)
+		}
+	})
+
+	t.Run("real content change changes hash", func(t *testing.T) {
+		a := scraper.Posting{Title: "t", Company: "c", Description: "원본"}
+		b := scraper.Posting{Title: "t", Company: "c", Description: "수정됨"}
+		_, ha, _ := ModelInput(a)
+		_, hb, _ := ModelInput(b)
+		if ha == hb {
+			t.Fatal("different descriptions must hash differently")
+		}
+	})
+
+	t.Run("hash is over PRE-truncation text", func(t *testing.T) {
+		// Two postings sharing the first 13000 description runes but differing
+		// only far past the truncation cap: the SENT (truncated) text is
+		// identical, yet the content_hash differs — proving the hash sees the
+		// full pre-truncation text.
+		base := strings.Repeat("가", 13000)
+		p1 := scraper.Posting{Title: "t", Company: "c", Description: base}
+		p2 := scraper.Posting{Title: "t", Company: "c", Description: base + "추가된뒷부분"}
+		s1, h1, tr1 := ModelInput(p1)
+		s2, h2, tr2 := ModelInput(p2)
+		if !tr1 || !tr2 {
+			t.Fatal("both long postings should truncate")
+		}
+		if s1 != s2 {
+			t.Fatal("truncated sent text should be identical for the shared prefix")
+		}
+		if h1 == h2 {
+			t.Fatal("content_hash must differ — it is taken pre-truncation, not on the sent text")
+		}
+		if len([]rune(s1)) != maxModelTextRunes {
+			t.Fatalf("sent text = %d runes, want %d", len([]rune(s1)), maxModelTextRunes)
+		}
+	})
+}
+
+func TestParseExtractionValid(t *testing.T) {
+	t.Run("max present", func(t *testing.T) {
+		ext, err := parseExtraction([]byte(`{"min_career":2,"max_career":5,"newcomer":false,"education":"bachelor","evidence":"경력 2-5년"}`))
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		if ext.MinCareer != 2 || ext.MaxCareer == nil || *ext.MaxCareer != 5 || ext.Newcomer || ext.EducationEnum != "bachelor" {
+			t.Fatalf("parsed = %+v", ext)
+		}
+	})
+	t.Run("max null is open bound", func(t *testing.T) {
+		ext, err := parseExtraction([]byte(`{"min_career":3,"max_career":null,"newcomer":false,"education":"none","evidence":"경력 3년 이상"}`))
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		if ext.MaxCareer != nil {
+			t.Fatalf("null max_career should map to nil, got %v", *ext.MaxCareer)
+		}
+	})
+	t.Run("tolerates markdown fences / prose", func(t *testing.T) {
+		raw := "여기 결과입니다:\n```json\n{\"min_career\":0,\"max_career\":0,\"newcomer\":true,\"education\":\"none\",\"evidence\":\"신입\"}\n```"
+		ext, err := parseExtraction([]byte(raw))
+		if err != nil {
+			t.Fatalf("parse fenced: %v", err)
+		}
+		if !ext.Newcomer {
+			t.Fatalf("parsed = %+v", ext)
+		}
+	})
+}
+
+func TestParseExtractionRejects(t *testing.T) {
+	cases := map[string]string{
+		"malformed JSON":     `{"min_career":2,`,
+		"no object":          `just some prose, no json`,
+		"min negative":       `{"min_career":-1,"newcomer":false,"education":"none","evidence":""}`,
+		"min absurd":         `{"min_career":2026,"newcomer":false,"education":"none","evidence":""}`,
+		"max below min":      `{"min_career":5,"max_career":2,"newcomer":false,"education":"none","evidence":""}`,
+		"max above ceiling":  `{"min_career":0,"max_career":200,"newcomer":true,"education":"none","evidence":""}`,
+		"education not enum": `{"min_career":0,"newcomer":true,"education":"phd","evidence":""}`,
+		"education empty":    `{"min_career":0,"newcomer":true,"evidence":""}`,
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseExtraction([]byte(raw)); err == nil {
+				t.Fatalf("expected rejection for %s, got none", name)
+			}
+		})
+	}
+}
+
+// TestHTTPProviderExtractEndToEnd exercises the wired Extract: complete →
+// parseExtraction, against a canned provider response.
+func TestHTTPProviderExtractEndToEnd(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Anthropic envelope wrapping the extraction JSON.
+		io.WriteString(w, `{"content":[{"type":"text","text":"{\"min_career\":0,\"max_career\":0,\"newcomer\":true,\"education\":\"bachelor\",\"evidence\":\"신입 환영\"}"}],"usage":{"input_tokens":40,"output_tokens":20}}`)
+	}))
+	defer srv.Close()
+
+	p, err := newHTTPProvider(anthropicSpec, "sk", "claude-x", srv.URL, 0)
+	if err != nil {
+		t.Fatalf("newHTTPProvider: %v", err)
+	}
+	ext, usage, err := p.Extract(context.Background(), "model text")
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if !ext.Newcomer || ext.EducationEnum != "bachelor" || ext.Evidence != "신입 환영" {
+		t.Fatalf("extract = %+v", ext)
+	}
+	if usage.InputTokens != 40 || usage.OutputTokens != 20 {
+		t.Fatalf("usage = %+v", usage)
+	}
+}
+
+func TestHTTPProviderExtractRejectsBadJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"content":[{"type":"text","text":"sorry I cannot help"}],"usage":{"input_tokens":5,"output_tokens":5}}`)
+	}))
+	defer srv.Close()
+
+	p, _ := newHTTPProvider(anthropicSpec, "sk", "claude-x", srv.URL, 0)
+	if _, _, err := p.Extract(context.Background(), "x"); err == nil {
+		t.Fatal("a non-JSON model reply must surface as an error so the caller falls back")
+	}
+}
