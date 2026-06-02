@@ -24,6 +24,35 @@ part of the 1.x series.
 
 ## [Unreleased]
 
+The **v2.0 BYOK-AI** line begins here (a separate major, not part of 1.x). Stage 1
+below is the foundation — committed but **dormant**: there is no key-entry UI yet
+(a later stage), so the running app behaves exactly like v1.5 until a provider is
+configured.
+
+### Added
+- **Bring-your-own-key AI provider layer (`internal/ai`).** A provider interface
+  with hand-rolled Anthropic and OpenAI HTTP clients (no SDK, to keep the pure-Go
+  single-binary build), a one-host egress pin, a 0600 `ai_keys.json` key store,
+  and a stub provider for the offline test suite.
+- **Stage-1 extraction + cache.** With AI enabled, each new posting's
+  career/education requirements are read by the model and cached in a new
+  `ai_extractions` table (migration `0008`). Scoring prefers these cached AI facts
+  over the regex heuristic — so a posting whose body says "경력 5년 이상" but is
+  actually 신입-friendly scores the full new-grad award instead of 0. Any AI
+  failure falls back silently to the existing regex scoring.
+- **Profile AI goal fields.** Four optional free-text fields (좋아하는 업무,
+  피하고 싶은 업무, 단기/장기 목표) under a new "AI 분석 (선택)" section, for the
+  upcoming AI analysis.
+
+### Removed
+- **필수 키워드 (must-have keywords).** The must-have list is gone. Use dealbreaker
+  keywords (any match excludes a posting) instead; re-enter past must-haves as
+  goal fields or dealbreakers.
+
+### Changed
+- **Scores clamp to `[0, 100]`** (a floor was added) and the score breakdown
+  renders signed deltas. No effect on existing scores while AI is off.
+
 ## [1.5.0] - 2026-05-29
 
 The accumulated refinements on the 1.0 baseline, cut as the first tagged

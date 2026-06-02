@@ -56,6 +56,7 @@ To run a single test: `go test ./internal/scoring/ -run TestScoreStacks -v`.
 - **FTS5 is available** in `modernc.org/sqlite` v1.50.1 — the Step 0 spike confirmed it on 2026-05-21. The schema in `internal/storage/migrations/0001_initial.sql` uses an external-content FTS5 virtual table over `title + company + description` with `tokenize='unicode61 remove_diacritics 0'` and three sync triggers. Despite that, Korean phrase matching in `internal/scoring/match.go` is implemented in Go (not via `MATCH` SQL) — see the Matching section below.
 - **Single concrete `*storage.Store`** — no repository interface. The design doc explicitly chose this for v1 simplicity; do not add a `StorageInterface` for "testability."
 - **`scraper.Scraper` IS an interface.** This is the seam for v1.6+ adding 원티드 / 프로그래머스 / company pages. New sources go under `internal/scraper/<name>/` and register themselves through `Scraper`. The `internal/scraper` package owns the shared `Posting` and `Tag` domain types.
+- **`ai.Provider` IS an interface** (v2.0 BYOK AI; Stage 1 landed 2026-06-02). The seam for AI backends — Anthropic + OpenAI live in `internal/ai` as hand-rolled `net/http` clients (no SDK, to keep the CGO-free build). **`internal/ai` must NOT import `internal/scoring`**: `scoring` imports `ai` (`Score(p, prof, *ai.Extraction, *ai.Delta)`), so the reverse would cycle. Egress is pinned to one host in `Transport.DialContext`; BYOK keys live in a 0600 `ai_keys.json` next to `jobs.db`. Stage-1 interface is `Name() + Extract()`; `ScoreDelta` joins it in Stage 2 (T5).
 - **One scrape at a time, per source.** `internal/server/singleflight.go` holds a mutex per source key; concurrent POSTs to `/api/scrape` return `409 Conflict`. The HTMX button uses `hx-disabled-elt` for the client side.
 
 ## Korean matching semantics (do not casually change)
@@ -78,6 +79,8 @@ Categories cap at maxes (Stack 50, Career = `Profile.CareerWeight` default 25, L
 
 When the profile changes, scores become stale (their `profile_hash` no longer matches the current one). `handleProfileSave` re-scores every posting in the same request; on dashboard render, mismatched-hash scores are recomputed. There is no score history — old values are overwritten by design.
 
+**v2.0 AI scoring (Stage 1, cache-read).** `Score` now takes `*ai.Extraction` and `*ai.Delta`. When an extraction is cached (`ai_extractions`), `scoreCareer`/`educationDealbreaker` prefer the AI career/education facts and **skip the regex `ParseExperienceYears` override** (decision D2 — the extraction lives only in the cache, never written into the `postings` columns); with no extraction the regex path is byte-identical to v1.5. The total now clamps to **`[0,100]`** (the floor was added so a negative AI delta floors at 0, not the `-1` dealbreaker sentinel), and `Explain` renders **signed** deltas. The dealbreaker short-circuit returns first, so a `Total:-1` posting never carries an AI line. AI is **off by default** (`Server.ai == nil`); when off, scoring is byte-identical to v1.5.
+
 ## SSE conventions
 
 `internal/server/sse.go` sets `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` and flushes after each event. **Do not wrap `/api/scrape` in any compression middleware** — gzip will buffer and the client sees nothing. Newlines in the `data:` payload are collapsed to spaces because each event sends one-line status text; if you ever need to send a multi-line HTML fragment, switch to the `data: `-per-line encoding (the design doc spells out the gotcha).
@@ -99,14 +102,16 @@ The 1 req/s pacing is `time.Sleep` in `internal/scraper/jumpit/client.go` — de
 
 ## Storage layout
 
-The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.6+ parsers.
+The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.6+ parsers. (`0006` is intentionally skipped — the runner keys on the 4-digit filename prefix, not contiguity.)
+
+Migration `0008_byok_ai.sql` (v2.0) adds the full AI schema in one file: `ai_extractions` (Stage-1 career/education cache, keyed `posting_id + content_hash + ai_version`), `ai_scores` (Stage-2 delta cache, keyed on `ai_input_hash`), and `ai_usage` (rolling daily token ledger). Both AI caches `REFERENCES postings(id) ON DELETE CASCADE`, so the staleness sweep cleans them with the posting. Stage 1 only writes `ai_extractions`; `ai_scores`/`ai_usage` are populated in Stage 2 / hardening. The BYOK key file (`ai_keys.json`, 0600) lives in the same config dir but is **not** in the DB.
 
 **modernc.org/sqlite DATETIME quirk** — when you bind a `time.Time` parameter, the driver serializes via Go's default `time.Time.String()` format (`"2006-01-02 15:04:05.999999999 -0700 MST"`), and that is what lands in the column on disk. For a named DATETIME column, `SELECT col` round-trips back to `time.Time` cleanly. But aggregates like `MAX(col)` lose the DATETIME column tag — `sql.NullTime.Scan` will fail. Read the aggregate into a `sql.NullString` and parse with `timeStoreFormat` in `internal/storage/postings.go` (the constant exists for exactly this).
 
 ## Things the design doc explicitly rules out for v1
 
 Don't add (parked in `feature-ideas.md`):
-- Multi-portal scraping, notifications, background scheduling, LLM anything, résumé parsing.
+- Multi-portal scraping, notifications, background scheduling, résumé parsing. (LLM/AI is no longer ruled out — it's the **v2.0 BYOK-AI line**; Stage 1 landed 2026-06-02, Stage 2 + hardening pending. See `task-list.md` and the eng-review doc.)
 - An architecture diagram in README (the code is small enough to be self-evident at v1 size).
 - Score history, absence-based closed-posting tracking (deadline-based via `closed_at` is in).
 - Code signing/notarization, Homebrew/Docker/auto-update.

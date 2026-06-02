@@ -28,7 +28,7 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 - **Scrapes 점핏** for 신입 IT postings — one polite request per second, robots.txt
   respected.
 - **Scores each posting** against a structured profile you fill in once: tech
-  stack, career level, location, salary floor, must-have / dealbreaker keywords.
+  stack, career level, location, salary floor, and dealbreaker keywords.
 - **Explains every score** — `React +20 · 신입 +25 · 서울 +15` — so you can see the
   algorithm working *for* you, not *on* you.
 - **Streams the scrape live**, so the slow part becomes the interesting part.
@@ -67,7 +67,7 @@ curl -L https://github.com/ohchanwu/job-scraper/releases/latest/download/job-scr
 ## Usage
 
 1. On first run you land on the profile form. Fill in your stacks, location, and
-   any must-have / dealbreaker keywords, then save.
+   any dealbreaker keywords, then save.
 2. Click **스크랩 시작** and watch the scrape stream in.
 3. Read your briefing — postings sorted by fit, each score broken down.
 
@@ -85,11 +85,12 @@ on Linux, `%APPDATA%\job-scraper\` on Windows).
 - **One source.** v1 scrapes 점핏 only; more portals are planned.
 - **Keyword matching is token-exact.** "개발" does not match "개발자", and the
   matcher cannot distinguish "야근 없음" from "야근" — enter short, plain
-  root-form keywords for must-have / dealbreaker lists.
+  root-form keywords for your dealbreaker list.
 - **Today-only briefing.** The dashboard shows postings first seen today — it is
   a daily ritual, not a searchable archive.
-- No notifications, no background scheduling, no LLM, no résumé parsing — all by
-  design.
+- No notifications, no background scheduling, no résumé parsing — by design.
+  (Optional bring-your-own-key AI scoring is the in-progress v2.0 line; its
+  foundation has landed in the code but is not yet user-facing.)
 
 ## Build from source
 
