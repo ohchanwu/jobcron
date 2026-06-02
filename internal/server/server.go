@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"time"
 
+	"github.com/ohchanwu/job-scraper/internal/ai"
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scoring"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
@@ -27,12 +28,38 @@ const (
 	sweepOldWindow   = 90 * 24 * time.Hour
 )
 
+// maxRunInputTokensDefault is the per-run AI token budget. It is a generous
+// in-memory ceiling so one scrape can't run away on cost; the persisted daily
+// ledger and a user-configurable cap are T9. Exceeding it halts AI for the
+// rest of the run and falls back to regex scoring.
+const maxRunInputTokensDefault = 150_000
+
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
 type Server struct {
 	store   *storage.Store
 	sources []scraper.Scraper
 	tmpl    *template.Template
 	flight  *singleFlight
+
+	// AI extraction (BYOK, v2.0 Stage 1). ai is nil when no provider is
+	// configured — the default — and the pipeline behaves exactly like v1.5
+	// (regex scoring, no provider calls). Wiring a real provider from
+	// ai_keys.json + a chosen model is the /profile settings work in T9.
+	ai            ai.Provider
+	aiModel       string
+	aiVersion     string // ai.AIVersion(ai.Name(), aiModel), precomputed
+	aiRunTokenCap int
+}
+
+// SetAIProvider enables AI extraction with the given provider and model. A nil
+// provider (the default) leaves AI off. Called after New (the constructor is
+// variadic over scrapers, so AI config rides a setter).
+func (s *Server) SetAIProvider(p ai.Provider, model string) {
+	s.ai = p
+	s.aiModel = model
+	if p != nil {
+		s.aiVersion = ai.AIVersion(p.Name(), model)
+	}
 }
 
 // New builds a Server over the given storage and one or more scrapers. The
@@ -45,9 +72,10 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		panic("server.New: at least one scraper is required")
 	}
 	srv := &Server{
-		store:   store,
-		sources: sources,
-		flight:  newSingleFlight(),
+		store:         store,
+		sources:       sources,
+		flight:        newSingleFlight(),
+		aiRunTokenCap: maxRunInputTokensDefault,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,
@@ -103,13 +131,16 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 
 	now := time.Now().UTC()
 	var res ScrapeResult
+	// One AI token budget for the whole run (persists across sources). nil
+	// when AI is off, so no per-posting budget bookkeeping happens at all.
+	budget := s.newAIBudget()
 	// succeeded tracks sources that completed without error this run; only
 	// they get their data swept. A source that failed cannot tell us what
 	// is stale (no fresh baseline this run), so we leave its existing rows
 	// untouched until the next successful scrape.
 	var succeeded []scraper.Scraper
 	for _, src := range active {
-		sub, err := s.runScrapeSource(ctx, src, now, emit)
+		sub, err := s.runScrapeSource(ctx, src, now, budget, emit)
 		if err != nil {
 			// Per-source fault isolation: one source's failure must not
 			// abort the whole briefing. Surface the failure as a status
@@ -146,6 +177,13 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		emit("status", fmt.Sprintf("다른 사이트에 똑같이 올라온 공고 %d개를 묶었어요", duplicates))
 	}
 
+	// Cold-start banner (D6): if the per-run AI budget ran out mid-scrape, some
+	// postings were scored by regex instead of AI. A mixed briefing is fine —
+	// surface it calmly, never as a failure.
+	if budget != nil && budget.degraded {
+		emit("status", "오늘 AI 예산을 다 써서 일부는 일반 점수로 분석했어요.")
+	}
+
 	emit("status", "공고에 점수를 매기는 중...")
 	scored, err := s.scoreAll(ctx)
 	if err != nil {
@@ -155,10 +193,39 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 	return res, nil
 }
 
+// aiRunBudget is the per-run, in-memory AI token counter (T4). The persisted
+// daily ledger (ai_usage) and the user-configurable cap are T9.
+type aiRunBudget struct {
+	remaining int
+	degraded  bool // true once the budget was exhausted mid-run
+}
+
+// newAIBudget returns a fresh per-run budget, or nil when AI is off (so the
+// scrape loop skips all AI bookkeeping).
+func (s *Server) newAIBudget() *aiRunBudget {
+	if s.ai == nil {
+		return nil
+	}
+	return &aiRunBudget{remaining: s.aiRunTokenCap}
+}
+
+// canSpend reports whether the budget has headroom for another call, marking
+// the run degraded the first time it does not.
+func (b *aiRunBudget) canSpend() bool {
+	if b.remaining <= 0 {
+		b.degraded = true
+		return false
+	}
+	return true
+}
+
+// debit subtracts a call's token usage from the remaining budget.
+func (b *aiRunBudget) debit(u ai.Usage) { b.remaining -= u.InputTokens + u.OutputTokens }
+
 // runScrapeSource scrapes one source, emitting source-prefixed status events
 // so the user can tell which source is currently active in the stream.
 func (s *Server) runScrapeSource(
-	ctx context.Context, src scraper.Scraper, now time.Time, emit func(event, data string),
+	ctx context.Context, src scraper.Scraper, now time.Time, budget *aiRunBudget, emit func(event, data string),
 ) (ScrapeResult, error) {
 	label := sourceLabel(src.Source())
 	emit("status", fmt.Sprintf("[%s] robots.txt 확인 중...", label))
@@ -199,13 +266,42 @@ func (s *Server) runScrapeSource(
 		}
 		detailed.FirstSeenAt = now
 		detailed.LastSeenAt = now
-		if _, _, err := s.store.UpsertPosting(ctx, detailed); err != nil {
+		id, _, err := s.store.UpsertPosting(ctx, detailed)
+		if err != nil {
 			return res, fmt.Errorf("server: insert new posting: %w", err)
 		}
 		res.New++
 		emit("progress", fmt.Sprintf("[%s] 공고 %d/%d 가져오는 중...", label, res.New, len(fresh)))
+		// Stage-1 AI extraction (cache-read, D2). Best-effort: any failure
+		// leaves no ai_extractions row and the posting is scored by the regex
+		// path exactly as v1.5 — the scrape never fails on an AI error.
+		s.extractStage1(ctx, id, detailed, now, budget)
 	}
 	return res, nil
+}
+
+// extractStage1 runs and caches the Stage-1 AI extraction for one new posting,
+// if AI is enabled and the per-run budget has headroom. It writes only the
+// ai_extractions cache row — the postings columns stay a faithful source
+// mirror (D2). Every failure path is silent (regex fallback at score time).
+func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting, now time.Time, budget *aiRunBudget) {
+	if s.ai == nil || budget == nil || !budget.canSpend() {
+		return
+	}
+	sent, contentHash, _ := ai.ModelInput(p)
+	// Cache hit (same content already extracted under this ai_version): reuse,
+	// no provider call. New postings always miss; this matters for the T7
+	// re-rate backfill and idempotent re-runs.
+	if _, ok, err := s.store.AIExtraction(ctx, id, contentHash, s.aiVersion); err == nil && ok {
+		return
+	}
+	ext, usage, err := s.ai.Extract(ctx, sent)
+	if err != nil {
+		return // timeout / 5xx / malformed JSON / out-of-range → regex fallback
+	}
+	budget.debit(usage)
+	// Best-effort cache write; a failure here just means a regex score this pass.
+	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, s.aiVersion, ext, now)
 }
 
 // loadProfile fetches the saved profile, returning ok=false when none has
@@ -244,11 +340,22 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// Batch-load the Stage-1 AI extractions once (no N+1) when AI is enabled;
+	// scoreCareer/educationDealbreaker prefer them. Stage-2 deltas are not
+	// wired yet (the delta arg stays nil until T5–T7).
+	var exts map[int64]ai.Extraction
+	if s.ai != nil {
+		exts, err = s.store.AIExtractionsByPostingID(ctx, s.aiVersion)
+		if err != nil {
+			return 0, err
+		}
+	}
 	for _, p := range postings {
-		// AI inputs are wired in T4 (Stage-1 extraction cache) and Stage 2
-		// (delta). Until then this is the offline regex path, byte-identical
-		// to v1.5.
-		result := scoring.Score(p, prof, nil, nil)
+		var ext *ai.Extraction
+		if e, ok := exts[p.ID]; ok {
+			ext = &e
+		}
+		result := scoring.Score(p, prof, ext, nil)
 		breakdown, err := json.Marshal(result)
 		if err != nil {
 			return 0, fmt.Errorf("server: marshal score: %w", err)
