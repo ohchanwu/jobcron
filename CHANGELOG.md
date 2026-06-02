@@ -24,6 +24,8 @@ part of the 1.x series.
 
 ## [Unreleased]
 
+## [2.0.0-alpha] - 2026-06-02
+
 The **v2.0 BYOK-AI** line begins here (a separate major, not part of 1.x). Stage 1
 below is the foundation — committed but **dormant**: there is no key-entry UI yet
 (a later stage), so the running app behaves exactly like v1.5 until a provider is

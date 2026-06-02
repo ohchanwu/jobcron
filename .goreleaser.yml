@@ -49,6 +49,11 @@ release:
   github:
     owner: ohchanwu
     name: job-scraper
+  # Mark pre-release tags (-alpha / -beta / -rc) as GitHub prereleases so they
+  # do NOT become "latest". The archives use version-free names served from
+  # releases/latest/download/… (the README install URLs), so an alpha must not
+  # hijack the stable download.
+  prerelease: auto
 
 changelog:
   use: github
