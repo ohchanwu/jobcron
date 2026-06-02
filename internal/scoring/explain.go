@@ -14,7 +14,9 @@ func Explain(r ScoreResult) string {
 	}
 	parts := make([]string, 0, len(r.Breakdown))
 	for _, li := range r.Breakdown {
-		parts = append(parts, fmt.Sprintf("%s +%d", li.Label, li.Delta))
+		// Signed (%+d) so a negative AI delta renders "-7", not "+-7".
+		// Positives still read "+50", so existing chips are unchanged.
+		parts = append(parts, fmt.Sprintf("%s %+d", li.Label, li.Delta))
 	}
 	return strings.Join(parts, " · ")
 }

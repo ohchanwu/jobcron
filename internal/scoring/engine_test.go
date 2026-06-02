@@ -38,7 +38,7 @@ func TestScoreStacksSumsMatchedWeights(t *testing.T) {
 		{Name: "Go", Weight: 30}, // not tagged on the posting
 	}
 
-	r := Score(p, prof)
+	r := scoreNoAI(p, prof)
 	if r.Total != 30 {
 		t.Errorf("Total = %d, want 30 (20 + 10 matched stacks)", r.Total)
 	}
@@ -62,7 +62,7 @@ func TestScoreStacksCapsAt50(t *testing.T) {
 		{Name: "B", Weight: 40},
 		{Name: "C", Weight: 40},
 	}
-	if r := Score(p, prof); r.Total != 50 {
+	if r := scoreNoAI(p, prof); r.Total != 50 {
 		t.Errorf("Total = %d, want 50 (stack sum 120 capped at 50)", r.Total)
 	}
 }
@@ -75,19 +75,19 @@ func TestScoreCareerHonorsCustomWeight(t *testing.T) {
 	p := basePosting()
 	p.Newcomer, p.MinCareer, p.MaxCareer = true, 0, 0
 	prof := baseProfile() // CareerWeight=0 → Effective=25
-	if r := Score(p, prof); r.Total != 25 {
+	if r := scoreNoAI(p, prof); r.Total != 25 {
 		t.Errorf("default CareerWeight → Total = %d, want 25", r.Total)
 	}
 
 	prof.CareerWeight = 40
-	if r := Score(p, prof); r.Total != 40 {
+	if r := scoreNoAI(p, prof); r.Total != 40 {
 		t.Errorf("CareerWeight=40 → Total = %d, want 40 (exact match award)", r.Total)
 	}
 
 	// Near-miss: 신입 profile, 1-3년 posting (adjacent). Near-miss
 	// award is round(weight * 2/5): 40 * 2/5 = 16.
 	p.Newcomer, p.MinCareer, p.MaxCareer = false, 1, 3
-	if r := Score(p, prof); r.Total != 16 {
+	if r := scoreNoAI(p, prof); r.Total != 16 {
 		t.Errorf("CareerWeight=40 near-miss → Total = %d, want 16 (40 * 2/5)", r.Total)
 	}
 }
@@ -101,18 +101,18 @@ func TestScoreSalaryHonorsCustomWeight(t *testing.T) {
 
 	prof := baseProfile() // SalaryWeight=0 → Effective=10
 	prof.SalaryFloorKRW = 40_000_000
-	if r := Score(p, prof); r.Total != 10 {
+	if r := scoreNoAI(p, prof); r.Total != 10 {
 		t.Errorf("default SalaryWeight → Total = %d, want 10", r.Total)
 	}
 
 	prof.SalaryWeight = 30
-	if r := Score(p, prof); r.Total != 30 {
+	if r := scoreNoAI(p, prof); r.Total != 30 {
 		t.Errorf("SalaryWeight=30 → Total = %d, want 30 (clear-award)", r.Total)
 	}
 
 	// Ambiguous (rate-only) — half of clear, rounded: 30 / 2 = 15.
 	p.Tags = []scraper.Tag{{Category: "salary", Name: "연봉상승률 15% 이상"}}
-	if r := Score(p, prof); r.Total != 15 {
+	if r := scoreNoAI(p, prof); r.Total != 15 {
 		t.Errorf("SalaryWeight=30 ambiguous → Total = %d, want 15 (30 / 2)", r.Total)
 	}
 }
@@ -138,7 +138,7 @@ func TestScoreCareer(t *testing.T) {
 			p.Newcomer, p.MinCareer, p.MaxCareer = tc.newcomer, tc.min, tc.max
 			prof := baseProfile()
 			prof.CareerYears = tc.years
-			if r := Score(p, prof); r.Total != tc.want {
+			if r := scoreNoAI(p, prof); r.Total != tc.want {
 				t.Errorf("Total = %d, want %d", r.Total, tc.want)
 			}
 		})
@@ -168,7 +168,7 @@ func TestScoreSalary(t *testing.T) {
 			p.Tags = tc.tags
 			prof := baseProfile()
 			prof.SalaryFloorKRW = tc.floor
-			if r := Score(p, prof); r.Total != tc.want {
+			if r := scoreNoAI(p, prof); r.Total != tc.want {
 				t.Errorf("Total = %d, want %d", r.Total, tc.want)
 			}
 		})
@@ -190,7 +190,7 @@ func TestScoreSortsBreakdownByDelta(t *testing.T) {
 		Location:       profile.LocationPref{Cities: []string{"서울"}, Weight: 15},
 		SalaryFloorKRW: 50_000_000,
 	}
-	r := Score(p, prof)
+	r := scoreNoAI(p, prof)
 	if r.Total != 55 {
 		t.Errorf("Total = %d, want 55 (5 + 25 + 15 + 10)", r.Total)
 	}
@@ -217,7 +217,7 @@ func TestScorePerfectPostingScores100(t *testing.T) {
 		Location:       profile.LocationPref{Cities: []string{"서울"}, Weight: 15},
 		SalaryFloorKRW: 50_000_000,
 	}
-	r := Score(p, prof)
+	r := scoreNoAI(p, prof)
 	if r.Total != 100 {
 		t.Errorf("Total = %d, want 100 (50 + 25 + 15 + 10)", r.Total)
 	}
@@ -234,7 +234,7 @@ func TestScoreDealbreakerKeyword(t *testing.T) {
 	prof.Stacks = []profile.StackPref{{Name: "React", Weight: 30}}
 	prof.Dealbreakers = []string{"병특"}
 
-	r := Score(p, prof)
+	r := scoreNoAI(p, prof)
 	if r.Total != -1 {
 		t.Errorf("Total = %d, want -1 (dealbreaker keyword hit)", r.Total)
 	}
@@ -253,7 +253,7 @@ func TestScoreDealbreakerKeywordIsTokenExact(t *testing.T) {
 	p.Description = "복지: 병특혜택없음"
 	prof := baseProfile()
 	prof.Dealbreakers = []string{"병특"}
-	if r := Score(p, prof); r.Total == -1 {
+	if r := scoreNoAI(p, prof); r.Total == -1 {
 		t.Error("dealbreaker '병특' wrongly matched the token '병특혜택없음'")
 	}
 }
@@ -276,7 +276,7 @@ func TestScoreEducationDealbreaker(t *testing.T) {
 			p.EducationName = tc.eduName
 			prof := baseProfile()
 			prof.MaxEducation = tc.maxEdu
-			r := Score(p, prof)
+			r := scoreNoAI(p, prof)
 			gotHit := r.DealbreakerHit != nil && r.DealbreakerHit.Kind == "education"
 			if gotHit != tc.wantHit {
 				t.Errorf("education dealbreaker = %v, want %v (hit %+v)", gotHit, tc.wantHit, r.DealbreakerHit)
@@ -320,7 +320,7 @@ func TestScoreLocation(t *testing.T) {
 			p.Tags = tc.tags
 			prof := baseProfile()
 			prof.Location = profile.LocationPref{Cities: tc.cities, Weight: tc.weight, RemoteOK: tc.remoteOK}
-			if r := Score(p, prof); r.Total != tc.want {
+			if r := scoreNoAI(p, prof); r.Total != tc.want {
 				t.Errorf("Total = %d, want %d", r.Total, tc.want)
 			}
 		})

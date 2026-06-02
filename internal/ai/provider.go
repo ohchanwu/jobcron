@@ -54,9 +54,16 @@ type DeltaItem struct {
 
 // Delta is the Stage-2 AI score delta: the surviving gated items and their
 // net sum. Defined in Stage 1 (type only); filled by ScoreDelta in Stage 2.
+//
+// Stale marks a delta computed against a PRIOR profile (the scoreAll merge
+// sets it when it falls back to the latest cached row because no row matches
+// the current ai_input_hash). A stale delta is still summed into the Total;
+// the chip is just labelled "(이전 프로필 기준)". scoreCareer's merge reads it
+// onto the AI LineItem (T6 renders the stale chrome).
 type Delta struct {
 	Items    []DeltaItem
 	NetDelta int
+	Stale    bool
 }
 
 // Usage is the token accounting returned by every provider call. Stage 1

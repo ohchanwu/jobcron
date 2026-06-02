@@ -103,7 +103,7 @@ func TestQADealbreakerFixture(t *testing.T) {
 			t.Errorf("posting %s (%s) has no QA label", p.SourcePostingID, p.Company)
 			continue
 		}
-		r := Score(p, prof)
+		r := scoreNoAI(p, prof)
 		gotExcluded := r.Total == -1
 
 		switch {

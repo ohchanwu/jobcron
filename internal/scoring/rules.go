@@ -5,9 +5,30 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ohchanwu/job-scraper/internal/ai"
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
+
+// careerUpperOpen mirrors scraper.experienceUpperOpen (99): a cached AI
+// extraction with a nil max_career means "no upper bound" and reads as this.
+const careerUpperOpen = 99
+
+// aiEducationOrdinal maps the raw AI education enum to a profile education
+// ordinal and a short Korean label for the dealbreaker chip. master and
+// doctorate both collapse to Graduate (the profile has no finer level), but
+// ai_extractions keeps the raw enum for a future split.
+var aiEducationOrdinal = map[string]struct {
+	level profile.EducationLevel
+	label string
+}{
+	ai.EduNone:       {profile.EducationAny, ""},
+	ai.EduHighSchool: {profile.EducationHighSchool, "고졸"},
+	ai.EduAssociate:  {profile.EducationAssociate, "초대졸"},
+	ai.EduBachelor:   {profile.EducationBachelor, "대졸(4년)"},
+	ai.EduMaster:     {profile.EducationGraduate, "석사"},
+	ai.EduDoctorate:  {profile.EducationGraduate, "박사"},
+}
 
 // Scoring point caps. Stack and location award user-assigned weights bounded
 // by their caps; career and salary award the per-profile weights
@@ -131,12 +152,23 @@ func matchStackTag(tags []string, name string) (string, bool) {
 // When the override fires the function always emits a chip (even at
 // Delta=0) so the user can see *why* the career score landed where it
 // did — silently dropping the score in that case would look like a bug.
-func scoreCareer(p scraper.Posting, prof profile.Profile) (LineItem, bool) {
+func scoreCareer(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (LineItem, bool) {
 	years := prof.CareerYears
 	minC, maxC, newcomer := p.MinCareer, p.MaxCareer, p.Newcomer
 
 	override := false
-	if pMin, pMax, parsedOK := scraper.ParseExperienceYears(p.Title, p.Description); parsedOK {
+	if ext != nil {
+		// Cache-read (D2): the AI extraction is authoritative for career fit.
+		// Use its min/max/newcomer and SKIP the regex override entirely. A nil
+		// max_career is an open upper bound. override stays false, so the chip
+		// shows the user's level ("신입"/"경력 N년"), not a "본문 …" range.
+		minC, newcomer = ext.MinCareer, ext.Newcomer
+		if ext.MaxCareer != nil {
+			maxC = *ext.MaxCareer
+		} else {
+			maxC = careerUpperOpen
+		}
+	} else if pMin, pMax, parsedOK := scraper.ParseExperienceYears(p.Title, p.Description); parsedOK {
 		if pMin != minC || pMax != maxC {
 			override = true
 			minC, maxC = pMin, pMax
@@ -300,7 +332,7 @@ func isASCIIDigit(r rune) bool { return r >= '0' && r <= '9' }
 // checkDealbreakers returns the first reason the posting must be excluded, or
 // nil. Checks run in order: dealbreaker keywords, then an unmet education
 // requirement.
-func checkDealbreakers(p scraper.Posting, prof profile.Profile) *DealbreakerHit {
+func checkDealbreakers(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) *DealbreakerHit {
 	text := p.Title + " " + p.Company + " " + p.Description
 
 	for _, phrase := range prof.Dealbreakers {
@@ -308,7 +340,7 @@ func checkDealbreakers(p scraper.Posting, prof profile.Profile) *DealbreakerHit 
 			return &DealbreakerHit{Kind: dealbreakerKeyword, Phrase: phrase}
 		}
 	}
-	if req, ok := educationDealbreaker(p, prof); ok {
+	if req, ok := educationDealbreaker(p, prof, ext); ok {
 		return &DealbreakerHit{Kind: dealbreakerEducation, Phrase: req}
 	}
 	return nil
@@ -316,13 +348,25 @@ func checkDealbreakers(p scraper.Posting, prof profile.Profile) *DealbreakerHit 
 
 // educationDealbreaker reports whether the posting demands a higher education
 // level than the profile holds. It is inert when the user leaves MaxEducation
-// at EducationAny (학력 무관).
-func educationDealbreaker(p scraper.Posting, prof profile.Profile) (string, bool) {
+// at EducationAny (학력 무관). When a cached AI extraction is present, the
+// posting's required level comes from the AI education enum (mapped to an
+// ordinal — NOT fed to postingEducationLevel, which keyword-matches Korean
+// strings and would silently read the English enum as 학력 무관); otherwise it
+// comes from the source's EducationName.
+func educationDealbreaker(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (string, bool) {
 	if prof.MaxEducation == profile.EducationAny {
 		return "", false
 	}
-	if postingEducationLevel(p.EducationName) > prof.MaxEducation {
-		return p.EducationName, true
+	var level profile.EducationLevel
+	var label string
+	if ext != nil {
+		e := aiEducationOrdinal[ext.EducationEnum] // unknown enum -> zero value (EducationAny, "")
+		level, label = e.level, e.label
+	} else {
+		level, label = postingEducationLevel(p.EducationName), p.EducationName
+	}
+	if level > prof.MaxEducation {
+		return label, true
 	}
 	return "", false
 }

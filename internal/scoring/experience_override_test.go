@@ -131,7 +131,7 @@ func TestScoreCareerOverride(t *testing.T) {
 				MaxCareer:   c.max,
 			}
 			prof := profile.Profile{CareerYears: c.years}
-			r := Score(p, prof)
+			r := scoreNoAI(p, prof)
 			if r.Total != c.wantTotal {
 				t.Errorf("Total = %d, want %d (breakdown: %+v)", r.Total, c.wantTotal, r.Breakdown)
 			}

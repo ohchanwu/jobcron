@@ -245,7 +245,10 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, p := range postings {
-		result := scoring.Score(p, prof)
+		// AI inputs are wired in T4 (Stage-1 extraction cache) and Stage 2
+		// (delta). Until then this is the offline regex path, byte-identical
+		// to v1.5.
+		result := scoring.Score(p, prof, nil, nil)
 		breakdown, err := json.Marshal(result)
 		if err != nil {
 			return 0, fmt.Errorf("server: marshal score: %w", err)
