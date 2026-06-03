@@ -53,6 +53,49 @@ func TestScoreCareerCachePreference(t *testing.T) {
 	}
 }
 
+// TestScoreCareerInternGuard (R3): an 인턴/internship role is new-grad-eligible
+// by definition, so a bad AI extraction (newcomer=false, min_career=2) must NOT
+// strip its 신입 award — the inclusive reading wins. The SAME bad extraction on a
+// non-intern role still drops the award, preserving D2's source-false-positive
+// correction. English is token-exact, so "internship" fires but "internal" does
+// not.
+func TestScoreCareerInternGuard(t *testing.T) {
+	prof := baseProfile() // 신입 (CareerYears 0)
+	want := prof.EffectiveCareerWeight()
+	// The model misjudged the role as experienced.
+	badExt := func() *ai.Extraction {
+		return &ai.Extraction{MinCareer: 2, MaxCareer: intPtr(5), Newcomer: false, EducationEnum: ai.EduNone}
+	}
+
+	cases := []struct {
+		name      string
+		title     string
+		wantAward bool
+	}{
+		{"korean intern bracket", "[인턴] 풀스택 개발자", true},
+		{"korean internship word", "백엔드 인턴십 채용", true},
+		{"english internship", "Backend Engineer Internship", true},
+		{"non-intern role keeps D2", "백엔드 개발자", false},
+		{"english 'internal' is not intern", "Internal Tools Engineer", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := basePosting()
+			p.Title = tc.title
+			p.Newcomer = true // source correctly marks it new-grad-eligible
+			r := Score(p, prof, badExt(), nil)
+			d, ok := lineDelta(r, "신입")
+			if tc.wantAward {
+				if !ok || d != want {
+					t.Fatalf("want full 신입 award %d, got delta=%d ok=%v; breakdown=%+v", want, d, ok, r.Breakdown)
+				}
+			} else if ok {
+				t.Fatalf("must NOT award 신입 for %q (D2 correction must stand); breakdown=%+v", tc.title, r.Breakdown)
+			}
+		})
+	}
+}
+
 // TestScoreCareerOpenUpperBound: a nil max_career reads as open-ended (99), so
 // a senior user still fits.
 func TestScoreCareerCacheOpenUpperBound(t *testing.T) {

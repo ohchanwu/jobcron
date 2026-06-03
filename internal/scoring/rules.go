@@ -168,6 +168,20 @@ func scoreCareer(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (L
 		} else {
 			maxC = careerUpperOpen
 		}
+		// 신입-eligibility guard (scoped to 인턴/internship roles). An intern
+		// posting is new-grad-eligible by definition, so when the model misjudges
+		// it as experienced (newcomer=false / min_career>0) the inclusive reading
+		// wins — wrongly excluding an eligible 신입 costs more than keeping a
+		// borderline role (design §"source-vs-AI 신입-eligibility disagreement").
+		// Deliberately NOT applied to non-intern roles: there D2 must still be
+		// able to correct a source false-positive ("경력무관 but actually 2–5년"),
+		// which is the whole reason the AI career read exists.
+		if isInternRole(p) {
+			newcomer = true
+			if minC > 0 {
+				minC = 0
+			}
+		}
 	} else if pMin, pMax, parsedOK := scraper.ParseExperienceYears(p.Title, p.Description); parsedOK {
 		if pMin != minC || pMax != maxC {
 			override = true
@@ -191,6 +205,26 @@ func scoreCareer(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (L
 	default:
 		return LineItem{}, false
 	}
+}
+
+// isInternRole reports whether a posting's TITLE marks it an 인턴/internship
+// role. Korean "인턴" is matched as a substring — it appears only in
+// intern-related words (인턴, 인턴십, 인턴직), never inside an unrelated Korean
+// word, so a substring test is safe and catches every form. English is matched
+// token-exact ("intern"/"internship") so it never fires on internal /
+// international / internet. Title-only by design: an intern role announces
+// itself in the title, while a senior posting that merely mentions interns in
+// its body must not be reclassified.
+func isInternRole(p scraper.Posting) bool {
+	if strings.Contains(normalizeText(p.Title), "인턴") {
+		return true
+	}
+	for _, tok := range tokenize(p.Title) {
+		if tok == "intern" || tok == "internship" {
+			return true
+		}
+	}
+	return false
 }
 
 // careerLabel renders the chip text for the career line item. The
