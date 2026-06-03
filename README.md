@@ -3,9 +3,12 @@
 A calm daily job-posting briefing for Korean new-grad (신입) IT job seekers.
 
 `job-scraper` is a single binary that opens a local web app. Click **스크랩 시작**
-and it scrapes [점핏 (Jumpit)](https://jumpit.saramin.co.kr), scores every new-grad
-IT posting against your profile, and shows a one-page daily briefing — each match
-explained, no notifications, no setup, no account.
+and it scrapes four Korean job sources — [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
+[랠릿 (Rallit)](https://www.rallit.com), [데모데이](https://demoday.co.kr), and
+[당근 (Daangn)](https://team.daangn.com) — scores every new-grad IT posting against
+your profile, and shows a one-page daily briefing — each match explained, no
+notifications, no setup, no account. (A fifth source, 워크넷, turns on with a free
+government API key — see *Usage*.)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png">
@@ -25,12 +28,18 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 
 ## What it does
 
-- **Scrapes 점핏** for 신입 IT postings — one polite request per second, robots.txt
-  respected.
+- **Scrapes four sources** — 점핏, 랠릿, 데모데이, and 당근 (plus 워크넷 with a key) —
+  for 신입 IT postings, one polite request per second, robots.txt respected.
+  Cross-source duplicates collapse onto a single card.
 - **Scores each posting** against a structured profile you fill in once: tech
-  stack, career level, location, salary floor, and dealbreaker keywords.
+  stack, career level, location, salary floor, and dealbreaker keywords — each
+  category's weight adjustable.
 - **Explains every score** — `React +20 · 신입 +25 · 서울 +15` — so you can see the
   algorithm working *for* you, not *on* you.
+- **Keeps what matters in reach** — a 관심 공고 archive of everything ever scraped,
+  북마크 for the ones you're chasing, and a 숨긴 공고 list for the ones you're not.
+  Low-scoring postings fold away below a minimum-score line you set.
+- **Filters by source** right on the briefing, so you can read one portal at a time.
 - **Streams the scrape live**, so the slow part becomes the interesting part.
 - **Optional AI scoring (bring your own key).** Add an Anthropic or OpenAI key and
   the briefing gains evidence-cited adjustments — each one backed by a real quote
@@ -78,20 +87,24 @@ curl -L https://github.com/ohchanwu/job-scraper/releases/latest/download/job-scr
 Run it once a day. That is the whole ritual.
 
 Flags: `--port` (default `7777`), `--no-open` (do not open a browser),
-`--db` (override the database path), `--version`.
+`--db` (override the database path), `--worknet-api-key` (enable the 워크넷
+source — a free key from [data.go.kr](https://www.data.go.kr); also read from
+`JOBSCRAPER_WORKNET_KEY`), `--version`.
 
 Your data lives in one SQLite file under the OS config directory
 (`~/Library/Application Support/job-scraper/` on macOS, `~/.config/job-scraper/`
 on Linux, `%APPDATA%\job-scraper\` on Windows).
 
-## Known limitations (v1)
+## Known limitations
 
-- **One source.** v1 scrapes 점핏 only; more portals are planned.
 - **Keyword matching is token-exact.** "개발" does not match "개발자", and the
   matcher cannot distinguish "야근 없음" from "야근" — enter short, plain
   root-form keywords for your dealbreaker list.
-- **Today-only briefing.** The dashboard shows postings first seen today — it is
-  a daily ritual, not a searchable archive.
+- **The briefing is today's postings.** The front page shows what was first seen
+  today — the daily ritual. Everything ever scraped stays in 관심 공고 (sortable by
+  date or by fit), so nothing is lost; it just isn't shouting at you each morning.
+- **New-grad IT only.** Sources are queried with their 신입 / entry filters; this
+  is not a general job search.
 - No notifications, no background scheduling, no résumé parsing — by design.
 
 ## AI scoring (optional, v2.0, bring your own key)

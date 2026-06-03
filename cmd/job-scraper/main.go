@@ -1,6 +1,7 @@
 // Command job-scraper runs the 신입 IT Job Briefing — a local web app that
-// scrapes 점핏, scores new-grad IT job postings against a user profile, and
-// renders a calm one-page daily briefing.
+// scrapes several Korean job boards (점핏, 랠릿, 데모데이, 당근, and optionally
+// 워크넷), scores new-grad IT job postings against a user profile, and renders a
+// calm one-page daily briefing.
 package main
 
 import (
@@ -59,8 +60,9 @@ func main() {
 		}
 		sources = append(sources, wn)
 	} else {
-		fmt.Println("job-scraper: 워크넷 key가 설정되지 않아 점핏만 활성화돼요.",
-			"전체 출처를 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
+		fmt.Println("job-scraper: 워크넷 key가 없어 워크넷 출처는 꺼져 있어요",
+			"(점핏·랠릿·데모데이·당근은 켜져 있어요).",
+			"워크넷도 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
 	// Wire BYOK AI from the saved profile + ai_keys.json. Non-fatal: any error
