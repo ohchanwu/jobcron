@@ -86,6 +86,78 @@ func TestArchiveGroupsByKSTDay(t *testing.T) {
 	}
 }
 
+// TestArchiveApplyScoreSort proves the 점수순 transform: every day group is
+// flattened into one date-headerless group ranked by Total descending.
+func TestArchiveApplyScoreSort(t *testing.T) {
+	v := &archiveView{
+		SortMode: archiveSortScore,
+		Days: []archiveDay{
+			{Date: "2026 / 05 / 23", IsToday: true, Postings: []dashboardPosting{{Total: 40}, {Total: 10}}},
+			{Date: "2026 / 05 / 22", Postings: []dashboardPosting{{Total: 70}, {Total: 25}}},
+		},
+	}
+	v.applyScoreSort()
+	if len(v.Days) != 1 {
+		t.Fatalf("Days = %d, want 1 flat group", len(v.Days))
+	}
+	if v.Days[0].Date != "" {
+		t.Errorf("flat group Date = %q, want empty (no day header in 점수순)", v.Days[0].Date)
+	}
+	var got []int
+	for _, dp := range v.Days[0].Postings {
+		got = append(got, dp.Total)
+	}
+	want := []int{70, 40, 25, 10}
+	if len(got) != len(want) {
+		t.Fatalf("flat list len = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("score order = %v, want %v (descending by Total across all days)", got, want)
+		}
+	}
+}
+
+// TestArchiveSortToggle proves the /archive toggle: 날짜순 keeps day headers,
+// 점수순 flattens them away, and the toggle marks the active mode.
+func TestArchiveSortToggle(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	// Two postings on two distinct KST days → date mode has two day headers.
+	pA := listingPosting("d1", "공고 A")
+	pA.FirstSeenAt = time.Now().Add(-30 * time.Hour).UTC()
+	pA.LastSeenAt = pA.FirstSeenAt
+	pB := listingPosting("d2", "공고 B")
+	pB.FirstSeenAt = time.Now().UTC()
+	pB.LastSeenAt = pB.FirstSeenAt
+	mustUpsert(t, st, pA)
+	mustUpsert(t, st, pB)
+
+	// Date mode (default): toggle present, 날짜순 active, two day headers.
+	recDate := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recDate, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	dateBody := recDate.Body.String()
+	if !strings.Contains(dateBody, `href="/archive?sort=score"`) {
+		t.Error("date mode missing the 점수순 toggle link")
+	}
+	if dateHeaders := strings.Count(dateBody, "day-header"); dateHeaders != 2 {
+		t.Errorf("date mode day-header count = %d, want 2 (one per KST day)", dateHeaders)
+	}
+
+	// Score mode: 점수순 active, NO day headers (one flat group).
+	recScore := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recScore, httptest.NewRequest(http.MethodGet, "/archive?sort=score", nil))
+	scoreBody := recScore.Body.String()
+	if !strings.Contains(scoreBody, `공고 A`) || !strings.Contains(scoreBody, `공고 B`) {
+		t.Error("score mode dropped a posting")
+	}
+	if n := strings.Count(scoreBody, "day-header"); n != 0 {
+		t.Errorf("score mode day-header count = %d, want 0 (flat list)", n)
+	}
+	if !strings.Contains(scoreBody, `sort-opt active" aria-current="true">점수순`) {
+		t.Error("score mode did not mark 점수순 as the active sort option")
+	}
+}
+
 func TestArchiveEmptyState(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	rec := httptest.NewRecorder()

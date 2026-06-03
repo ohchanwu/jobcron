@@ -55,6 +55,12 @@
 
     <div class="scrape-row">
       <div class="count">모은 공고 <strong>{{.Total}}</strong>개</div>
+      {{if .Total}}
+      <div class="archive-sort" role="group" aria-label="정렬 기준">
+        <a href="/archive" class="sort-opt{{if ne .SortMode "score"}} active{{end}}"{{if ne .SortMode "score"}} aria-current="true"{{end}}>날짜순</a>
+        <a href="/archive?sort=score" class="sort-opt{{if eq .SortMode "score"}} active{{end}}"{{if eq .SortMode "score"}} aria-current="true"{{end}}>점수순</a>
+      </div>
+      {{end}}
     </div>
     {{template "rerateButton" .Rerate}}
 
@@ -76,7 +82,7 @@
       {{if or .Days .Excluded}}
         {{range .Days}}
         <section class="archive-day">
-          <h2 class="day-header">{{.Date}}{{if .IsToday}} <span class="day-today">오늘</span>{{end}}</h2>
+          {{if .Date}}<h2 class="day-header">{{.Date}}{{if .IsToday}} <span class="day-today">오늘</span>{{end}}</h2>{{end}}
           <ol class="postings">
             {{range .Postings}}
             <li class="posting" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">

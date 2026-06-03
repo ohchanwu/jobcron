@@ -173,6 +173,24 @@ nav.primary a.active {
   letter-spacing: 0.04em;
 }
 .count strong { color: var(--ink); font-weight: 500; }
+/* 관심 공고 sort toggle (날짜순 / 점수순) — a small segmented control on the right
+   of the count row. The active state is server-rendered via a ?sort= query-param
+   link (no JS), so it survives reload and is shareable. Calm gold for the active
+   segment, matching the source pills. */
+.archive-sort { display: inline-flex; gap: 0.25rem; flex: 0 0 auto; }
+.sort-opt {
+  font-family: var(--sans);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.sort-opt:hover { color: var(--ink); border-color: var(--ink-soft); }
+.sort-opt.active { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
 .btn-primary {
   background: var(--ink);
   color: var(--bg);

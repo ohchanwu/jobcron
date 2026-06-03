@@ -27,6 +27,41 @@ type archiveView struct {
 	Excluded []dashboardPosting // below-MinScore / dealbreaker rows, collapsed
 	Total    int                // total posting count (main + excluded), for the header counter
 	Rerate   *rerateInfo        // re-rate button state; nil = no AI key (button hidden)
+	SortMode string             // "date" (day-grouped, default) | "score" (one flat fit ranking)
+}
+
+// Archive sort modes. 날짜순 (date) is the default day-grouped view; 점수순
+// (score) flattens every kept row into one list ranked by fit, regardless of
+// when it was first seen.
+const (
+	archiveSortDate  = "date"
+	archiveSortScore = "score"
+)
+
+// normalizeArchiveSort maps the ?sort= query value to a known mode, defaulting
+// to date for anything unrecognized (incl. empty).
+func normalizeArchiveSort(v string) string {
+	if v == archiveSortScore {
+		return archiveSortScore
+	}
+	return archiveSortDate
+}
+
+// applyScoreSort collapses the day-grouped Days into a single, date-headerless
+// group sorted by Total descending — the 점수순 (by-fit) view. Excluded rows
+// (dealbreaker / below-MinScore) are untouched; they still collapse into the
+// 관심 밖 section exactly as in 날짜순. A no-op when there are no kept rows.
+func (v *archiveView) applyScoreSort() {
+	var all []dashboardPosting
+	for _, day := range v.Days {
+		all = append(all, day.Postings...)
+	}
+	sort.SliceStable(all, func(a, b int) bool { return all[a].Total > all[b].Total })
+	if len(all) == 0 {
+		v.Days = nil
+		return
+	}
+	v.Days = []archiveDay{{Postings: all}} // Date "" → the template omits the day header
 }
 
 // handleArchive renders every posting the scraper has ever stored, grouped
@@ -36,6 +71,10 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	view.SortMode = normalizeArchiveSort(r.URL.Query().Get("sort"))
+	if view.SortMode == archiveSortScore {
+		view.applyScoreSort()
 	}
 	s.render(w, "archive.html", view)
 }
