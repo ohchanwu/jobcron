@@ -91,6 +91,8 @@ The event names the client listens for: `status`, `count`, `progress`, `done`, `
 
 `/api/rerate` (the per-surface 재평가) is the second SSE endpoint and shares this contract. Two extra rules it follows (S8): it emits its terminal event (`done`|`failed`) on **every** exit path via a `defer` (so a mid-stream error never leaves the client hanging or auto-reconnecting into a double-spend), and it **commits each posting's `ai_scores` row before the next provider call**, so a dropped connection resumes from cache with no re-spend. Both the scrape and re-rate clients live in static JS (`ai-rerate.js` mirrors the inline scrape `EventSource` flow), not htmx.
 
+**Re-rate cache semantics** — why a listing can be analyzed yet show no `AI 분석` card, and what a repeat press re-spends on — are written up in `internal/server/RERATE_NOTES.md`. Short version: a successful-but-empty delta is cached (`items_json = "[]"`), counted in the `N/M` indicator but rendered as no chip, and **never** re-analyzed under the same goal text + model; only failed or never-reached listings lack a cache row and get retried on the next press.
+
 ## Scrape pipeline
 
 `Server.runScrape` (in `internal/server/server.go`) is the orchestrator:
