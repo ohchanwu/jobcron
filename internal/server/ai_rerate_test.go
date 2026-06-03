@@ -58,7 +58,7 @@ func TestRunRerateRatesVisibleRows(t *testing.T) {
 	srv, stub := seedRerate(t)
 	ctx := context.Background()
 
-	n, err := srv.runRerate(ctx, "today", noopEmit)
+	n, _, err := srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
@@ -89,14 +89,14 @@ func TestRunRerateReconnectReusesCache(t *testing.T) {
 	srv, stub := seedRerate(t)
 	ctx := context.Background()
 
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("first runRerate: %v", err)
 	}
 	callsAfterFirst := stub.ScoreDeltaCalls
 
 	// A reconnect (second run, same profile) must resume entirely from cache —
 	// no provider call, no double-spend (S8).
-	n, err := srv.runRerate(ctx, "today", noopEmit)
+	n, _, err := srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("second runRerate: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 	}
 
 	// Press 1: the run budget halts after two rows.
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("press 1: %v", err)
 	}
 	if stub.ScoreDeltaCalls != 2 {
@@ -154,7 +154,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 
 	// Press 2: the two already-rated rows are cache hits (skipped, no re-spend);
 	// the budget rates the remaining two.
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("press 2: %v", err)
 	}
 	if stub.ScoreDeltaCalls != total {
@@ -166,7 +166,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 	}
 
 	// Press 3 (everything cached): no further provider calls at all.
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("press 3: %v", err)
 	}
 	if stub.ScoreDeltaCalls != total {
@@ -303,6 +303,135 @@ func TestRerateButtonShowsStaleCount(t *testing.T) {
 	}
 	if !strings.Contains(body, "has-stale") {
 		t.Fatalf("expected the has-stale attention class on the button")
+	}
+}
+
+// TestRerateRespectsPerCallCap proves the user-adjustable per-call cap (R1):
+// one press analyzes at most s.aiPerCallCap NOT-yet-cached rows even when the
+// token budget has ample headroom, and a later press resumes on the rest. This
+// is a legibility knob distinct from the hard token caps.
+func TestRerateRespectsPerCallCap(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"}
+	pj, _ := profile.Marshal(prof)
+	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	now := time.Now().UTC()
+	const total = 5
+	for i := 0; i < total; i++ {
+		p := listingPosting("c"+string(rune('1'+i)), "신입 백엔드 개발자")
+		p.Description = "서버 개발자를 찾습니다"
+		p.FirstSeenAt, p.LastSeenAt = now, now
+		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+	stub := rerateStub()
+	srv.SetAIProvider(stub, "test-model")
+	srv.aiRunTokenCap = 1_000_000 // generous: the per-call cap, not tokens, is the limiter
+	srv.aiPerCallCap = 2          // analyze at most 2 fresh rows per press
+	if _, err := srv.scoreAll(ctx); err != nil {
+		t.Fatalf("scoreAll: %v", err)
+	}
+
+	// Press 1: 2 fresh rows analyzed, 3 left.
+	analyzed, visible, err := srv.runRerate(ctx, "today", noopEmit)
+	if err != nil {
+		t.Fatalf("press 1: %v", err)
+	}
+	if visible != total {
+		t.Fatalf("press 1 visible = %d, want %d", visible, total)
+	}
+	if analyzed != 2 || stub.ScoreDeltaCalls != 2 {
+		t.Fatalf("press 1: analyzed=%d ScoreDelta=%d, want 2 and 2 (per-call cap)", analyzed, stub.ScoreDeltaCalls)
+	}
+	// Press 2: 2 cache hits (free) + 2 new = 4 analyzed cumulatively, 4 calls total.
+	analyzed, _, err = srv.runRerate(ctx, "today", noopEmit)
+	if err != nil {
+		t.Fatalf("press 2: %v", err)
+	}
+	if analyzed != 4 || stub.ScoreDeltaCalls != 4 {
+		t.Fatalf("press 2: analyzed=%d ScoreDelta=%d, want 4 and 4", analyzed, stub.ScoreDeltaCalls)
+	}
+	// Press 3: the last row. All analyzed, no further presses needed.
+	analyzed, _, err = srv.runRerate(ctx, "today", noopEmit)
+	if err != nil {
+		t.Fatalf("press 3: %v", err)
+	}
+	if analyzed != total || stub.ScoreDeltaCalls != total {
+		t.Fatalf("press 3: analyzed=%d ScoreDelta=%d, want %d and %d", analyzed, stub.ScoreDeltaCalls, total, total)
+	}
+}
+
+// TestRerateInfoCountsCacheNotChips proves the N/M indicator is honest about a
+// row that was analyzed but produced no surviving signal (R1): such a row has a
+// cached delta but renders NO AI chip. The indicator counts the cache, so it
+// reads "1/1", not "0/1" — resolving the "analyzed or just silent?" ambiguity.
+func TestRerateInfoCountsCacheNotChips(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"}
+	pj, _ := profile.Marshal(prof)
+	if _, _, err := srv.store.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	now := time.Now().UTC()
+	p := listingPosting("e1", "신입 백엔드 개발자")
+	p.Description = "서버 개발자를 찾습니다"
+	p.FirstSeenAt, p.LastSeenAt = now, now
+	id, _, err := srv.store.UpsertPosting(ctx, p)
+	if err != nil {
+		t.Fatalf("UpsertPosting: %v", err)
+	}
+	srv.SetAIProvider(rerateStub(), "test-model")
+
+	// An EMPTY current-goal delta: analyzed, but nothing survived the gate → no chip.
+	hash := profile.AIInputHash(currentProfile(t, srv))
+	if err := srv.store.UpsertAIScore(ctx, id, hash, srv.aiVersion, ai.Delta{}, now); err != nil {
+		t.Fatalf("seed empty delta: %v", err)
+	}
+	if _, err := srv.scoreAll(ctx); err != nil {
+		t.Fatalf("scoreAll: %v", err)
+	}
+
+	b, err := srv.buildBriefing(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("buildBriefing: %v", err)
+	}
+	if b.Rerate == nil {
+		t.Fatal("Rerate info nil; want analyzed/visible counts when AI is on")
+	}
+	if b.Rerate.Analyzed != 1 || b.Rerate.Visible != 1 {
+		t.Fatalf("indicator = %d/%d, want 1/1 (the empty-delta cache row counts as analyzed)",
+			b.Rerate.Analyzed, b.Rerate.Visible)
+	}
+	// The rendered page must NOT carry an AI chip for this row (chip-ai class),
+	// yet the indicator still shows it analyzed.
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	body := rec.Body.String()
+	if strings.Contains(body, "chip-ai") {
+		t.Fatal("an empty-delta row rendered an AI chip; it should be silent (no surviving signal)")
+	}
+	if !strings.Contains(body, "AI 분석 1/1") {
+		t.Fatalf("expected the persistent indicator 'AI 분석 1/1' on the page")
+	}
+}
+
+func TestRerateDoneMessage(t *testing.T) {
+	if got := rerateDoneMessage(0, 0); got != "지금 화면에 분석할 공고가 없어요." {
+		t.Errorf("empty: %q", got)
+	}
+	if got := rerateDoneMessage(5, 5); got != "공고 5개를 모두 AI로 분석했어요." {
+		t.Errorf("complete: %q", got)
+	}
+	got := rerateDoneMessage(3, 7)
+	if !strings.Contains(got, "3/7") || !strings.Contains(got, "다시 눌러") {
+		t.Errorf("partial copy missing N/M or the press-again cue: %q", got)
 	}
 }
 

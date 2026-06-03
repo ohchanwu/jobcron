@@ -54,7 +54,7 @@ func TestRerateInjectionProducesNoInflatedScore(t *testing.T) {
 		t.Fatalf("scoreAll: %v", err)
 	}
 
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 

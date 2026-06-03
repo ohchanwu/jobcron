@@ -29,6 +29,14 @@ const (
 	// design (D5): a normal day's scrape + a re-rate stay well under it, but a
 	// runaway can't burn unbounded BYOK spend.
 	DefaultDailyTokenCap = 1_000_000
+
+	// DefaultAIPerCallCap is the number of NOT-yet-analyzed visible rows one
+	// 재평가 (re-rate) press will analyze with a provider call. It is a legibility
+	// knob, not a safety one — the per-run and daily token caps are the hard
+	// ceilings. A press analyzes up to this many fresh rows, then stops so the
+	// spend per click is predictable; pressing again continues where it left off.
+	// Cached rows are free and never count against it.
+	DefaultAIPerCallCap = 50
 )
 
 // Profile is the user's job-matching preferences, scored against each posting.
@@ -68,6 +76,13 @@ type Profile struct {
 	AIProvider      string `json:"ai_provider,omitempty"`
 	AIModel         string `json:"ai_model,omitempty"`
 	AIDailyTokenCap int    `json:"ai_daily_token_cap,omitempty"`
+
+	// AIPerCallCap is how many not-yet-analyzed visible rows one 재평가 press
+	// analyzes (0 = DefaultAIPerCallCap). Like the caps above it is non-secret AI
+	// config, NOT read by BuildStage2ProfileText, so changing it never churns the
+	// goal-keyed AI cache. omitempty keeps a pre-v2.0 / unset profile's JSON
+	// byte-identical.
+	AIPerCallCap int `json:"ai_per_call_cap,omitempty"`
 
 	// DisabledSources are source identifiers (e.g. "worknet") the user has
 	// opted out of. Default empty = every registered source is active. We
@@ -114,6 +129,17 @@ func (p Profile) EffectiveAIDailyTokenCap() int {
 		return p.AIDailyTokenCap
 	}
 	return DefaultDailyTokenCap
+}
+
+// EffectiveAIPerCallCap returns AIPerCallCap when the user has set a positive
+// value, else DefaultAIPerCallCap. It must never be zero — a zero per-call cap
+// would make a re-rate press analyze nothing — so a zero/absent field falls
+// back to the default.
+func (p Profile) EffectiveAIPerCallCap() int {
+	if p.AIPerCallCap > 0 {
+		return p.AIPerCallCap
+	}
+	return DefaultAIPerCallCap
 }
 
 // SourceEnabled reports whether the given source identifier should be active

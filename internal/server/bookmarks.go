@@ -68,7 +68,11 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 		}
 		view.Postings = append(view.Postings, dp)
 	}
-	view.Rerate = s.buildRerateInfo("bookmarks", view.Postings)
+	prof, _, err := s.loadProfile(ctx)
+	if err != nil {
+		return bookmarksView{}, err
+	}
+	view.Rerate = s.buildRerateInfo(ctx, prof, "bookmarks", view.Postings)
 	return view, nil
 }
 

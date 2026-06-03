@@ -188,7 +188,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if len(b.Today) > briefingCap {
 		b.Today = b.Today[:briefingCap]
 	}
-	b.Rerate = s.buildRerateInfo("today", b.Today)
+	b.Rerate = s.buildRerateInfo(ctx, prof, "today", b.Today)
 	return b, nil
 }
 
@@ -280,6 +280,8 @@ type profileForm struct {
 	AIDailyCapEffective int // the cap actually in force, for the remaining line
 	AITokensUsedToday   int
 	AIRemainingToday    int
+	AIPerCallCap        int // raw (0 = use default); the form input value
+	AIPerCallCapEffect  int // the per-call cap actually in force, for the placeholder/hint
 }
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
@@ -309,6 +311,7 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 // must still render.
 func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profile.Profile) {
 	form.AIDailyCapEffective = p.EffectiveAIDailyTokenCap()
+	form.AIPerCallCapEffect = p.EffectiveAIPerCallCap()
 	if p.AIProvider != "" {
 		if path, err := s.keysPath(); err == nil {
 			if keys, err := ai.LoadKeys(path); err == nil && keys[p.AIProvider] != "" {
@@ -351,6 +354,12 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	if dailyCap == profile.DefaultDailyTokenCap {
 		dailyCap = 0
 	}
+	// Same convention for the per-call cap: storing the default as 0 keeps an
+	// unchanged default absent from the canonical JSON (omitempty).
+	perCallCap := atoi(r.FormValue("ai_per_call_cap"))
+	if perCallCap == profile.DefaultAIPerCallCap {
+		perCallCap = 0
+	}
 	p := profile.Profile{
 		CareerYears:    atoi(r.FormValue("career_years")),
 		CareerWeight:   atoi(r.FormValue("career_weight")),
@@ -373,6 +382,7 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		AIProvider:      aiProviderValue(r.FormValue("ai_provider")),
 		AIModel:         strings.TrimSpace(r.FormValue("ai_model")),
 		AIDailyTokenCap: dailyCap,
+		AIPerCallCap:    perCallCap,
 	}
 	// Persist a newly-entered API key to the 0600 ai_keys.json (never the DB). A
 	// blank key field keeps the existing key — the form shows "•••• 저장됨" and
@@ -465,6 +475,7 @@ func toProfileForm(p profile.Profile) profileForm {
 		AIProvider:       p.AIProvider,
 		AIModel:          p.AIModel,
 		AIDailyTokenCap:  p.AIDailyTokenCap, // raw: 0 renders as an empty input
+		AIPerCallCap:     p.AIPerCallCap,    // raw: 0 renders as an empty input
 	}
 }
 

@@ -60,8 +60,9 @@ type Server struct {
 	ai              ai.Provider
 	aiModel         string
 	aiVersion       string // ai.AIVersion(ai.Name(), aiModel), precomputed
-	aiRunTokenCap   int    // per-run, in-memory
-	aiDailyTokenCap int    // rolling daily, enforced against the persisted ai_usage ledger
+	aiRunTokenCap   int    // per-run, in-memory token ceiling (hard cap)
+	aiDailyTokenCap int    // rolling daily token ceiling, enforced against the persisted ai_usage ledger (hard cap)
+	aiPerCallCap    int    // 재평가: not-yet-analyzed rows analyzed per press (legibility knob, not a hard cap)
 	aiKeysPath      string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
 }
 
@@ -104,6 +105,9 @@ func (s *Server) ReconfigureAI(ctx context.Context) error {
 	}
 	if ok && prof.EffectiveAIDailyTokenCap() > 0 {
 		s.aiDailyTokenCap = prof.EffectiveAIDailyTokenCap()
+	}
+	if ok {
+		s.aiPerCallCap = prof.EffectiveAIPerCallCap()
 	}
 	if !ok || prof.AIProvider == "" {
 		s.SetAIProvider(nil, "")
@@ -153,6 +157,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		flight:          newSingleFlight(),
 		aiRunTokenCap:   defaultRunTokenCap,
 		aiDailyTokenCap: profile.DefaultDailyTokenCap,
+		aiPerCallCap:    profile.DefaultAIPerCallCap,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,

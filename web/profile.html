@@ -163,6 +163,13 @@
                  placeholder="{{.AIDailyCapEffective}}">
           <span class="field-hint derived">오늘 사용 {{.AITokensUsedToday}} · 남은 예산 {{.AIRemainingToday}} 토큰</span>
         </label>
+
+        <label>한 번에 분석할 공고 수
+          <span class="field-hint">재평가를 한 번 누를 때 새로 분석할 공고 수예요. 토큰을 아끼려고 한 번에 일정 개수만 분석하고, 더 보려면 다시 누르면 돼요. 비우면 기본 {{.AIPerCallCapEffect}}.</span>
+          <input type="number" name="ai_per_call_cap" min="1"
+                 value="{{if .AIPerCallCap}}{{.AIPerCallCap}}{{end}}"
+                 placeholder="{{.AIPerCallCapEffect}}">
+        </label>
       </fieldset>
 
       <div class="form-actions">

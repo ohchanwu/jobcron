@@ -13,34 +13,50 @@ import (
 
 // rerateInfo is the per-surface re-rate button view model. A nil *rerateInfo
 // means "no AI key configured" — the template renders no button at all (design
-// §4: no dead control). StaleCount drives the gold attention treatment.
+// §4: no dead control). StaleCount drives the gold attention treatment;
+// Analyzed/Visible drive the persistent "N/M 분석됨" progress indicator.
 type rerateInfo struct {
 	Surface    string // "today" | "bookmarks" | "archive"
 	StaleCount int    // visible rows whose AI chip is stale (이전 프로필 기준)
+	Analyzed   int    // visible rows with a current-goal AI delta cached (N)
+	Visible    int    // total visible, non-excluded rows on this surface (M)
 }
 
 // buildRerateInfo returns the re-rate button state for a surface, or nil when AI
-// is off (so the button is hidden). StaleCount counts the visible, non-excluded
-// rows carrying a stale AI line across the given posting lists.
-func (s *Server) buildRerateInfo(surface string, lists ...[]dashboardPosting) *rerateInfo {
+// is off (so the button is hidden). Across the given posting lists it counts the
+// visible, non-excluded rows (Visible), how many of them carry a stale AI line
+// (StaleCount), and how many already have a delta cached against the CURRENT
+// goal text (Analyzed). Analyzed reads the fresh ai_scores cache, NOT the chips —
+// a row analyzed but with no surviving signal shows no chip yet is still counted,
+// which is the whole point of the indicator (it resolves "analyzed or just
+// silent?"). A cache read error degrades Analyzed to 0; it never blocks render.
+func (s *Server) buildRerateInfo(ctx context.Context, prof profile.Profile, surface string, lists ...[]dashboardPosting) *rerateInfo {
 	if s.ai == nil {
 		return nil
 	}
-	stale := 0
+	fresh, err := s.store.AIScoresByPostingID(ctx, profile.AIInputHash(prof), s.aiVersion)
+	if err != nil {
+		fresh = nil
+	}
+	info := &rerateInfo{Surface: surface}
 	for _, list := range lists {
 		for _, dp := range list {
 			if dp.Excluded {
 				continue
 			}
+			info.Visible++
+			if _, ok := fresh[dp.Posting.ID]; ok {
+				info.Analyzed++
+			}
 			for _, li := range dp.Breakdown {
 				if li.Stale {
-					stale++
+					info.StaleCount++
 					break
 				}
 			}
 		}
 	}
-	return &rerateInfo{Surface: surface, StaleCount: stale}
+	return info
 }
 
 // validRerateSurface reports whether surface is one of the three re-ratable
@@ -94,12 +110,29 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	n, err := s.runRerate(r.Context(), surface, sw.event)
+	analyzed, visible, err := s.runRerate(r.Context(), surface, sw.event)
 	if err != nil {
 		return // defer emits "failed"
 	}
 	done = true
-	sw.event("done", fmt.Sprintf("재평가를 마쳤어요 — 공고 %d개", n))
+	sw.event("done", rerateDoneMessage(analyzed, visible))
+}
+
+// rerateDoneMessage is the terminal copy after a re-rate press. It states the
+// honest N/M progress and, when the press did not finish the list (the per-call
+// cap or token budget stopped it), why and what to do — so a counter that did
+// not reach M reads as "intentional, press again," not "broken."
+func rerateDoneMessage(analyzed, visible int) string {
+	switch {
+	case visible == 0:
+		return "지금 화면에 분석할 공고가 없어요."
+	case analyzed >= visible:
+		return fmt.Sprintf("공고 %d개를 모두 AI로 분석했어요.", visible)
+	default:
+		return fmt.Sprintf(
+			"공고 %d/%d개를 AI로 분석했어요 — 토큰을 아끼려고 한 번에 일정 개수만 분석해요. 더 보려면 다시 눌러주세요.",
+			analyzed, visible)
+	}
 }
 
 // runRerate re-rates the visible rows of one surface: it backfills Stage-1 for
@@ -107,20 +140,28 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 // commits each delta BEFORE the next provider call (so a reconnect resumes from
 // cache with no double-spend — S8), then re-scores so the fresh deltas land in
 // the briefing. It is bounded by the surface's visible rows, never the whole DB.
-func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string)) (int, error) {
+//
+// One press analyzes at most s.aiPerCallCap NOT-yet-cached rows (a legibility
+// knob so the spend per click is predictable), still capped by the hard token
+// budgets. Cached rows are free cache hits and don't count against the per-call
+// cap, so a later press resumes on the still-uncached rows. It returns the
+// cumulative analyzed count (N — visible rows now cached against the current
+// goal) and the total visible rows (M) for the progress copy.
+func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string)) (analyzed, visible int, err error) {
 	prof, ok, err := s.loadProfile(ctx)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if !ok {
-		return 0, nil
+		return 0, 0, nil
 	}
 	postings, err := s.visibleForRerate(ctx, surface, time.Now())
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	if len(postings) == 0 {
-		return 0, nil
+	visible = len(postings)
+	if visible == 0 {
+		return 0, 0, nil
 	}
 	emit("status", "AI로 다시 분석하는 중이에요 — 1초에 하나씩 천천히 가요. ☕")
 
@@ -129,11 +170,15 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	profileText := profile.BuildStage2ProfileText(prof)
 	now := time.Now().UTC()
 
-	rated := 0
+	newCalls := 0 // not-yet-cached rows analyzed THIS press (against aiPerCallCap)
 	for i, p := range postings {
-		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", i+1, len(postings)))
-		if s.rerateOne(ctx, p, aiInputHash, profileText, now, budget) {
-			rated++
+		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", i+1, visible))
+		cached, called := s.rerateOne(ctx, p, aiInputHash, profileText, now, budget, newCalls < s.aiPerCallCap)
+		if cached {
+			analyzed++
+		}
+		if called {
+			newCalls++
 		}
 	}
 	if budget != nil && budget.degraded {
@@ -141,44 +186,52 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	}
 	emit("status", "점수를 다시 매기는 중...")
 	if _, err := s.scoreAll(ctx); err != nil {
-		return rated, err
+		return analyzed, visible, err
 	}
-	return rated, nil
+	return analyzed, visible, nil
 }
 
-// rerateOne re-rates a single posting: Stage-1 backfill if uncached, then the
-// Stage-2 delta (cache hit → reuse; miss → provider call, gate, commit). It
-// returns whether the posting now has a current-goal delta cached. The per-row
-// commit happens before the caller's next call, so a dropped connection resumes
-// from cache. A provider/budget failure leaves the row uncached (regex score).
+// rerateOne re-rates a single posting. It checks the Stage-2 cache FIRST (free,
+// reconnect-safe): a hit means the posting already has a delta against the
+// current goal, so it counts as analyzed without spending — and the Stage-1
+// backfill is skipped too (Stage-1 and Stage-2 cache together on the first
+// press, so a repeat press need not re-attempt the extraction). When uncached,
+// the row is analyzed only if allowNew (the per-call cap has headroom) and the
+// token budget can spend; otherwise it is left for a later press. It returns
+// (cached: the posting now has a current-goal delta; called: a provider call was
+// attempted, which consumes one slot of the per-call cap). The per-row commit
+// happens before the caller's next call, so a dropped connection resumes from
+// cache. A provider/budget failure leaves the row uncached (regex score).
 func (s *Server) rerateOne(
-	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, budget *aiBudget,
-) bool {
+	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, budget *aiBudget, allowNew bool,
+) (cached, called bool) {
+	// Already rated against the current goal text → reuse (reconnect-safe, no
+	// re-spend, free). An empty cached delta still counts as analyzed.
+	if _, ok, err := s.store.AIScore(ctx, p.ID, aiInputHash, s.aiVersion); err == nil && ok {
+		return true, false
+	}
+	// Uncached: only spend if the per-call cap has room AND the token budget can.
+	// Otherwise leave it uncached (regex score) for a later press to pick up.
+	if !allowNew || budget == nil || !budget.canSpend() {
+		return false, false
+	}
 	// Backfill Stage 1 so career/education facts are AI-grounded too (e.g. rows
 	// scraped before AI was enabled). Best-effort, budget-bounded.
 	s.extractStage1(ctx, p.ID, p, now, budget)
 
-	// Already rated against the current goal text → reuse (reconnect-safe, no
-	// re-spend). An empty cached delta still counts as rated.
-	if _, ok, err := s.store.AIScore(ctx, p.ID, aiInputHash, s.aiVersion); err == nil && ok {
-		return true
-	}
-	if budget == nil || !budget.canSpend() {
-		return false // budget halted — leave uncached, scored by regex
-	}
 	sent, _, _ := ai.ModelInput(p)
 	raw, usage, err := s.ai.ScoreDelta(ctx, sent, profileText)
 	if err != nil {
-		return false // provider error → no delta for this posting
+		return false, true // provider error → no delta, but the call counted against the cap
 	}
 	budget.debit(ctx, usage)
 	// Gate: presence against the SENT (truncated) text, absence against the FULL
 	// Description (S5). Survivors net into the stored delta.
 	delta := ai.GateDelta(raw, sent, p.Description)
 	if err := s.store.UpsertAIScore(ctx, p.ID, aiInputHash, s.aiVersion, delta, now); err != nil {
-		return false
+		return false, true
 	}
-	return true
+	return true, true
 }
 
 // visibleForRerate returns the non-dealbreaker postings currently shown on a

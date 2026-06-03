@@ -218,6 +218,17 @@ nav.primary a.active {
 .btn-ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-ghost.has-stale { background: var(--accent-soft); font-weight: 600; }
 .rerate-hint { color: var(--ink-soft); font-size: 0.78rem; }
+/* Persistent "N/M 분석됨" progress — counts the cache, not the chips, so it is
+   honest about silent (no-signal) rows. Muted until the visible list is fully
+   analyzed, then it settles to the accent color (calm "done", never a badge). */
+.rerate-count {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-family: var(--mono);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.rerate-count.complete { color: var(--accent); }
 
 /* Streaming scrape log */
 .scrape-log { margin: 0.6rem 0 0; }

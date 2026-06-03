@@ -156,6 +156,6 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 	for _, day := range view.Days {
 		lists = append(lists, day.Postings)
 	}
-	view.Rerate = s.buildRerateInfo("archive", lists...)
+	view.Rerate = s.buildRerateInfo(ctx, prof, "archive", lists...)
 	return view, nil
 }
