@@ -24,6 +24,51 @@ part of the 1.x series.
 
 ## [Unreleased]
 
+## [2.0.0-alpha2] - 2026-06-03
+
+Stage 2 + hardening of the **v2.0 BYOK-AI** line. AI is now a real, end-to-end
+feature: enable it on the profile form, and the briefing gains evidence-cited
+score adjustments you can re-run on demand. Still fully optional — with no key
+configured the app behaves exactly like v1.5.
+
+### Added
+- **AI is now user-facing.** A new "AI 분석" section on the profile form picks a
+  provider (Anthropic / OpenAI), takes your API key (stored only in a local 0600
+  file, never the database, shown as "•••• 저장됨" once saved), and sets a daily
+  token budget with a live "오늘 사용 / 남은 예산" readout. The app wires the
+  provider at startup and the moment you save a key — no restart.
+- **Evidence-cited AI score adjustment.** When AI is on, each posting can gain an
+  `AI 분석` chip — gold `+N` or muted `−N` — that you click to see the exact quote
+  from the posting backing each adjustment (or a code-verified "관련 언급 없음" for
+  something a goal needed but the posting lacks). Every shown adjustment is
+  backed by a real citation; nothing unjustified appears.
+- **재평가 (re-rate).** A per-page button (briefing / 관심 공고 / 북마크) re-scores
+  the rows you can see against your goals, streaming progress. It only spends
+  tokens on rows not already analyzed under your current goals, so pressing it
+  again continues where it left off instead of redoing work. Hidden entirely when
+  no key is set; shows a count when some rows were scored against an older profile.
+- **Rolling daily token ledger + caps.** A per-run and a per-day token ceiling
+  (default ~1M/day) cap spend; when the budget runs out the briefing finishes on
+  the regular score with a calm note, never an error.
+
+### Changed
+- A posting's "(이전 프로필 기준)" stale AI chip stays counted in the total and is
+  shown faded, so editing your goals never silently changes a score without
+  telling you it's now out of date.
+
+### Security
+- The AI is treated as untrusted: a posting that tries to hijack the model (hidden
+  "ignore instructions / dump your key" text) gets its output rejected by the JSON
+  and citation gates, applies no score, and cannot exfiltrate the key (which never
+  enters the prompt; egress is pinned to the one provider host).
+
+### Known issues
+- An `인턴` (internship) posting can lose its `신입` chip when AI is on: the model
+  sometimes reads an entry-level intern role as requiring experience, and the
+  score trusts that over the source's correct new-grad flag. Fix pending.
+- The live provider integration tests ship but are opt-in and were not run this
+  release (no API key available).
+
 ## [2.0.0-alpha] - 2026-06-02
 
 The **v2.0 BYOK-AI** line begins here (a separate major, not part of 1.x). Stage 1
