@@ -109,6 +109,84 @@ func TestRunRerateReconnectReusesCache(t *testing.T) {
 	}
 }
 
+// TestRerateProgressesAcrossPressesUnderBudget proves the behavior a user with a
+// large list depends on: when the per-run token budget halts a re-rate partway,
+// the NEXT press skips the already-rated rows (Stage-2 cache hits, no re-spend)
+// and rates the ones after them. Each posting's ScoreDelta is called exactly
+// once across the two presses — never re-rated.
+func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"}
+	pj, _ := profile.Marshal(prof)
+	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	now := time.Now().UTC()
+	const total = 4
+	for i := 0; i < total; i++ {
+		p := listingPosting("p"+string(rune('1'+i)), "신입 백엔드 개발자")
+		p.Description = "서버 개발자를 찾습니다"
+		p.FirstSeenAt, p.LastSeenAt = now, now
+		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+	stub := rerateStub() // each ScoreDelta debits 60 tokens (50 in + 10 out)
+	srv.SetAIProvider(stub, "test-model")
+	srv.aiRunTokenCap = 90 // tiny: two ScoreDelta calls per run, then halt
+	if _, err := srv.scoreAll(ctx); err != nil {
+		t.Fatalf("scoreAll: %v", err)
+	}
+
+	// Press 1: the run budget halts after two rows.
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+		t.Fatalf("press 1: %v", err)
+	}
+	if stub.ScoreDeltaCalls != 2 {
+		t.Fatalf("after press 1: ScoreDelta calls = %d, want 2 (budget halts partway)", stub.ScoreDeltaCalls)
+	}
+	rated1 := countAIScores(t, srv)
+	if rated1 != 2 {
+		t.Fatalf("after press 1: %d rows rated, want 2", rated1)
+	}
+
+	// Press 2: the two already-rated rows are cache hits (skipped, no re-spend);
+	// the budget rates the remaining two.
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+		t.Fatalf("press 2: %v", err)
+	}
+	if stub.ScoreDeltaCalls != total {
+		t.Fatalf("after press 2: total ScoreDelta calls = %d, want %d (each row rated exactly once, never re-rated)",
+			stub.ScoreDeltaCalls, total)
+	}
+	if rated2 := countAIScores(t, srv); rated2 != total {
+		t.Fatalf("after press 2: %d rows rated, want all %d", rated2, total)
+	}
+
+	// Press 3 (everything cached): no further provider calls at all.
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+		t.Fatalf("press 3: %v", err)
+	}
+	if stub.ScoreDeltaCalls != total {
+		t.Fatalf("press 3 made extra ScoreDelta calls (%d > %d) — a fully-rated list must re-spend nothing",
+			stub.ScoreDeltaCalls, total)
+	}
+}
+
+// countAIScores counts rows in ai_scores under the server's ai_version for the
+// current profile's goal text (the fresh, current-goal deltas).
+func countAIScores(t *testing.T, srv *Server) int {
+	t.Helper()
+	m, err := srv.store.AIScoresByPostingID(context.Background(),
+		profile.AIInputHash(currentProfile(t, srv)), srv.aiVersion)
+	if err != nil {
+		t.Fatalf("AIScoresByPostingID: %v", err)
+	}
+	return len(m)
+}
+
 func TestRerateMutuallyExclusiveWithScrape(t *testing.T) {
 	srv, _ := seedRerate(t)
 
