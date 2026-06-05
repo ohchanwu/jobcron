@@ -29,7 +29,7 @@ manual application flow) and similar gated APIs.
 | **랠릿** (rallit.com)                                             | ✅ shipped        | Dev-focused, lots of 신입, JSON API at `/api/v1/position`. No credentials required.                                                                                                                                                                                                                                 |
 | **네이버 careers** (recruit.navercorp.com)                        | ❌ removed        | Shipped 2026-05-25, removed 2026-05-27 after a click-through audit. The JSON listing API is fine, but the detail-page URLs the scraper stores **categorically don't deep-link for 신입 postings** — `recruit.navercorp.com` runs JavaScript on `view.do` that detects direct navigations and redirects to `/rcrt/list.do` (the generic listings page). Verified via playwright: a fresh 경력 annoId deep-links fine; every 신입 annoId (the only entType this scraper collects) redirects. Without a workable click destination there is no point shipping the source. See `.claude/sessions/2026-05-27-link-audit.md` for the recon trail.                                                                                              |
 | **잡알리오** (job.alio.go.kr)                                     | ❌ removed        | Shipped 2026-05-26 then removed 2026-05-27. NCS R600020 (정보통신) filter does not actually deliver IT/dev roles in public-sector data — a 30-row audit found ~7% IT-adjacent (한전KDN AMI 작업원, 수도시설 운영, 마사회 인턴, etc.). Also surfaced an off-by-one parser bug: the live listing dropped the row-index TD that the unit test still includes, so `company` was getting written with the title. Fixing the parser wouldn't change the relevance verdict, so the source was unregistered. See `.claude/sessions/2026-05-27.md` for context.                                       |
-| **데모데이** (demoday.co.kr)                                      | ✅ shipped        | Shipped 2026-05-27 via the embedded Supabase anon key (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`). The robots.txt disallow at `/api/` is scoped to demoday.co.kr; Supabase is a different host whose robots.txt is unrestricted. ~50 신입-friendly postings after excluding the `experience_level=any` bucket (~720 rows hidden — re-evaluation parked in `feature-ideas.md`).                                                                                                                                                                                                       |
+| **데모데이** (demoday.co.kr)                                      | ✅ shipped        | Shipped 2026-05-27 via the embedded Supabase anon key (`xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`). The robots.txt disallow at `/api/` is scoped to demoday.co.kr; Supabase is a different host whose robots.txt is unrestricted. Filter (rewritten 2026-05-28) keeps all three `experience_level` buckets and keys on `position_tags[0] ∈ {개발, 게임 제작, 정보보호}`, ~96% clean SWE; the `any`-bucket re-evaluation is resolved (`feature-ideas.md`).                                                                                                                                                                                                       |
 | **그룹바이** (groupby.kr)                                         | ⏸ deferred        | Recon on 2026-05-27: the listings API (`api.groupby.kr/startup-positions`) returns clean JSON in Chromium but **404s every non-browser HTTP client** (curl, Go's `net/http`, even with the full set of browser headers including Origin/Referer/sec-ch-ua). nginx returns an empty 404 body — clear TLS-fingerprint / JA3-style bot detection. Same posture as 원티드 / 쿠팡 — out of reach without a headless browser, which this project explicitly avoids (pure-Go + single-binary distribution).                                                                                                                                                                                                                |
 | **당근** (team.daangn.com)                                        | ✅ shipped        | Greenhouse public board API at `boards-api.greenhouse.io/v1/boards/daangn/jobs?content=true`. No auth. Single request returns ~42 jobs with full HTML body and rich metadata — `Engineer: yes/no` + `Prior Experience: 신입/경력/신입+경력` make filtering trivial. Recon + scraper landed 2026-05-27.                                                                                                                                                                                                                                                                |
 | **Direct company pages — others** (Toss, 네이버페이)              | ✅ later phase    | One scraper each, shipped one per release. Toss: Greenhouse via api-public.toss.im, 236 jobs but ~0 신입 in titles (Toss hires for experienced engineers). 네이버페이: separate from existing 네이버 scraper, recon needed.                                                                                                                                                                                                                                                                                                                                |
@@ -88,7 +88,7 @@ site is hostile to direct 신입 deep-links by design. Same posture as
 Do not revisit unless either (a) 네이버 stops gating 신입 deep-links
 on referer/cookie state, or (b) the project adopts a Playwright
 scraping path that can also drive clicks (which is the same trigger
-that would unlock 카카오 / 쿠팡 / 원티드 / 그룹바이 / 배민 / 데모데이-original).
+that would unlock 카카오 / 쿠팡 / 원티드 / 그룹바이 / 배민).
 
 ### 잡알리오 (job.alio.go.kr) — removed 2026-05-27
 
@@ -117,51 +117,50 @@ NCS sub-code dedicated to dev/SWE roles, or (b) the project picks up
 a 공공기관 cohort focus on its own merits and is willing to take the
 noise.
 
-### 데모데이 (demoday.co.kr) — deferred (recon 2026-05-27)
+### 데모데이 (demoday.co.kr) — shipped 2026-05-27
 
-The earlier read of this site was wrong on two points and the corrected
-picture is what changed the verdict.
+Briefly deferred during recon, then shipped the same day once the robots.txt
+picture resolved in our favor. Full scraper notes (record shape, column
+mapping, key-rotation contract) live in
+`internal/scraper/demoday/API_NOTES.md`; the short version of *why it ships*:
 
-What the recon actually found, watching the listings page (`/recruits`)
-load in a real browser:
+The listings page (`/recruits`) is a Next.js shell (~30KB, no inline data) —
+the posting data does NOT live on demoday.co.kr. The in-page client fetches
+it from a **Supabase REST endpoint on a different host**:
+`https://xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits`. A list query
+pulls lightweight metadata (`status=eq.published&is_active=eq.true`, capped
+at 1000 rows / HTTP 206); a follow-up `?id=in.(…)` query fetches the full
+records. Both calls carry the project's **anonymous** Supabase key in the
+`apikey` + `Authorization: Bearer` headers — that key is published in the
+page bundle, is not a secret, and is exactly the read-only access Supabase's
+anon role is designed to grant.
 
-- The listings HTML is a thin client shell (~30KB, no inline data). Data
-  is fetched after page load from a **Supabase REST endpoint on a
-  different host**:
-  `https://xypsryijdllrhfctnehy.supabase.co/rest/v1/recruits?...`
-  The query returns the list of recruit IDs + lightweight metadata; a
-  follow-up `?id=in.(…)` query fetches full records for the visible page.
-- The same page also fires Next.js RSC requests at `/recruits/{id}?_rsc=…`
-  for prefetch — but those go through `/_next/` semantically and the
-  initial page bootstrap pulls from `/_next/` too.
+Why this is shippable and **not** "going around the front door" (the
+distinction that keeps it on the right side of the 자소설닷컴 line):
 
-Their robots.txt is **not** as friendly as previously documented. The
-`User-Agent: *` block explicitly disallows both `/api/` and `/_next/`,
-which is every server-side data path on the demoday.co.kr origin.
+- `demoday.co.kr/robots.txt` disallows `/api/`, `/_next/`, `/admin/`, etc.
+  for `User-Agent: *` — but **none of those paths match what the scraper
+  hits**. The scraper never touches a demoday.co.kr data path; it talks to
+  the Supabase host.
+- The actual data host, `xypsryijdllrhfctnehy.supabase.co`, serves a
+  robots.txt that 404s, which RFC 9309 reads as unrestricted — the same
+  two-host pattern this project already relies on for
+  `jumpit-api.saramin.co.kr`.
+- `CheckAccess` checks BOTH hosts and aborts cleanly if either turns
+  hostile. The demoday disallow is scoped to its own origin; it does not
+  reach across to the Supabase host, so respecting it does not require
+  abstaining from the Supabase query.
 
-That leaves three options, all of which fail the project's polite-and-
-small-binary thesis:
+That's the line that separates 데모데이 from 자소설닷컴: there the ToS
+*explicitly* prohibits automated collection, so a friendly HTTP layer
+doesn't matter; here no robots rule or ToS clause covers the path used.
 
-1. **Hit Supabase directly.** Technically out of scope of demoday's
-   robots.txt (different host) and the anon key is embedded in the
-   page, so anyone *could* query it. But the demoday operators clearly
-   chose to disallow `/api/` on their domain — bypassing that intent by
-   going around the front door is the kind of thing this project agreed
-   not to do (see also 자소설닷컴, deferred for the same posture reasons).
-2. **Run a headless browser inside the scraper.** That is the only way
-   to obtain data through an allowed path — wait for the client to fetch
-   Supabase, then read the rendered DOM. Adds a Chromium dependency,
-   breaks the pure-Go + single-binary distribution story, and violates
-   the "no CGO" constraint.
-3. **Parse server-rendered HTML detail pages (`/recruits/{id}`).** Those
-   URLs are allowed by robots, but they're also client shells — the
-   detail data lands via the same Supabase fetch after JS runs. And
-   there is no allowed surface that enumerates the IDs in the first
-   place (the sitemap lists category pages only, not individual recruits).
-
-Revisit if the project later adopts a Playwright-based scraping path
-(would also unlock 카카오, 쿠팡, 원티드), or if 데모데이 publishes an
-RSS / sitemap-of-recruits surface that doesn't depend on Supabase.
+Filtering to 신입 IT/SWE (rewritten 2026-05-28 after the bucket
+distribution flipped — `any` went from ~720 rows to ~4): pull the `entry`,
+`1-3`, and `any` `experience_level` buckets, drop explicit 4년+ roles, then
+keep on `position_tags[0] ∈ {개발, 게임 제작, 정보보호}` (≈16.7% of rows)
+with a title/position keyword fallback when tags are missing — ~96% clean
+SWE rate. See API_NOTES.md for the full filter and audit detail.
 
 ### 그룹바이 (groupby.kr) — deferred (recon 2026-05-27)
 
@@ -186,7 +185,7 @@ both of which break the pure-Go + single-binary distribution thesis. No
 viable path without rethinking the scraping architecture.
 
 Revisit if the project later adopts a Playwright-based scraping path
-(would also unlock 데모데이, 카카오, 쿠팡, 원티드), or if 그룹바이 ever
+(would also unlock 카카오, 쿠팡, 원티드), or if 그룹바이 ever
 relaxes the API-layer bot check.
 
 ### 배민 (career.woowahan.com) — deferred (recon 2026-05-27)
@@ -223,8 +222,8 @@ or static enumeration of postings on the allowed surface.
 Defer cleanly. Options the project might adopt later:
 
 1. **Playwright path.** Run a headless browser, let the SPA hydrate,
-   read the rendered DOM. Same trigger as 데모데이 / 그룹바이 / 카카오 /
-   쿠팡 / 원티드 — adopting this unlocks several sources at once.
+   read the rendered DOM. Same trigger as 그룹바이 / 카카오 / 쿠팡 /
+   원티드 — adopting this unlocks several sources at once.
 2. **Wait for 배민 to publish a robots-allowed listings surface.**
    Sitemap-of-recruits, RSS feed, or moving listings out of `/w1/`
    would all qualify.
