@@ -110,7 +110,17 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	analyzed, visible, err := s.runRerate(r.Context(), surface, sw.event)
+	// Bug 2A (parallel to handleScrapeSSE): detach the re-rate from the request
+	// context. runRerate ends with scoreAll, the only step that copies the
+	// freshly-cached AI deltas into the scores table the dashboard renders; if
+	// client navigation cancelled the request mid-run, that terminal scoreAll
+	// would be skipped and the chips the user just paid for would not appear
+	// until an unrelated scrape/save. The per-row commit-before-call invariant
+	// (S8) already makes a longer-running detached re-rate safe to interrupt;
+	// SSE writes after disconnect are no-ops.
+	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
+	defer cancel()
+	analyzed, visible, err := s.runRerate(ctx, surface, sw.event)
 	if err != nil {
 		return // defer emits "failed"
 	}

@@ -114,6 +114,7 @@ func TestDashboardMarksBookmarkedRows(t *testing.T) {
 	p.FirstSeenAt = time.Now().UTC()
 	p.LastSeenAt = p.FirstSeenAt
 	id := mustUpsert(t, st, p)
+	scoreEach(t, st, map[int64]int{id: 50}) // scored, as scoreAll always does post-scrape (Bug 2B skips unscored)
 	if err := st.SetBookmark(ctx, id, time.Now()); err != nil {
 		t.Fatalf("SetBookmark: %v", err)
 	}

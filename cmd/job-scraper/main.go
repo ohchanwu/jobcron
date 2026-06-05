@@ -71,6 +71,14 @@ func main() {
 	if err := srv.ReconfigureAI(context.Background()); err != nil {
 		log.Printf("job-scraper: AI 설정을 불러오지 못해 일반 점수로 시작해요: %v", err)
 	}
+	// Heal any posting left unscored by an interrupted scrape (e.g. a crash or
+	// restart between insert and the end-of-run scoring) so it never renders as
+	// a blank card. Runs after ReconfigureAI so cached AI deltas merge in too;
+	// it never calls the provider, so there is no startup cost or token spend.
+	// Non-fatal: a transient error just defers healing to the next scrape/save.
+	if _, err := srv.RescoreAll(context.Background()); err != nil {
+		log.Printf("job-scraper: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
+	}
 
 	ln, addr, err := listen(*port)
 	if err != nil {

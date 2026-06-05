@@ -57,13 +57,31 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	res, err := s.runScrape(r.Context(), sw.event)
+	// Bug 2A: the scrape must NOT run on the request context. If it did,
+	// navigating away from the briefing mid-scrape (which tears down the SSE
+	// EventSource and cancels the request) would abort the scrape, leaving
+	// postings inserted but unscored — the end-of-run scoreAll never reached,
+	// so they render as blank cards. Detach onto a background context with a
+	// generous ceiling so the scrape runs to completion and scores everything
+	// regardless of the client. The handler still blocks here until it
+	// finishes, so the singleflight lock is held for the scrape's real
+	// duration; SSE writes to a since-disconnected client are no-ops
+	// (sseWriter.event ignores write errors).
+	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
+	defer cancel()
+	res, err := s.runScrape(ctx, sw.event)
 	if err != nil {
 		sw.event("failed", "스크랩에 실패했어요. 잠시 후 다시 시도해 주세요.")
 		return
 	}
 	sw.event("done", fmt.Sprintf("브리핑이 준비됐어요 — 새 공고 %d개", res.New))
 }
+
+// scrapeMaxDuration bounds a detached scrape (Bug 2A) so a wedged provider or
+// stalled network can't hold the scrape singleflight lock forever. Generous: a
+// full multi-source scrape paces detail fetches + AI extraction at ~1 req/s for
+// up to scrapeNewCap new postings per source.
+const scrapeMaxDuration = 15 * time.Minute
 
 // dashboardPosting is one row of the daily briefing.
 type dashboardPosting struct {
@@ -156,27 +174,40 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 		if !sameKSTDay(p.FirstSeenAt, now) || expired(p, now) {
 			continue
 		}
+		// Bug 2B (render-time belt-and-suspenders): a posting with no score row
+		// is mid-pipeline — an interrupted scrape inserted it before scoreAll
+		// ran. Never render a scoreless card (no total, no 신입 chip); skip it.
+		// This is the last line of defense behind two guards that between them
+		// prevent the unscored state reaching render: handleScrapeSSE detaches
+		// the scrape from the request context so client navigation can't cancel
+		// it (Bug 2A), and main calls RescoreAll at startup so a process crash
+		// between insert and scoring is healed on the next boot. (Those two are
+		// what make the other surfaces — /archive, /bookmarks, /hidden — safe
+		// without this skip; here it stays as cheap insurance on the most
+		// visible surface.)
+		sc, ok := scores[p.ID]
+		if !ok {
+			continue
+		}
 		dp := dashboardPosting{
 			Posting:          p,
 			Bookmarked:       bookmarks[p.ID],
 			Deadline:         deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 			DuplicateSources: dupSources[p.ID],
 		}
-		if sc, ok := scores[p.ID]; ok {
-			dp.Total = sc.Total
-			// Dealbreaker hits (Total = -1) are always excluded. The
-			// MinScore knob collapses additional low-scoring rows out of
-			// the main "Today" list — the user can still find them under
-			// the expandable "제외된 공고" section. MinScore = 0 disables
-			// the soft-hide entirely. A bookmarked posting is exempt from
-			// the soft MinScore hide (the user deliberately saved it) but
-			// NOT from the dealbreaker hide — Total < 0 stays unconditional.
-			dp.Excluded = sc.Total < 0 || (sc.Total < prof.EffectiveMinScore() && !bookmarks[p.ID])
-			var result scoring.ScoreResult
-			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
-				dp.Explanation = scoring.Explain(result)
-				dp.Breakdown = result.Breakdown
-			}
+		dp.Total = sc.Total
+		// Dealbreaker hits (Total = -1) are always excluded. The MinScore knob
+		// collapses additional low-scoring rows out of the main "Today" list —
+		// the user can still find them under the expandable "제외된 공고"
+		// section. MinScore = 0 disables the soft-hide entirely. A bookmarked
+		// posting is exempt from the soft MinScore hide (the user deliberately
+		// saved it) but NOT from the dealbreaker hide — Total < 0 stays
+		// unconditional.
+		dp.Excluded = sc.Total < 0 || (sc.Total < prof.EffectiveMinScore() && !bookmarks[p.ID])
+		var result scoring.ScoreResult
+		if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
+			dp.Explanation = scoring.Explain(result)
+			dp.Breakdown = result.Breakdown
 		}
 		if dp.Excluded {
 			b.Excluded = append(b.Excluded, dp)

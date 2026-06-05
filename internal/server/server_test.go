@@ -334,7 +334,8 @@ func TestDeadlineBadgeRendersTieredClasses(t *testing.T) {
 			c := time.Date(2026, 5, closeDay, 23, 59, 59, 0, kst)
 			p.ClosedAt = &c
 		}
-		mustUpsert(t, st, p)
+		rowID := mustUpsert(t, st, p)
+		scoreEach(t, st, map[int64]int{rowID: 50}) // scored, as scoreAll always does post-scrape (Bug 2B skips unscored)
 	}
 	mk("open", "상시 공고", true, false, 0)     // 상시채용  → deadline-open
 	mk("none", "정보없음 공고", false, true, 0)   // 마감 정보 없음 → deadline-none
@@ -375,11 +376,12 @@ func TestDashboardShowsOnlyTodaysPostings(t *testing.T) {
 	old := listingPosting("old1", "예전에 본 공고")
 	old.FirstSeenAt = time.Now().Add(-72 * time.Hour).UTC()
 	old.LastSeenAt = old.FirstSeenAt
-	for _, p := range []scraper.Posting{today, old} {
-		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
-			t.Fatalf("UpsertPosting: %v", err)
-		}
-	}
+	// Both postings are scored: in production scoreAll always runs after a
+	// scrape, so a rendered posting always has a score row (Bug 2B skips the
+	// unscored). This test exercises the date filter, not the scoring path.
+	todayID := mustUpsert(t, st, today)
+	oldID := mustUpsert(t, st, old)
+	scoreEach(t, st, map[int64]int{todayID: 50, oldID: 50})
 
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))

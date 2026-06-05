@@ -434,6 +434,19 @@ func (s *Server) loadProfile(ctx context.Context) (profile.Profile, bool, error)
 	return p, true, nil
 }
 
+// RescoreAll re-scores every stored posting against the current profile. main
+// calls it once at startup (right after ReconfigureAI) so a posting left
+// unscored by an INTERRUPTED scrape is healed on the next boot rather than
+// rendering as a blank card. Fix 2A keeps CLIENT navigation from leaving the
+// unscored state; this covers PROCESS death — a crash / SIGKILL / OOM / deploy
+// restart in the window between UpsertPosting committing a new row and the
+// end-of-run scoreAll, which nothing else self-heals. It is the exported entry
+// point to scoreAll; it never calls the AI provider (merge-only, D10), so the
+// startup pass is a cheap cache-only re-score. No-op when no profile is saved.
+func (s *Server) RescoreAll(ctx context.Context) (int, error) {
+	return s.scoreAll(ctx)
+}
+
 // scoreAll scores every stored posting against the current profile and upserts
 // the score rows. It is a no-op when no profile has been saved yet.
 func (s *Server) scoreAll(ctx context.Context) (int, error) {
