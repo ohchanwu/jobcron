@@ -81,6 +81,17 @@ check that killed 네이버 and 잡알리오).
 Net verdict: **two productive veins (Greeting, Greenhouse), two dead ones
 (Lever, Ashby).**
 
+**What counts as a 신입 dev role here.** The target audience is *anyone a
+developer browsing GitHub for an entry-level job would consider* — not just
+frontend/backend/fullstack/mobile software engineers (SWE). The filter
+deliberately includes cybersecurity (정보보안 / DevSecOps), data engineers and
+data analysts (데이터엔지니어 / 데이터분석), AI/ML engineers, DevOps / SRE / 인프라 /
+클라우드, QA engineers, and embedded/firmware. The ~59 Greeting and ~9 Greenhouse
+junior-dev counts below already use this broad reading — **do not narrow it to
+"pure SWE."** This is slightly broader than 데모데이's `position_tags` filter (which
+keeps `개발` / `게임 제작` / `정보보호`): data and DevOps/infra titles that 데모데이's
+taxonomy may file under non-dev categories are in-scope for the ATS sources.
+
 #### 그리팅 / Greeting (greetinghr.com) — the best NEW source found
 
 Korea's leading native ATS (by 두들린), used by thousands of companies. Genuinely
