@@ -53,8 +53,138 @@ manual application flow) and similar gated APIs.
 | **커리어리** (careerly.co.kr)                                     | ❌ skip           | NOT actually a job board (was floated as a 프로그래머스 replacement). It's a career-content SNS. "Job matching" is account-gated and curated; no public listings index to scrape.                                                                                                                                   |
 | **LinkedIn Korea**                                                | ❌ skip           | hiQ v. LinkedIn precedent; aggressive enforcement; CAPTCHA-heavy.                                                                                                                                                                                                                                                   |
 | **인크루트** (incruit.com)                                        | ❌ skip           | Low signal, defensive posture, dated UX.                                                                                                                                                                                                                                                                            |
+| **그리팅 / Greeting** (greetinghr.com, by 두들린)                 | ⏸ candidate (strong) | NEW Korean-native Applicant Tracking System (ATS), recon 2026-06-05. Per-tenant server-rendered Next.js boards at `{slug}.career.greetinghr.com`; job openings sit inline in the page's `__NEXT_DATA__` JSON (no headless browser needed). Structured `careerType` (`NEW_COMER`/`NOT_MATTER`/`EXPERIENCED`) gives a real 신입 signal — better than Greenhouse. ~24 Korean tenants verified live, 548 openings, ~59 신입-dev; strongest: `cashwalk12`(넛지헬스케어/캐시워크), `realworld`(RLWRLD), `estfamily`(이스트소프트), `supercent`. Click-through to a real posting verified. Build as ONE multi-tenant scraper over a curated slug list. See the ATS-platform note below. |
+| **Greenhouse — Korean tenants** (boards-api.greenhouse.io)        | ◐ partial (당근 shipped) | No-auth public JSON board API — the exact model 당근 already ships. Recon 2026-06-05 verified NEW Korean boards to add: `krafton` (best — 6 junior/intern dev roles, all Korea), `moloco`, `sendbird`; senior-skewed (Korea volume, ~0 신입): `coupang`, `coupanginternal`, `seoulrobotics`; dead: `dunamu` (board 404), `appliedintuition` (public API gated). No structured 신입 field → title/description heuristic (counts are a lower bound). Click-through verified. Generalize the 당근 scraper into a token-list source. See the ATS-platform note below. |
+| **Lever** (api.lever.co)                                          | ❌ thin            | No-auth JSON board API (`/v0/postings/{slug}?mode=json`), recon 2026-06-05. Korea-HQ startups essentially do **not** use Lever — 37+ native-company slugs all 404. Only `matchgroup` (Tinder/Azar Seoul) carries a real 신입 dev role (1 backend intern). Not worth a scraper for the 신입 thesis. |
+| **Ashby** (api.ashbyhq.com)                                       | ❌ thin            | No-auth JSON board API (`/posting-api/job-board/{name}`), recon 2026-06-05. Real Korea boards exist (`furiosa-ai` 46 KR jobs, `twelve-labs`, `miso`, `hopae`) but ~0 junior/new-grad SWE — experienced-heavy. Skip for the 신입 thesis; revisit `furiosa-ai` only if a hardware/senior scope is ever added. |
 
 ## Per-portal notes
+
+### ATS-platform layer (그리팅 / Greenhouse / Lever / Ashby) — recon 2026-06-05
+
+This is a different axis from the company-by-company rows above. An Applicant
+Tracking System (ATS) — the hiring software a company runs its careers page on
+— is **not one source you scrape once**. It is a *platform* behind which each
+company has its own board, reached by the same URL pattern with a different
+identifier. The project already proved this twice without naming it: 당근 and
+토스 are both on **Greenhouse**, each wired as a bespoke one-off.
+
+The leverage: write **one scraper per ATS, parameterized by a curated list of
+Korean company identifiers**. Adding the next Korean company on that ATS then
+becomes a one-line config change, not a new scraper. A deep-research pass +
+four discovery agents swept the four no-auth ATS platforms on 2026-06-05; every
+candidate below was probed with a plain HTTP client (browser User-Agent, no
+headless browser — matching the project's hard constraint), and the two live
+candidates had a real posting **click-through-verified in a browser** (the
+check that killed 네이버 and 잡알리오).
+
+Net verdict: **two productive veins (Greeting, Greenhouse), two dead ones
+(Lever, Ashby).**
+
+#### 그리팅 / Greeting (greetinghr.com) — the best NEW source found
+
+Korea's leading native ATS (by 두들린), used by thousands of companies. Genuinely
+new — not previously in this file.
+
+- **Where the data lives.** Each tenant is a server-rendered Next.js page at
+  `https://{slug}.career.greetinghr.com/`. The job openings are inline in the
+  page's `<script id="__NEXT_DATA__">` JSON, at
+  `props.pageProps.dehydratedState.queries` → the entry whose `queryKey` is
+  `["openings"]` → `state.data` (an array). No headless browser needed — a plain
+  HTTP GET + JSON parse gets everything. (There is also a
+  `_next/data/{buildId}/ko/recruiting.json` route, but the `buildId` rotates on
+  every deploy, so parsing `__NEXT_DATA__` from the HTML is the stable path.)
+- **Real 신입 signal.** Each opening's `openingJobPosition.openingJobPositions[]`
+  carries `jobPositionCareer.careerType` ∈ {`NEW_COMER` (신입), `NOT_MATTER`
+  (경력무관/open to both), `EXPERIENCED` (경력)} and
+  `jobPositionEmployment.employmentType` ∈ {`INTERN_WORKER`, `FULL_TIME_WORKER`,
+  `MILITARY_SERVICE_EXCEPTION` (병역특례/병특), …}, plus `careerFrom`/`careerTo`
+  and `workspacePlace.place` (address). This is a **structured** new-grad signal,
+  unlike Greenhouse. Note the value is `NEW_COMER` with an underscore. Korean
+  tenants lean on `NOT_MATTER` + title markers more than a strict `NEW_COMER`
+  flag, so the project's existing inclusive reading applies (the demoday
+  `any`-bucket convention — keep 경력무관/open-to-both as 신입-eligible).
+- **Reachability / robots.** Cloudflare fronts it as a CDN but does **not**
+  bot-wall a browser-User-Agent client (a default/empty-UA client may get 403 —
+  send a normal UA, as the project already does for 점핏/랠릿). robots.txt is
+  `Allow: /` with only `/apply`, `/m/*`, `/a/*` disallowed — the board path is
+  permitted. This is a *softer* guarantee than a pure-API host; re-check if
+  Cloudflare tightens.
+- **Volume (2026-06-05).** ~24 Korean tenants verified, 548 total openings,
+  ~59 신입-dev (inclusive count). Concentrated in a few strong tenants and a long
+  tail of zeros. Best 신입/인턴 dev tenants, in order: `cashwalk12` (넛지헬스케어/
+  캐시워크 — 17, full deck of 채용전환형 인턴: 백엔드/프론트/iOS/안드로이드/Flutter/
+  데이터), `realworld` (RLWRLD robotics AI — 15), `estfamily` (이스트소프트 — 10),
+  `supercent` (4), `ezcaretech` (2), `kimcaddie` (백엔드 신입~5년차), `blue-dot`
+  (반도체 회로 설계 신입), `echomarketing` (백엔드 인턴/신입), `kbfintech` (Cloud
+  Engineer 주니어). `kakaopay` (landing `/ko/main`) runs the 카카오그룹 신입크루 공채
+  seasonally. Also live but mostly 경력: `musinsa`, `kurly`, `wadiz`, `gccompany`,
+  `portone`, `megastudyedu`, `estfamily`. The custom-domain example is 올리브영
+  (`career.oliveyoung.com`).
+- **Click-through verified.** `cashwalk12/ko/o/78138` ("[캐시워크] 백엔드개발
+  채용전환형 인턴") renders the exact posting in a browser, no redirect.
+- **Why it's not trivial to ship.** Discovery is the hard part: tenant slugs are
+  not guessable (Toss-on-Greeting is under a non-obvious slug; sendbird/lunit/etc.
+  are NOT on Greeting), landing paths vary per tenant (`/ko/home`, `/ko/main`,
+  `/ko/jobs`, `/ko/people`, `/ko/intro`, `/ko/corp`…), and some tenants use custom
+  domains. A scraper needs a **curated, hand-maintained tenant list** (start from
+  the ~24 above) plus per-tenant landing-path resolution (fetch `/` and follow the
+  redirect). There is no public directory of all tenants. Per-tenant 신입 volume is
+  modest; the aggregate is what makes it source-grade.
+- **Verdict: strong candidate, build as one multi-tenant Greeting scraper.** The
+  single best new source from this sweep.
+
+#### Greenhouse — Korean tenants beyond 당근/토스
+
+Same no-auth public JSON board API the project already ships for 당근:
+`GET https://boards-api.greenhouse.io/v1/boards/{token}/jobs` → `{jobs:[…],
+meta:{total}}`, no key, CloudFront-fronted but no bot challenge. (Toss is the
+exception — it runs a custom Greenhouse host `api-public.toss.im`, not a standard
+token.)
+
+- **NEW verified Korean boards (2026-06-05):** `krafton` (63 jobs, 55 Korea, 6
+  explicit junior/intern dev — the strongest; AI Research interns + 신입채용 track),
+  `moloco` (67/20, Seoul ML/SWE interns), `sendbird` (17/9, Seoul AI engineer
+  intern). High Korea volume but senior-skewed (~0 explicit junior dev): `coupang`
+  (563/270), `coupanginternal` (336/136), `seoulrobotics` (10/10). Former/gated,
+  now 404: `dunamu` (board unpublished), `appliedintuition` (uses Greenhouse but
+  gates the public API / non-standard long token). `navervietnam` is Greenhouse
+  but Vietnam-only — skip.
+- **Caveat — no structured 신입 field.** Unlike Greeting (`careerType`) and 점핏
+  (`career=0`), Greenhouse boards carry only `title` + `location` — junior
+  detection is a title/description heuristic, so the ~9 junior-dev total across the
+  live Korean boards is a **lower bound** (a plain "Frontend Engineer" open to 신입
+  won't match a title filter). Same heuristic problem the 데모데이 scraper already
+  solves.
+- **Click-through verified.** `job-boards.greenhouse.io/krafton/jobs/8574562002`
+  ("[AI Research Div.] Research Engineer … (2년 이상 / 인턴)", Seoul) renders the
+  exact posting, no redirect.
+- **Verdict: generalize the 당근 scraper into a multi-tenant Greenhouse source**
+  parameterized by a token list (`daangn`, `krafton`, `moloco`, `sendbird`, + 토스
+  via its custom host). Modest 신입 volume but zero-friction and already-proven.
+
+#### Lever — evaluated, dead for Korean 신입 dev
+
+No-auth JSON API (`api.lever.co/v0/postings/{slug}?mode=json`, robots `Allow: /`,
+`Crawl-delay: 1` = the project's pacing). But **Korea-HQ startups don't use
+Lever**: 37+ native-company slugs (Toss, 당근, Moloco, Sendbird, Hyperconnect,
+Riiid, Lunit, Krafton, …) all 404. The boards with Korea roles are global firms
+with Seoul offices (Match Group, Binance, Palantir, Xsolla, Insider, …), and
+junior dev is near-absent — only `matchgroup` has a real entry-level role
+("Software Engineer Intern, Backend (Tinder Seoul)"). One intern role is not worth
+a scraper. Skip; the productive veins for Korean 신입 dev are the native boards
+(랠릿, 그리팅) and Greenhouse, not the global ATSes.
+
+#### Ashby — evaluated, dead for Korean 신입 dev
+
+No-auth JSON API (`api.ashbyhq.com/posting-api/job-board/{name}`). Adoption among
+Korea-HQ companies is thin, and what exists is experienced-heavy: `furiosa-ai`
+(46 Korea jobs, but its one 신입-tagged role is semiconductor mass-production
+evaluation, not software), `twelve-labs` (24, all Staff/Senior ML), `miso` (22,
+ops-heavy), `hopae` (7, mid-level). Strict filter: **0 junior/new-grad SWE across
+all of them.** Most Korea-located Ashby roles are on foreign boards (OpenAI,
+Sierra, Speak) and senior. Skip for the 신입 thesis; `furiosa-ai` is the only board
+worth remembering, and only if a hardware/senior scope is ever added.
 
 ### 네이버 careers — removed 2026-05-27
 
