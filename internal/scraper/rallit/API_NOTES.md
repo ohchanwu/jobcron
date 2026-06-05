@@ -38,13 +38,42 @@ GET /api/v1/position
     ?pageNumber=1
     &pageSize=50
     &jobLevel=BEGINNER,INTERN,IRRELEVANT
+    &jobGroup=DEVELOPER
 ```
 
 | Param | Type | Notes |
 |---|---|---|
 | `pageNumber` | int ≥ 1 | required, 1-indexed (NOT 0-indexed) |
 | `pageSize` | int ≥ 1 | per-page count cap (we use 50) |
-| `jobLevel` | comma-separated enum | filter to 신입-friendly levels |
+| `jobLevel` | comma-separated enum | filter to 신입-friendly career levels |
+| `jobGroup` | single enum value | filter to the dev 직군 (job function) — see below |
+
+### 직군 (job group) filter — `jobGroup=DEVELOPER`
+
+`jobLevel` filters by *career level* only; it does NOT restrict job *function*.
+Without a `jobGroup` filter the listing returns every 신입-level role — marketing,
+design, PM, HR, sales — not just dev. That leaked non-dev postings into the
+briefing (e.g. 모두닥's 인플루언서 마케터 / 경영지원 사무보조 / 채용운영(TA)).
+
+`jobGroup=DEVELOPER` is the fix. Recon 2026-06-05 (live `totalCount` probes
+against the 신입-level baseline of 135):
+
+- `jobGroup=DEVELOPER` → 69. **This single umbrella group covers every tech
+  role we want** — backend / frontend / mobile SWE plus 데이터(분석가·엔지니어·
+  사이언티스트), AI/ML·NLP·딥러닝, AI Infra, DevOps·인프라, QA, 임베디드. 랠릿
+  does NOT split data / AI / security / DevOps into separate top-level groups;
+  they all live under DEVELOPER. The excluded 66 were all genuinely non-dev
+  (마케터, UI/UX 디자이너, 기획자/PM, 인사총무, 콘텐츠 PD).
+- **Single value only.** Comma-OR is silently rejected: `jobGroup=DEVELOPER,DESIGNER`
+  → 0 (unlike `jobLevel`, which does ANY-match on comma values).
+- **Unknown values silently return 0 rows** (same envelope, `statusCode: "OK"`,
+  `totalCount: 0`). So a typo'd group looks like "no postings," not an error —
+  `DEVELOPER` must stay exact. The param name itself is also silently dropped if
+  misspelled (we verified `jobCategory` / `jobType` / `positionGroup` are all
+  no-ops; only `jobGroup` filters).
+- If 랠릿 ever splits data / AI / security into their own top-level groups, this
+  filter would start missing them — re-run the `totalCount` probe to re-derive
+  the enum.
 
 ### Level enum (from live data sampling)
 

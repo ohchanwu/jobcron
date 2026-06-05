@@ -29,6 +29,18 @@ const (
 // levels — accepted as legitimate signal; the scoring stage handles refinement.
 var newcomerLevels = []string{"BEGINNER", "INTERN", "IRRELEVANT"}
 
+// devJobGroup restricts the listing to 랠릿's DEVELOPER 직군 (job group). On
+// 랠릿 this single umbrella group covers every tech role — backend / frontend /
+// mobile SWE plus 데이터(분석·엔지니어링·사이언스), AI/ML, 보안, DevOps·인프라·
+// 클라우드, QA, 임베디드 — while excluding the marketing / design / PM / HR /
+// sales 신입 roles that otherwise flood the briefing (recon 2026-06-05: 135
+// 신입 postings total → 69 with this filter; the excluded 66 were all non-dev,
+// e.g. 모두닥's 마케터 / 사무보조 / 채용운영(TA)). The param takes a SINGLE
+// value — comma-OR is NOT supported here (unlike jobLevel), and an unknown
+// value silently returns zero rows, so DEVELOPER must stay exact. See
+// API_NOTES.md "직군 (job group) filter".
+const devJobGroup = "DEVELOPER"
+
 // Scraper is the 랠릿 implementation of scraper.Scraper.
 type Scraper struct {
 	client   *client
@@ -73,6 +85,7 @@ func (s *Scraper) FetchListing(ctx context.Context, limit int) ([]scraper.Postin
 		q.Set("pageNumber", strconv.Itoa(page))
 		q.Set("pageSize", strconv.Itoa(s.pageSize))
 		q.Set("jobLevel", strings.Join(newcomerLevels, ","))
+		q.Set("jobGroup", devJobGroup)
 
 		body, err := s.client.get(ctx, listingPath+"?"+q.Encode())
 		if err != nil {
