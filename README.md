@@ -1,5 +1,7 @@
 # job-scraper — 신입 IT Job Briefing
 
+_[한국어로 보기 🇰🇷](README.ko.md)_
+
 A calm daily job-posting briefing for Korean new-grad (신입) IT job seekers.
 
 `job-scraper` is a single binary that opens a local web app. Click **스크랩 시작**
