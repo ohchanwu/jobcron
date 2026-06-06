@@ -37,10 +37,10 @@ manual application flow) and similar gated APIs.
 | **프로그래머스** (career.programmers.co.kr)                       | ❌ defunct        | **Service shut down 2025-04-28.** `career.programmers.co.kr` no longer resolves. Confirmed via official notice at <https://programmers.co.kr/notices/11584>. Do not revisit.                                                                                                                                        |
 | **워크넷** (work.go.kr)                                           | ⏸ deprioritized   | Code shipped in v0.2 and works, but requires each user to register at data.go.kr and paste their own OpenAPI key. That setup friction conflicts with the "open the binary, see a briefing" thesis. Left in the repo as dormant scaffolding.                                                                         |
 | **로켓펀치** (rocketpunch.com)                                    | ⏸ deferred        | CloudFront-fronted (403 to plain curl, needs full browser fingerprint). robots.txt explicitly `Disallow: /*.json$` blocking the Next.js data endpoints, plus a comprehensive scraper-UA blacklist. Visibly invested in keeping bots out.                                                                            |
-| **카카오 careers** (careers.kakao.com)                            | ⏸ deferred        | Full SPA with all `/api/*` endpoints returning 401 — listing data needs a bootstrap auth token. Plus careers is fragmented across 6+ subsidiary subdomains (KakaoEnterprise, KakaoStyle, KakaoEnt, KakaoPaySec, KakaoBank…), each its own portal. Not worth the reverse-engineering for v1.                         |
-| **쿠팡 careers** (coupang.jobs)                                   | ⏸ deferred        | Cloudflare challenge wall — returns "Attention Required" even with full browser-fidelity headers. Same blocker as 원티드 / 로켓펀치.                                                                                                                                                                                |
+| **카카오 careers** (careers.kakao.com)                            | ⏸ deferred        | Full SPA with all `/api/*` endpoints returning 401 — listing data needs a bootstrap auth token. Plus careers is fragmented across 6+ subsidiary subdomains (KakaoEnterprise, KakaoStyle, KakaoEnt, KakaoPaySec, KakaoBank…), each its own portal. Continuous board is experienced-only; new-grad dev is a once-a-year group 공채, syndicated to 공채 aggregators → route to a future 공채-calendar feature, not a per-subsidiary SPA scraper. See `docs/plans/browser-driven-scrapers.md`.                         |
+| **쿠팡 careers** (coupang.jobs)                                   | ⏸ skip (low 신입)  | **Correction (2026-06-06):** the Cloudflare wall fronts only the `coupang.jobs` marketing SPA. 쿠팡's actual listings are on the public no-auth Greenhouse board API (`coupang` token) we already scrape — verified 570 jobs / 276 Korea / **0 newcomer-marked dev**. So this is a senior-skew relevance skip (same as the other Greenhouse senior tokens), NOT a browser/access problem. See `docs/plans/browser-driven-scrapers.md`.                |
 | **삼성 careers** (sec.wd3.myworkdayjobs.com + samsungcareers.com) | ⏸ deferred        | Public Samsung Workday tenant carries 493 jobs across 26 countries but **zero in Korea** (KR jobs live in a separate authenticated portal). samsungcareers.com/jobs returns a 500 wrapped in 200. No accessible signal for Korean 신입 IT roles.                                                                    |
-| **원티드** (wanted.co.kr)                                         | ⏸ deferred        | Cloudflare-blocked (returns 403 to robots.txt + bot fingerprint checks). Needs headless browser or paid proxy.                                                                                                                                                                                                      |
+| **원티드** (wanted.co.kr)                                         | ⛔ decline (ToS)   | Cloudflare managed challenge (403 to robots.txt). Needs a real headless browser — and bypassing it would violate 원티드's ToS (개인회원 약관 Art. 19 §7) which explicitly forbids both 자동화된 스크래퍼 AND Captcha/기술적 조치 우회. Strongest prohibition of any candidate. Legitimate path = official OpenAPI (`openapi.wanted.jobs`), but partner-key-gated (fails onboarding-friction). 신입-dev is the tail (mid-career platform) and overlaps the ATS layer. See `docs/plans/browser-driven-scrapers.md`.                                              |
 | **자소설닷컴** (jasoseol.com)                                     | ⏸ deferred        | Technically clean (Next.js `__NEXT_DATA__` exposes rich data; 11,582+ active recruit URLs; mostly 대졸 신입/인턴). BUT the ToS explicitly prohibits "자동화된 수단(예, 수집로봇, 스파이더, 스크래퍼)" — same posture as 로켓펀치. Excluding for consistency, not technical reasons.                                 |
 | **링커리어** (linkareer.com)                                      | ⏸ defer           | 대학생-targeted 공모전/인턴/신입 aggregator with some 공채 signal. CloudFront-fronted but currently passes plain curl. Partial redundancy with 점핏 on 대기업 IT 공채 paths. Re-evaluate when the 공채 calendar feature lands.                                                                                      |
 | **디스콰이엇** (disquiet.io)                                      | ⏸ defer           | Small curated maker/PM-leaning board (~50-100 jobs). Friendly robots.txt. Real signal but low absolute volume — better as a "long tail" source in v1.2+.                                                                                                                                                            |
@@ -320,14 +320,21 @@ send (Origin, Referer, full `sec-ch-ua-*` block, Accept, Accept-
 Language, Accept-Encoding, all of it). The page works in real Chromium
 because of TLS / JA3 / HTTP-fingerprint detection at the proxy layer.
 
-That is the same blocker class as 원티드 / 쿠팡 / 잡플래닛 — would need
-a headless browser or a TLS-fingerprint-spoofing client (utls/CycleTLS),
-both of which break the pure-Go + single-binary distribution thesis. No
-viable path without rethinking the scraping architecture.
+This is a TLS/JA3-fingerprint block — a DIFFERENT class from 원티드's
+Cloudflare *JavaScript* challenge (uTLS beats the former, not the latter).
 
-Revisit if the project later adopts a Playwright-based scraping path
-(would also unlock 카카오, 쿠팡, 원티드), or if 그룹바이 ever
-relaxes the API-layer bot check.
+**Correction (2026-06-06):** the earlier claim that "utls/CycleTLS break the
+pure-Go + single-binary distribution thesis" is **wrong**. `refraction-
+networking/utls` is a pure-Go fork of `crypto/tls` (whole dep tree is pure Go);
+it compiles under `CGO_ENABLED=0` and cross-compiles to linux/arm64 + darwin/
+arm64 — the single static binary is fully preserved. So the build story is NOT
+the blocker. The honest reasons to keep 그룹바이 deferred are (a) it deliberately
+circumvents an operator-deployed TLS bot wall — an anti-bot signal that, by our
+own 배민 precedent (parked for a weaker robots signal), warrants declining, and
+(b) low value: the live `/positions` board is experienced-skewed and overlaps
+데모데이 / 랠릿 / 그리팅. uTLS would be ~100 lines of `DialTLSContext` glue (pin
+≥ 1.8.2 for CVE-2026-26995/27017). Full analysis: `docs/plans/browser-driven-
+scrapers.md`.
 
 ### 배민 (career.woowahan.com) — deferred (recon 2026-05-27)
 
