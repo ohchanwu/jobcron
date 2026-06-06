@@ -24,6 +24,72 @@ part of the 1.x series.
 
 ## [Unreleased]
 
+## [2.0.0-alpha3] - 2026-06-06
+
+The BYOK-AI line matures and the source set widens. The headline is a reversal:
+**OpenAI is removed as a provider** — live testing made it concrete that it can't
+serve this app's audience (see Removed). Anthropic is now the single supported
+provider, at a calm self-imposed 1 request/second. Alongside that: two new
+sources, an automatic AI rating pass at scrape time, and a batch of
+provider-switch and scoring fixes.
+
+### Added
+- **More sources (eight defaults now).** 그리팅 (Greeting) Korean-ATS aggregator and
+  a multi-tenant Greenhouse source (당근·크래프톤·몰로코·센드버드) join
+  점핏·랠릿·데모데이. The browser-gated portals (원티드/카카오/쿠팡/그룹바이) were evaluated
+  and deliberately not built.
+- **AI rates new postings automatically.** A scrape now runs the Stage-2 re-rate
+  over the fresh briefing at the end, so new postings show their AI 분석 chip
+  without a manual 재평가 — bounded by the same per-call and token caps.
+- **관심 공고 sort + remembered filters.** A 점수순 sort toggle on the 관심 공고 page,
+  and the source-filter pills + sort choice now persist across visits.
+- **Legible re-rate.** Clearer 재평가 progress, and a user-settable "how many
+  postings to analyze per press" cap on the profile form.
+
+### Changed
+- **AI request pacing is back to a self-imposed 1 request/second** — the original
+  limit, restored after a brief provider-aware experiment. It spaces only request
+  starts, so the concurrent re-rate worker pool (~4× faster than the old
+  one-at-a-time loop) still overlaps call latency.
+
+### Removed
+- **OpenAI is no longer a selectable provider; Anthropic is the only one.** It was
+  removed after live testing made the problem concrete: a bring-your-own-key user
+  on OpenAI's free / entry tier cannot sustain the re-rate workload. Each listing
+  costs two model calls (a Stage-1 extraction and a Stage-2 score), and a re-rate
+  fans several out at once — past an entry-tier ceiling that can be as low as a few
+  requests per minute. In practice OpenAI returned a rate-limit error on nearly
+  every call: only about one listing in five got through per press, the rest
+  failing. Pacing the calls much more gently still got zero of five through — the
+  account tier, not our pacing, is the wall. We will not ask users to pay for a
+  higher OpenAI tier just to use this app, so OpenAI is out; Anthropic's entry tier
+  handles the 1 req/s pace comfortably. The provider abstraction stays, so a viable
+  provider could be added back later, and the OpenAI implementation lives on in git
+  history.
+
+### Fixed
+- **AI 분석 chips no longer vanish when you change the AI model** (or, before its
+  removal, the provider). The change rotated an internal cache version and orphaned
+  every prior rating, so the chips disappeared; they now persist, faded and
+  labelled "(이전 설정 기준)", until a 재평가 refreshes them.
+- **A failing re-rate now says why.** A bad key, a wrong model, or a provider rate
+  limit used to be swallowed — the press looked like it did nothing. The re-rate
+  now ends in a calm, specific message (check your key / check the model /
+  rate-limited, try again / check billing) instead of a hollow "0 analyzed".
+- **인턴 (intern) roles keep their 신입 chip when AI is on** — resolving the alpha2
+  known issue. The source's correct new-grad flag is no longer overridden by a
+  model that misreads an entry-level intern role as requiring experience.
+- **랠릿 listings are filtered to the developer 직군**, so non-dev roles no longer
+  enter the briefing from that source going forward.
+- Scraped postings are never left unscored / blank-carded; the 관심 공고 sort no
+  longer flashes 점수순 on load; orphaned AI cache rows are purged with their
+  posting (migration 0009).
+
+### Known issues
+- The live provider integration tests remain opt-in; this release was verified by
+  the manual Anthropic/OpenAI checks run during the OpenAI investigation, not the
+  full live suite.
+
 ## [2.0.0-alpha2] - 2026-06-03
 
 Stage 2 + hardening of the **v2.0 BYOK-AI** line. AI is now a real, end-to-end
