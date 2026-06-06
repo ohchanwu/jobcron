@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"sync"
 	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/ai"
@@ -288,9 +289,17 @@ type aiBudget struct {
 	day          string // UTC date, e.g. "2026-06-03"
 	runCap       int
 	dailyCap     int
-	dailyAtStart int  // ledger total (input+output) when the run began
-	runSpent     int  // input+output debited this run
-	degraded     bool // true once either cap was hit mid-run
+	dailyAtStart int // ledger total (input+output) when the run began
+
+	// mu guards the mutable counters so the concurrent 재평가 worker pool
+	// (handleRerateSSE) can canSpend/debit from several goroutines without a
+	// data race. The scrape path is sequential, so the lock is uncontended
+	// there. Optimistic overshoot is bounded: workers that pass canSpend
+	// before an in-flight call debits can collectively exceed the cap by at
+	// most (pool size) calls — acceptable for a soft token ceiling.
+	mu       sync.Mutex
+	runSpent int  // input+output debited this run
+	degraded bool // true once either cap was hit mid-run
 }
 
 // newAIBudget returns a fresh per-run budget, or nil when AI is off (so the
@@ -318,6 +327,8 @@ func (s *Server) newAIBudget(ctx context.Context) *aiBudget {
 // canSpend reports whether either cap still has headroom, marking the run
 // degraded the first time it does not (so the caller surfaces the calm banner).
 func (b *aiBudget) canSpend() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.runSpent >= b.runCap || b.dailyAtStart+b.runSpent >= b.dailyCap {
 		b.degraded = true
 		return false
@@ -328,10 +339,20 @@ func (b *aiBudget) canSpend() bool {
 // debit records a call's token usage: against the in-memory run counter and
 // (best-effort) through to the persisted daily ledger. A ledger write failure is
 // swallowed — it must never fail a scrape — but the in-memory run cap still
-// holds for the rest of this run.
+// holds for the rest of this run. The ledger write happens outside the lock so a
+// slow disk write does not serialize the worker pool's budget checks.
 func (b *aiBudget) debit(ctx context.Context, u ai.Usage) {
+	b.mu.Lock()
 	b.runSpent += u.InputTokens + u.OutputTokens
+	b.mu.Unlock()
 	_ = b.store.AddAIUsage(ctx, b.day, u.InputTokens, u.OutputTokens)
+}
+
+// isDegraded reports whether either cap was hit during the run.
+func (b *aiBudget) isDegraded() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.degraded
 }
 
 // runScrapeSource scrapes one source, emitting source-prefixed status events

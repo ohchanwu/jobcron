@@ -111,9 +111,11 @@ func TestRunRerateReconnectReusesCache(t *testing.T) {
 
 // TestRerateProgressesAcrossPressesUnderBudget proves the behavior a user with a
 // large list depends on: when the per-run token budget halts a re-rate partway,
-// the NEXT press skips the already-rated rows (Stage-2 cache hits, no re-spend)
-// and rates the ones after them. Each posting's ScoreDelta is called exactly
-// once across the two presses — never re-rated.
+// each following press skips the already-rated rows (Stage-2 cache hits, no
+// re-spend) and rates the ones after them, until the whole list is done. Each
+// posting's ScoreDelta is called exactly once across all presses — never
+// re-rated — even though the concurrent worker pool can overshoot the per-run
+// cap by a bounded number of calls.
 func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
@@ -124,9 +126,9 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 	now := time.Now().UTC()
-	const total = 4
+	const total = 24
 	for i := 0; i < total; i++ {
-		p := listingPosting("p"+string(rune('1'+i)), "신입 백엔드 개발자")
+		p := listingPosting("p"+string(rune('a'+i)), "신입 백엔드 개발자")
 		p.Description = "서버 개발자를 찾습니다"
 		p.FirstSeenAt, p.LastSeenAt = now, now
 		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
@@ -135,42 +137,53 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 	}
 	stub := rerateStub() // each ScoreDelta debits 60 tokens (50 in + 10 out)
 	srv.SetAIProvider(stub, "test-model")
-	srv.aiRunTokenCap = 90 // tiny: two ScoreDelta calls per run, then halt
+	// Per-run cap ≈ 8 calls (8×60=480), so the run halts well short of `total`.
+	// The concurrent worker pool can overshoot the cap by at most rerateWorkers
+	// calls (workers that pass canSpend before in-flight debits land), so one
+	// press rates somewhere in [8, 8+rerateWorkers] rows — always strictly fewer
+	// than `total`. The daily cap is high so only the run cap binds.
+	srv.aiRunTokenCap = 480
+	srv.aiDailyTokenCap = 1_000_000
 	if _, err := srv.scoreAll(ctx); err != nil {
 		t.Fatalf("scoreAll: %v", err)
 	}
 
-	// Press 1: the run budget halts after two rows.
+	// Press 1 halts partway: the run budget stops it before the whole list.
 	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("press 1: %v", err)
 	}
-	if stub.ScoreDeltaCalls != 2 {
-		t.Fatalf("after press 1: ScoreDelta calls = %d, want 2 (budget halts partway)", stub.ScoreDeltaCalls)
-	}
 	rated1 := countAIScores(t, srv)
-	if rated1 != 2 {
-		t.Fatalf("after press 1: %d rows rated, want 2", rated1)
+	if rated1 == 0 || rated1 >= total {
+		t.Fatalf("press 1 rated %d rows, want a partial run (0 < n < %d): the budget must halt it partway", rated1, total)
+	}
+	if stub.ScoreDeltaCalls != rated1 {
+		t.Fatalf("press 1: %d ScoreDelta calls but %d rows rated — every successful call must cache exactly one row",
+			stub.ScoreDeltaCalls, rated1)
 	}
 
-	// Press 2: the two already-rated rows are cache hits (skipped, no re-spend);
-	// the budget rates the remaining two.
-	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
-		t.Fatalf("press 2: %v", err)
+	// Keep pressing: each press resumes on the still-uncached rows (cache hits
+	// skip the already-rated ones, no re-spend) until the whole list is rated.
+	for press := 2; countAIScores(t, srv) < total; press++ {
+		if press > 20 {
+			t.Fatalf("re-rate did not finish the list within 20 presses (rated %d/%d)", countAIScores(t, srv), total)
+		}
+		if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+			t.Fatalf("press %d: %v", press, err)
+		}
 	}
+
+	// Every row rated exactly once across all presses — never re-rated.
 	if stub.ScoreDeltaCalls != total {
-		t.Fatalf("after press 2: total ScoreDelta calls = %d, want %d (each row rated exactly once, never re-rated)",
+		t.Fatalf("total ScoreDelta calls = %d, want %d (each row rated exactly once, never re-rated)",
 			stub.ScoreDeltaCalls, total)
 	}
-	if rated2 := countAIScores(t, srv); rated2 != total {
-		t.Fatalf("after press 2: %d rows rated, want all %d", rated2, total)
-	}
 
-	// Press 3 (everything cached): no further provider calls at all.
+	// A press over a fully-rated list spends nothing.
 	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
-		t.Fatalf("press 3: %v", err)
+		t.Fatalf("final press: %v", err)
 	}
 	if stub.ScoreDeltaCalls != total {
-		t.Fatalf("press 3 made extra ScoreDelta calls (%d > %d) — a fully-rated list must re-spend nothing",
+		t.Fatalf("final press made extra ScoreDelta calls (%d > %d) — a fully-rated list must re-spend nothing",
 			stub.ScoreDeltaCalls, total)
 	}
 }
