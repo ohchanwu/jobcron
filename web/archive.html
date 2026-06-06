@@ -12,22 +12,6 @@
       } catch (e) {}
     })();
   </script>
-  <script>
-    /* Remember the 관심 공고 sort across visits (per-browser, like the theme).
-       If the URL names a sort, remember it; otherwise apply a remembered 점수순
-       before paint via location.replace, so there's no flash of the default
-       날짜순. Only 점수순 redirects — 날짜순 is the server default already. */
-    (function () {
-      try {
-        var s = new URLSearchParams(location.search).get('sort');
-        if (s === 'score' || s === 'date') {
-          localStorage.setItem('archiveSort', s);
-        } else if (localStorage.getItem('archiveSort') === 'score') {
-          location.replace('/archive?sort=score');
-        }
-      } catch (e) {}
-    })();
-  </script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="stylesheet" href="/static/styles.css">

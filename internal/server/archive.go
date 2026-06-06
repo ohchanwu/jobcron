@@ -72,11 +72,38 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	view.SortMode = normalizeArchiveSort(r.URL.Query().Get("sort"))
+	view.SortMode = resolveArchiveSort(w, r)
 	if view.SortMode == archiveSortScore {
 		view.applyScoreSort()
 	}
 	s.render(w, "archive.html", view)
+}
+
+// archiveSortCookie remembers the 관심 공고 sort per-browser.
+const archiveSortCookie = "archive_sort"
+
+// resolveArchiveSort picks the 관심 공고 sort and remembers it. An explicit
+// ?sort= wins and is written to a per-browser cookie; otherwise the remembered
+// cookie applies; otherwise the 날짜순 default. Doing this server-side (rather
+// than a client-side localStorage redirect) means the right sort renders on the
+// FIRST load — no second round trip, so no white flash on return visits.
+func resolveArchiveSort(w http.ResponseWriter, r *http.Request) string {
+	if q := r.URL.Query().Get("sort"); q != "" {
+		mode := normalizeArchiveSort(q)
+		http.SetCookie(w, &http.Cookie{
+			Name:     archiveSortCookie,
+			Value:    mode,
+			Path:     "/archive",
+			MaxAge:   60 * 60 * 24 * 365, // a year
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		return mode
+	}
+	if c, err := r.Cookie(archiveSortCookie); err == nil {
+		return normalizeArchiveSort(c.Value)
+	}
+	return archiveSortDate
 }
 
 // buildArchive groups every stored posting by its first-seen KST day. The
