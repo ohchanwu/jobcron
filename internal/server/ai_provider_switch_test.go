@@ -15,13 +15,14 @@ import (
 )
 
 // failingScoreDeltaStub is a provider whose ScoreDelta always fails with a typed
-// APIError of the given HTTP status — the shape an OpenAI 404 (bad model) or 401
-// (bad key) takes, the failure a provider switch can leave behind.
-func failingScoreDeltaStub(status int) *ai.StubProvider {
+// APIError of the given HTTP status + body — the shape an OpenAI 404 (bad model),
+// 401 (bad key), or 429 (no quota / rate limit) takes, the failure a provider
+// switch or an unbilled account can leave behind.
+func failingScoreDeltaStub(status int, body string) *ai.StubProvider {
 	return &ai.StubProvider{
 		NameVal: "stub",
 		ScoreDeltaFn: func(ctx context.Context, modelText, profileText string) ([]ai.RawDeltaItem, ai.Usage, error) {
-			return nil, ai.Usage{}, &ai.APIError{Provider: "openai", Status: status, Body: `{"error":{"message":"nope"}}`}
+			return nil, ai.Usage{}, &ai.APIError{Provider: "openai", Status: status, Body: body}
 		},
 	}
 }
@@ -34,17 +35,19 @@ func TestRerateSurfacesProviderError(t *testing.T) {
 	cases := []struct {
 		name    string
 		status  int
+		body    string
 		wantSub string
 	}{
-		{"bad model 404", http.StatusNotFound, "선택한 모델이 이 제공자와 맞지 않아요"},
-		{"bad model 400", http.StatusBadRequest, "선택한 모델이 이 제공자와 맞지 않아요"},
-		{"bad key 401", http.StatusUnauthorized, "AI 키를 확인해주세요"},
-		{"rate limited 429", http.StatusTooManyRequests, "사용량 한도"},
+		{"bad model 404", http.StatusNotFound, `{"error":{"code":"model_not_found"}}`, "선택한 모델이 이 제공자와 맞지 않아요"},
+		{"bad model 400", http.StatusBadRequest, `{"error":{"message":"bad request"}}`, "선택한 모델이 이 제공자와 맞지 않아요"},
+		{"bad key 401", http.StatusUnauthorized, `{"error":{"message":"invalid api key"}}`, "AI 키를 확인해주세요"},
+		{"no quota 429", http.StatusTooManyRequests, `{"error":{"type":"insufficient_quota"}}`, "결제"},
+		{"rate limited 429", http.StatusTooManyRequests, `{"error":{"type":"rate_limit_exceeded"}}`, "잠시"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, _ := seedRerate(t)
-			srv.SetAIProvider(failingScoreDeltaStub(tc.status), "test-model")
+			srv.SetAIProvider(failingScoreDeltaStub(tc.status, tc.body), "test-model")
 
 			rec := httptest.NewRecorder()
 			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
@@ -74,7 +77,8 @@ func TestProviderFailureMessageClassifies(t *testing.T) {
 		{&ai.APIError{Status: http.StatusForbidden}, "AI 키를 확인해주세요"},
 		{&ai.APIError{Status: http.StatusBadRequest}, "선택한 모델이 이 제공자와 맞지 않아요"},
 		{&ai.APIError{Status: http.StatusNotFound}, "선택한 모델이 이 제공자와 맞지 않아요"},
-		{&ai.APIError{Status: http.StatusTooManyRequests}, "사용량 한도"},
+		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"insufficient_quota"}}`}, "결제"},
+		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"rate_limit_exceeded"}}`}, "잠시"},
 		{&ai.APIError{Status: http.StatusInternalServerError}, "(500)"},
 		{errors.New("dial tcp: i/o timeout"), "AI 분석에 실패했어요"},
 	}

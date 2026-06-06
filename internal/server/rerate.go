@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,7 +39,14 @@ func providerFailureMessage(err error) string {
 		case http.StatusBadRequest, http.StatusNotFound:
 			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
 		case http.StatusTooManyRequests:
-			return "AI 제공자의 사용량 한도에 걸렸어요 — 잠시 후 다시 시도해 주세요."
+			// OpenAI overloads 429 for two very different situations. A persistent
+			// billing/credit problem (insufficient_quota) must NOT read as "retry
+			// later" — the user needs to fix billing, not wait. A transient
+			// rate-limit does retry. Distinguish on the error body.
+			if strings.Contains(apiErr.Body, "insufficient_quota") {
+				return "AI 제공자 사용 한도를 초과했어요 — 제공자 계정의 결제·요금제를 확인해주세요."
+			}
+			return "요청이 잠시 몰렸어요 — 잠시 후 다시 시도해 주세요."
 		}
 		return fmt.Sprintf("AI 제공자가 오류를 반환했어요 (%d) — 설정을 확인해 주세요.", apiErr.Status)
 	}
