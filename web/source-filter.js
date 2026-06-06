@@ -15,10 +15,23 @@
    single chokepoint is deliberate: two independent scripts each toggling
    .filter-hidden would fight.
 
-   Filter state is intentionally ephemeral (no localStorage) — opening a page
-   should feel like a fresh briefing, not yesterday's leftover filter. */
+   The active source pill is remembered in localStorage ('sourceFilter') so the
+   choice sticks across navigations and sessions, and across the listing
+   surfaces (/, /archive, /bookmarks, /hidden) that share these pills. It's a
+   per-browser QUICK filter that narrows WITHIN the profile's enabled sources —
+   a separate layer from Profile.DisabledSources (the persistent, cross-device
+   "never show this source" preference set on /profile). The text search box
+   stays ephemeral (a fresh find-again affordance, not a saved view). */
 (function () {
   var ALL_KEY = '_all';
+  var FILTER_KEY = 'sourceFilter';
+
+  function savedSource() {
+    try { return localStorage.getItem(FILTER_KEY); } catch (e) { return null; }
+  }
+  function rememberSource(source) {
+    try { localStorage.setItem(FILTER_KEY, source); } catch (e) {}
+  }
 
   function init() {
     var container = document.getElementById('source-filter');
@@ -49,11 +62,25 @@
     var preSearchOpen = null;
 
     markEmptyPills(container, cards);
+    restoreSavedSource();
+
+    /* Apply a remembered source pill on load. Falls back to 전체 when the saved
+       source has no pill on this page (e.g. a source that was since removed),
+       so a stale value never strands the user on an empty filter. */
+    function restoreSavedSource() {
+      var saved = savedSource();
+      if (!saved || saved === ALL_KEY) return;
+      var esc = (window.CSS && CSS.escape) ? CSS.escape(saved) : saved;
+      if (!container.querySelector('.source-pill[data-source="' + esc + '"]')) return;
+      setActivePill(container, saved);
+      applyFilters();
+    }
 
     container.addEventListener('click', function (e) {
       var pill = e.target.closest('.source-pill');
       if (!pill) return;
       setActivePill(container, pill.dataset.source);
+      rememberSource(pill.dataset.source);
       applyFilters();
     });
     if (searchInput) {
