@@ -3,12 +3,13 @@
 A calm daily job-posting briefing for Korean new-grad (신입) IT job seekers.
 
 `job-scraper` is a single binary that opens a local web app. Click **스크랩 시작**
-and it scrapes four Korean job sources — [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
+and it scrapes Korean job boards — the aggregators [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
 [랠릿 (Rallit)](https://www.rallit.com), [데모데이](https://demoday.co.kr), and
-[당근 (Daangn)](https://team.daangn.com) — scores every new-grad IT posting against
-your profile, and shows a one-page daily briefing — each match explained, no
-notifications, no setup, no account. (A fifth source, 워크넷, turns on with a free
-government API key — see *Usage*.)
+[그리팅 (Greeting)](https://greetinghr.com), plus the company career boards
+[당근 (Daangn)](https://team.daangn.com), 크래프톤, 몰로코, and 센드버드 (via Greenhouse) —
+scores every new-grad IT posting against your profile, and shows a one-page daily
+briefing — each match explained, no notifications, no setup, no account. (워크넷 also
+turns on with a free government API key — see *Usage*.)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png">
@@ -28,9 +29,10 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 
 ## What it does
 
-- **Scrapes four sources** — 점핏, 랠릿, 데모데이, and 당근 (plus 워크넷 with a key) —
-  for 신입 IT postings, one polite request per second, robots.txt respected.
-  Cross-source duplicates collapse onto a single card.
+- **Scrapes several Korean job boards** — 점핏, 랠릿, 데모데이, 그리팅, and the company
+  boards 당근·크래프톤·몰로코·센드버드 (plus 워크넷 with a key) — for 신입 IT postings, one
+  polite request per second, robots.txt respected. Cross-source duplicates collapse
+  onto a single card.
 - **Scores each posting** against a structured profile you fill in once: tech
   stack, career level, location, salary floor, and dealbreaker keywords — each
   category's weight adjustable.
@@ -39,7 +41,8 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 - **Keeps what matters in reach** — a 관심 공고 archive of everything ever scraped,
   북마크 for the ones you're chasing, and a 숨긴 공고 list for the ones you're not.
   Low-scoring postings fold away below a minimum-score line you set.
-- **Filters by source** right on the briefing, so you can read one portal at a time.
+- **Filters by source** right on the briefing, so you can read one portal at a time —
+  and the filter (and the 관심 공고 점수순/날짜순 sort) stick across pages and visits.
 - **Streams the scrape live**, so the slow part becomes the interesting part.
 - **Optional AI scoring (bring your own key).** Add an Anthropic or OpenAI key and
   the briefing gains evidence-cited adjustments — each one backed by a real quote
@@ -115,10 +118,12 @@ Off by default. On the profile form, open **AI 분석 (선택)**, pick a provide
 0600-permission file next to the database — never uploaded, never shown again
 after you save it.
 
-With AI on, postings can carry an **AI 분석** chip you click to see the exact
-quote from the posting that justifies each score adjustment — no quote, no
-adjustment. A per-page **재평가** button re-scores the postings you're looking at
-against your goals, and a daily token budget (which you set) keeps spend bounded.
+With AI on, a scrape automatically rates the briefing's new postings, and each can
+carry an **AI 분석** chip you click to see the exact quote from the posting that
+justifies the adjustment — no quote, no adjustment. A per-page **재평가** button
+re-rates the postings you're looking at (for example after you change your goals,
+or to analyze more than one scrape covered), and a daily token budget (which you
+set) keeps spend bounded.
 
 This is the **v2.0** line and ships as a `-alpha` prerelease while the live
 provider paths get more real-world mileage. Everything else in the app works
