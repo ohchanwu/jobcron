@@ -106,6 +106,37 @@ func DefaultModel(providerName string) string {
 	return defaultModelByProvider[providerName]
 }
 
+// modelsByProvider is the set of selectable model ids per provider, default
+// (cheapest) first. The profile form renders these as a provider-aware dropdown
+// so a model id can never be paired with the wrong provider — the failure mode
+// that, after an Anthropic→OpenAI switch, left a claude-* model pointed at OpenAI
+// and produced a silent 404. The empty "" choice (rendered as "기본값") maps to
+// DefaultModel. Keep each list short and current; a model the provider has
+// retired would 404 just like a cross-provider id.
+var modelsByProvider = map[string][]string{
+	"anthropic": {"claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8"},
+	"openai":    {"gpt-4o-mini", "gpt-4o"},
+}
+
+// ModelsForProvider returns the selectable model ids for a provider (default
+// first), or nil for an unknown provider name. The server renders the current
+// provider's list server-side; ModelsByProvider feeds the client-side swap.
+func ModelsForProvider(providerName string) []string {
+	return modelsByProvider[providerName]
+}
+
+// ModelsByProvider returns a copy of the full provider→models map for the form's
+// client-side dropdown swap (when the user changes the provider select, JS
+// repopulates the model select from this map). A copy keeps the package's map
+// unexported and immutable from the caller.
+func ModelsByProvider() map[string][]string {
+	out := make(map[string][]string, len(modelsByProvider))
+	for k, v := range modelsByProvider {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
+}
+
 // Providers lists the selectable provider ids for the settings UI, in display
 // order.
 func Providers() []string { return []string{"anthropic", "openai"} }

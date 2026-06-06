@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -11,6 +12,38 @@ import (
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
+
+// providerCallError marks a runRerate failure where every attempted row hit an
+// AI provider error (a bad key, a model the provider rejects, a transport
+// failure) — as opposed to a storage/profile failure. handleRerateSSE unwraps it
+// to show a calm, provider-specific message instead of the generic one, so the
+// user who just switched provider learns what to fix rather than seeing a hollow
+// "0/N analyzed."
+type providerCallError struct{ err error }
+
+func (e *providerCallError) Error() string { return e.err.Error() }
+func (e *providerCallError) Unwrap() error { return e.err }
+
+// providerFailureMessage maps an AI provider failure to a calm Korean message.
+// An *ai.APIError is classified by HTTP status — 401/403 reads as a key problem,
+// 400/404 as a model/provider mismatch, 429 as a usage cap — so the BYOK user who
+// just switched provider learns exactly what to fix. Transport/parse errors fall
+// back to a generic retry line. Always non-empty.
+func providerFailureMessage(err error) string {
+	var apiErr *ai.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.Status {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return "AI 키를 확인해주세요 — 키가 올바르지 않거나 권한이 없어요."
+		case http.StatusBadRequest, http.StatusNotFound:
+			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
+		case http.StatusTooManyRequests:
+			return "AI 제공자의 사용량 한도에 걸렸어요 — 잠시 후 다시 시도해 주세요."
+		}
+		return fmt.Sprintf("AI 제공자가 오류를 반환했어요 (%d) — 설정을 확인해 주세요.", apiErr.Status)
+	}
+	return "AI 분석에 실패했어요 — 키와 모델 설정을 확인하거나 잠시 후 다시 시도해 주세요."
+}
 
 // rerateWorkers bounds how many visible rows a 재평가 press analyzes
 // concurrently. The provider's own 1-req/s limiter (internal/ai) spaces
@@ -132,9 +165,10 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 	// done false, so the client always sees a terminal event and the htmx
 	// sse-connect is torn down (no auto-reconnect into a second re-rate).
 	done := false
+	failMsg := "재평가에 실패했어요. 잠시 후 다시 시도해 주세요."
 	defer func() {
 		if !done {
-			sw.event("failed", "재평가에 실패했어요. 잠시 후 다시 시도해 주세요.")
+			sw.event("failed", failMsg)
 		}
 	}()
 
@@ -150,7 +184,14 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	analyzed, visible, err := s.runRerate(ctx, surface, sw.event)
 	if err != nil {
-		return // defer emits "failed"
+		// A provider failure (every attempted row errored) carries a calm,
+		// specific message; a storage/profile failure keeps the generic one. The
+		// defer emits whichever is set into the terminal "failed" event.
+		var pce *providerCallError
+		if errors.As(err, &pce) {
+			failMsg = providerFailureMessage(pce.err)
+		}
+		return
 	}
 	done = true
 	sw.event("done", rerateDoneMessage(analyzed, visible))
@@ -209,13 +250,24 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	emit("status", "AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕")
 
 	budget := s.newAIBudget(ctx)
-	analyzed = s.rateStage2(ctx, postings, prof, budget, emit)
+	var provErr error
+	analyzed, provErr = s.rateStage2(ctx, postings, prof, budget, emit)
 	if budget != nil && budget.isDegraded() {
 		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요.")
+	}
+	if provErr != nil && analyzed > 0 {
+		// Partial: some rows rated, some hit a provider error. Note it before the
+		// done path reloads (the rows that succeeded still render their chips).
+		emit("status", providerFailureMessage(provErr))
 	}
 	emit("status", "점수를 다시 매기는 중...")
 	if _, err := s.scoreAll(ctx); err != nil {
 		return analyzed, visible, err
+	}
+	if analyzed == 0 && provErr != nil {
+		// Every attempted row failed against the provider — surface it so the SSE
+		// terminal is a calm, specific "failed" instead of a hollow "0/N done."
+		return analyzed, visible, &providerCallError{err: provErr}
 	}
 	return analyzed, visible, nil
 }
@@ -234,9 +286,9 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 // limiter still spaces request starts. SSE progress writes stay on this
 // goroutine (a ResponseWriter is not safe for concurrent writes); workers send
 // results to a fully-buffered channel that a closer goroutine ends.
-func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, budget *aiBudget, emit func(event, data string)) (analyzed int) {
+func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, budget *aiBudget, emit func(event, data string)) (analyzed int, provErr error) {
 	if s.ai == nil || budget == nil || len(postings) == 0 {
-		return 0
+		return 0, nil
 	}
 	aiInputHash := profile.AIInputHash(prof)
 	profileText := profile.BuildStage2ProfileText(prof)
@@ -244,7 +296,11 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 	calls := &callCap{max: s.aiPerCallCap}
 	total := len(postings)
 
-	results := make(chan bool, total) // each value: this row is now cached (analyzed)
+	type rerateResult struct {
+		cached bool
+		err    error
+	}
+	results := make(chan rerateResult, total)
 	sem := make(chan struct{}, rerateWorkers)
 	var wg sync.WaitGroup
 	for _, p := range postings {
@@ -253,20 +309,26 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results <- s.rerateOne(ctx, p, aiInputHash, profileText, now, budget, calls)
+			cached, err := s.rerateOne(ctx, p, aiInputHash, profileText, now, budget, calls)
+			results <- rerateResult{cached: cached, err: err}
 		}(p)
 	}
 	go func() { wg.Wait(); close(results) }()
 
 	completed := 0
-	for cached := range results {
+	for r := range results {
 		completed++
-		if cached {
+		if r.cached {
 			analyzed++
+		}
+		// Keep the FIRST provider error as representative — a bad key or mismatched
+		// model fails every row identically, so one classified message is enough.
+		if r.err != nil && provErr == nil {
+			provErr = r.err
 		}
 		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", completed, total))
 	}
-	return analyzed
+	return analyzed, provErr
 }
 
 // rerateOne re-rates a single posting and reports whether it now has a delta
@@ -285,20 +347,21 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 // failing calls can't ignore the cap.
 func (s *Server) rerateOne(
 	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, budget *aiBudget, calls *callCap,
-) (cached bool) {
+) (cached bool, err error) {
 	// Already rated against the current goal text → reuse (reconnect-safe, no
 	// re-spend, free). An empty cached delta still counts as analyzed.
-	if _, ok, err := s.store.AIScore(ctx, p.ID, aiInputHash, s.aiVersion); err == nil && ok {
-		return true
+	if _, ok, e := s.store.AIScore(ctx, p.ID, aiInputHash, s.aiVersion); e == nil && ok {
+		return true, nil
 	}
 	// Uncached: spend only if the token budget has headroom AND the per-call cap
 	// has a free slot. canSpend is checked first so a cap-only miss doesn't mark
-	// the budget degraded. Either miss leaves the row uncached for a later press.
+	// the budget degraded. Either miss leaves the row uncached for a later press —
+	// not an error (no provider call was attempted).
 	if budget == nil || !budget.canSpend() {
-		return false
+		return false, nil
 	}
 	if !calls.tryReserve() {
-		return false
+		return false, nil
 	}
 	// Backfill Stage 1 so career/education facts are AI-grounded too (e.g. rows
 	// scraped before AI was enabled). Best-effort, budget-bounded.
@@ -307,16 +370,19 @@ func (s *Server) rerateOne(
 	sent, _, _ := ai.ModelInput(p)
 	raw, usage, err := s.ai.ScoreDelta(ctx, sent, profileText)
 	if err != nil {
-		return false // provider error → no delta; the reserved slot is spent
+		// Provider error (bad key, mismatched model, transport) → no delta. Return
+		// it so rateStage2 can surface a calm, specific message instead of letting
+		// the failure read as a silent "not analyzed." The reserved slot is spent.
+		return false, err
 	}
 	budget.debit(ctx, usage)
 	// Gate: presence against the SENT (truncated) text, absence against the FULL
 	// Description (S5). Survivors net into the stored delta.
 	delta := ai.GateDelta(raw, sent, p.Description)
 	if err := s.store.UpsertAIScore(ctx, p.ID, aiInputHash, s.aiVersion, delta, now); err != nil {
-		return false
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // visibleForRerate returns the non-dealbreaker postings currently shown on a

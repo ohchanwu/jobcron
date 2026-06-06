@@ -134,7 +134,7 @@
 
         <label>AI 제공자
           <span class="field-hint">키는 이 기기에만 0600 권한 파일로 저장돼요. "없음"이면 일반 점수만 매겨요.</span>
-          <select name="ai_provider">
+          <select name="ai_provider" id="ai-provider-select">
             <option value=""{{if eq .AIProvider ""}} selected{{end}}>없음 (끄기)</option>
             <option value="anthropic"{{if eq .AIProvider "anthropic"}} selected{{end}}>Anthropic (Claude)</option>
             <option value="openai"{{if eq .AIProvider "openai"}} selected{{end}}>OpenAI</option>
@@ -142,8 +142,11 @@
         </label>
 
         <label>모델
-          <span class="field-hint">비워두면 기본값을 써요. 예: claude-haiku-4-5-20251001 / gpt-4o-mini</span>
-          <input type="text" name="ai_model" value="{{.AIModel}}" autocomplete="off">
+          <span class="field-hint">제공자에 맞는 모델 중에서 골라요. "기본값"이면 제공자 기본 모델을 써요.</span>
+          <select name="ai_model" id="ai-model-select">
+            <option value=""{{if eq .AIModel ""}} selected{{end}}>기본값</option>
+            {{range .AIModels}}<option value="{{.}}"{{if eq . $.AIModel}} selected{{end}}>{{.}}</option>{{end}}
+          </select>
         </label>
 
         <label>API 키
@@ -178,8 +181,10 @@
     </form>
   </div>
 
+  <script>window.aiModelOptions = {{.AIModelOptionsJSON}};</script>
   <script src="/static/theme.js"></script>
   <script src="/static/not-interested.js"></script>
   <script src="/static/weight-hint.js" defer></script>
+  <script src="/static/ai-model-select.js" defer></script>
 </body>
 </html>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"sort"
@@ -306,6 +307,8 @@ type profileForm struct {
 	// template, so the secret is never re-rendered (design §5).
 	AIProvider          string // "" | "anthropic" | "openai"
 	AIModel             string
+	AIModels            []string    // selectable models for the CURRENT provider (server-side render)
+	AIModelOptionsJSON  template.JS // provider→[]model map, for the client-side dropdown swap
 	AIKeySaved          bool
 	AIDailyTokenCap     int // raw (0 = use default); the form input value
 	AIDailyCapEffective int // the cap actually in force, for the remaining line
@@ -343,6 +346,13 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profile.Profile) {
 	form.AIDailyCapEffective = p.EffectiveAIDailyTokenCap()
 	form.AIPerCallCapEffect = p.EffectiveAIPerCallCap()
+	// Provider-aware model dropdown: the current provider's models render
+	// server-side; the full map drives the client-side swap when the provider
+	// select changes (so a model id can't be paired with the wrong provider).
+	form.AIModels = ai.ModelsForProvider(p.AIProvider)
+	if b, err := json.Marshal(ai.ModelsByProvider()); err == nil {
+		form.AIModelOptionsJSON = template.JS(b)
+	}
 	if p.AIProvider != "" {
 		if path, err := s.keysPath(); err == nil {
 			if keys, err := ai.LoadKeys(path); err == nil && keys[p.AIProvider] != "" {

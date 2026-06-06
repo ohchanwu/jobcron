@@ -171,6 +171,63 @@ func TestAIScoresByPostingIDBatched(t *testing.T) {
 	})
 }
 
+// TestLatestAIScoresAnyVersionCrossesProviderSwitch is the Bug 1 regression: when
+// the user switches provider/model, ai_version rotates and the version-scoped
+// lookups (AIScoresByPostingID / LatestAIScoresByPostingID) can no longer reach
+// the prior rows. The cross-version fallback must still find a posting's latest
+// delta so the chip persists faded instead of vanishing.
+func TestLatestAIScoresAnyVersionCrossesProviderSwitch(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	const (
+		anthropicVer = "anthropicver"
+		openaiVer    = "openai_ver01"
+	)
+	t0 := time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC)
+
+	id1, _, _ := st.UpsertPosting(ctx, samplePosting())
+	p2 := samplePosting()
+	p2.SourcePostingID = "777"
+	id2, _, _ := st.UpsertPosting(ctx, p2)
+
+	// id1: a single delta rated under the OLD provider's ai_version.
+	if err := st.UpsertAIScore(ctx, id1, "goalhash0001", anthropicVer, sampleDelta(7), t0); err != nil {
+		t.Fatal(err)
+	}
+	// id2: rated under the old version, then re-rated more recently under a NEW
+	// version (e.g. switched provider and back) — newest computed_at should win.
+	if err := st.UpsertAIScore(ctx, id2, "goalhash0001", anthropicVer, sampleDelta(3), t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAIScore(ctx, id2, "goalhash0001", openaiVer, sampleDelta(8), t0.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	// The version-scoped lookup under a THIRD, current ai_version finds nothing —
+	// this is exactly the vanish condition the fallback exists to rescue.
+	scoped, err := st.LatestAIScoresByPostingID(ctx, "currentver01")
+	if err != nil {
+		t.Fatalf("LatestAIScoresByPostingID: %v", err)
+	}
+	if len(scoped) != 0 {
+		t.Fatalf("version-scoped lookup leaked %d rows for an unseen version", len(scoped))
+	}
+
+	anyVer, err := st.LatestAIScoresAnyVersionByPostingID(ctx)
+	if err != nil {
+		t.Fatalf("LatestAIScoresAnyVersionByPostingID: %v", err)
+	}
+	if len(anyVer) != 2 {
+		t.Fatalf("any-version map has %d entries, want 2", len(anyVer))
+	}
+	if anyVer[id1].NetDelta != 7 {
+		t.Fatalf("id1 any-version net = %d, want 7 (the old-provider row, still reachable)", anyVer[id1].NetDelta)
+	}
+	if anyVer[id2].NetDelta != 8 {
+		t.Fatalf("id2 any-version net = %d, want 8 (newest computed_at across versions)", anyVer[id2].NetDelta)
+	}
+}
+
 func TestAIScoreCascadeOnPostingDelete(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()

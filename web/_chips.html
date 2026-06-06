@@ -21,7 +21,7 @@
 {{- if .Evidence}}
   <span class="chip-ai-wrap">
     <button type="button" class="chip chip-ai{{if .Stale}} is-stale{{end}}" aria-expanded="false" aria-label="AI 분석 근거 보기">
-      <span class="chip-label">AI 분석</span>{{template "deltaValue" .Delta}}{{if .Stale}}<span class="chip-stale-note">(이전 프로필 기준)</span>{{end}}<span class="chip-caret" aria-hidden="true">▸</span>
+      <span class="chip-label">AI 분석</span>{{template "deltaValue" .Delta}}{{if .Stale}}<span class="chip-stale-note">(이전 설정 기준)</span>{{end}}<span class="chip-caret" aria-hidden="true">▸</span>
     </button>
     <div class="ai-evidence" hidden>
       {{- range .Evidence}}

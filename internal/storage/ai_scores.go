@@ -150,6 +150,41 @@ ORDER BY posting_id, computed_at DESC`, aiVersion)
 	return out, rows.Err()
 }
 
+// LatestAIScoresAnyVersionByPostingID returns, per posting id, the most recently
+// computed delta REGARDLESS of ai_version (newest computed_at wins). It is the
+// cross-version stale fallback: when a posting has no delta under the current
+// ai_version at all — the case when the user switches provider or model, which
+// rotates ai_version (hash of provider+model+prompt) and orphans every prior row
+// from the version-scoped fresh and stale lookups — the merge falls back here so
+// the chip persists faded ("이전 설정 기준") instead of vanishing. scoreAll
+// prefers the current-version row first (LatestAIScoresByPostingID), so this only
+// supplies rows for postings the current provider/model has never rated.
+func (s *Store) LatestAIScoresAnyVersionByPostingID(
+	ctx context.Context,
+) (map[int64]ai.Delta, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT posting_id, items_json, net_delta
+FROM ai_scores
+ORDER BY posting_id, computed_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query latest ai scores (any version): %w", err)
+	}
+	defer rows.Close()
+	out := map[int64]ai.Delta{}
+	for rows.Next() {
+		var pid int64
+		d, err := scanAIScoreWithID(rows, &pid)
+		if err != nil {
+			return nil, err
+		}
+		if _, seen := out[pid]; seen {
+			continue // ORDER BY computed_at DESC: first row per posting is the latest
+		}
+		out[pid] = d
+	}
+	return out, rows.Err()
+}
+
 // scanAIScore reads items_json + net_delta into an ai.Delta. Stale stays false;
 // the merge layer flips it on the fallback path.
 func scanAIScore(row rowScanner) (ai.Delta, error) {

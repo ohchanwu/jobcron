@@ -282,11 +282,17 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		if vis, verr := s.visibleForRerate(ctx, "today", now); verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
 			rateBudget := s.newAIBudget(ctx)
-			if s.rateStage2(ctx, vis, prof, rateBudget, emit) > 0 {
+			rated, provErr := s.rateStage2(ctx, vis, prof, rateBudget, emit)
+			if rated > 0 {
 				// Merge the fresh Stage-2 deltas into the rendered scores.
 				if rescored, rerr := s.scoreAll(ctx); rerr == nil {
 					res.Scored = rescored
 				}
+			}
+			if provErr != nil {
+				// The auto-rate hit a provider error (bad key/model after a switch).
+				// Surface it calmly inline — the scrape itself still succeeds.
+				emit("status", providerFailureMessage(provErr))
 			}
 			if rateBudget != nil && rateBudget.isDegraded() {
 				emit("status", "오늘 AI 예산을 다 써서 일부 공고는 아직 분석하지 못했어요 — 재평가로 더 볼 수 있어요.")
@@ -512,8 +518,9 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 	// (Stage 1) and on a 재평가 (Stage 2, T7).
 	var (
 		exts         map[int64]ai.Extraction
-		freshDeltas  map[int64]ai.Delta // keyed by the CURRENT goal text (ai_input_hash)
-		latestDeltas map[int64]ai.Delta // newest per posting, any goal text — the stale fallback
+		freshDeltas  map[int64]ai.Delta // keyed by the CURRENT goal text (ai_input_hash) + current ai_version
+		latestDeltas map[int64]ai.Delta // newest per posting under the current ai_version, any goal text — stale fallback for a goal edit
+		anyVerDeltas map[int64]ai.Delta // newest per posting across ANY ai_version — stale fallback for a provider/model switch
 	)
 	if s.ai != nil {
 		exts, err = s.store.AIExtractionsByPostingID(ctx, s.aiVersion)
@@ -529,20 +536,36 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+		// Cross-version fallback: when the user switches provider/model, ai_version
+		// rotates and orphans every prior row from the two version-scoped lookups
+		// above. Without this, the AI chip would VANISH on a provider switch; with
+		// it, the latest prior reading persists faded ("이전 설정 기준") until a
+		// 재평가 refreshes it under the new provider/model.
+		anyVerDeltas, err = s.store.LatestAIScoresAnyVersionByPostingID(ctx)
+		if err != nil {
+			return 0, err
+		}
 	}
 	for _, p := range postings {
 		var ext *ai.Extraction
 		if e, ok := exts[p.ID]; ok {
 			ext = &e
 		}
-		// Prefer a delta computed against the CURRENT goal text (fresh); else
-		// fall back to the latest delta from a prior goal text, marked Stale so
-		// the chip reads "(이전 프로필 기준)" — still summed into the Total (T1).
+		// Prefer a delta computed against the CURRENT goal text + provider/model
+		// (fresh). Else fall back, marked Stale (still summed into the Total — T1),
+		// so the chip reads "(이전 설정 기준)": first to the latest row under the
+		// current ai_version (a goal edit), then to the latest row under ANY
+		// ai_version (a provider/model switch, which rotated ai_version and orphaned
+		// the prior rows). The cross-version tier is what keeps the chip from
+		// vanishing when the user changes provider.
 		var delta *ai.Delta
 		if d, ok := freshDeltas[p.ID]; ok {
 			d.Stale = false
 			delta = &d
 		} else if d, ok := latestDeltas[p.ID]; ok {
+			d.Stale = true
+			delta = &d
+		} else if d, ok := anyVerDeltas[p.ID]; ok {
 			d.Stale = true
 			delta = &d
 		}

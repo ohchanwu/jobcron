@@ -90,8 +90,18 @@ func TestCompleteNon200IsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newHTTPProvider: %v", err)
 	}
-	if _, _, err := p.complete(context.Background(), "s", "u"); err == nil {
+	_, _, err = p.complete(context.Background(), "s", "u")
+	if err == nil {
 		t.Fatal("a 401 response must be an error")
+	}
+	// The status must survive as a typed *APIError so the server can tell a 401
+	// (bad key) from a 404 (bad model) and surface a specific, calm message.
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("non-2xx must be an *APIError, got %T: %v", err, err)
+	}
+	if apiErr.Status != http.StatusUnauthorized {
+		t.Fatalf("APIError.Status = %d, want 401", apiErr.Status)
 	}
 }
 

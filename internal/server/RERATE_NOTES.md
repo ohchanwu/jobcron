@@ -54,6 +54,17 @@ This is what makes a second 재평가 press *advance* the counter: it picks up e
 the Case-B rows. Intermittent `ScoreDelta` failures (seen live against real
 providers) land here and recover on a later press.
 
+**Provider errors are no longer silent.** A `ScoreDelta` error now propagates out
+of `rerateOne` (it returns `(false, err)`, not a swallowed `false`). `rateStage2`
+keeps the first such error and `runRerate` surfaces it: if **every** attempted row
+failed (`analyzed == 0`), the SSE terminal is a calm, classified `failed` event —
+`providerFailureMessage` maps a 401/403 to "AI 키를 확인해주세요", a 400/404 to
+"선택한 모델이 이 제공자와 맞지 않아요" (the mismatched-model trap a provider switch
+leaves behind), a 429 to a usage-cap line — instead of a hollow `done` with `0/M`.
+A *partial* failure still reloads (the rows that succeeded render) but emits a
+status note first. The cache behavior above is unchanged: a failed row writes no
+`ai_scores` row and is retried on the next press.
+
 ## The N/M indicator is the signal that separates them
 
 On the page, Case A and Case B both show no card. The `AI 분석 N/M` indicator is

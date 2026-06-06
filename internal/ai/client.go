@@ -129,9 +129,25 @@ func (p *httpProvider) complete(ctx context.Context, system, user string) (strin
 		return "", Usage{}, fmt.Errorf("ai: %s read response: %w", p.spec.name, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", Usage{}, fmt.Errorf("ai: %s status %d: %s", p.spec.name, resp.StatusCode, truncateForError(respBody))
+		return "", Usage{}, &APIError{Provider: p.spec.name, Status: resp.StatusCode, Body: string(respBody)}
 	}
 	return p.spec.parseResp(respBody)
+}
+
+// APIError is a non-2xx response from a provider's API. It carries the HTTP
+// status so a caller can tell a 401 (bad key) from a 404 (model not found) and
+// surface a specific, calm message — the difference the BYOK user needs when a
+// provider switch leaves a mismatched model or key behind. Match it with
+// errors.As. Error() keeps the historical "ai: <provider> status <n>: <body>"
+// shape so existing log lines and string assertions are unchanged.
+type APIError struct {
+	Provider string
+	Status   int
+	Body     string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("ai: %s status %d: %s", e.Provider, e.Status, truncateForError([]byte(e.Body)))
 }
 
 // truncateForError trims a response body for inclusion in an error message so
