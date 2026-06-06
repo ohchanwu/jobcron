@@ -109,3 +109,29 @@ func DefaultModel(providerName string) string {
 // Providers lists the selectable provider ids for the settings UI, in display
 // order.
 func Providers() []string { return []string{"anthropic", "openai"} }
+
+// suggestedRateLimit is the per-provider minimum spacing between live requests,
+// tuned to each provider's entry-tier requests-per-minute ceiling so a BYOK user
+// on a fresh key doesn't trip 429s:
+//
+//   - anthropic: ~50 req/min on the tier-1 (entry) Claude limits → 1.2s spacing.
+//   - openai: hundreds of req/min on entry tiers → 200ms, so the 재평가 worker
+//     pool (rerateWorkers), not the limiter, becomes the throughput bound.
+//
+// The limiter only spaces request STARTS — waitForRateLimit releases its lock
+// before sleeping — so concurrent pool calls still overlap. A 429 is not fatal:
+// the caller falls back to the row's regex score and retries on the next press.
+var suggestedRateLimit = map[string]time.Duration{
+	"anthropic": 1200 * time.Millisecond,
+	"openai":    200 * time.Millisecond,
+}
+
+// SuggestedRateLimit returns the default request spacing for a provider, falling
+// back to a conservative 1s for an unknown name. The server passes this to New
+// so pacing matches the chosen provider's rate limits.
+func SuggestedRateLimit(providerName string) time.Duration {
+	if d, ok := suggestedRateLimit[providerName]; ok {
+		return d
+	}
+	return time.Second
+}

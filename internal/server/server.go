@@ -41,10 +41,6 @@ const (
 // input.)
 const defaultRunTokenCap = 150_000
 
-// aiRateLimit paces live provider calls, mirroring the scrapers' 1-req/s
-// politeness. Tests pass 0 to the provider constructor to disable pacing.
-const aiRateLimit = time.Second
-
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
 type Server struct {
 	store   *storage.Store
@@ -134,7 +130,7 @@ func (s *Server) ReconfigureAI(ctx context.Context) error {
 	if model == "" {
 		model = ai.DefaultModel(prof.AIProvider)
 	}
-	p, err := ai.New(prof.AIProvider, key, model, aiRateLimit)
+	p, err := ai.New(prof.AIProvider, key, model, ai.SuggestedRateLimit(prof.AIProvider))
 	if err != nil {
 		s.SetAIProvider(nil, "")
 		return err
@@ -261,10 +257,10 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		emit("status", fmt.Sprintf("다른 사이트에 똑같이 올라온 공고 %d개를 묶었어요", duplicates))
 	}
 
-	// Cold-start banner (D6): if the per-run AI budget ran out mid-scrape, some
-	// postings were scored by regex instead of AI. A mixed briefing is fine —
-	// surface it calmly, never as a failure.
-	if budget != nil && budget.degraded {
+	// Cold-start banner (D6): if the per-run AI budget ran out mid-scrape during
+	// Stage-1 extraction, some postings were scored by regex instead of AI. A
+	// mixed briefing is fine — surface it calmly, never as a failure.
+	if budget != nil && budget.isDegraded() {
 		emit("status", "오늘 AI 예산을 다 써서 일부는 일반 점수로 분석했어요.")
 	}
 
@@ -274,6 +270,29 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		return res, err
 	}
 	res.Scored = scored
+
+	// Auto-rate the fresh briefing with Stage-2 so new postings show their
+	// evidence-cited AI chip without a manual 재평가. Runs AFTER the offline
+	// scoreAll (so "visible" reflects real scores), over the today surface only,
+	// through the same worker pool as 재평가. A fresh run budget gives Stage-2 its
+	// own per-run cap; the daily cap still accounts for the scrape's Stage-1 spend
+	// (newAIBudget re-reads the ledger). aiPerCallCap bounds the spend per scrape;
+	// the rest stays for a manual 재평가.
+	if s.ai != nil && profileOK {
+		if vis, verr := s.visibleForRerate(ctx, "today", now); verr == nil && len(vis) > 0 {
+			emit("status", "새 공고를 AI로 분석하는 중...")
+			rateBudget := s.newAIBudget(ctx)
+			if s.rateStage2(ctx, vis, prof, rateBudget, emit) > 0 {
+				// Merge the fresh Stage-2 deltas into the rendered scores.
+				if rescored, rerr := s.scoreAll(ctx); rerr == nil {
+					res.Scored = rescored
+				}
+			}
+			if rateBudget != nil && rateBudget.isDegraded() {
+				emit("status", "오늘 AI 예산을 다 써서 일부 공고는 아직 분석하지 못했어요 — 재평가로 더 볼 수 있어요.")
+			}
+		}
+	}
 	return res, nil
 }
 

@@ -209,16 +209,42 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	emit("status", "AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕")
 
 	budget := s.newAIBudget(ctx)
+	analyzed = s.rateStage2(ctx, postings, prof, budget, emit)
+	if budget != nil && budget.isDegraded() {
+		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요.")
+	}
+	emit("status", "점수를 다시 매기는 중...")
+	if _, err := s.scoreAll(ctx); err != nil {
+		return analyzed, visible, err
+	}
+	return analyzed, visible, nil
+}
+
+// rateStage2 runs the Stage-2 ScoreDelta over `postings` through the bounded
+// worker pool (rerateWorkers), committing each delta before moving on, and
+// returns the count now cached against the current goal. It is shared by the
+// 재평가 handler (runRerate) and the scrape's end-of-run auto-rate pass
+// (runScrape), so a fresh briefing shows its AI chips without a manual 재평가.
+// The caller owns the budget — so a scrape and a 재평가 each scope their own run
+// cap — and the scoreAll merge that follows. The per-call cap (aiPerCallCap)
+// bounds how many not-yet-cached rows one pass spends on, exactly as a 재평가
+// press does; cached rows are free.
+//
+// The per-row LLM latencies overlap (cutting wall-time ~4×); the provider's
+// limiter still spaces request starts. SSE progress writes stay on this
+// goroutine (a ResponseWriter is not safe for concurrent writes); workers send
+// results to a fully-buffered channel that a closer goroutine ends.
+func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, budget *aiBudget, emit func(event, data string)) (analyzed int) {
+	if s.ai == nil || budget == nil || len(postings) == 0 {
+		return 0
+	}
 	aiInputHash := profile.AIInputHash(prof)
 	profileText := profile.BuildStage2ProfileText(prof)
 	now := time.Now().UTC()
 	calls := &callCap{max: s.aiPerCallCap}
+	total := len(postings)
 
-	// Fan the rows out across the pool; collect results on this goroutine so the
-	// SSE progress writes stay single-threaded (a ResponseWriter is not safe for
-	// concurrent writes). results is fully buffered so a worker never blocks
-	// sending, and a closer goroutine ends the range once all workers finish.
-	results := make(chan bool, visible) // each value: this row is now cached (analyzed)
+	results := make(chan bool, total) // each value: this row is now cached (analyzed)
 	sem := make(chan struct{}, rerateWorkers)
 	var wg sync.WaitGroup
 	for _, p := range postings {
@@ -238,16 +264,9 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 		if cached {
 			analyzed++
 		}
-		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", completed, visible))
+		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", completed, total))
 	}
-	if budget != nil && budget.isDegraded() {
-		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요.")
-	}
-	emit("status", "점수를 다시 매기는 중...")
-	if _, err := s.scoreAll(ctx); err != nil {
-		return analyzed, visible, err
-	}
-	return analyzed, visible, nil
+	return analyzed
 }
 
 // rerateOne re-rates a single posting and reports whether it now has a delta

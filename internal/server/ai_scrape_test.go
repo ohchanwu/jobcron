@@ -44,6 +44,42 @@ func aiExtractionCount(t *testing.T, srv *Server) int {
 	return len(m)
 }
 
+// TestRunScrapeAutoRatesFreshBriefingWithStage2 proves the fix: a scrape now
+// runs Stage-2 over the fresh briefing, so new postings carry their evidence-
+// cited AI delta WITHOUT a manual 재평가 press.
+func TestRunScrapeAutoRatesFreshBriefingWithStage2(t *testing.T) {
+	mkDetail := func(id, title string) scraper.Posting {
+		p := listingPosting(id, title)
+		p.Description = "서버 개발자를 찾습니다" // the quote rerateStub cites → the gate keeps the delta
+		return p
+	}
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "백엔드 신입"), listingPosting("2", "서버 신입")},
+		details: map[string]scraper.Posting{
+			"1": mkDetail("1", "백엔드 신입"),
+			"2": mkDetail("2", "서버 신입"),
+		},
+	}
+	srv, st := newTestServer(t, f)
+	srv.SetAIProvider(rerateStub(), "test-model") // ScoreDeltaFn set; Stage-1 backfill errors harmlessly
+	ctx := context.Background()
+	zero := 0
+	pj, _ := profile.Marshal(profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"})
+	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+		t.Fatalf("runScrape: %v", err)
+	}
+
+	// Both fresh, visible postings should have a Stage-2 delta cached against the
+	// current goal — no 재평가 needed.
+	if n := countAIScores(t, srv); n != 2 {
+		t.Fatalf("after scrape: %d Stage-2 deltas cached, want 2 (auto-rated, no manual 재평가)", n)
+	}
+}
+
 func TestRunScrapeStubProviderExtractsNewPostings(t *testing.T) {
 	f := &fakeScraper{
 		listing: []scraper.Posting{listingPosting("1", "백엔드 신입"), listingPosting("2", "AI 신입")},
