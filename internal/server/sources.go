@@ -8,11 +8,14 @@ import "github.com/ohchanwu/job-scraper/internal/scraper"
 // source ID itself rather than throwing, so a freshly added scraper still
 // renders something readable until the label is filled in.
 var sourceLabels = map[string]string{
-	"jumpit":  "점핏",
-	"worknet": "워크넷",
-	"rallit":  "랠릿",
-	"demoday": "데모데이",
-	"daangn":  "당근",
+	"jumpit":   "점핏",
+	"worknet":  "워크넷",
+	"rallit":   "랠릿",
+	"demoday":  "데모데이",
+	"daangn":   "당근",
+	"krafton":  "크래프톤",
+	"moloco":   "몰로코",
+	"sendbird": "센드버드",
 }
 
 // sourceLabel returns the user-facing display name for a source identifier,

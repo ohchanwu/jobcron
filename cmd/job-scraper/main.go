@@ -1,7 +1,7 @@
 // Command job-scraper runs the 신입 IT Job Briefing — a local web app that
-// scrapes several Korean job boards (점핏, 랠릿, 데모데이, 당근, and optionally
-// 워크넷), scores new-grad IT job postings against a user profile, and renders a
-// calm one-page daily briefing.
+// scrapes several Korean job boards (점핏, 랠릿, 데모데이, the Greenhouse company
+// boards 당근·크래프톤·몰로코·센드버드, and optionally 워크넷), scores new-grad IT job
+// postings against a user profile, and renders a calm one-page daily briefing.
 package main
 
 import (
@@ -20,8 +20,8 @@ import (
 	"github.com/pkg/browser"
 
 	"github.com/ohchanwu/job-scraper/internal/scraper"
-	"github.com/ohchanwu/job-scraper/internal/scraper/daangn"
 	"github.com/ohchanwu/job-scraper/internal/scraper/demoday"
+	"github.com/ohchanwu/job-scraper/internal/scraper/greenhouse"
 	"github.com/ohchanwu/job-scraper/internal/scraper/jumpit"
 	"github.com/ohchanwu/job-scraper/internal/scraper/rallit"
 	"github.com/ohchanwu/job-scraper/internal/scraper/worknet"
@@ -52,7 +52,12 @@ func main() {
 	}
 	defer store.Close()
 
-	sources := []scraper.Scraper{jumpit.New(), rallit.New(), demoday.New(), daangn.New()}
+	// 당근·크래프톤·몰로코·센드버드 all ride the shared Greenhouse adapter — each
+	// is one company board registered as its own source (own badge + toggle).
+	sources := []scraper.Scraper{
+		jumpit.New(), rallit.New(), demoday.New(),
+		greenhouse.Daangn(), greenhouse.Krafton(), greenhouse.Moloco(), greenhouse.Sendbird(),
+	}
 	if *worknetKey != "" {
 		wn, err := worknet.New(*worknetKey)
 		if err != nil {
@@ -61,7 +66,7 @@ func main() {
 		sources = append(sources, wn)
 	} else {
 		fmt.Println("job-scraper: 워크넷 key가 없어 워크넷 출처는 꺼져 있어요",
-			"(점핏·랠릿·데모데이·당근은 켜져 있어요).",
+			"(점핏·랠릿·데모데이·당근·크래프톤·몰로코·센드버드는 켜져 있어요).",
 			"워크넷도 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
