@@ -1,5 +1,7 @@
 # Feature Ideas — Parked
 
+_[한국어로 보기 🇰🇷](feature-ideas.ko.md)_
+
 Things we discussed but explicitly cut from v1 to protect scope. Each entry should answer: what is it, why we want it, why it's not v1, and what triggers building it.
 
 ---
