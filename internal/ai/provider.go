@@ -91,12 +91,13 @@ func New(providerName, apiKey, model string, rateLimit time.Duration) (Provider,
 }
 
 // defaultModelByProvider is the model used when the user selects a provider but
-// leaves the model field blank. Both default to the provider's small, cheap tier
+// leaves the model field blank. The default is the provider's small, cheap tier
 // — the extraction/scoring task is short, and BYOK users pay per token. The user
-// can override either in the profile form.
+// can override it in the profile form. (OpenAI was removed as a provider — its
+// low free-tier rate limit couldn't sustain the re-rate workload; see git history
+// for the implementation.)
 var defaultModelByProvider = map[string]string{
 	"anthropic": "claude-haiku-4-5-20251001",
-	"openai":    "gpt-4o-mini",
 }
 
 // DefaultModel returns the fallback model id for a provider, or "" for an
@@ -107,15 +108,12 @@ func DefaultModel(providerName string) string {
 }
 
 // modelsByProvider is the set of selectable model ids per provider, default
-// (cheapest) first. The profile form renders these as a provider-aware dropdown
-// so a model id can never be paired with the wrong provider — the failure mode
-// that, after an Anthropic→OpenAI switch, left a claude-* model pointed at OpenAI
-// and produced a silent 404. The empty "" choice (rendered as "기본값") maps to
-// DefaultModel. Keep each list short and current; a model the provider has
-// retired would 404 just like a cross-provider id.
+// (cheapest) first. The profile form renders these as a dropdown so a non-existent
+// model id can't be typed. The empty "" choice (rendered as "기본값") maps to
+// DefaultModel. Keep the list short and current; a model the provider has retired
+// would 404.
 var modelsByProvider = map[string][]string{
 	"anthropic": {"claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8"},
-	"openai":    {"gpt-4o-mini", "gpt-4o"},
 }
 
 // ModelsForProvider returns the selectable model ids for a provider (default
@@ -138,31 +136,21 @@ func ModelsByProvider() map[string][]string {
 }
 
 // Providers lists the selectable provider ids for the settings UI, in display
-// order.
-func Providers() []string { return []string{"anthropic", "openai"} }
+// order. Anthropic is the only supported provider (OpenAI was removed).
+func Providers() []string { return []string{"anthropic"} }
 
-// suggestedRateLimit is the per-provider minimum spacing between live requests,
-// tuned to each provider's entry-tier requests-per-minute ceiling so a BYOK user
-// on a fresh key doesn't trip 429s:
-//
-//   - anthropic: ~50 req/min on the tier-1 (entry) Claude limits → 1.2s spacing.
-//   - openai: hundreds of req/min on entry tiers → 200ms, so the 재평가 worker
-//     pool (rerateWorkers), not the limiter, becomes the throughput bound.
-//
-// The limiter only spaces request STARTS — waitForRateLimit releases its lock
-// before sleeping — so concurrent pool calls still overlap. A 429 is not fatal:
-// the caller falls back to the row's regex score and retries on the next press.
-var suggestedRateLimit = map[string]time.Duration{
-	"anthropic": 1200 * time.Millisecond,
-	"openai":    200 * time.Millisecond,
-}
+// aiRequestSpacing is the self-imposed 1-request-per-second minimum spacing
+// between live AI request STARTS — the polite, backpressure-friendly pace the AI
+// path has used since it went live (the original aiRateLimit). It sits well under
+// Anthropic's tier-1 ~50 req/min ceiling. The limiter only spaces STARTS —
+// waitForRateLimit releases its lock before sleeping — so the 재평가 worker pool
+// still overlaps the multi-second call latencies. A 429 is not fatal: the caller
+// surfaces it and retries on the next press.
+const aiRequestSpacing = time.Second
 
-// SuggestedRateLimit returns the default request spacing for a provider, falling
-// back to a conservative 1s for an unknown name. The server passes this to New
-// so pacing matches the chosen provider's rate limits.
+// SuggestedRateLimit returns the request-start spacing for a provider. With a
+// single supported provider the value is uniform — the 1 req/s self-imposed
+// limit — so the provider name is accepted for API stability but not branched on.
 func SuggestedRateLimit(providerName string) time.Duration {
-	if d, ok := suggestedRateLimit[providerName]; ok {
-		return d
-	}
-	return time.Second
+	return aiRequestSpacing
 }

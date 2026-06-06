@@ -305,7 +305,7 @@ type profileForm struct {
 	// AI settings (v2.0 BYOK). The API key value is NEVER placed here — only
 	// AIKeySaved (whether a key exists for the selected provider) crosses to the
 	// template, so the secret is never re-rendered (design §5).
-	AIProvider          string // "" | "anthropic" | "openai"
+	AIProvider          string // "" | "anthropic"
 	AIModel             string
 	AIModels            []string    // selectable models for the CURRENT provider (server-side render)
 	AIModelOptionsJSON  template.JS // provider→[]model map, for the client-side dropdown swap
@@ -461,8 +461,6 @@ func aiProviderValue(v string) string {
 	switch strings.TrimSpace(v) {
 	case "anthropic":
 		return "anthropic"
-	case "openai":
-		return "openai"
 	default:
 		return ""
 	}

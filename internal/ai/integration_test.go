@@ -16,7 +16,6 @@ import (
 // CI and never spend tokens without an explicit opt-in. Run one with:
 //
 //	JOBSCRAPER_ANTHROPIC_KEY=sk-ant-... go test -tags integration -run Live ./internal/ai/
-//	JOBSCRAPER_OPENAI_KEY=sk-...        go test -tags integration -run Live ./internal/ai/
 //
 // They confirm the REAL request/response shape and JSON-mode parsing — the
 // external-surface check a stub cannot give: that the live model honors the
@@ -94,8 +93,4 @@ func runLiveContract(t *testing.T, p Provider) {
 
 func TestLiveAnthropic(t *testing.T) {
 	runLiveContract(t, liveProvider(t, "anthropic", "JOBSCRAPER_ANTHROPIC_KEY", DefaultModel("anthropic")))
-}
-
-func TestLiveOpenAI(t *testing.T) {
-	runLiveContract(t, liveProvider(t, "openai", "JOBSCRAPER_OPENAI_KEY", DefaultModel("openai")))
 }

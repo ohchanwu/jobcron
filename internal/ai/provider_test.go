@@ -30,25 +30,21 @@ func TestModelsByProviderReturnsACopy(t *testing.T) {
 	// Mutating the returned map/slices must not corrupt the package's source of
 	// truth — the form marshals this map to JSON every render.
 	m["anthropic"][0] = "tampered"
-	delete(m, "openai")
+	m["injected"] = []string{"x"}
 	if ModelsForProvider("anthropic")[0] == "tampered" {
 		t.Error("ModelsByProvider leaked a shared slice — caller mutation reached package state")
 	}
-	if ModelsForProvider("openai") == nil {
-		t.Error("ModelsByProvider leaked a shared map — caller deletion reached package state")
+	if ModelsForProvider("injected") != nil {
+		t.Error("ModelsByProvider leaked a shared map — caller insertion reached package state")
 	}
 }
 
 func TestSuggestedRateLimit(t *testing.T) {
-	cases := map[string]time.Duration{
-		"anthropic": 1200 * time.Millisecond, // ~50 req/min — tier-1 entry ceiling
-		"openai":    200 * time.Millisecond,  // headroom; the pool becomes the bound
-		"unknown":   time.Second,             // conservative fallback
-		"":          time.Second,
-	}
-	for provider, want := range cases {
-		if got := SuggestedRateLimit(provider); got != want {
-			t.Errorf("SuggestedRateLimit(%q) = %v, want %v", provider, got, want)
+	// A single supported provider → the uniform 1-request-per-second self-imposed
+	// spacing, regardless of the name passed.
+	for _, provider := range []string{"anthropic", "unknown", ""} {
+		if got := SuggestedRateLimit(provider); got != time.Second {
+			t.Errorf("SuggestedRateLimit(%q) = %v, want 1s", provider, got)
 		}
 	}
 }

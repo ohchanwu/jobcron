@@ -1,11 +1,10 @@
 /* Provider-aware model dropdown. When the user changes the AI provider select,
    repopulate the model select with that provider's models (plus a "기본값"
    option that maps to the empty value → the server's per-provider default).
-
-   This is what makes a mismatched model structurally impossible: a claude-* id
-   can never stay selected after switching to OpenAI, which is what produced the
-   silent 404 on 재평가 before. The full provider→models map is injected by the
-   template as window.aiModelOptions. */
+   Toggling the provider to "없음" (off) empties the model list. The full
+   provider→models map is injected by the template as window.aiModelOptions.
+   (Anthropic is currently the only provider; the swap stays provider-aware so a
+   second provider would just slot back in.) */
 (function () {
   var options = window.aiModelOptions || {};
   var provider = document.getElementById('ai-provider-select');

@@ -67,7 +67,7 @@ type Profile struct {
 	MinScore *int `json:"min_score,omitempty"`
 
 	// AI settings (v2.0 BYOK). Non-secret app config: the active provider
-	// ("anthropic"|"openai"; empty = AI off), the model id, and the rolling
+	// ("anthropic"; empty = AI off), the model id, and the rolling
 	// daily token cap (0 = DefaultDailyTokenCap). The API key itself lives in
 	// the 0600 ai_keys.json, NEVER here. These are deliberately NOT read by
 	// BuildStage2ProfileText, so changing the cap or model never churns the
