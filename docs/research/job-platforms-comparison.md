@@ -1,5 +1,7 @@
 # 데모데이 vs 랠릿 vs 점핏: A Comparative Report for the 신입 (New-Grad) IT Job Seeker
 
+_[한국어로 보기 🇰🇷](job-platforms-comparison.ko.md)_
+
 ## Executive summary
 
 데모데이 (Demoday, demoday.co.kr) lists far more jobs than 랠릿 (Rallit) and 점핏 (Jumpit) not because it is a bigger or better recruiting product, but because it is a fundamentally *different kind of site*: a broad 창업 정보 플랫폼 (startup-information platform) running since 2012, where job posting is one free feature sitting beside investment data, company rankings, business-model analysis, funding insights, and a community [0][1][2][3][17][18][19][20]. By contrast, 점핏 is Saramin's developer-only recruiting platform with a paid, success-fee business model (7% of the hire's annual salary) [8][9][10][11][12], and 랠릿 is 인프랩's (Inflab's) IT-talent platform — the company behind the 인프런 (Inflearn) e-learning service — scoped to IT roles and marketing itself around postings from "companies vetted within the industry" [14][15][16]. The verified evidence supports two of the three drivers of 데모데이's higher count cleanly (free-to-post vs paid, and all-job-functions vs developer-only) and the third (curation/staleness gap) partially. The practical consequence for a backend-leaning 신입 (e.g., Go / MySQL / vanilla JavaScript): 데모데이's bigger number is mostly noise to scan, not signal to chase — the dedicated tech platforms (점핏, 랠릿, plus 원티드) give a higher hit-rate per minute spent.
