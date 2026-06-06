@@ -12,6 +12,7 @@ var sourceLabels = map[string]string{
 	"worknet":  "워크넷",
 	"rallit":   "랠릿",
 	"demoday":  "데모데이",
+	"greeting": "그리팅",
 	"daangn":   "당근",
 	"krafton":  "크래프톤",
 	"moloco":   "몰로코",

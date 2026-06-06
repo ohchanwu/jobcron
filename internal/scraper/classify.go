@@ -49,3 +49,14 @@ var devKeywordKO = []string{
 	"머신러닝",
 	"모바일", "안드로이드",
 }
+
+// IsKoreaLocation reports whether a work-location string names a Korea-based
+// place. Multinational sources (Greenhouse, Greeting tenants like 무신사·캐시워크
+// with overseas offices) list non-Korea locations we don't want; a posting
+// open to a Korean city among several still matches. Case-insensitive over a
+// mix of romanized and Hangul city/region markers.
+func IsKoreaLocation(location string) bool {
+	return koreaLoc.MatchString(location)
+}
+
+var koreaLoc = regexp.MustCompile(`(?i)(seoul|pangyo|incheon|busan|daejeon|daegu|gwangju|ulsan|sejong|gyeonggi|seongnam|bundang|songpa|gangnam|jeju|korea|대한민국|한국|서울|판교|성남|분당|송파|강남|부산|인천|대전|대구|광주|울산|세종|경기|제주)`)

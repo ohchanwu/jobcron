@@ -197,11 +197,6 @@ func hasSeniorMarker(title string) bool {
 	return false
 }
 
-// koreaLoc matches a Korea-based work location. Multinational boards list
-// non-Korea offices we don't want; a posting open to Seoul among several
-// cities still matches.
-var koreaLoc = regexp.MustCompile(`(?i)(seoul|pangyo|incheon|busan|daejeon|daegu|gwangju|gyeonggi|seongnam|bundang|songpa|gangnam|korea|서울|판교|성남|분당|송파|강남|부산|인천|대전|대구|광주|경기|한국)`)
-
 func isKorea(location string) bool {
-	return koreaLoc.MatchString(location)
+	return scraper.IsKoreaLocation(location)
 }
