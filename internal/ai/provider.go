@@ -139,23 +139,23 @@ func ModelsByProvider() map[string][]string {
 // order. Anthropic is the only supported provider (OpenAI was removed).
 func Providers() []string { return []string{"anthropic"} }
 
-// aiRequestSpacing is the self-imposed 1-request-per-second minimum spacing
-// between live AI request STARTS — the polite, backpressure-friendly pace the AI
-// path has used since it went live (the original aiRateLimit). When the 재평가
-// worker pool keeps it saturated this is ~60 req/min; a live measurement
-// (2026-06-08, Haiku, real corpus) saw ~1-2 HTTP 429s per 40-call burst at this
-// pace — occasional, not persistent, and almost certainly input-tokens-per-minute
-// driven (~2k input tokens/call). Loosening to 1.5s cleared the 429s in testing
-// but cost ~50% wall-clock; 1s is kept because real re-rates are small (a 429 is
-// rare in daily use), and a 429 is not fatal — the caller surfaces it and the row
-// retries on the next press. See internal/ai/AI_TUNING_NOTES.md for the data.
-// The limiter only spaces STARTS — waitForRateLimit releases its lock before
-// sleeping — so the worker pool still overlaps the multi-second call latencies.
-const aiRequestSpacing = time.Second
+// aiRequestSpacing is the self-imposed minimum spacing between live AI request
+// STARTS — the polite, backpressure-friendly pace the AI path has used since it
+// went live (originally 1s, the aiRateLimit). A live measurement (2026-06-08,
+// Haiku, real corpus) saw ~1-2 HTTP 429s per 40-call burst at 1s (~60 req/min) —
+// occasional, not persistent, and almost certainly input-tokens-per-minute
+// driven (~2k input tokens/call). 1.5s cleared the 429s entirely but cost ~50%
+// wall-clock, so this was loosened to 1.2s (~50 req/min) as the middle ground:
+// most of the 429 relief for a modest latency cost. A 429 is not fatal either —
+// the caller surfaces it and the row retries on the next press. See
+// internal/ai/AI_TUNING_NOTES.md for the data. The limiter only spaces STARTS —
+// waitForRateLimit releases its lock before sleeping — so the worker pool still
+// overlaps the multi-second call latencies.
+const aiRequestSpacing = time.Second + (time.Second / 5) // 1.2s
 
 // SuggestedRateLimit returns the request-start spacing for a provider. With a
-// single supported provider the value is uniform — the 1 req/s self-imposed
-// limit — so the provider name is accepted for API stability but not branched on.
+// single supported provider the value is uniform (aiRequestSpacing), so the
+// provider name is accepted for API stability but not branched on.
 func SuggestedRateLimit(providerName string) time.Duration {
 	return aiRequestSpacing
 }

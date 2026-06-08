@@ -2,7 +2,6 @@ package ai
 
 import (
 	"testing"
-	"time"
 )
 
 func TestModelsForProvider(t *testing.T) {
@@ -40,11 +39,13 @@ func TestModelsByProviderReturnsACopy(t *testing.T) {
 }
 
 func TestSuggestedRateLimit(t *testing.T) {
-	// A single supported provider → the uniform 1-request-per-second self-imposed
-	// spacing, regardless of the name passed.
+	// A single supported provider → the uniform self-imposed request-start
+	// spacing (aiRequestSpacing), regardless of the name passed. Asserts against
+	// the const so a deliberate retune (e.g. 1s → 1.2s) keeps the test honest
+	// without re-pinning a literal here.
 	for _, provider := range []string{"anthropic", "unknown", ""} {
-		if got := SuggestedRateLimit(provider); got != time.Second {
-			t.Errorf("SuggestedRateLimit(%q) = %v, want 1s", provider, got)
+		if got := SuggestedRateLimit(provider); got != aiRequestSpacing {
+			t.Errorf("SuggestedRateLimit(%q) = %v, want %v", provider, got, aiRequestSpacing)
 		}
 	}
 }
