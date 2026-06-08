@@ -141,11 +141,16 @@ func Providers() []string { return []string{"anthropic"} }
 
 // aiRequestSpacing is the self-imposed 1-request-per-second minimum spacing
 // between live AI request STARTS — the polite, backpressure-friendly pace the AI
-// path has used since it went live (the original aiRateLimit). It sits well under
-// Anthropic's tier-1 ~50 req/min ceiling. The limiter only spaces STARTS —
-// waitForRateLimit releases its lock before sleeping — so the 재평가 worker pool
-// still overlaps the multi-second call latencies. A 429 is not fatal: the caller
-// surfaces it and retries on the next press.
+// path has used since it went live (the original aiRateLimit). When the 재평가
+// worker pool keeps it saturated this is ~60 req/min; a live measurement
+// (2026-06-08, Haiku, real corpus) saw ~1-2 HTTP 429s per 40-call burst at this
+// pace — occasional, not persistent, and almost certainly input-tokens-per-minute
+// driven (~2k input tokens/call). Loosening to 1.5s cleared the 429s in testing
+// but cost ~50% wall-clock; 1s is kept because real re-rates are small (a 429 is
+// rare in daily use), and a 429 is not fatal — the caller surfaces it and the row
+// retries on the next press. See internal/ai/AI_TUNING_NOTES.md for the data.
+// The limiter only spaces STARTS — waitForRateLimit releases its lock before
+// sleeping — so the worker pool still overlaps the multi-second call latencies.
 const aiRequestSpacing = time.Second
 
 // SuggestedRateLimit returns the request-start spacing for a provider. With a

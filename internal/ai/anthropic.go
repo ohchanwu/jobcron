@@ -45,9 +45,16 @@ var anthropicSpec = providerSpec{
 	},
 }
 
-// maxOutputTokens bounds the model's reply. The extraction/score JSON is tiny;
-// a few hundred tokens is plenty, but keep headroom for evidence quotes.
-const maxOutputTokens = 1024
+// maxOutputTokens bounds the model's reply. Stage-1 extraction replies are
+// tiny (measured max ~120 output tokens), but Stage-2 ScoreDelta carries an
+// evidence quote per signal and runs large: a live measurement over the real
+// corpus (2026-06-08, Haiku) saw successful ScoreDelta replies up to ~820
+// output tokens and a reply that hit the OLD 1024 ceiling and truncated
+// mid-JSON — an "unexpected end of JSON input" that DROPPED the whole delta.
+// Raised to 2048 (≈2.5× the largest successful reply) so a signal-rich delta
+// completes. The cap only ever bites a reply that would exceed it; billing is
+// per ACTUAL output token, so the headroom is free for the common case.
+const maxOutputTokens = 2048
 
 type anthropicRequest struct {
 	Model     string             `json:"model"`
