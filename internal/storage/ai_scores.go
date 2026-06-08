@@ -18,6 +18,17 @@ import (
 // ai_input_hash is the hash of the goal text only (profile.AIInputHash), so a
 // weight/MinScore tweak keeps the cached delta fresh — only a goal edit rotates
 // the key (T1).
+//
+// After the write it prunes the posting's accumulated dead rows, but
+// deliberately NOT to nothing: it keeps (a) ALL rows under the just-written
+// ai_version (different goal hashes under the current provider/model stay
+// reachable by the version-scoped fresh/stale lookups), and (b) the single
+// most-recent row from any OTHER ai_version. That one cross-version row is
+// load-bearing: it is what LatestAIScoresAnyVersionByPostingID returns so the
+// faded "이전 설정 기준" chip survives a provider/model switch, and — because a
+// switch back to a previously-used provider rotates ai_version back — it is what
+// brings that provider's prior score back without re-rating. Pruning it would
+// make a provider round-trip silently lose the old reading.
 func (s *Store) UpsertAIScore(
 	ctx context.Context, postingID int64, aiInputHash, aiVersion string,
 	d ai.Delta, computedAt time.Time,
@@ -30,7 +41,12 @@ func (s *Store) UpsertAIScore(
 	if err != nil {
 		return fmt.Errorf("storage: marshal ai score items: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("storage: begin upsert ai score: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `
 INSERT INTO ai_scores
     (posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
 VALUES (?,?,?,?,?,?)
@@ -38,9 +54,27 @@ ON CONFLICT(posting_id, ai_input_hash, ai_version) DO UPDATE SET
     items_json  = excluded.items_json,
     net_delta   = excluded.net_delta,
     computed_at = excluded.computed_at`,
-		postingID, aiInputHash, aiVersion, string(itemsJSON), d.NetDelta, computedAt.UTC())
-	if err != nil {
+		postingID, aiInputHash, aiVersion, string(itemsJSON), d.NetDelta, computedAt.UTC()); err != nil {
 		return fmt.Errorf("storage: upsert ai score: %w", err)
+	}
+	// Prune other-version rows for this posting, keeping only the single
+	// most-recent one (current-version rows are never in the delete's scope, so
+	// they all survive). computed_at, rowid DESC makes the kept row deterministic
+	// on a tie.
+	if _, err = tx.ExecContext(ctx, `
+DELETE FROM ai_scores
+WHERE posting_id = ?
+  AND ai_version <> ?
+  AND rowid NOT IN (
+    SELECT rowid FROM ai_scores
+    WHERE posting_id = ? AND ai_version <> ?
+    ORDER BY computed_at DESC, rowid DESC
+    LIMIT 1
+  )`, postingID, aiVersion, postingID, aiVersion); err != nil {
+		return fmt.Errorf("storage: prune ai scores: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("storage: commit upsert ai score: %w", err)
 	}
 	return nil
 }

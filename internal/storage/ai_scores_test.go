@@ -228,6 +228,96 @@ func TestLatestAIScoresAnyVersionCrossesProviderSwitch(t *testing.T) {
 	}
 }
 
+// TestUpsertAIScorePrunePreservesCrossVersionStale is the T5 prune-on-write
+// regression. UpsertAIScore prunes a posting's accumulated dead rows but must
+// keep (a) every row under the just-written ai_version and (b) the single
+// most-recent OTHER-version row — the load-bearing row the faded "이전 설정 기준"
+// chip and a provider round-trip both depend on.
+func TestUpsertAIScorePrunePreservesCrossVersionStale(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	id, _, _ := st.UpsertPosting(ctx, samplePosting())
+	const (
+		h  = "goalhash0001"
+		vA = "ver_anthropic" // first provider
+		vB = "ver_openai_01" // switched once
+		vC = "ver_anthro_v2" // switched twice
+	)
+	t1 := time.Date(2026, 6, 6, 0, 0, 0, 0, time.UTC)
+	t2 := t1.Add(time.Hour)
+	t3 := t2.Add(time.Hour)
+
+	rowCount := func() int {
+		var n int
+		st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_scores WHERE posting_id=?`, id).Scan(&n)
+		return n
+	}
+
+	// Rate under vA, then switch to vB (rotate once). The vB write prunes other
+	// versions but keeps the single most-recent — vA, the only other row.
+	if err := st.UpsertAIScore(ctx, id, h, vA, sampleDelta(-7), t1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertAIScore(ctx, id, h, vB, sampleDelta(5), t2); err != nil {
+		t.Fatal(err)
+	}
+	// Provider round-trip: switching back to vA must still find its row FRESH —
+	// the prune kept it, so the prior provider's score returns without re-rating.
+	if got, ok, _ := st.AIScore(ctx, id, h, vA); !ok || got.NetDelta != -7 {
+		t.Fatalf("after one rotation, vA row should survive fresh: ok=%v net=%d (want -7)", ok, got.NetDelta)
+	}
+	if rowCount() != 2 {
+		t.Fatalf("after one rotation: %d rows, want 2 (vA + vB)", rowCount())
+	}
+
+	// Rotate twice: the vC write prunes other versions to the single most-recent
+	// (vB at t2), deleting the older vA row.
+	if err := st.UpsertAIScore(ctx, id, h, vC, sampleDelta(9), t3); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := st.AIScore(ctx, id, h, vA); ok {
+		t.Fatal("after two rotations, the oldest (vA) row should have been pruned")
+	}
+	if _, ok, _ := st.AIScore(ctx, id, h, vB); !ok {
+		t.Fatal("vB is the most-recent OTHER-version row — it must survive the prune")
+	}
+	if _, ok, _ := st.AIScore(ctx, id, h, vC); !ok {
+		t.Fatal("vC is the current version — it must survive")
+	}
+	if rowCount() != 2 {
+		t.Fatalf("after two rotations: %d rows, want 2 (vB + vC)", rowCount())
+	}
+
+	// The cross-version stale chip still resolves: under a brand-new current
+	// version (vD, never rated) the version-scoped lookup misses, but the
+	// any-version fallback returns the newest surviving row (vC).
+	if _, ok, _ := st.LatestAIScore(ctx, id, "ver_unseen_01"); ok {
+		t.Fatal("an unseen version must miss the version-scoped lookup")
+	}
+	anyVer, err := st.LatestAIScoresAnyVersionByPostingID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d, ok := anyVer[id]; !ok || d.NetDelta != 9 {
+		t.Fatalf("cross-version stale chip must resolve to the newest surviving row: ok=%v net=%d (want 9)", ok, d.NetDelta)
+	}
+
+	// "Keep ALL current-version rows": a second goal hash under the current
+	// version must coexist (the prune only ever targets OTHER versions).
+	if err := st.UpsertAIScore(ctx, id, "goalhash0002", vC, sampleDelta(2), t3.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := st.AIScore(ctx, id, h, vC); !ok {
+		t.Fatal("first current-version row must survive a same-version write")
+	}
+	if _, ok, _ := st.AIScore(ctx, id, "goalhash0002", vC); !ok {
+		t.Fatal("second current-version row must survive")
+	}
+	if rowCount() != 3 {
+		t.Fatalf("expected 3 rows (vB + two vC), got %d", rowCount())
+	}
+}
+
 func TestAIScoreCascadeOnPostingDelete(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
