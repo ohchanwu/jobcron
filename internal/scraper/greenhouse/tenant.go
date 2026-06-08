@@ -38,6 +38,13 @@ const (
 	// absolute_url points at a custom careers page that does not deep-link
 	// to the specific posting.
 	LinkBoard
+	// LinkEmbed builds the Greenhouse embedded job-application URL
+	// job-boards.greenhouse.io/embed/job_app?for={token}&token={id}. For boards
+	// whose hosted board page (LinkBoard) 302-redirects to a company careers
+	// site that ignores the deep-link and lands on its front page (센드버드,
+	// found broken 2026-06-08): the embed route is served by Greenhouse directly,
+	// bypassing the company redirect, and shows the real JD + apply form.
+	LinkEmbed
 )
 
 // DetectStrategy controls how 신입-eligibility is decided.
@@ -60,6 +67,8 @@ func (t Tenant) link(id, absoluteURL string) string {
 		return trimSlash(t.SiteURL) + "/jobs/" + id + "/"
 	case LinkBoard:
 		return "https://job-boards.greenhouse.io/" + t.Token + "/jobs/" + id
+	case LinkEmbed:
+		return "https://job-boards.greenhouse.io/embed/job_app?for=" + t.Token + "&token=" + id
 	default: // LinkAbsolute
 		return absoluteURL
 	}
@@ -122,15 +131,19 @@ func Moloco() *Scraper {
 }
 
 // Sendbird returns the 센드버드 careers scraper (Seoul AI engineer interns).
-// Its absolute_url is a custom careers page that does not deep-link to the
-// posting, so it uses the canonical hosted board URL instead.
+// Both its absolute_url (sendbird.com/careers?gh_jid=) AND the canonical hosted
+// board URL (job-boards.greenhouse.io/sendbird/jobs/{id}) 302-redirect to
+// sendbird.com/careers, which ignores the gh_jid and shows its FRONT PAGE — not
+// the posting (verified broken 2026-06-08). LinkEmbed routes to Greenhouse's
+// own embed/job_app view, which is served directly (no company redirect) and
+// shows the real job + JD.
 func Sendbird() *Scraper {
 	return New(Tenant{
 		Source:  "sendbird",
 		Token:   "sendbird",
 		Company: "센드버드",
 		SiteURL: "https://sendbird.com",
-		Link:    LinkBoard,
+		Link:    LinkEmbed,
 		Detect:  DetectHeuristic,
 	})
 }

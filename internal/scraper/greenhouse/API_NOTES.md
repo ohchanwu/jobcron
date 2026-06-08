@@ -28,22 +28,25 @@ GET https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true
 - robots.txt on `boards-api.greenhouse.io` only disallows `/embed/`; the
   `/v1/boards/` path is unrestricted.
 
-## Per-tenant URL strategy (verified live 2026-06-06)
+## Per-tenant URL strategy (daangn/krafton/moloco verified 2026-06-06; sendbird re-verified + fixed 2026-06-08)
 
 `absolute_url` is **not** uniformly trustworthy, so each tenant declares a
 `LinkStrategy`:
 
-| Tenant   | Strategy       | Click-through URL                                   | Why |
-|----------|----------------|-----------------------------------------------------|-----|
-| daangn   | `LinkSite`     | `team.daangn.com/jobs/{id}/`                        | `absolute_url` is a dead `about.daangn.com?gh_jid=` marketing link (2026-05-27 audit). |
-| krafton  | `LinkAbsolute` | `job-boards.greenhouse.io/krafton/jobs/{id}`        | `absolute_url` is the hosted board page; renders the job directly (200, no redirect). |
-| moloco   | `LinkAbsolute` | `job-boards.greenhouse.io/moloco/jobs/{id}`         | same as krafton. |
-| sendbird | `LinkBoard`    | `job-boards.greenhouse.io/sendbird/jobs/{id}`       | `absolute_url` is a custom `sendbird.com/careers?gh_jid=` page; the canonical hosted board 302-redirects there with the `gh_jid` deep-link intact. The canonical URL is stored because it's stable and Greenhouse-owned. |
+| Tenant   | Strategy       | Click-through URL                                          | Why |
+|----------|----------------|-----------------------------------------------------------|-----|
+| daangn   | `LinkSite`     | `team.daangn.com/jobs/{id}/`                               | `absolute_url` is a dead `about.daangn.com?gh_jid=` marketing link (2026-05-27 audit). |
+| krafton  | `LinkAbsolute` | `job-boards.greenhouse.io/krafton/jobs/{id}`              | `absolute_url` is the hosted board page; renders the job directly (200, no redirect). |
+| moloco   | `LinkAbsolute` | `job-boards.greenhouse.io/moloco/jobs/{id}`              | same as krafton. |
+| sendbird | `LinkEmbed`    | `job-boards.greenhouse.io/embed/job_app?for=sendbird&token={id}` | **Was `LinkBoard`; regressed 2026-06-08.** BOTH the `absolute_url` (`sendbird.com/careers?gh_jid=`) AND the hosted board URL (`/sendbird/jobs/{id}`) now 302-redirect to sendbird.com's careers **front page** — the `gh_jid` is ignored. The careers page still echoes the id in its HTML, so a body-contains-id check is fooled. The `embed/job_app` route is served by Greenhouse directly (no company redirect) and shows the real JD + apply form. robots.txt on `job-boards.greenhouse.io` disallows nothing (its `Disallow:` lines are commented out). |
 
 `integration_test.go`'s `TestLiveGreenhouseURLsResolve` GETs each posting URL
-(following redirects, browser UA) and asserts the destination contains the
-posting id — a regression guard against the dead-link / wrong-redirect class
-of bug.
+(following redirects, browser UA) and asserts (a) the **final URL stays on the
+expected host** (Greenhouse for board/embed/absolute strategies; the tenant's
+own site for `LinkSite`) AND (b) the body contains the posting id. The host
+assertion was added 2026-06-08: id-only was a false-pass because the sendbird
+careers front page echoes the `gh_jid`. **When adding/auditing a tenant, this
+test must be run live — each tenant's click-through can break independently.**
 
 ## 신입 detection — two strategies
 

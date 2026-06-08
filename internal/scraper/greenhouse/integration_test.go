@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -80,6 +81,21 @@ func TestLiveGreenhouseURLsResolve(t *testing.T) {
 			if len(postings) == 0 {
 				t.Skipf("no 신입 dev postings on %s today", name)
 			}
+			// The host the click-through must END on after following redirects.
+			// 센드버드 (2026-06-08) regressed by 302-redirecting its hosted board
+			// URL to sendbird.com's careers FRONT PAGE — which still echoes the
+			// gh_jid in its HTML, so the body-contains-id check below passes even
+			// though the destination is wrong. Pinning the final host catches that
+			// off-board redirect class: a Greenhouse-built URL must stay on
+			// Greenhouse; a LinkSite URL must stay on the tenant's own site.
+			wantHost := "job-boards.greenhouse.io"
+			if s.t.Link == LinkSite {
+				u, err := url.Parse(s.t.SiteURL)
+				if err != nil {
+					t.Fatalf("parse SiteURL %q: %v", s.t.SiteURL, err)
+				}
+				wantHost = u.Host
+			}
 			for _, p := range postings {
 				req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.URL, nil)
 				if err != nil {
@@ -97,6 +113,10 @@ func TestLiveGreenhouseURLsResolve(t *testing.T) {
 				if resp.StatusCode != http.StatusOK {
 					t.Errorf("GET %s: status %d", p.URL, resp.StatusCode)
 					continue
+				}
+				if gotHost := resp.Request.URL.Host; gotHost != wantHost {
+					t.Errorf("destination of %s redirected off-host to %q, want %q — likely a company careers front page, not the posting",
+						p.URL, gotHost, wantHost)
 				}
 				if !strings.Contains(string(body), p.SourcePostingID) {
 					t.Errorf("destination of %s lacks posting id %s — likely landed on a generic page",

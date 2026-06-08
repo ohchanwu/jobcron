@@ -123,7 +123,7 @@ func TestParseMolocoKeepsInternRejectsInternal(t *testing.T) {
 	}
 }
 
-// --- sendbird: LinkBoard URL strategy + non-dev intern reject ---------------
+// --- sendbird: LinkEmbed URL strategy + non-dev intern reject ---------------
 
 func TestParseSendbirdHeuristic(t *testing.T) {
 	got := parseFixture(t, "sendbird_jobs.json", Sendbird().t)
@@ -131,9 +131,11 @@ func TestParseSendbirdHeuristic(t *testing.T) {
 	if !ok {
 		t.Fatalf("sendbird: AI Agent Engineer Intern (8276676002) should be kept (kept: %v)", keys(got))
 	}
-	// LinkBoard → canonical hosted-board URL (sendbird's absolute_url is a
-	// custom careers page that does not deep-link).
-	wantURL := "https://job-boards.greenhouse.io/sendbird/jobs/8276676002"
+	// LinkEmbed → Greenhouse embed/job_app URL. The hosted-board URL and the
+	// absolute_url both 302-redirect to sendbird.com's careers front page (the
+	// gh_jid is ignored), so the embed route — served directly by Greenhouse —
+	// is the only one that deep-links to the posting (verified 2026-06-08).
+	wantURL := "https://job-boards.greenhouse.io/embed/job_app?for=sendbird&token=8276676002"
 	if p.url != wantURL {
 		t.Errorf("sendbird URL=%q, want %q", p.url, wantURL)
 	}
