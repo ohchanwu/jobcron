@@ -139,6 +139,7 @@ func parseExtraction(raw []byte) (Extraction, error) {
 	if err != nil {
 		return Extraction{}, err
 	}
+	obj = stripLeadingNumericPlus(obj)
 	var w extractionWire
 	if err := json.Unmarshal(obj, &w); err != nil {
 		return Extraction{}, fmt.Errorf("ai: extraction not valid JSON: %w", err)
@@ -164,16 +165,112 @@ func parseExtraction(raw []byte) (Extraction, error) {
 }
 
 // firstJSONObject returns the first balanced {...} object in raw, tolerating a
-// model that wraps the JSON in markdown fences or prose. It returns an error
-// when no object is present.
+// model that wraps the JSON in markdown fences or prose. It is depth-aware: it
+// stops at the brace that closes the FIRST object, so a reply containing two
+// objects (or one object followed by prose with stray braces) yields just the
+// first one — the old first-'{' to last-'}' slice scooped both into an invalid
+// span. Braces inside string literals are ignored.
 func firstJSONObject(raw []byte) ([]byte, error) {
-	s := string(raw)
-	start := strings.IndexByte(s, '{')
-	end := strings.LastIndexByte(s, '}')
-	if start < 0 || end < start {
-		return nil, fmt.Errorf("ai: no JSON object in model reply")
+	span, _, err := scanBalanced(raw, "{")
+	return span, err
+}
+
+// scanBalanced returns the balanced bracket span beginning at the first
+// top-level open byte (any byte in `opens`, e.g. "{" or "{[") found OUTSIDE a
+// JSON string, through its matching close. It respects string literals and
+// backslash escapes, so brackets inside quoted text and a second value after the
+// first are never mis-scooped. It returns the span and the opening byte.
+func scanBalanced(raw []byte, opens string) ([]byte, byte, error) {
+	inStr, esc := false, false
+	start, depth := -1, 0
+	var open, closeB byte
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		if inStr {
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		if c == '"' {
+			inStr = true
+			continue
+		}
+		if start < 0 {
+			if strings.IndexByte(opens, c) >= 0 {
+				start, open, depth = i, c, 1
+				closeB = closerFor(c)
+			}
+			continue
+		}
+		switch c {
+		case open:
+			depth++
+		case closeB:
+			depth--
+			if depth == 0 {
+				return raw[start : i+1], open, nil
+			}
+		}
 	}
-	return []byte(s[start : end+1]), nil
+	if start < 0 {
+		return nil, 0, fmt.Errorf("ai: no JSON value in model reply")
+	}
+	return nil, 0, fmt.Errorf("ai: unbalanced JSON in model reply")
+}
+
+func closerFor(open byte) byte {
+	if open == '[' {
+		return ']'
+	}
+	return '}'
+}
+
+// stripLeadingNumericPlus removes a JSON-invalid leading '+' on a number in a
+// value position (right after ':' '[' or ','). This is the dominant live
+// failure mode measured 2026-06-08: the model writes `"delta": +3`, which Go's
+// JSON decoder rejects with "invalid character '+'". It tracks string literals,
+// so a '+' inside a quoted value (an evidence quote like "연봉: +α") is never
+// touched. Negative numbers and ordinary digits are left alone.
+func stripLeadingNumericPlus(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	inStr, esc := false, false
+	var lastSig byte // last non-whitespace byte seen outside a string
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		if inStr {
+			out = append(out, c)
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		if c == '"' {
+			inStr = true
+			out = append(out, c)
+			lastSig = c
+			continue
+		}
+		if c == '+' && (lastSig == ':' || lastSig == '[' || lastSig == ',') &&
+			i+1 < len(b) && b[i+1] >= '0' && b[i+1] <= '9' {
+			continue // drop the invalid leading '+'; the digit follows as the value
+		}
+		out = append(out, c)
+		if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+			lastSig = c
+		}
+	}
+	return out
 }
 
 // Extract sends the extraction prompt for one posting's model text and

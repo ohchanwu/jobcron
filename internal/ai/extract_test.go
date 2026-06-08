@@ -120,6 +120,73 @@ func TestParseExtractionRejects(t *testing.T) {
 	}
 }
 
+// TestFirstJSONObjectDepthAware locks the T6 depth-aware behavior: stop at the
+// first object's matching brace, ignore braces inside string literals.
+func TestFirstJSONObjectDepthAware(t *testing.T) {
+	t.Run("stops at first object, ignores a second", func(t *testing.T) {
+		obj, err := firstJSONObject([]byte(`prose {"a":1} more {"b":2}`))
+		if err != nil || string(obj) != `{"a":1}` {
+			t.Fatalf("got %q err=%v", string(obj), err)
+		}
+	})
+	t.Run("nested object balanced", func(t *testing.T) {
+		obj, err := firstJSONObject([]byte(`{"a":{"b":2}} trailing }`))
+		if err != nil || string(obj) != `{"a":{"b":2}}` {
+			t.Fatalf("got %q err=%v", string(obj), err)
+		}
+	})
+	t.Run("ignores braces inside strings", func(t *testing.T) {
+		obj, err := firstJSONObject([]byte(`{"a":"}{ not a brace"}`))
+		if err != nil || string(obj) != `{"a":"}{ not a brace"}` {
+			t.Fatalf("got %q err=%v", string(obj), err)
+		}
+	})
+	t.Run("error when no object", func(t *testing.T) {
+		if _, err := firstJSONObject([]byte(`no json here`)); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+// TestStripLeadingNumericPlus locks the +N sanitizer: strip a JSON-invalid
+// leading '+' on numbers in value positions, never inside a string, leave
+// negatives and plain digits alone.
+func TestStripLeadingNumericPlus(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`{"d": +3}`, `{"d": 3}`},
+		{`[+1,+2]`, `[1,2]`},
+		{`{"d": -2}`, `{"d": -2}`},
+		{`{"d": 5}`, `{"d": 5}`},
+		{`{"q": "a: +3 b"}`, `{"q": "a: +3 b"}`},
+		{`{"q": "C++"}`, `{"q": "C++"}`},
+	}
+	for _, c := range cases {
+		if got := string(stripLeadingNumericPlus([]byte(c.in))); got != c.want {
+			t.Errorf("stripLeadingNumericPlus(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestParseExtractionDepthAndPlus: the depth-aware scan + +N sanitizer applied
+// to Stage-1 extraction too.
+func TestParseExtractionDepthAndPlus(t *testing.T) {
+	t.Run("two objects: first wins", func(t *testing.T) {
+		raw := `{"min_career":0,"max_career":null,"newcomer":true,"education":"none","evidence":"신입 환영"}
+		{"min_career":5,"max_career":null,"newcomer":false,"education":"master","evidence":"무시"}`
+		ext, err := parseExtraction([]byte(raw))
+		if err != nil || ext.MinCareer != 0 || !ext.Newcomer || ext.EducationEnum != "none" {
+			t.Fatalf("expected the first object, got %+v err=%v", ext, err)
+		}
+	})
+	t.Run("leading + on numbers tolerated", func(t *testing.T) {
+		raw := `{"min_career": +2,"max_career": +5,"newcomer":false,"education":"bachelor","evidence":"경력 2-5년"}`
+		ext, err := parseExtraction([]byte(raw))
+		if err != nil || ext.MinCareer != 2 || ext.MaxCareer == nil || *ext.MaxCareer != 5 {
+			t.Fatalf("expected min 2 max 5, got %+v err=%v", ext, err)
+		}
+	})
+}
+
 // TestHTTPProviderExtractEndToEnd exercises the wired Extract: complete →
 // parseExtraction, against a canned provider response.
 func TestHTTPProviderExtractEndToEnd(t *testing.T) {

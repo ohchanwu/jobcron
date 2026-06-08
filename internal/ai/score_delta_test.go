@@ -81,6 +81,64 @@ func TestParseScoreDeltaRejects(t *testing.T) {
 	}
 }
 
+// TestParseScoreDeltaTopLevelArray: the model sometimes drops the {"items":...}
+// wrapper and returns a bare array of items (T6).
+func TestParseScoreDeltaTopLevelArray(t *testing.T) {
+	raw := `[
+		{"signal":"백엔드","kind":"presence","delta":6,"quote":"서버 개발자를 찾습니다","matched_goal":"좋아하는 업무"},
+		{"signal":"야근","kind":"presence","delta":-3,"quote":"가끔 야근이 있습니다"}
+	]`
+	items, err := parseScoreDelta([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(items) != 2 || items[0].Delta != 6 || items[1].Delta != -3 {
+		t.Fatalf("bare-array parse = %+v", items)
+	}
+}
+
+// TestParseScoreDeltaToleratesLeadingPlus: the dominant live failure (2026-06-08)
+// — Haiku writes "delta": +3, which is invalid JSON. The parser strips the
+// leading '+' on numbers in value positions, but never inside a string.
+func TestParseScoreDeltaToleratesLeadingPlus(t *testing.T) {
+	t.Run("object with +N", func(t *testing.T) {
+		raw := `{"items":[{"signal":"맞음","kind":"presence","delta": +7,"quote":"클라우드 백엔드 개발"}]}`
+		items, err := parseScoreDelta([]byte(raw))
+		if err != nil || len(items) != 1 || items[0].Delta != 7 {
+			t.Fatalf("object +N: items=%+v err=%v", items, err)
+		}
+	})
+	t.Run("bare array with +N", func(t *testing.T) {
+		raw := `[{"signal":"맞음","kind":"presence","delta":+5,"quote":"서버 개발 업무"}]`
+		items, err := parseScoreDelta([]byte(raw))
+		if err != nil || len(items) != 1 || items[0].Delta != 5 {
+			t.Fatalf("array +N: items=%+v err=%v", items, err)
+		}
+	})
+	t.Run("a '+' inside a quote is preserved", func(t *testing.T) {
+		raw := `{"items":[{"signal":"스택","kind":"presence","delta":4,"quote":"C++ 백엔드 개발"}]}`
+		items, err := parseScoreDelta([]byte(raw))
+		if err != nil || len(items) != 1 || items[0].Quote != "C++ 백엔드 개발" {
+			t.Fatalf("C++ quote corrupted: items=%+v err=%v", items, err)
+		}
+	})
+}
+
+// TestParseScoreDeltaDepthAware: two objects in one reply. The old first-'{' to
+// last-'}' slice scooped both into one invalid span; the depth-aware scan
+// returns the first, valid object (T6).
+func TestParseScoreDeltaDepthAware(t *testing.T) {
+	raw := `{"items":[{"signal":"a","kind":"presence","delta":3,"quote":"좋은 개발 문화"}]}
+	{"items":[{"signal":"b","kind":"presence","delta":9,"quote":"무시될 항목"}]}`
+	items, err := parseScoreDelta([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(items) != 1 || items[0].Delta != 3 {
+		t.Fatalf("expected only the first object's item (delta 3), got %+v", items)
+	}
+}
+
 func TestGateDeltaPresence(t *testing.T) {
 	sent := "제목: 신입 백엔드\n회사: 가나다\n\n서버 개발자를 찾습니다. 재택근무 가능하고 좋은 회사 문화를 갖췄습니다."
 

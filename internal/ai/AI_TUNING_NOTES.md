@@ -148,9 +148,15 @@ the richer ScoreDelta schema malforms.
 `RERATE_NOTES.md` already notes these land in "case B" (no `ai_scores` row, retried
 next press) and recover — but a 15–45% first-pass drop is a real quality dent: a
 fresh briefing's scrape-time auto-rate silently leaves many rows without their AI
-chip until a later press happens to succeed. **Fix routed to T6** (parsing
-hardening): tolerate `+N`, drop the prompt's `+` induction, and consider a single
-retry on parse failure (cheap given the failures are stochastic).
+chip until a later press happens to succeed.
+
+**RESOLVED in T6 (2026-06-08).** `parseScoreDelta` now (a) strips JSON-invalid
+leading `+` on numbers (`"delta": +3` → `3`, string-safe), (b) is depth-aware so
+a second object / trailing prose can't corrupt the span, and (c) accepts a bare
+top-level array. The Stage-2 prompt no longer induces `+N` ("맞으면 양수, 어긋나면
+음수" instead of "맞으면 +") and explicitly demands valid JSON. A live re-check
+after the change parsed **12/12** ScoreDelta replies (vs ~6/12 before), so the
+single-retry idea was not needed.
 
 ---
 
