@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"sort"
 	"sync"
 	"time"
 
@@ -19,6 +20,25 @@ import (
 // scrapeNewCap bounds how many new postings one scrape will detail-fetch — a
 // defensive limit; the 점핏 신입 universe is well under it.
 const scrapeNewCap = 50
+
+// Edited-JD refresh (T7). The scrape detail-fetches NEW postings only; an
+// already-seen posting whose JD the employer later edits never gets re-fetched,
+// so its content_hash — and thus its cached Stage-1 extraction and score — stay
+// frozen at first sight. To catch edits without re-fetching everything (cost +
+// politeness) or nothing (the staleness), each scrape re-fetches up to
+// detailRefreshCap already-seen postings PER SOURCE, choosing the ones whose
+// detail is oldest, and only those at least detailRefreshMinAge stale (so a
+// same-day re-scrape doesn't re-fetch what it just fetched). Oldest-first
+// rotation guarantees every posting's detail is rechecked within a bounded
+// number of scrapes; JD edits are infrequent, so a day-plus latency to catch one
+// is fine for a calm daily briefing. For full-listing sources (데모데이 /
+// Greenhouse / 그리팅, whose FetchDetail is a no-op) the re-fetch is free and
+// still picks up the listing's current text; for 점핏 / 랠릿 it is a real
+// 1-req/s detail fetch, bounded by the cap.
+const (
+	detailRefreshCap    = 10
+	detailRefreshMinAge = 24 * time.Hour
+)
 
 // Sweep windows. Postings that have not been seen in any scrape for
 // sweepStaleWindow, OR were first seen more than sweepOldWindow ago AND
@@ -170,6 +190,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 type ScrapeResult struct {
 	Listed     int `json:"listed"`
 	New        int `json:"new"`
+	Refreshed  int `json:"refreshed"` // already-seen postings whose detail was re-fetched (T7)
 	Scored     int `json:"scored"`
 	Removed    int `json:"removed"`    // postings hard-deleted by the staleness sweep
 	Duplicates int `json:"duplicates"` // cross-portal duplicates collapsed onto a canonical
@@ -233,6 +254,7 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 		succeeded = append(succeeded, src)
 		res.Listed += sub.Listed
 		res.New += sub.New
+		res.Refreshed += sub.Refreshed
 	}
 
 	activeIDs := make([]string, 0, len(succeeded))
@@ -395,18 +417,31 @@ func (s *Server) runScrapeSource(
 	if err != nil {
 		return ScrapeResult{}, fmt.Errorf("server: %s fetch listing: %w", src.Source(), err)
 	}
-	known, err := s.store.KnownSourceIDs(ctx, src.Source())
+	seen, err := s.store.SeenDetail(ctx, src.Source())
 	if err != nil {
 		return ScrapeResult{}, err
 	}
 	res := ScrapeResult{Listed: len(listing)}
 
+	// refreshCand is an already-seen posting eligible for an edited-JD re-fetch:
+	// the listing posting (carries the id/url FetchDetail needs) plus its stored
+	// row id and how stale its detail is.
+	type refreshCand struct {
+		p     scraper.Posting
+		id    int64
+		detAt time.Time
+	}
 	var fresh []scraper.Posting
+	var cands []refreshCand
+	staleBefore := now.Add(-detailRefreshMinAge)
 	for _, p := range listing {
-		if known[p.SourcePostingID] {
+		if info, ok := seen[p.SourcePostingID]; ok {
 			p.LastSeenAt = now
 			if _, _, err := s.store.UpsertPosting(ctx, p); err != nil {
 				return res, fmt.Errorf("server: refresh seen posting: %w", err)
+			}
+			if info.DetailFetchedAt.Before(staleBefore) {
+				cands = append(cands, refreshCand{p: p, id: info.ID, detAt: info.DetailFetchedAt})
 			}
 			continue
 		}
@@ -434,6 +469,30 @@ func (s *Server) runScrapeSource(
 		// leaves no ai_extractions row and the posting is scored by the regex
 		// path exactly as v1.5 — the scrape never fails on an AI error.
 		s.extractStage1(ctx, id, detailed, now, budget)
+	}
+
+	// Edited-JD refresh (T7): re-fetch the detail of the stalest already-seen
+	// postings (oldest detail_fetched_at first, capped per source). A changed JD
+	// flows new content_hash → fresh Stage-1 extraction → re-score; an unchanged
+	// JD is a cheap no-op (content_hash matches, extraction cache hits). The
+	// per-source cap bounds the added 1-req/s detail fetches for 점핏/랠릿; it is
+	// free for the no-op-FetchDetail sources.
+	sort.Slice(cands, func(i, j int) bool { return cands[i].detAt.Before(cands[j].detAt) })
+	if len(cands) > detailRefreshCap {
+		cands = cands[:detailRefreshCap]
+	}
+	for i, c := range cands {
+		detailed, err := src.FetchDetail(ctx, c.p)
+		if err != nil {
+			continue // transient detail failure — try again a later scrape
+		}
+		detailed.LastSeenAt = now
+		if err := s.store.RefreshPostingDetail(ctx, c.id, detailed, now); err != nil {
+			return res, fmt.Errorf("server: refresh posting detail: %w", err)
+		}
+		res.Refreshed++
+		emit("progress", fmt.Sprintf("[%s] 기존 공고 새로고침 %d/%d...", label, i+1, len(cands)))
+		s.extractStage1(ctx, c.id, detailed, now, budget)
 	}
 	return res, nil
 }

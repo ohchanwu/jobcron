@@ -203,3 +203,15 @@ This is structurally identical to 원티드 (already noted under "Additional scr
 **Why not v1.** Requires a paid Apple Developer account (~$99/year). v1's README will document the workaround (`xattr -d com.apple.quarantine ./job-scraper` or right-click → Open).
 
 **Build trigger.** Project has stable maintainership AND budget. Could also be funded by a sponsorship / GitHub Sponsors.
+
+---
+
+## Stage-2 AI delta recompute on an edited JD
+
+**What.** When an employer edits a posting's description after it was first scraped, re-run the Stage-2 AI *delta* (the evidence-cited `AI 분석` signals), not just the Stage-1 extraction.
+
+**Why we want it.** T7 (2026-06-08) added a bounded edited-JD re-fetch: a changed JD now flows new `content_hash` → fresh Stage-1 extraction → re-score. But the Stage-2 delta cache is keyed on `(posting_id, ai_input_hash, ai_version)` where `ai_input_hash` is the *goal text* only — the JD content is not in the key. So after a JD edit, the Stage-1 career/education facts refresh but the Stage-2 delta (which cites the JD) stays computed against the old text. Its quotes could even cite text no longer present.
+
+**Why not now.** The clean fix is to fold the posting's `content_hash` into the Stage-2 cache key, which makes a JD edit a natural cache miss that the scrape-time auto-rate / 재평가 recompute. That's a migration + key change touching `ai_scores`, `UpsertAIScore`/`AIScore`/the batch reads, the T5 prune, and `scoreAll`'s merge — bigger than T7's scope. Lower priority because JD edits are infrequent and the stale delta degrades gracefully (the gate already verified its quotes against the JD-at-the-time; a now-missing quote just means a slightly stale chip until the next goal edit / model switch rotates the key).
+
+**Build trigger.** If JD edits turn out to be common enough that stale Stage-2 chips are noticed, or when `ai_scores` is next migrated for another reason (bundle the key change in).

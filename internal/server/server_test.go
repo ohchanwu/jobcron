@@ -95,15 +95,19 @@ func TestRunScrapeStoresAndScoresPostings(t *testing.T) {
 	}
 }
 
-func TestRunScrapeSkipsDetailForKnownPostings(t *testing.T) {
+func TestRunScrapeSkipsDetailForFreshKnownPostings(t *testing.T) {
 	f := &fakeScraper{
 		listing: []scraper.Posting{listingPosting("1", "기존 공고"), listingPosting("2", "새 공고")},
 	}
 	srv, st := newTestServer(t, f)
 	ctx := context.Background()
 
+	// Seed posting 1 with FRESH detail (fetched just now). The edited-JD refresh
+	// (T7) only re-fetches a known posting whose detail is >detailRefreshMinAge
+	// stale, so a fresh known posting is still skipped — only the new posting 2
+	// gets a detail fetch.
 	seen := listingPosting("1", "기존 공고")
-	seen.FirstSeenAt = time.Now().Add(-48 * time.Hour).UTC()
+	seen.FirstSeenAt = time.Now().UTC()
 	seen.LastSeenAt = seen.FirstSeenAt
 	if _, _, err := st.UpsertPosting(ctx, seen); err != nil {
 		t.Fatalf("seed UpsertPosting: %v", err)
@@ -113,7 +117,52 @@ func TestRunScrapeSkipsDetailForKnownPostings(t *testing.T) {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if len(f.detailCalls) != 1 || f.detailCalls[0] != "2" {
-		t.Errorf("FetchDetail called for %v, want only [2] — posting 1 is already known", f.detailCalls)
+		t.Errorf("FetchDetail called for %v, want only [2] — posting 1 is known and detail-fresh", f.detailCalls)
+	}
+}
+
+// TestRunScrapeRefetchesStaleDetail is the T7 edited-JD path: a known posting
+// whose detail is >detailRefreshMinAge stale IS re-fetched, and a changed JD is
+// written through (so its content_hash, extraction, and score can refresh).
+func TestRunScrapeRefetchesStaleDetail(t *testing.T) {
+	edited := listingPosting("1", "기존 공고")
+	edited.Description = "수정된 공고 본문 — 경력 3년 이상으로 변경되었습니다."
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "기존 공고")},
+		details: map[string]scraper.Posting{"1": edited},
+	}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+
+	// Seed posting 1 with STALE detail (48h ago) and the ORIGINAL body.
+	seen := listingPosting("1", "기존 공고")
+	seen.Description = "원래 공고 본문."
+	seen.FirstSeenAt = time.Now().Add(-48 * time.Hour).UTC()
+	seen.LastSeenAt = seen.FirstSeenAt
+	id, _, err := st.UpsertPosting(ctx, seen)
+	if err != nil {
+		t.Fatalf("seed UpsertPosting: %v", err)
+	}
+
+	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+		t.Fatalf("runScrape: %v", err)
+	}
+
+	found := false
+	for _, c := range f.detailCalls {
+		if c == "1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("stale known posting 1 should have been re-fetched; detailCalls=%v", f.detailCalls)
+	}
+	got, ok, err := st.PostingByID(ctx, id)
+	if err != nil || !ok {
+		t.Fatalf("PostingByID: ok=%v err=%v", ok, err)
+	}
+	if got.Description != edited.Description {
+		t.Errorf("description not refreshed:\n got %q\nwant %q", got.Description, edited.Description)
 	}
 }
 

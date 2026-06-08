@@ -61,13 +61,18 @@ func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64,
 	if err != nil {
 		return 0, false, fmt.Errorf("storage: marshal tags: %w", err)
 	}
+	// detail_fetched_at (0010) is set to first_seen_at on insert: a new posting's
+	// detail is fetched at first sight. It is NOT part of the shared
+	// postingColumns/scanPosting plumbing (no Posting struct field) — only the
+	// scrape's bounded edited-JD refresh reads/writes it, via SeenDetail and
+	// RefreshPostingDetail.
 	res, err := s.db.ExecContext(ctx, `
-INSERT INTO postings (`+postingColumns+`)
-VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+INSERT INTO postings (`+postingColumns+`, detail_fetched_at)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		p.Source, p.SourcePostingID, p.URL, p.Title, p.Company, p.Location,
 		p.Newcomer, p.MinCareer, p.MaxCareer, p.CareerLevel, p.Education, p.EducationName,
 		string(stackJSON), string(tagsJSON), p.Description, p.RawJSON, utcPtr(p.PublishedAt), utcPtr(p.ClosedAt),
-		p.AlwaysOpen, p.FirstSeenAt.UTC(), p.LastSeenAt.UTC())
+		p.AlwaysOpen, p.FirstSeenAt.UTC(), p.LastSeenAt.UTC(), p.FirstSeenAt.UTC())
 	if err != nil {
 		return 0, false, fmt.Errorf("storage: insert posting: %w", err)
 	}
@@ -115,6 +120,79 @@ func (s *Store) KnownSourceIDs(ctx context.Context, source string) (map[string]b
 		ids[id] = true
 	}
 	return ids, rows.Err()
+}
+
+// SeenPostingDetail is one already-seen posting's identity plus how stale its
+// last detail fetch is — the inputs the scrape's bounded edited-JD refresh needs
+// to pick which postings to re-fetch (T7).
+type SeenPostingDetail struct {
+	ID              int64
+	DetailFetchedAt time.Time // zero when never recorded (treated as oldest)
+}
+
+// SeenDetail returns, per source_posting_id, the stored posting's id and the
+// time its detail was last fetched, for one source. It is the scrape's seen-set
+// lookup that also carries the detail-staleness signal: membership tells new
+// from already-seen (like KnownSourceIDs), and DetailFetchedAt drives the
+// oldest-first edited-JD re-fetch selection. A NULL detail_fetched_at (a row
+// that predates 0010's backfill, defensively) reads as the zero time, sorting
+// it oldest so it is refreshed first.
+func (s *Store) SeenDetail(ctx context.Context, source string) (map[string]SeenPostingDetail, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT source_posting_id, id, detail_fetched_at FROM postings WHERE source = ?`, source)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query seen detail: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]SeenPostingDetail{}
+	for rows.Next() {
+		var (
+			srcID string
+			id    int64
+			det   sql.NullTime
+		)
+		if err := rows.Scan(&srcID, &id, &det); err != nil {
+			return nil, fmt.Errorf("storage: scan seen detail: %w", err)
+		}
+		out[srcID] = SeenPostingDetail{ID: id, DetailFetchedAt: det.Time} // det.Time is zero when NULL
+	}
+	return out, rows.Err()
+}
+
+// RefreshPostingDetail re-writes an already-seen posting's full detail (the
+// fields a re-fetched FetchDetail can have changed) and stamps detail_fetched_at
+// to detailFetchedAt. It is the write half of the edited-JD refresh: after it
+// runs with new content, ModelInput's content_hash changes, so the next
+// extractStage1 misses the cache and re-extracts, and scoreAll picks up the
+// fresh extraction. Unlike UpsertPosting's seen path (which only bumps
+// url/title/company/location/last_seen_at), this also updates description,
+// raw_json, the career/education fields, tags, and dates.
+func (s *Store) RefreshPostingDetail(ctx context.Context, id int64, p scraper.Posting, detailFetchedAt time.Time) error {
+	stackJSON, err := json.Marshal(nonNilSlice(p.StackTags))
+	if err != nil {
+		return fmt.Errorf("storage: marshal stack tags: %w", err)
+	}
+	tagsJSON, err := json.Marshal(nonNilTags(p.Tags))
+	if err != nil {
+		return fmt.Errorf("storage: marshal tags: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `
+UPDATE postings SET
+    url = ?, title = ?, company = ?, location = ?,
+    newcomer = ?, min_career = ?, max_career = ?, career_level = ?,
+    education = ?, education_name = ?, stack_tags_json = ?, tags_json = ?,
+    description = ?, raw_json = ?, published_at = ?, closed_at = ?, always_open = ?,
+    last_seen_at = ?, detail_fetched_at = ?
+  WHERE id = ?`,
+		p.URL, p.Title, p.Company, p.Location,
+		p.Newcomer, p.MinCareer, p.MaxCareer, p.CareerLevel,
+		p.Education, p.EducationName, string(stackJSON), string(tagsJSON),
+		p.Description, p.RawJSON, utcPtr(p.PublishedAt), utcPtr(p.ClosedAt), p.AlwaysOpen,
+		p.LastSeenAt.UTC(), detailFetchedAt.UTC(), id)
+	if err != nil {
+		return fmt.Errorf("storage: refresh posting detail: %w", err)
+	}
+	return nil
 }
 
 // SweepStalePostings removes postings that have probably gone stale.
