@@ -233,8 +233,8 @@ func TestRerateRejectedWhenAIOff(t *testing.T) {
 	saveSinipProfile(t, srv)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409 (AI not configured)", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 (AI not configured)", rec.Code)
 	}
 }
 

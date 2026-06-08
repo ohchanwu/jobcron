@@ -151,8 +151,10 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.ai == nil {
 		// No provider configured — there is nothing to re-rate. The button is
-		// hidden in this state; this guards a direct request.
-		http.Error(w, "AI가 설정되지 않았어요.", http.StatusConflict)
+		// hidden in this state; this guards a direct request. 503 (not 409): the
+		// feature is unavailable in this configuration, not in conflict with
+		// another in-flight operation (that's the 409 below).
+		http.Error(w, "AI가 설정되지 않았어요.", http.StatusServiceUnavailable)
 		return
 	}
 	// Share the scrape lock: a scrape and a re-rate (and two re-rates) must never
