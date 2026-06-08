@@ -66,6 +66,46 @@ The heuristic trades recall for precision: an unmarked "Backend Engineer" open
 to 신입 is missed (the Greenhouse 신입-dev count is a documented **lower
 bound**), but the briefing is not flooded with senior roles.
 
+### Heuristic validation — live audit (2026-06-08)
+
+Both unvalidated guesses in `classify.go` were audited against all four boards'
+live listings. **Both kept; the trade is validated, not changed.**
+
+**Title-only newcomer rule (`classifyHeuristic`).** The question was whether to
+widen the newcomer check from the title to the body (a 신입 role stated only in
+the body is missed). Counting by hand every Korea-based dev role whose *body*
+contains a newcomer word but whose *title* does not:
+
+| board | total jobs | Korea dev | kept | body-only newcomer hits | real 신입 among them |
+|---|---|---|---|---|---|
+| krafton | 64 | 27 | 6 | 16 | **0** |
+| moloco | 67 | 20 | 1 | 0 | 0 |
+| sendbird | 17 | 6 | 1 | 1 | **0** |
+| daangn | 38 | (metadata) | 3 | — | — |
+
+**Every** body-only hit was boilerplate, not a real 신입 signal:
+
+- **krafton (16/16 false):** 15 match `신입` inside the identical application-
+  instructions footer every krafton JD carries — *"신입일 경우 자기소개서를, 경력일
+  경우 경력기술서를 중심으로…"* — and 1 matches `수습` inside *"5개월의 수습기간을
+  적용합니다"* (a probation clause). All 16 are 5년+/7년+/2년+/postdoc roles.
+- **sendbird (1/1 false):** "Software Engineer, AI Agent" matched `junior` inside
+  *"You enjoy mentoring junior engineers"* — the exact senior-mentions-juniors
+  trap the title-only rule exists to dodge.
+
+So widening to the body would inject **17 senior/experienced false positives and
+zero real 신입 roles**. A senior-marker guard wouldn't save it (Server Programmer
+(5년 이상) has no senior *title* marker), and the ≥2-year guard misses the
+exp-parse-fails cases (postdoc, the sendbird SWE). **Verdict: keep title-only.**
+
+**당근 신입/경력 → max 3 (`metadataBounds`).** The `3` is harmless for the target
+audience: a 신입 user has `CareerYears == 0`, and `scoreCareer`'s first branch
+`(newcomer && years == 0)` short-circuits to the full award *before* `maxCareer`
+is ever read — so 3 vs 5 vs 10 changes no 신입 score. When an AI extraction
+exists it overrides `p.MaxCareer` outright. The 3 only sets the displayed range
+and the near-miss boundary for *experienced* users (out of scope). **Verdict:
+keep 3.**
+
 ### Gotchas baked into the heuristic
 
 - **`intern` ⊄ `Internal`.** English newcomer/intern markers are

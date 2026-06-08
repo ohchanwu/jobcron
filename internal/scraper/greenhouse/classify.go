@@ -53,7 +53,11 @@ func classifyMetadata(md map[string]any) detection {
 
 // metadataBounds turns 당근's Prior Experience string into the (min, max)
 // pair. Pure-신입 maps to (0, 0); the mixed 신입/경력 admits a couple years
-// without over-promising the upper bound.
+// without over-promising the upper bound. The "3" is harmless for the 신입
+// target user: scoreCareer awards on (newcomer && years==0) before maxCareer is
+// read, and an AI extraction overrides it — so the ceiling only shapes the
+// near-miss boundary for experienced users. Validated 2026-06-08; see
+// API_NOTES.md.
 func metadataBounds(priorExp string) (min, max int) {
 	switch strings.TrimSpace(priorExp) {
 	case "신입":
@@ -97,9 +101,13 @@ func metadataLabel(priorExp string) string {
 //     alongside a real mid-career demand.
 //
 // Greenhouse carries no structured 신입 flag, so this trades recall for
-// precision: an unmarked "Backend Engineer" open to 신입 is missed (the ~9
-// Greenhouse 신입-dev count is a documented lower bound), but the briefing
-// is not flooded with senior roles.
+// precision: an unmarked "Backend Engineer" open to 신입 is missed (the
+// Greenhouse 신입-dev count is a documented lower bound), but the briefing is
+// not flooded with senior roles. A 2026-06-08 live audit validated keeping the
+// title-only check: across all four boards every body-only newcomer hit was
+// boilerplate (krafton's "신입일 경우 자기소개서를…" footer; a sendbird "mentoring
+// junior engineers" line) — widening to the body would inject ~17 senior
+// false positives and zero real 신입 roles. See API_NOTES.md.
 func classifyHeuristic(j ghJob) detection {
 	location := ""
 	if j.Location != nil {
