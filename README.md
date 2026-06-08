@@ -46,7 +46,7 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 - **Filters by source** right on the briefing, so you can read one portal at a time —
   and the filter (and the 관심 공고 점수순/날짜순 sort) stick across pages and visits.
 - **Streams the scrape live**, so the slow part becomes the interesting part.
-- **Optional AI scoring (bring your own key).** Add an Anthropic or OpenAI key and
+- **Optional AI scoring (bring your own key).** Add an Anthropic API key and
   the briefing gains evidence-cited adjustments — each one backed by a real quote
   from the posting, with a daily token budget you control. Entirely optional; with
   no key the app scores exactly as before. See *AI scoring* below.
@@ -114,8 +114,8 @@ on Linux, `%APPDATA%\job-scraper\` on Windows).
 
 ## AI scoring (optional, v2.0, bring your own key)
 
-Off by default. On the profile form, open **AI 분석 (선택)**, pick a provider
-(Anthropic or OpenAI), paste your own API key, and fill in a few free-text goals
+Off by default. On the profile form, open **AI 분석 (선택)**, select **Anthropic**
+as the provider, paste your own API key, and fill in a few free-text goals
 (what work you like, what you want to avoid). Your key is stored only in a local
 0600-permission file next to the database — never uploaded, never shown again
 after you save it.
@@ -127,9 +127,9 @@ re-rates the postings you're looking at (for example after you change your goals
 or to analyze more than one scrape covered), and a daily token budget (which you
 set) keeps spend bounded.
 
-This is the **v2.0** line and ships as a `-alpha` prerelease while the live
-provider paths get more real-world mileage. Everything else in the app works
-identically whether or not AI is configured.
+This is the **v2.0** line and ships as a `-alpha` prerelease while the live AI
+path gets more real-world mileage. Everything else in the app works identically
+whether or not AI is configured.
 
 ## Build from source
 

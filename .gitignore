@@ -17,8 +17,8 @@
 /internal/scraper/jumpit/curl-cmd-response*.txt
 
 # Local AI-integration planning doc — interactive v2.0 design notes, kept local
-# and out of git per user request.
-/ai-integration-plan.md
+# and out of git per user request (English + Korean draft).
+/ai-integration-plan*.md
 
 # Claude Code local config (settings, session state, skills)
 /.claude/

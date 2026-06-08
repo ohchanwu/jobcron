@@ -20,7 +20,9 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ## AI / ML scoring layer
 
-**What.** Replace (or augment) the current keyword-and-weight scorer with a semantic model — embeddings + cosine similarity between profile and posting, or an LLM that reads each posting and outputs a fit score with a short rationale. Could be local (gguf / ONNX) or hosted (Anthropic / OpenAI / Together).
+**Status (2026-06-06).** The *hosted* half of this shipped as the **v2.0 BYOK-AI line** — an LLM reads each posting and returns an evidence-cited Stage-2 score delta, layered on the keyword breakdown (additive, never a replacement — exactly as the build trigger below prescribed). OpenAI was offered, then **removed**: the rate-limit risk flagged in "Why not v1" (1) materialized — its free/entry tier couldn't sustain the re-rate workload. **Anthropic is the one provider.** The still-open direction is the **local / built-in model** (gguf / ONNX) — no rate limits, fine-tunable — now parked as a design task in `task-list.md`.
+
+**What.** Replace (or augment) the current keyword-and-weight scorer with a semantic model — embeddings + cosine similarity between profile and posting, or an LLM that reads each posting and outputs a fit score with a short rationale. Could be local (gguf / ONNX) or hosted (Anthropic / Together / …).
 
 **Why we want it.** Current matching is token-exact: "개발" doesn't match "개발자", "야근 없음" doesn't get distinguished from "야근", particle-attached forms like "야근이" miss "야근". A semantic model would close most of those gaps and pick up nuance the keyword matcher cannot (e.g. "성장하고 싶은 신입 환영" ≈ "신입 친화적").
 
