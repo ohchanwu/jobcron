@@ -87,15 +87,39 @@ func TestLiveGreenhouseURLsResolve(t *testing.T) {
 			// gh_jid in its HTML, so the body-contains-id check below passes even
 			// though the destination is wrong. Pinning the final host catches that
 			// off-board redirect class: a Greenhouse-built URL must stay on
-			// Greenhouse; a LinkSite URL must stay on the tenant's own site.
+			// Greenhouse; a site URL must stay on the tenant's own site.
 			wantHost := "job-boards.greenhouse.io"
-			if s.t.Link == LinkSite {
+			if s.t.Link == LinkSite || s.t.Link == LinkSiteJob {
 				u, err := url.Parse(s.t.SiteURL)
 				if err != nil {
 					t.Fatalf("parse SiteURL %q: %v", s.t.SiteURL, err)
 				}
 				wantHost = u.Host
 			}
+
+			// LinkSiteJob (센드버드) points at a client-rendered SPA whose per-job
+			// page returns a soft HTTP 404 to non-browser clients (verified
+			// 2026-06-08): it renders fine in a real browser but a raw GET can't
+			// see it. So for this strategy validate the URL SHAPE only (right host
+			// + /job/{id} path) and skip the live fetch — the destination must be
+			// browser-verified by hand. Don't let a raw GET's soft-404 fail CI, and
+			// don't let a silent format break pass either.
+			if s.t.Link == LinkSiteJob {
+				for _, p := range postings {
+					u, err := url.Parse(p.URL)
+					if err != nil {
+						t.Errorf("malformed URL %q: %v", p.URL, err)
+						continue
+					}
+					if u.Host != wantHost || u.Path != "/job/"+p.SourcePostingID {
+						t.Errorf("URL %q malformed: host=%q path=%q, want host %q path /job/%s",
+							p.URL, u.Host, u.Path, wantHost, p.SourcePostingID)
+					}
+				}
+				t.Logf("%s: %d URLs shape-checked (host %s, /job/{id}); live fetch skipped — SPA soft-404, browser-verify by hand", name, len(postings), wantHost)
+				return
+			}
+
 			for _, p := range postings {
 				req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.URL, nil)
 				if err != nil {

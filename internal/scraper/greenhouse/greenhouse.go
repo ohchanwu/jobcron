@@ -85,7 +85,7 @@ func (s *Scraper) Kind() scraper.SourceKind { return scraper.SourceKindCompany }
 // own careers site (Link == LinkSite, i.e. 당근), that site too. The API
 // host only disallows /embed/, which we never request.
 func (s *Scraper) CheckAccess(ctx context.Context) error {
-	if s.t.Link == LinkSite && s.t.SiteURL != "" {
+	if (s.t.Link == LinkSite || s.t.Link == LinkSiteJob) && s.t.SiteURL != "" {
 		if err := s.checkRobotsHost(ctx, s.t.SiteURL, siteRobotsCheck, &s.siteRobotsMu, &s.siteRobots); err != nil {
 			return fmt.Errorf("greenhouse %s: site robots: %w", s.t.Source, err)
 		}
