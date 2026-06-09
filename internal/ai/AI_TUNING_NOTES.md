@@ -163,3 +163,79 @@ single-retry idea was not needed.
 *Measured 2026-06-08 against `claude-haiku-4-5-20251001` and a 395-posting
 snapshot. The harness + raw-dump diagnostic were throwaway and removed; this file
 is the durable record. Numbers will drift with model, corpus, and account tier.*
+
+---
+
+# Local-model Stage-2 survivor diagnosis + presence-first prototype (2026-06-09)
+
+Context: office-hours spike on a LOCAL Ollama provider (design doc
+`~/.gstack/projects/job-scraper/chanbla11mit-main-design-20260609-122122.md`).
+Measured on the 20-posting `internal/scoring/testdata/qa_postings.json` fixture via
+the build-tagged harness `internal/ai/spike_test.go` (tag `aispike`), reusing the
+real prompts, parsers, and `GateDelta`. The harness's per-item gate replay
+cross-checked clean against `GateDelta` on all 20 postings, so the breakdown is
+faithful, not approximate.
+
+## Model pick — 4-model spike vs Haiku 4.5 (survivors over 20 postings)
+- **Qwen2.5-7B (Apache): 82 survivors, 0 parse fails, 0 신입 flips → CHOSEN DEFAULT.**
+- Qwen2.5-14B (Apache): 74 — NOT better than 7B, ~2× slower, tight on 18GB. Skip.
+- EXAONE-3.5-7.8B: 85 (best Stage-2) — license is **research-only**, cannot be a FOSS default.
+- Kanana-1.5-8B (Apache, Korean-native): 68 — the LOWEST. "Korean-native" is not a reliable lever; Qwen's multilingual training reads these JDs as well or better.
+
+The Stage-2 gap to Haiku (local surfaces ~⅔ of Haiku's cited deltas) is a
+**model-size/grounding limit, not a language-fit problem.** Ship Qwen2.5-7B.
+
+## Why items get gated (qwen2.5:7b, PRODUCTION `scoreDeltaSystemPrompt`)
+Funnel: **111 raw (23 presence, 88 absence) → 82 survivors (74% keep) → 29 rejected.**
+Rejection reasons: **absence-form-present 19 (66%)**, presence-not-verbatim 9 (31%),
+quote-too-short 1 (3%).
+
+This **overturned** the initial "paraphrased quotes dominate" hypothesis: the model is
+**penalty-heavy** (88 absence vs 23 presence) and its dominant loss is
+**wrongly-asserted absence** — it claims "X is missing" but a listed form is actually
+in the JD, so `GateDelta` (fail-safe) correctly kills the penalty. Surviving
+composition: ~13 presence + ~69 absence → mostly "this job LACKS X" chips. Also seen:
+the model sometimes quotes its OWN reasoning / the profile text as a "presence quote."
+
+## Presence-first prompt prototype (V2) — measured lift
+`spikeScoreDeltaPromptV2` (in `spike_test.go`, behind `AISPIKE_PROMPT=v2`): lead with
+presence/fit; absence only when certain; "quote ONLY the posting body — never the
+profile or your own reasoning"; cap absence forms at 2-3 canonical. Identical JSON
+schema (parser unchanged).
+
+| prompt | raw | presence/absence | survivors | keep-rate | composition |
+|---|---|---|---|---|---|
+| production | 111 | 23 / 88 | **82** | 74% | ~13 presence / ~69 absence (**16% presence**) |
+| V2 presence-first | 59 | 33 / 26 | **52** | **88%** | ~31 presence / ~21 absence (**60% presence**) |
+
+V2 did exactly what it targeted: presence 23→33, absence 88→26, keep-rate 74%→**88%**
+(= Haiku level), wrong-absence rejects 19→5. **BUT total survivors DROPPED 82→52** — it
+traded volume for precision and over-suppressed absence.
+
+## Conclusion — "maximize survivors" is the WRONG objective
+The baseline's higher count (82) was inflated by ~69 absence penalties of mixed value.
+V2 yields fewer but far better-composed survivors: presence-dominant (60% vs 16%),
+Haiku-level keep-rate, almost no wrongly-applied penalties. For the calm / fit-forward
+product thesis, V2's briefing (mostly "this matches you") beats the baseline's wall of
+"this lacks X" even at a lower count. **The Stage-2 objective for the build is
+composition + verified precision, not raw survivor count.**
+
+## Levers for the build (do NOT relax the gate)
+1. **Adopt a presence-first prompt** (the V2 direction) when wiring the local provider —
+   but tune absence suppression: V2 over-corrected (52 < 82); the sweet spot sits between
+   the penalty-heavy baseline and over-conservative V2.
+2. Add the **"quote ONLY the posting body, never the profile / your reasoning"** rule +
+   a few-shot example — fixes the self-quote confusion and the long-multi-line paraphrase
+   rejects.
+3. To recover **volume** without losing V2's precision: free **local multi-sample-and-union**
+   (run ScoreDelta 2-3× at temp>0, dedup, then gate) — affordable only because local has no
+   per-token cost. The lever local inference uniquely unlocks.
+4. Optional: Ollama `format` JSON-schema to eliminate parse-failure losses (0 for Qwen here;
+   1-2 for EXAONE/Kanana).
+5. **Do NOT relax `GateDelta`** (fuzzy quotes / lower floors). It would recover count by
+   readmitting the hallucinated-evidence the gate exists to block — the wrong trade for the
+   trust thesis.
+
+*Measured 2026-06-09, qwen2.5:7b via Ollama (num_ctx 8192, temp 0), 20-posting fixture.
+Harness `internal/ai/spike_test.go` (build tag `aispike`) retained for re-runs; it does
+not compile into the normal suite.*
