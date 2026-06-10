@@ -32,6 +32,18 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ---
 
+## Self-healing Ollama runner restart
+
+**What.** When the local-model provider is using Ollama and an inference wedges the runner, the app would detect the stuck state, stop the bad Ollama runner process, restart or reload it, and continue the overnight batch without the user waking up to press anything.
+
+**Why we want it.** The local-model batch exists so the user can rate the whole `/archive` / 전체 공고 set unattended. The 2026-06-09 spike showed a real failure mode: one hung inference left Ollama alive but not generating, and later model calls silently blocked behind it. A health check that only asks "is Ollama running?" misses that. Full self-healing would make the overnight run genuinely hands-off.
+
+**Why not v1.** Process management is a bigger responsibility than the app currently takes on. It means finding the right Ollama runner process, killing it safely, restarting or reloading the model, and handling platform-specific edge cases. v1 should do the smaller, safer version: run a real generation/liveness probe, retry boundedly, then stop with clear restart instructions. Finished postings are already cached, so pressing again resumes without repeating completed AI calls.
+
+**Build trigger.** Build this if wedged-runner failures recur in normal Qwen2.5-7B use, not just during model-swapping experiments, or if "restart Ollama and press again" proves too disruptive for the intended overnight workflow.
+
+---
+
 ## Hybrid: structured form + free-form keyword overrides
 
 **What.** Keep the structured profile form as the primary input, but add two free-form fields underneath: "반드시 포함해야 할 키워드" (must-include) and "절대 포함되면 안 되는 키워드" (dealbreakers). Real Korean job preferences have long-tail signals that don't fit any structured field: 병특 transferable, 자유 출퇴근, 노가다 거부, 적대적 완전 재택, 외국계, 스톡옵션, 외국어 사용 환경, etc.
