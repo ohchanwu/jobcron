@@ -32,3 +32,6 @@
 tmp/
 
 screenshots/
+
+# Local research scratch notes
+/docs/research/resources.md

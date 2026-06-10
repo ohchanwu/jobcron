@@ -40,11 +40,11 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
   category's weight adjustable.
 - **Explains every score** — `React +20 · 신입 +25 · 서울 +15` — so you can see the
   algorithm working *for* you, not *on* you.
-- **Keeps what matters in reach** — a 관심 공고 archive of everything ever scraped,
+- **Keeps what matters in reach** — a 전체 공고 archive of everything ever scraped,
   북마크 for the ones you're chasing, and a 숨긴 공고 list for the ones you're not.
   Low-scoring postings fold away below a minimum-score line you set.
 - **Filters by source** right on the briefing, so you can read one portal at a time —
-  and the filter (and the 관심 공고 점수순/날짜순 sort) stick across pages and visits.
+  and the filter (and the 전체 공고 점수순/날짜순 sort) stick across pages and visits.
 - **Streams the scrape live**, so the slow part becomes the interesting part.
 - **Optional AI scoring (bring your own key).** Add an Anthropic API key and
   the briefing gains evidence-cited adjustments — each one backed by a real quote
@@ -106,7 +106,7 @@ on Linux, `%APPDATA%\job-scraper\` on Windows).
   matcher cannot distinguish "야근 없음" from "야근" — enter short, plain
   root-form keywords for your dealbreaker list.
 - **The briefing is today's postings.** The front page shows what was first seen
-  today — the daily ritual. Everything ever scraped stays in 관심 공고 (sortable by
+  today — the daily ritual. Everything ever scraped stays in 전체 공고 (sortable by
   date or by fit), so nothing is lost; it just isn't shouting at you each morning.
 - **New-grad IT only.** Sources are queried with their 신입 / entry filters; this
   is not a general job search.
