@@ -173,7 +173,7 @@ nav.primary a.active {
   letter-spacing: 0.04em;
 }
 .count strong { color: var(--ink); font-weight: 500; }
-/* 관심 공고 sort toggle (날짜순 / 점수순) — a small segmented control on the right
+/* 전체 공고 sort toggle (날짜순 / 점수순) — a small segmented control on the right
    of the count row. The active state is server-rendered via a ?sort= query-param
    link (no JS), so it survives reload and is shareable. Calm gold for the active
    segment, matching the source pills. */

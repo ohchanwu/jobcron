@@ -47,6 +47,28 @@ func TestArchivePageListsEveryPosting(t *testing.T) {
 	}
 }
 
+func TestArchivePageUsesAllPostingsTerminology(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"<title>전체 공고 — 오늘의 채용 브리핑</title>",
+		"<h1>전체 공고</h1>",
+		`<a href="/archive" class="active">전체 공고</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/archive missing %q", want)
+		}
+	}
+	if strings.Contains(body, "관심 공고") {
+		t.Error("/archive still renders the stale 관심 공고 label")
+	}
+}
+
 func TestArchiveGroupsByKSTDay(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
@@ -229,7 +251,7 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 	}
 }
 
-// TestArchiveRoutesBelowMinScoreToExcluded covers task 1(b): the 관심 공고
+// TestArchiveRoutesBelowMinScoreToExcluded covers task 1(b): the 전체 공고
 // page mirrors the briefing's MinScore split. A posting scoring 35 with
 // MinScore = 40 lands in the collapsible Excluded list, not the main
 // day-grouped list; a 50 stays in the main list.
@@ -342,7 +364,7 @@ func TestArchiveRoutesExpiredToExcluded(t *testing.T) {
 }
 
 // TestArchiveHidesMutedPostings covers task 1(c): a muted ("관심 없음")
-// posting vanishes from 관심 공고 entirely — not into the Excluded
+// posting vanishes from 전체 공고 entirely — not into the Excluded
 // collapsible, but gone from both lists.
 func TestArchiveHidesMutedPostings(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})

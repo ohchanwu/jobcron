@@ -1,7 +1,7 @@
 -- 0007_not_interested.sql — user-muted postings ("관심 없음").
 --
 -- A manual mute is the inverse of a bookmark: a soft, user-controlled signal
--- that a posting should disappear from the briefing and the 관심 공고 list
+-- that a posting should disappear from the briefing and the 전체 공고 list
 -- entirely (not merely sink into the "관심 밖" collapsible the way a
 -- below-MinScore score does). Like a bookmark it lives outside the
 -- daily-briefing window and the profile_hash / scores cycle, and follows the

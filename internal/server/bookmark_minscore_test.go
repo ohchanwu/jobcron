@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,8 +35,24 @@ func contains(rows []dashboardPosting, want string) bool {
 	return false
 }
 
+func TestBookmarksPageUsesAllPostingsArchiveNav(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/bookmarks", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<a href="/archive">전체 공고</a>`) {
+		t.Error("/bookmarks nav missing 전체 공고 archive link")
+	}
+	if !strings.Contains(body, `<a href="/bookmarks" class="active">북마크</a>`) {
+		t.Error("/bookmarks should keep 북마크 as its active page label")
+	}
+}
+
 // TestArchiveBookmarkExemptFromMinScore covers the bookmark override on the
-// 관심 공고 page: a bookmarked posting scoring below MinScore stays in the main
+// 전체 공고 page: a bookmarked posting scoring below MinScore stays in the main
 // day-grouped list instead of sinking into the 관심 밖 collapsible, while an
 // identical un-bookmarked posting is demoted, and a bookmarked dealbreaker hit
 // (Total < 0) stays excluded — the dealbreaker rule wins over the bookmark.
@@ -147,7 +166,7 @@ func TestBriefingBookmarkExemptFromMinScore(t *testing.T) {
 }
 
 // TestArchiveMutedBookmarkStaysHidden guards the precedence the task flagged:
-// the bookmark override must not resurrect a muted posting on 관심 공고. A
+// the bookmark override must not resurrect a muted posting on 전체 공고. A
 // posting that is bookmarked AND muted AND below MinScore stays gone from
 // /archive entirely (mute is filtered before the partition; it still shows on
 // /bookmarks). The bookmark exemption only moves a row between the main list

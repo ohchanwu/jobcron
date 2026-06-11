@@ -49,7 +49,7 @@ func (s *Store) IsNotInterested(ctx context.Context, postingID int64) (bool, err
 }
 
 // NotInterestedIDs returns the set of currently-muted posting ids — used by
-// the briefing and 관심 공고 views to filter muted postings out entirely.
+// the briefing and 전체 공고 views to filter muted postings out entirely.
 func (s *Store) NotInterestedIDs(ctx context.Context) (map[int64]bool, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT posting_id FROM not_interested`)
 	if err != nil {

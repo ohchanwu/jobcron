@@ -26,6 +26,11 @@ part of the 1.x series.
 
 ## [Unreleased]
 
+### Changed
+- Renamed the `/archive` surface from **관심 공고** to **전체 공고** across the UI
+  and current code comments, making it explicit that `/archive` is the full
+  all-postings archive and distinct from **북마크**.
+
 ## [2.0.0-alpha3] - 2026-06-06
 
 The BYOK-AI line matures and the source set widens. The headline is a reversal:

@@ -43,7 +43,7 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 		return bookmarksView{}, err
 	}
 	// A bookmarked posting can also be muted ("관심 없음"); it stays visible
-	// here (unlike on the briefing / 관심 공고 list) but renders its mute
+	// here (unlike on the briefing / 전체 공고 list) but renders its mute
 	// toggle in the on state so the user can un-mute it from here too.
 	muted, err := s.store.NotInterestedIDs(ctx)
 	if err != nil {

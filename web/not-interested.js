@@ -3,7 +3,7 @@
    any added later when the dashboard re-renders on scrape completion.
 
    Context-aware removal, so the click feels finished:
-   - On the briefing (/) and 관심 공고 (/archive), muting a posting removes
+   - On the briefing (/) and 전체 공고 (/archive), muting a posting removes
      its card — those surfaces hide muted postings entirely. On /bookmarks a
      muted posting stays (it is bookmarked), so the card is kept and only the
      icon state flips.
@@ -49,7 +49,7 @@
 
         var card = btn.closest('.posting');
         if (muted && card && location.pathname !== '/bookmarks') {
-          fadeRemove(card); // muted: leaves the briefing / 관심 공고 view
+          fadeRemove(card); // muted: leaves the briefing / 전체 공고 view
         } else if (!muted && location.pathname === '/hidden' && card) {
           fadeRemove(card); // un-hidden: leaves the 숨긴 공고 page
         }

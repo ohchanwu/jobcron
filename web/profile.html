@@ -30,7 +30,7 @@
 
     <nav class="primary">
       <a href="/">데일리 브리핑</a>
-      <a href="/archive">관심 공고</a>
+      <a href="/archive">전체 공고</a>
       <a href="/bookmarks">북마크</a>
       <a href="/hidden">숨긴 공고</a>
       <a href="/profile" class="active">프로필 설정</a>
@@ -99,7 +99,7 @@
       {{if .Sources}}
       <fieldset class="source-toggles">
         <legend>공고 출처</legend>
-        <span class="field-hint">체크 해제한 출처의 공고는 브리핑과 관심 공고에서 숨겨져요. 저장한 공고는 그대로 보여요.</span>
+        <span class="field-hint">체크 해제한 출처의 공고는 브리핑과 전체 공고에서 숨겨져요. 저장한 공고는 그대로 보여요.</span>
         {{range .Sources}}
         <label class="check">
           <input type="checkbox" name="source_{{.ID}}"{{if .Enabled}} checked{{end}}> {{.Label}}

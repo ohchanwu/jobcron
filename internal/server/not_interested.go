@@ -8,7 +8,7 @@ import (
 
 // handleNotInterestedAdd mutes a posting ("관심 없음"). Idempotent — a repeat
 // PUT does not advance muted_at. A muted posting vanishes from the briefing
-// and the 관심 공고 list entirely; if it is also bookmarked it stays on
+// and the 전체 공고 list entirely; if it is also bookmarked it stays on
 // /bookmarks.
 func (s *Server) handleNotInterestedAdd(w http.ResponseWriter, r *http.Request) {
 	id, ok := postingID(w, r)

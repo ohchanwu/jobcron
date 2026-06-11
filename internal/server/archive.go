@@ -20,7 +20,7 @@ type archiveDay struct {
 	Postings []dashboardPosting
 }
 
-// archiveView is the view model for the /archive (관심 공고) page.
+// archiveView is the view model for the /archive (전체 공고) page.
 type archiveView struct {
 	Today    string // header date, mirroring the briefing view's Date field
 	Days     []archiveDay
@@ -79,10 +79,10 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "archive.html", view)
 }
 
-// archiveSortCookie remembers the 관심 공고 sort per-browser.
+// archiveSortCookie remembers the 전체 공고 sort per-browser.
 const archiveSortCookie = "archive_sort"
 
-// resolveArchiveSort picks the 관심 공고 sort and remembers it. An explicit
+// resolveArchiveSort picks the 전체 공고 sort and remembers it. An explicit
 // ?sort= wins and is written to a per-browser cookie; otherwise the remembered
 // cookie applies; otherwise the 날짜순 default. Doing this server-side (rather
 // than a client-side localStorage redirect) means the right sort renders on the
@@ -183,7 +183,7 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 		// findable here (and badged "마감"). Mirrors the briefing, which filters
 		// expired postings out of the daily list entirely. 데모데이 keeps
 		// re-serving published-but-past rows, so without this they would sit in
-		// the main 관심 공고 list with a normal score and no closure cue.
+		// the main 전체 공고 list with a normal score and no closure cue.
 		if expired(p, now) {
 			dp.Excluded = true
 		}
