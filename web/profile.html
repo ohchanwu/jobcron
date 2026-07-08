@@ -16,7 +16,7 @@
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body data-demo="{{demoMode}}">
   <div class="wrap">
     <header>
       <div>
@@ -36,9 +36,14 @@
       <a href="/profile" class="active">프로필 설정</a>
     </nav>
 
+    {{if demoMode}}
+    <p class="demo-banner">데모 모드에서는 설정을 볼 수만 있어요. 방문자가 바꾼 내용은 서버에 저장되지 않아요.</p>
+    {{else}}
     <p class="form-intro">이 정보로 매일의 공고에 점수를 매겨요. 언제든 다시 바꿀 수 있어요.</p>
+    {{end}}
 
     <form method="post" action="/profile">
+      <fieldset class="profile-fields"{{if demoMode}} disabled{{end}}>
       <label>경력 (년)
         <span class="field-hint">햇수로 적어주세요. 신입이면 0.</span>
         <input type="number" name="career_years" min="0" value="{{.CareerYears}}">
@@ -175,7 +180,7 @@
       </fieldset>
 
       <div class="form-actions">
-        <button type="submit" class="btn-primary">저장하고 브리핑 보기 <span class="arrow">→</span></button>
+        <button type="submit" class="btn-primary"{{if demoMode}} disabled{{end}}>저장하고 브리핑 보기 <span class="arrow">→</span></button>
       </div>
     </form>
   </div>

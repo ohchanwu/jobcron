@@ -36,7 +36,9 @@ var version = "dev"
 
 func main() {
 	port := flag.Int("port", 7777, "preferred port; the next ten are tried if it is busy")
+	host := flag.String("host", "127.0.0.1", "host/interface to bind")
 	noOpen := flag.Bool("no-open", false, "do not open a browser window on startup")
+	demo := flag.Bool("demo", envBool("JOBSCRAPER_DEMO"), "run in read-only public demo mode")
 	dbPath := flag.String("db", "", "database file path (default: under the OS config dir)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	worknetKey := flag.String("worknet-api-key", os.Getenv("JOBSCRAPER_WORKNET_KEY"),
@@ -73,6 +75,8 @@ func main() {
 			"워크넷도 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
+	srv.SetDemoMode(*demo)
+	srv.SetAdminToken(os.Getenv("JOBSCRAPER_ADMIN_TOKEN"))
 	// Wire BYOK AI from the saved profile + ai_keys.json. Non-fatal: any error
 	// (or simply no key configured) leaves AI off and the briefing falls back to
 	// the v1.5 offline scoring. The user enables AI on /profile.
@@ -88,7 +92,7 @@ func main() {
 		log.Printf("job-scraper: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
 	}
 
-	ln, addr, err := listen(*port)
+	ln, addr, err := listen(*host, *port)
 	if err != nil {
 		log.Fatalf("job-scraper: %v", err)
 	}
@@ -128,14 +132,23 @@ func openStore(path string) (*storage.Store, error) {
 	return storage.Open()
 }
 
-// listen binds 127.0.0.1 on the preferred port, falling back to the next ten
+// listen binds host on the preferred port, falling back to the next ten
 // if it is busy. It returns the listener and the bound "host:port" address.
-func listen(preferred int) (net.Listener, string, error) {
+func listen(host string, preferred int) (net.Listener, string, error) {
 	for p := preferred; p <= preferred+10; p++ {
-		addr := fmt.Sprintf("127.0.0.1:%d", p)
+		addr := net.JoinHostPort(host, fmt.Sprintf("%d", p))
 		if ln, err := net.Listen("tcp", addr); err == nil {
 			return ln, addr, nil
 		}
 	}
 	return nil, "", fmt.Errorf("no free port in %d..%d", preferred, preferred+10)
+}
+
+func envBool(name string) bool {
+	switch os.Getenv(name) {
+	case "1", "true", "TRUE", "yes", "YES", "on", "ON":
+		return true
+	default:
+		return false
+	}
 }

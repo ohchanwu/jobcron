@@ -300,6 +300,7 @@ nav.primary a.active {
   color: var(--ink-soft);
 }
 .filter-hidden { display: none !important; }
+.posting[hidden] { display: none !important; }
 
 /* Visual seam between the aggregator pills (left) and the single-
    company-portal pills (right). 1px solid line, height matches the
@@ -666,6 +667,23 @@ footer {
   color: var(--ink-soft);
   margin: 1.25rem 0 0;
   font-size: 0.95rem;
+}
+.demo-banner {
+  color: var(--ink);
+  margin: 1.25rem 0 0;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 0.95rem;
+}
+.profile-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.profile-fields:disabled {
+  opacity: 0.72;
 }
 form label {
   display: block;

@@ -10,6 +10,58 @@
    - On the 숨긴 공고 page (/hidden), every card is muted; un-muting one means
      it no longer belongs there, so fade the .posting card out. */
 (function () {
+  var KEY = 'jobScraperDemoHidden';
+
+  function demoMode() {
+    return document.body && document.body.dataset.demo === 'true';
+  }
+
+  function readSet() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function writeSet(set) {
+    try { localStorage.setItem(KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+  }
+
+  function paintButton(btn, on) {
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+
+  function syncDemoHidden() {
+    if (!demoMode()) return;
+    var hidden = readSet();
+    document.querySelectorAll('.not-interested[data-posting-id]').forEach(function (btn) {
+      paintButton(btn, hidden.has(String(btn.dataset.postingId)));
+    });
+    document.querySelectorAll('.posting').forEach(function (card) {
+      var btn = card.querySelector('.not-interested[data-posting-id]');
+      if (!btn) return;
+      var isHidden = hidden.has(String(btn.dataset.postingId));
+      if (location.pathname === '/hidden') {
+        card.hidden = !isHidden;
+      } else if (location.pathname !== '/bookmarks') {
+        card.hidden = isHidden;
+      }
+    });
+    if (location.pathname === '/hidden') updateDemoCount();
+  }
+
+  function updateDemoCount() {
+    var visible = document.querySelectorAll('.posting:not([hidden])').length;
+    var count = document.querySelector('.count strong');
+    if (count) count.textContent = String(visible);
+    var empty = document.querySelector('.empty');
+    if (empty) empty.hidden = visible !== 0;
+  }
+
   function fadeRemove(el) {
     if (!el) return;
     el.classList.add('removing');
@@ -33,6 +85,13 @@
     if (!id) return;
 
     var wasOn = btn.classList.contains('on');
+    if (demoMode()) {
+      var hidden = readSet();
+      if (wasOn) hidden.delete(String(id)); else hidden.add(String(id));
+      writeSet(hidden);
+      syncDemoHidden();
+      return;
+    }
     btn.disabled = true;
 
     fetch('/api/not-interested/' + encodeURIComponent(id), {
@@ -63,4 +122,11 @@
         btn.disabled = false;
       });
   });
+
+  document.addEventListener('demo-state-change', syncDemoHidden);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncDemoHidden);
+  } else {
+    syncDemoHidden();
+  }
 })();

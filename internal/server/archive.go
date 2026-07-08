@@ -124,9 +124,15 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 	if err != nil {
 		return archiveView{}, err
 	}
+	if s.demoMode {
+		bookmarks = map[int64]bool{}
+	}
 	muted, err := s.store.NotInterestedIDs(ctx)
 	if err != nil {
 		return archiveView{}, err
+	}
+	if s.demoMode {
+		muted = map[int64]bool{}
 	}
 	dupSources, err := s.store.DuplicateSourcesByCanonical(ctx)
 	if err != nil {

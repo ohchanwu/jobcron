@@ -17,7 +17,7 @@
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body data-demo="{{demoMode}}">
   <!-- Icon sprite: defined once per page; cards reference these symbols via
        <svg><use href="#icon-…"/></svg> instead of pasting the full icon markup
        into every card. Inline (not an external file) because external-file
@@ -56,9 +56,7 @@
 
     <div class="scrape-row">
       <div class="count">새 공고 <strong>{{len .Today}}</strong>개</div>
-      <button id="scrape" class="btn-primary">스크랩 시작 <span class="arrow">→</span></button>
     </div>
-    <div id="scrape-log" class="scrape-log" aria-live="polite"></div>
     {{template "rerateButton" .Rerate}}
 
     <main>
@@ -113,7 +111,7 @@
       {{else}}
       <div class="empty">
         <p class="empty-title">오늘은 아직 브리핑할 공고가 없어요.</p>
-        <p class="empty-sub">위의 <b>스크랩 시작</b>을 눌러보세요.<br>새 공고가 없는 날도 있어요 — 천천히 가도 괜찮아요.</p>
+        <p class="empty-sub">운영자가 준비한 공고가 여기에 표시돼요.<br>새 공고가 없는 날도 있어요 — 천천히 가도 괜찮아요.</p>
       </div>
       {{end}}
 
@@ -165,50 +163,5 @@
   <script src="/static/source-filter.js"></script>
   <script src="/static/ai-popover.js"></script>
   <script src="/static/ai-rerate.js"></script>
-  <script>
-    /* Scrape: open EventSource on click, stream events into the log,
-       reload the page on done so the new briefing renders. */
-    (function () {
-      var btn = document.getElementById('scrape');
-      var log = document.getElementById('scrape-log');
-      if (!btn) return;
-
-      btn.addEventListener('click', function () {
-        btn.disabled = true;
-        log.textContent = '';
-        var es = new EventSource('/api/scrape');
-
-        function append(msg) {
-          var p = document.createElement('p');
-          p.textContent = msg;
-          log.appendChild(p);
-        }
-        function progress(msg) {
-          var pr = document.getElementById('scrape-progress');
-          if (!pr) {
-            pr = document.createElement('p');
-            pr.id = 'scrape-progress';
-            log.appendChild(pr);
-          }
-          pr.textContent = msg;
-        }
-
-        es.addEventListener('status',   function (e) { append(e.data); });
-        es.addEventListener('count',    function (e) { append(e.data); });
-        es.addEventListener('progress', function (e) { progress(e.data); });
-        es.addEventListener('done', function () { es.close(); location.reload(); });
-        es.addEventListener('failed', function (e) {
-          es.close();
-          btn.disabled = false;
-          append(e.data || '스크랩에 실패했어요.');
-        });
-        es.addEventListener('error', function () {
-          es.close();
-          btn.disabled = false;
-          append('연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
-        });
-      });
-    })();
-  </script>
 </body>
 </html>

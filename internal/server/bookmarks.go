@@ -38,6 +38,12 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 	if err != nil {
 		return bookmarksView{}, err
 	}
+	if s.demoMode {
+		postings, err = s.store.AllPostings(ctx)
+		if err != nil {
+			return bookmarksView{}, err
+		}
+	}
 	scores, err := s.store.ScoresByPostingID(ctx)
 	if err != nil {
 		return bookmarksView{}, err
@@ -49,11 +55,14 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 	if err != nil {
 		return bookmarksView{}, err
 	}
+	if s.demoMode {
+		muted = map[int64]bool{}
+	}
 	view := bookmarksView{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
 		dp := dashboardPosting{
 			Posting:       p,
-			Bookmarked:    true, // every row here is bookmarked by definition
+			Bookmarked:    !s.demoMode, // in demo, browser localStorage paints saved rows
 			NotInterested: muted[p.ID],
 			Deadline:      deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 		}

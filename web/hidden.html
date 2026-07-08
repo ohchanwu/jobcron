@@ -16,7 +16,7 @@
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body data-demo="{{demoMode}}">
   <!-- Icon sprite: defined once per page; cards reference these symbols via
        <svg><use href="#icon-…"/></svg> instead of pasting the full icon markup
        into every card. Inline (not an external file) because external-file
@@ -106,6 +106,12 @@
         </li>
         {{end}}
       </ol>
+      {{if demoMode}}
+      <div class="empty" data-demo-empty hidden>
+        <p class="empty-title">아직 숨긴 공고가 없어요.</p>
+        <p class="empty-sub">공고 옆의 눈 아이콘을 누르면 이 브라우저에서만 숨겨져요.</p>
+      </div>
+      {{end}}
       {{else}}
       <div class="empty">
         <p class="empty-title">아직 숨긴 공고가 없어요.</p>

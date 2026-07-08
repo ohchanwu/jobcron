@@ -86,6 +86,7 @@
     if (searchInput) {
       searchInput.addEventListener('input', applyFilters);
     }
+    document.addEventListener('demo-state-change', applyFilters);
 
     function activeSource() {
       var on = container.querySelector('.source-pill.on');
@@ -103,7 +104,7 @@
         var srcMatch = source === ALL_KEY ||
           (',' + c.el.dataset.source + ',').indexOf(',' + source + ',') !== -1;
         var qMatch = q === '' || c.text.indexOf(q) !== -1;
-        var visible = srcMatch && qMatch;
+        var visible = !c.el.hidden && srcMatch && qMatch;
         c.el.classList.toggle('filter-hidden', !visible);
         if (visible) anyVisible = true;
       });
