@@ -6,9 +6,9 @@ The deploy files in this directory are configured for:
 
 - Public URL: `https://demo.jobcron.app`
 - App data file on the server: `/srv/job-scraper/data/jobs.db`
-- App config directory on the server: `/srv/job-scraper/app`
+- App repository directory on the server: `/srv/job-scraper/app`
+- App compose directory on the server: `/srv/job-scraper/app/deploy/aws`
 - Local prepared database backup: `/tmp/jobs.db`
-- Local prepared Docker image archive: `/tmp/job-scraper-demo-linux-arm64.tar.gz`
 
 Do not upload `ai_keys.json`. AI runs locally before deployment. The server reads cached AI results from `jobs.db`.
 
@@ -45,21 +45,32 @@ dig demo.jobcron.app
 
 The answer should include your Elastic IP before you start Caddy.
 
-## 3. Build the Docker image on your Mac
+## 3. Build and push the Docker image on your Mac
 
 Do not build the app image on the EC2 instance. A `t4g.micro` does not have enough memory for the Docker build.
 
-On your Mac:
+Choose a registry image name. For GitHub Container Registry, use:
+
+```sh
+IMAGE=ghcr.io/<github-user>/job-scraper-demo:latest
+```
+
+For Docker Hub, use:
+
+```sh
+IMAGE=<dockerhub-user>/job-scraper-demo:latest
+```
+
+Then build the arm64 Linux image and push it from your Mac:
 
 ```sh
 cd /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper
-docker buildx build --platform linux/arm64 -f deploy/aws/Dockerfile -t job-scraper-demo:latest --load .
-docker save job-scraper-demo:latest | gzip > /tmp/job-scraper-demo-linux-arm64.tar.gz
+docker buildx build --platform linux/arm64 -f deploy/aws/Dockerfile -t "$IMAGE" --push .
 ```
 
-This creates an arm64 Linux image that can run on the AWS instance.
+This creates an arm64 Linux image that can run on the AWS instance, then stores it in your registry.
 
-## 4. Copy the deploy files, image, and database
+## 4. Clone or update the repo on the server
 
 On your Mac, set these variables:
 
@@ -68,25 +79,24 @@ EC2_HOST=<elastic-ip-or-ec2-host>
 KEY=~/path/to/your-key.pem
 ```
 
-Create the server directories:
+Create the server directories, then clone the repository if this is the first deploy:
 
 ```sh
 ssh -i "$KEY" ec2-user@$EC2_HOST 'sudo mkdir -p /srv/job-scraper/app /srv/job-scraper/data && sudo chown -R ec2-user:ec2-user /srv/job-scraper'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'git clone <repo-url> /srv/job-scraper/app'
 ```
 
-Copy the app deploy files:
+For later deploys, pull the latest code instead:
 
 ```sh
-scp -i "$KEY" -r /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper/deploy/aws/* ec2-user@$EC2_HOST:/srv/job-scraper/app/
+ssh -i "$KEY" ec2-user@$EC2_HOST 'cd /srv/job-scraper/app && git pull --ff-only'
 ```
 
-Copy the prebuilt Docker image archive:
+Using Git for the app files is safe for this repo because the tracked files do not include the runtime database, `.env`, or `ai_keys.json`. Those stay local to your Mac or the server.
 
-```sh
-scp -i "$KEY" /tmp/job-scraper-demo-linux-arm64.tar.gz ec2-user@$EC2_HOST:/srv/job-scraper/app/
-```
+## 5. Copy only the database
 
-Copy only the prepared SQLite database:
+The database is runtime data, not source code. Copy only the prepared SQLite backup:
 
 ```sh
 scp -i "$KEY" /tmp/jobs.db ec2-user@$EC2_HOST:/srv/job-scraper/data/jobs.db
@@ -98,7 +108,16 @@ Do not copy:
 ~/Library/Application Support/job-scraper/ai_keys.json
 ```
 
-## 5. Install Docker on the server
+Do not commit or upload:
+
+```text
+.env
+*.db
+*.db-shm
+*.db-wal
+```
+
+## 6. Install Docker on the server
 
 SSH into the instance:
 
@@ -130,12 +149,18 @@ sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 docker compose version
 ```
 
-## 6. Create the environment file
+If your registry requires login, log in on the EC2 instance:
+
+```sh
+docker login <registry>
+```
+
+## 7. Create the environment file
 
 On the server:
 
 ```sh
-cd /srv/job-scraper/app
+cd /srv/job-scraper/app/deploy/aws
 openssl rand -hex 32
 ```
 
@@ -145,26 +170,30 @@ Create `.env`:
 nano .env
 ```
 
-Add this line, using the random token from `openssl`:
+Add these lines. Use the same image name you pushed from your Mac, and use the random token from `openssl`:
 
 ```sh
+JOBSCRAPER_IMAGE=<registry>/<namespace>/job-scraper-demo:latest
 JOBSCRAPER_ADMIN_TOKEN=<paste-random-token-here>
 ```
 
 The token is a safety hatch for operator-triggered `/api/scrape` in demo mode. Visitors still cannot write profile, bookmark, hide, or AI re-rate data.
 
-## 7. Load the image and start the app
+## 8. Pull the image and start the app
 
 On the server:
 
 ```sh
-cd /srv/job-scraper/app
-gunzip -c job-scraper-demo-linux-arm64.tar.gz | docker load
+cd /srv/job-scraper/app/deploy/aws
+set -a
+. ./.env
+set +a
+docker pull "$JOBSCRAPER_IMAGE"
 docker compose --env-file .env up -d
 docker compose logs -f
 ```
 
-Do not run `docker compose build` or `docker compose up --build` on the EC2 instance. The compose file uses the prebuilt `job-scraper-demo:latest` image that `docker load` imports, and it will not pull or build a replacement image.
+Do not run `docker compose build` or `docker compose up --build` on the EC2 instance. The compose file uses the prebuilt image named by `JOBSCRAPER_IMAGE`, and it will not build a replacement image.
 
 Expected behavior:
 
@@ -173,7 +202,7 @@ Expected behavior:
 - The `caddy` container listens on public ports `80` and `443`.
 - Caddy requests and stores the HTTPS certificate automatically.
 
-## 8. Final checks
+## 9. Final checks
 
 From a phone on cellular, open:
 
@@ -211,7 +240,6 @@ These files were prepared locally:
 
 ```text
 /tmp/jobs.db
-/tmp/job-scraper-demo-linux-arm64.tar.gz
 ```
 
-The deployment uses both files: `/tmp/jobs.db` for the read-only data and `/tmp/job-scraper-demo-linux-arm64.tar.gz` for the prebuilt app container image.
+The deployment uses `/tmp/jobs.db` for the read-only data. The app container image is pushed from your Mac and pulled by the EC2 instance.

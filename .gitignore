@@ -11,6 +11,11 @@
 *.db-shm
 *.db-wal
 
+# Local environment files. Production values are created directly on the server.
+.env
+.env.*
+deploy/aws/.env
+
 # 점핏 API spike material — raw captured responses kept locally as Step 4
 # fixture seeds. May contain request headers / cookies. Never committed.
 /internal/scraper/jumpit/API_NOTES.md

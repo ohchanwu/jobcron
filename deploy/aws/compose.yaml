@@ -1,6 +1,6 @@
 services:
   app:
-    image: job-scraper-demo:latest
+    image: "${JOBSCRAPER_IMAGE:?set JOBSCRAPER_IMAGE in .env}"
     pull_policy: never
     command:
       - --no-open
