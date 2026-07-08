@@ -48,35 +48,16 @@ The answer should include the instance's current public IPv4 address before you 
 
 Do not build the app image on the EC2 instance. A `t4g.micro` does not have enough memory for the Docker build.
 
-Choose a registry image name. For GitHub Container Registry, use:
-
-```sh
-IMAGE=ghcr.io/<github-user>/job-scraper-demo:latest
-```
-
-For Docker Hub, use:
-
-```sh
-IMAGE=<dockerhub-user>/job-scraper-demo:latest
-```
-
-Then build the arm64 Linux image and push it from your Mac:
+Build the arm64 Linux image and push it from your Mac:
 
 ```sh
 cd /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper
-docker buildx build --platform linux/arm64 -f deploy/aws/Dockerfile -t "$IMAGE" --push .
+docker buildx build --platform linux/arm64 -f deploy/aws/Dockerfile -t ohchanwu/jobcron:0.1-linuxarm64 --push .
 ```
 
 This creates an arm64 Linux image that can run on the AWS instance, then stores it in your registry.
 
 ## 4. Clone or update the repo on the server
-
-On your Mac, set these variables:
-
-```sh
-EC2_HOST=<current-ec2-public-ip-or-public-dns-name>
-KEY=~/path/to/your-key.pem
-```
 
 Create the server directories, then clone the repository if this is the first deploy:
 
