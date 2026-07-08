@@ -59,6 +59,13 @@ This creates an arm64 Linux image that can run on the AWS instance, then stores 
 
 ## 4. Clone or update the repo on the server
 
+On your Mac, set these variables:
+
+```sh
+EC2_HOST=<current-ec2-public-ip-or-public-dns-name>
+KEY=~/path/to/your-key.pem
+```
+
 Create the server directories, then clone the repository if this is the first deploy:
 
 ```sh
@@ -153,7 +160,7 @@ nano .env
 Add these lines. Use the same image name you pushed from your Mac, and use the random token from `openssl`:
 
 ```sh
-JOBSCRAPER_IMAGE=<registry>/<namespace>/job-scraper-demo:latest
+JOBSCRAPER_IMAGE=ohchanwu/jobcron:0.1-linuxarm64
 JOBSCRAPER_ADMIN_TOKEN=<paste-random-token-here>
 ```
 
