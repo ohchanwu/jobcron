@@ -39,6 +39,12 @@ func (s *Server) buildHidden(ctx context.Context, now time.Time) (hiddenView, er
 	if err != nil {
 		return hiddenView{}, err
 	}
+	if s.demoMode {
+		postings, err = s.store.AllPostings(ctx)
+		if err != nil {
+			return hiddenView{}, err
+		}
+	}
 	scores, err := s.store.ScoresByPostingID(ctx)
 	if err != nil {
 		return hiddenView{}, err
@@ -47,12 +53,15 @@ func (s *Server) buildHidden(ctx context.Context, now time.Time) (hiddenView, er
 	if err != nil {
 		return hiddenView{}, err
 	}
+	if s.demoMode {
+		bookmarks = map[int64]bool{}
+	}
 	view := hiddenView{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
 		dp := dashboardPosting{
 			Posting:       p,
 			Bookmarked:    bookmarks[p.ID],
-			NotInterested: true, // every row here is muted by definition
+			NotInterested: !s.demoMode, // demo localStorage decides which rows are hidden
 			Deadline:      deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 		}
 		if sc, ok := scores[p.ID]; ok {

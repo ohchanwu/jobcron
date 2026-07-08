@@ -16,7 +16,7 @@
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body data-demo="{{demoMode}}">
   <!-- Icon sprite: defined once per page; cards reference these symbols via
        <svg><use href="#icon-…"/></svg> instead of pasting the full icon markup
        into every card. Inline (not an external file) because external-file
@@ -97,16 +97,22 @@
                     aria-label="관심 없음">
               <svg width="22" height="22" aria-hidden="true"><use href="#icon-eye-off"/></svg>
             </button>
-            <button class="bookmark on" type="button"
+            <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button"
                     data-posting-id="{{.Posting.ID}}"
-                    aria-pressed="true"
-                    aria-label="북마크 해제">
+                    aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}"
+                    aria-label="북마크">
               <svg width="24" height="24" aria-hidden="true"><use href="#icon-bookmark"/></svg>
             </button>
           </div>
         </li>
         {{end}}
       </ol>
+      {{if demoMode}}
+      <div class="empty" data-demo-empty hidden>
+        <p class="empty-title">아직 저장한 공고가 없어요.</p>
+        <p class="empty-sub">마음에 드는 공고 옆의 북마크 아이콘을 눌러보세요.<br>이 브라우저에서만 저장돼요.</p>
+      </div>
+      {{end}}
       {{else}}
       <div class="empty">
         <p class="empty-title">아직 저장한 공고가 없어요.</p>

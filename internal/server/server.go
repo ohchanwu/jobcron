@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -81,6 +84,8 @@ type Server struct {
 	aiDailyTokenCap int    // rolling daily token ceiling, enforced against the persisted ai_usage ledger (hard cap)
 	aiPerCallCap    int    // 재평가: not-yet-analyzed rows analyzed per press (legibility knob, not a hard cap)
 	aiKeysPath      string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
+	demoMode        bool   // read-only public demo mode
+	adminToken      string // optional safety token for operator GET mutators in demo mode
 }
 
 // SetAIProvider enables AI with the given provider and model. A nil provider
@@ -99,6 +104,27 @@ func (s *Server) SetAIProvider(p ai.Provider, model string) {
 // Empty (the default) uses ai.DefaultKeysPath(). Tests point this at a temp dir
 // so they never touch the real ~/.../job-scraper/ai_keys.json.
 func (s *Server) SetAIKeysPath(path string) { s.aiKeysPath = path }
+
+// SetDemoMode makes the HTTP surface read-only. Visitor bookmark/hide state is
+// handled by browser localStorage in this mode; no request should mutate the DB.
+func (s *Server) SetDemoMode(on bool) { s.demoMode = on }
+
+// SetAdminToken sets the operator token accepted by /api/scrape in demo mode.
+// An empty token means the endpoint is refused like every other mutator.
+func (s *Server) SetAdminToken(token string) { s.adminToken = token }
+
+func (s *Server) validAdminToken(r *http.Request) bool {
+	if s.adminToken == "" {
+		return false
+	}
+	got := r.URL.Query().Get("token")
+	if got == "" {
+		got = r.Header.Get("X-JobScraper-Admin-Token")
+	}
+	wantHash := sha256.Sum256([]byte(s.adminToken))
+	gotHash := sha256.Sum256([]byte(got))
+	return subtle.ConstantTimeCompare(wantHash[:], gotHash[:]) == 1
+}
 
 // keysPath returns the configured ai_keys.json path, falling back to the OS
 // default.
@@ -181,6 +207,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		"registeredSources": srv.allRegisteredSources,
 		"sourcePillGroups":  srv.sourcePillGroups,
 		"absInt":            absInt,
+		"demoMode":          func() bool { return srv.demoMode },
 	}
 	srv.tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
 	return srv
@@ -604,6 +631,15 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+	} else if s.demoMode {
+		// The public demo runs without ai_keys.json, but the uploaded database
+		// already contains tonight's cached Stage-2 deltas. Merge the newest
+		// cached row as current so the first server boot does not erase the
+		// visible AI chips.
+		anyVerDeltas, err = s.store.LatestAIScoresAnyVersionByPostingID(ctx)
+		if err != nil {
+			return 0, err
+		}
 	}
 	for _, p := range postings {
 		var ext *ai.Extraction
@@ -625,7 +661,7 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 			d.Stale = true
 			delta = &d
 		} else if d, ok := anyVerDeltas[p.ID]; ok {
-			d.Stale = true
+			d.Stale = !(s.demoMode && s.ai == nil)
 			delta = &d
 		}
 		result := scoring.Score(p, prof, ext, delta)

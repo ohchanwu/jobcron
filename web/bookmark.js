@@ -2,6 +2,55 @@
    click handler covers every .bookmark button on the page, including any
    that show up later (the dashboard re-renders on scrape completion). */
 (function () {
+  var KEY = 'jobScraperDemoBookmarks';
+
+  function demoMode() {
+    return document.body && document.body.dataset.demo === 'true';
+  }
+
+  function readSet() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function writeSet(set) {
+    try { localStorage.setItem(KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+  }
+
+  function paintButton(btn, on) {
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+
+  function syncDemoBookmarks() {
+    if (!demoMode()) return;
+    var saved = readSet();
+    document.querySelectorAll('.bookmark[data-posting-id]').forEach(function (btn) {
+      paintButton(btn, saved.has(String(btn.dataset.postingId)));
+    });
+    if (location.pathname === '/bookmarks') {
+      document.querySelectorAll('.posting').forEach(function (card) {
+        var btn = card.querySelector('.bookmark[data-posting-id]');
+        card.hidden = !btn || !saved.has(String(btn.dataset.postingId));
+      });
+      updateDemoCount('저장된 공고');
+    }
+    document.dispatchEvent(new CustomEvent('demo-state-change'));
+  }
+
+  function updateDemoCount(label) {
+    var visible = document.querySelectorAll('.posting:not([hidden])').length;
+    var count = document.querySelector('.count strong');
+    if (count) count.textContent = String(visible);
+    var empty = document.querySelector('.empty');
+    if (empty) empty.hidden = visible !== 0;
+  }
+
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.bookmark');
     if (!btn || btn.disabled) return;
@@ -10,6 +59,13 @@
     if (!id) return;
 
     var wasOn = btn.classList.contains('on');
+    if (demoMode()) {
+      var saved = readSet();
+      if (wasOn) saved.delete(String(id)); else saved.add(String(id));
+      writeSet(saved);
+      syncDemoBookmarks();
+      return;
+    }
     // Optimistic flip — gives the click instant feedback even on a slow
     // local DB. The server response below is the source of truth.
     btn.classList.toggle('on');
@@ -37,4 +93,10 @@
         btn.disabled = false;
       });
   });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncDemoBookmarks);
+  } else {
+    syncDemoBookmarks();
+  }
 })();

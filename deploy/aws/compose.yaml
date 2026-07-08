@@ -1,0 +1,37 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/aws/Dockerfile
+    command:
+      - --no-open
+      - --demo
+      - --host
+      - 0.0.0.0
+      - --db
+      - /data/jobs.db
+    environment:
+      JOBSCRAPER_DEMO: "1"
+      JOBSCRAPER_ADMIN_TOKEN: "${JOBSCRAPER_ADMIN_TOKEN:?set JOBSCRAPER_ADMIN_TOKEN in .env}"
+    volumes:
+      - /srv/job-scraper/data:/data
+    ports:
+      - "127.0.0.1:7777:7777"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

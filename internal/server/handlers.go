@@ -39,7 +39,33 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /favicon.ico", http.RedirectHandler("/static/favicon.ico", http.StatusMovedPermanently))
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.FS(web.FS))))
-	return mux
+	if !s.demoMode {
+		return mux
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.rejectDemoMutation(w, r) {
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) rejectDemoMutation(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "데모 모드에서는 변경할 수 없어요.", http.StatusForbidden)
+		return true
+	}
+	switch r.URL.Path {
+	case "/api/rerate":
+		http.Error(w, "데모 모드에서는 AI 재평가를 실행할 수 없어요.", http.StatusForbidden)
+		return true
+	case "/api/scrape":
+		if !s.validAdminToken(r) {
+			http.Error(w, "데모 모드에서는 관리자 토큰이 있어야 스크랩할 수 있어요.", http.StatusForbidden)
+			return true
+		}
+	}
+	return false
 }
 
 // handleScrapeSSE runs the scrape pipeline, streaming progress to the client
@@ -154,9 +180,15 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if err != nil {
 		return briefing{}, err
 	}
+	if s.demoMode {
+		bookmarks = map[int64]bool{}
+	}
 	muted, err := s.store.NotInterestedIDs(ctx)
 	if err != nil {
 		return briefing{}, err
+	}
+	if s.demoMode {
+		muted = map[int64]bool{}
 	}
 	dupSources, err := s.store.DuplicateSourcesByCanonical(ctx)
 	if err != nil {
