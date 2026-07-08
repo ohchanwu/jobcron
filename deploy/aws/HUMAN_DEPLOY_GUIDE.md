@@ -24,17 +24,16 @@ In AWS EC2:
    - Allow TCP `80` from `0.0.0.0/0`
    - Allow TCP `443` from `0.0.0.0/0`
    - Allow TCP `22` only from your current IP address
-6. Allocate an Elastic IP.
-7. Associate the Elastic IP with the instance.
+6. Do not allocate an Elastic IP for this demo. Use the instance's current public IPv4 address or public DNS name.
 
 ## 2. Point DNS at the server
 
-At your DNS provider for `jobcron.app`, create this record:
+In the EC2 console, copy the instance's current public IPv4 address. At your DNS provider for `jobcron.app`, create this record:
 
 ```text
 Type: A
 Name: demo
-Value: <Elastic IP>
+Value: <current EC2 public IPv4 address>
 ```
 
 Verify DNS from your local machine:
@@ -43,7 +42,7 @@ Verify DNS from your local machine:
 dig demo.jobcron.app
 ```
 
-The answer should include your Elastic IP before you start Caddy.
+The answer should include the instance's current public IPv4 address before you start Caddy. If the instance is stopped and AWS assigns a new public IPv4 address later, update this DNS record again.
 
 ## 3. Build and push the Docker image on your Mac
 
@@ -75,7 +74,7 @@ This creates an arm64 Linux image that can run on the AWS instance, then stores 
 On your Mac, set these variables:
 
 ```sh
-EC2_HOST=<elastic-ip-or-ec2-host>
+EC2_HOST=<current-ec2-public-ip-or-public-dns-name>
 KEY=~/path/to/your-key.pem
 ```
 

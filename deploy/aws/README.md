@@ -7,8 +7,9 @@ instance. AI is off on the server. Upload only `jobs.db`; never upload
 ## DNS and instance assumptions
 
 - Hostname: `demo.jobcron.app`
-- DNS: create an `A` record for `demo.jobcron.app` pointing to the instance
-  Elastic IP.
+- DNS: create an `A` record for `demo.jobcron.app` pointing to the instance's
+  current public IPv4 address. This guide does not use an Elastic IP. If the
+  instance is stopped and AWS assigns a new public IPv4 address, update DNS.
 - Instance: Amazon Linux 2023 kernel-6.18 arm64 AMI, t4g.micro.
 - Security group: allow 80 and 443 from the internet; allow 22 only from your IP.
 
