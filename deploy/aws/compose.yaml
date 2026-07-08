@@ -1,8 +1,7 @@
 services:
   app:
-    build:
-      context: ../..
-      dockerfile: deploy/aws/Dockerfile
+    image: job-scraper-demo:latest
+    pull_policy: never
     command:
       - --no-open
       - --demo
