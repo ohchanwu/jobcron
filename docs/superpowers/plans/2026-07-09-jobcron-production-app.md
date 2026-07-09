@@ -4,9 +4,12 @@
 
 **Goal:** Turn the current read-only demo into a single-user production app with PostgreSQL, owner login, cookie sessions, server-side user state, scheduled daily scraping, manual/opt-in AI scoring, RDS deployment docs, and a human handoff report.
 
-**Architecture:** Keep global job postings shared, but introduce owner/user identity now so Milestone B multi-user support does not require a second schema rewrite. Add PostgreSQL through a small storage dialect layer while preserving SQLite for local development and existing tests. Build all code that can be built locally first; stop at a handoff report for AWS RDS, DNS, production secrets, and backup sync details that require human action.
+**Architecture:** Keep global job postings shared, but introduce owner/user identity now so Milestone B multi-user support does not require a second schema rewrite. Make PostgreSQL the normal database for production and local development by the end of Milestone A, with Docker Compose providing the local PostgreSQL service. Keep SQLite only as a legacy import source and temporary test compatibility layer while the app moves to PostgreSQL-first behavior.
 
-**Tech Stack:** Go `net/http`, `database/sql`, SQLite via `modernc.org/sqlite`, PostgreSQL via `github.com/jackc/pgx/v5/stdlib`, password hashing via `golang.org/x/crypto/argon2`, existing embedded templates in `web/`, Docker Compose/Caddy/AWS RDS docs.
+- **Overseer feedback:** No, we want to be using PostgreSQL for local development as well once Milestone A is complete. The port should be total, unless you can come up with a good objection. We want to make the local development environment as similar to prod as is feasible/advisable/prudent.
+- **Overseer feedback response:** Accepted. The revised plan makes PostgreSQL the default local development database at the end of Milestone A. SQLite is retained only where it has a concrete transitional purpose: importing the current `jobs.db` data and keeping narrow compatibility tests until their PostgreSQL equivalents exist.
+
+**Tech Stack:** Go `net/http`, `database/sql`, PostgreSQL via `github.com/jackc/pgx/v5/stdlib`, local PostgreSQL via Docker Compose, SQLite via `modernc.org/sqlite` only for legacy import/test compatibility, password hashing via `golang.org/x/crypto/argon2`, existing embedded templates in `web/`, Docker Compose/Caddy/AWS RDS docs.
 
 ## Global Constraints
 
@@ -17,7 +20,8 @@
 - Milestone A is single-user production with one owner account.
 - Milestone B is public signup and multi-user accounts, but do not implement public signup in this plan.
 - Use AWS RDS PostgreSQL for production.
-- Keep SQLite available for local development during this migration.
+- Use local PostgreSQL for normal development by the end of Milestone A.
+- Keep SQLite available only for legacy `jobs.db` import and transitional test coverage.
 - Do not upload or commit `ai_keys.json`, `.env`, `jobs.db`, or production secrets.
 - Owner account creation is a CLI command, not a first-run browser page.
 - Production user state must not use localStorage as source of truth.
@@ -53,6 +57,8 @@
 - Create `internal/storage/dialect.go`: database dialect enum and SQL placeholder helpers.
 - Modify `internal/storage/store.go`: open SQLite or PostgreSQL and run dialect-specific migrations.
 - Create `internal/storage/postgres_migrations/*.sql`: PostgreSQL schema.
+- Create `deploy/local/compose.yaml`: local PostgreSQL service for day-to-day development.
+- Create `deploy/local/README.md`: local PostgreSQL setup, reset, migrate, and import workflow.
 - Create `cmd/job-scraper-import/main.go`: one-time SQLite to PostgreSQL importer.
 - Create `internal/auth/password.go`: Argon2id password hashing and verification.
 - Create `internal/auth/session.go`: secure session token generation and hashing helpers.
@@ -77,11 +83,13 @@
 ## Task 1: Production Configuration Foundation
 
 **Files:**
+
 - Create: `internal/config/config.go`
 - Create: `internal/config/config_test.go`
 - Modify: `cmd/job-scraper/main.go`
 
 **Interfaces:**
+
 - Produces: `config.Load(args []string, env map[string]string) (config.Config, error)`
 - Produces: `Config.DatabaseURL string`
 - Produces: `Config.SessionSecret []byte`
@@ -188,18 +196,23 @@ git commit -m "feat: add production config loading"
 ## Task 2: Storage Dialect and PostgreSQL Migration Runner
 
 **Files:**
+
 - Create: `internal/storage/dialect.go`
 - Create: `internal/storage/postgres_migrations/0001_initial.sql`
 - Create: `internal/storage/postgres_migrations/0002_user_state.sql`
+- Create: `deploy/local/compose.yaml`
+- Create: `deploy/local/README.md`
 - Modify: `internal/storage/store.go`
 - Modify: `go.mod`, `go.sum`
 - Test: `internal/storage/store_test.go`
 
 **Interfaces:**
+
 - Produces: `storage.OpenPostgres(databaseURL string) (*Store, error)`
 - Produces: `storage.OpenSQLiteAt(path string) (*Store, error)`
 - Produces: `Store.Dialect() storage.Dialect`
-- Keeps: `storage.Open()` and `storage.OpenAt(path)` compatibility for SQLite.
+- Keeps: `storage.Open()` and `storage.OpenAt(path)` compatibility for legacy SQLite tests and import only.
+- Produces: local PostgreSQL development service at `deploy/local/compose.yaml`.
 
 - [ ] **Step 1: Add failing tests for dialect selection**
 
@@ -246,7 +259,7 @@ func (d Dialect) Placeholder(n int) string {
 
 - [ ] **Step 4: Split open functions**
 
-Keep `OpenAt(path)` as SQLite, but implement `OpenSQLiteAt(path)` and `OpenPostgres(databaseURL)`.
+Keep `OpenAt(path)` as SQLite for transitional callers, but mark new app code to use `OpenPostgres(databaseURL)` when a `DATABASE_URL` is configured. Do not add new feature work that depends on SQLite.
 
 - [ ] **Step 5: Implement PostgreSQL migration runner**
 
@@ -259,37 +272,71 @@ Port the current SQLite schema to PostgreSQL:
 - `INTEGER PRIMARY KEY AUTOINCREMENT` becomes `BIGSERIAL PRIMARY KEY`.
 - `DATETIME` becomes `TIMESTAMPTZ`.
 - JSON text columns can stay `TEXT` for first migration.
-- SQLite FTS5 does not port directly. For Milestone A, skip PostgreSQL full-text search unless the current app requires it for visible behavior; add a later search-specific task if needed.
+- SQLite full-text search does not port directly. For Milestone A, add PostgreSQL search using `to_tsvector`/`plainto_tsquery` if the current app has visible search behavior; otherwise document search as unchanged only if no user-facing search exists.
 
-- [ ] **Step 7: Verify local SQLite tests still pass**
+- [ ] **Step 7: Add local PostgreSQL development Compose service**
+
+Create `deploy/local/compose.yaml`:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: jobscraper_dev
+    ports:
+      - "55432:5432"
+    volumes:
+      - jobscraper-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  jobscraper-postgres-data:
+```
+
+Create `deploy/local/README.md` with:
+
+- start: `docker compose -f deploy/local/compose.yaml up -d`,
+- local `DATABASE_URL`: `postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable`,
+- reset command using `docker compose -f deploy/local/compose.yaml down -v`,
+- import command from the old `jobs.db`.
+
+- [ ] **Step 8: Verify PostgreSQL-first storage and legacy SQLite tests**
 
 Run:
 
 ```bash
 go test ./internal/storage
+docker compose -f deploy/local/compose.yaml up -d
+JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go test ./internal/storage -run Postgres -count=1
 go test ./...
 ```
 
 Expected: all pass.
 
-- [ ] **Step 8: Commit locally**
+- [ ] **Step 9: Commit locally**
 
 ```bash
-git add go.mod go.sum internal/storage
+git add go.mod go.sum internal/storage deploy/local
 git commit -m "feat: add storage dialect foundation"
 ```
 
 ---
 
-## Task 3: PostgreSQL Integration Test Harness
+## Task 3: PostgreSQL Local Development and Integration Test Harness
 
 **Files:**
+
 - Create: `internal/storage/postgres_integration_test.go`
+- Modify: `cmd/job-scraper/main.go`
+- Modify: `README.md` or existing local run docs if present.
 - Modify: `docs/plans/production-app-roadmap.md` only if a real plan correction is discovered.
 
 **Interfaces:**
+
 - Consumes: `JOBSCRAPER_TEST_POSTGRES_URL`
 - Produces: integration tests skipped unless `JOBSCRAPER_TEST_POSTGRES_URL` is set.
+- Produces: local app startup path that uses PostgreSQL when `DATABASE_URL` is set.
 
 - [ ] **Step 1: Write integration test**
 
@@ -330,22 +377,38 @@ go test ./internal/storage -run Postgres
 
 Expected: skipped when env var absent.
 
-- [ ] **Step 3: Verify with local Docker PostgreSQL when available**
+- [ ] **Step 3: Verify with local Docker PostgreSQL**
 
 Run:
 
 ```bash
-docker run --rm --name jobscraper-pg-test -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=jobscraper_test -p 55432:5432 -d postgres:16-alpine
-JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_test?sslmode=disable' go test ./internal/storage -run Postgres -count=1
-docker stop jobscraper-pg-test
+docker compose -f deploy/local/compose.yaml up -d
+JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go test ./internal/storage -run Postgres -count=1
 ```
 
 Expected: test passes.
 
-- [ ] **Step 4: Commit locally**
+- [ ] **Step 4: Make PostgreSQL the documented local development path**
+
+Update startup wiring so:
+
+- `DATABASE_URL` opens PostgreSQL,
+- absence of `DATABASE_URL` may still use SQLite only for compatibility/demo commands,
+- local development docs instruct developers to start PostgreSQL and run the app with `DATABASE_URL`.
+
+Run:
 
 ```bash
-git add internal/storage/postgres_integration_test.go internal/storage
+docker compose -f deploy/local/compose.yaml up -d
+DATABASE_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' ./job-scraper --no-open --port 7777
+```
+
+Expected: app starts against PostgreSQL.
+
+- [ ] **Step 5: Commit locally**
+
+```bash
+git add internal/storage/postgres_integration_test.go internal/storage cmd/job-scraper README.md deploy/local
 git commit -m "test: add postgres migration integration check"
 ```
 
@@ -354,18 +417,23 @@ git commit -m "test: add postgres migration integration check"
 ## Task 4: SQLite to PostgreSQL Importer
 
 **Files:**
+
 - Create: `cmd/job-scraper-import/main.go`
 - Create: `cmd/job-scraper-import/main_test.go`
 - Modify: `internal/storage/store.go` only if export helpers are required.
 
 **Interfaces:**
+
 - Produces command:
   - `job-scraper-import --sqlite /path/jobs.db --postgres "$DATABASE_URL" --dry-run`
   - `job-scraper-import --sqlite /path/jobs.db --postgres "$DATABASE_URL"`
 
-- [ ] **Step 1: Write dry-run test**
+- [ ] **Step 1: Write importer tests**
 
-Use a temporary SQLite store with sample data, run importer in dry-run mode, and assert it reports table counts without writing to PostgreSQL.
+Add two tests:
+
+- a dry-run test using a temporary SQLite store with sample data that asserts the importer reports table counts without writing to PostgreSQL,
+- a PostgreSQL integration test, gated by `JOBSCRAPER_TEST_POSTGRES_URL`, that imports sample SQLite data into PostgreSQL and verifies representative postings, user state, and scores exist in PostgreSQL.
 
 - [ ] **Step 2: Implement importer structure**
 
@@ -391,7 +459,8 @@ Use PostgreSQL `ON CONFLICT` for idempotent retries. Importing twice should not 
 Run:
 
 ```bash
-go test ./cmd/job-scraper-import ./internal/storage
+docker compose -f deploy/local/compose.yaml up -d
+JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go test ./cmd/job-scraper-import ./internal/storage
 go test ./...
 ```
 
@@ -407,6 +476,7 @@ git commit -m "feat: add sqlite to postgres importer"
 ## Task 5: Owner User and CLI Account Creation
 
 **Files:**
+
 - Create: `internal/auth/password.go`
 - Create: `internal/auth/password_test.go`
 - Create: `internal/storage/users.go`
@@ -416,6 +486,7 @@ git commit -m "feat: add sqlite to postgres importer"
 - Modify: `go.mod`, `go.sum`
 
 **Interfaces:**
+
 - Produces: `auth.HashPassword(password string) (string, error)`
 - Produces: `auth.VerifyPassword(encodedHash, password string) (bool, error)`
 - Produces: `Store.CreateOwnerUser(ctx, email, passwordHash string) (User, error)`
@@ -494,6 +565,7 @@ git commit -m "feat: add owner account cli"
 ## Task 6: Cookie Sessions and Login Flow
 
 **Files:**
+
 - Create: `internal/auth/session.go`
 - Create: `internal/auth/session_test.go`
 - Create: `internal/storage/sessions.go`
@@ -505,6 +577,7 @@ git commit -m "feat: add owner account cli"
 - Modify: `web/*.html` as needed for login/logout links.
 
 **Interfaces:**
+
 - Produces: `Store.CreateSession(ctx, userID int64, tokenHash string, expiresAt time.Time) error`
 - Produces: `Store.UserBySessionToken(ctx, token string) (User, bool, error)`
 - Produces routes:
@@ -566,6 +639,7 @@ git commit -m "feat: add owner login sessions"
 ## Task 7: User-Scoped Profile, Bookmarks, Hidden State, and Scores
 
 **Files:**
+
 - Modify: `internal/storage/profile.go`, `profile_test.go`
 - Modify: `internal/storage/bookmarks.go`, `bookmarks_test.go`
 - Modify: `internal/storage/not_interested.go`, `not_interested_test.go`
@@ -575,6 +649,7 @@ git commit -m "feat: add owner login sessions"
 - Modify: `web/bookmark.js`, `web/not-interested.js`, `web/*.html`
 
 **Interfaces:**
+
 - Produces user-scoped storage methods:
   - `SaveProfileForUser(ctx, userID, canonicalJSON string)`
   - `ProfileForUser(ctx, userID int64)`
@@ -590,7 +665,7 @@ For each state type:
 - save different state for each,
 - assert user A cannot see user B state.
 
-- [ ] **Step 2: Add SQLite migrations for user-scoped state**
+- [ ] **Step 2: Add PostgreSQL user-scoped state migration**
 
 Add a migration that:
 
@@ -598,11 +673,17 @@ Add a migration that:
 - creates `sessions`,
 - renames or rebuilds `profile` into `profiles`,
 - adds `user_id` to bookmarks, not_interested, and scores,
-- backfills existing single-user data to owner user for local SQLite.
+- backfills imported single-user data to the owner user.
 
-- [ ] **Step 3: Add PostgreSQL equivalent migration**
+- [ ] **Step 3: Keep SQLite compatibility narrow**
 
-Keep table and index names aligned with SQLite where possible.
+Do not add broad new SQLite behavior. Keep only the compatibility needed for:
+
+- reading the old `jobs.db` import source,
+- existing unit tests that have not yet moved to PostgreSQL,
+- demo mode if the current demo deployment still depends on SQLite.
+
+Any compatibility wrapper must be documented as transitional.
 
 - [ ] **Step 4: Update storage methods**
 
@@ -637,6 +718,7 @@ git commit -m "feat: scope user state to owner account"
 ## Task 8: CSRF Protection and Login Rate Limiting
 
 **Files:**
+
 - Create: `internal/server/csrf.go`
 - Create: `internal/server/csrf_test.go`
 - Create: `internal/server/rate_limit.go`
@@ -645,6 +727,7 @@ git commit -m "feat: scope user state to owner account"
 - Modify: `web/*.html` forms.
 
 **Interfaces:**
+
 - Produces: CSRF token generation and validation for POST/PUT/DELETE form/API calls.
 - Produces: in-memory login rate limiter keyed by IP and email.
 
@@ -690,12 +773,14 @@ git commit -m "feat: add csrf and login rate limiting"
 ## Task 9: Scrape Run History
 
 **Files:**
+
 - Create: `internal/storage/scrape_runs.go`
 - Create: `internal/storage/scrape_runs_test.go`
 - Modify: `internal/server/server.go`
 - Modify: `internal/server/sse.go` only if status serialization needs reuse.
 
 **Interfaces:**
+
 - Produces: `Store.StartScrapeRun(ctx, trigger string) (ScrapeRun, error)`
 - Produces: `Store.FinishScrapeRun(ctx, id int64, result ScrapeResult, status string, errorSummary string) error`
 - Produces trigger values: `manual`, `scheduled`
@@ -751,12 +836,14 @@ git commit -m "feat: record scrape run history"
 ## Task 10: Daily Scheduler
 
 **Files:**
+
 - Create: `internal/server/scheduler.go`
 - Create: `internal/server/scheduler_test.go`
 - Modify: `cmd/job-scraper/main.go`
 - Modify: `internal/config/config.go`
 
 **Interfaces:**
+
 - Produces: `server.Scheduler`
 - Produces: `server.StartScheduler(ctx, cfg SchedulerConfig)`
 - Consumes: `JOBSCRAPER_DAILY_SCRAPE_TIME`
@@ -803,6 +890,7 @@ git commit -m "feat: add daily scrape scheduler"
 ## Task 11: Manual AI Run and Opt-In Scheduled AI
 
 **Files:**
+
 - Modify: `internal/profile/profile.go`
 - Modify: `internal/server/rerate.go`
 - Modify: `internal/server/server.go`
@@ -810,6 +898,7 @@ git commit -m "feat: add daily scrape scheduler"
 - Modify: `web/index.html`, `web/profile.html`, `web/styles.css`
 
 **Interfaces:**
+
 - Produces profile fields:
   - `scheduled_ai_enabled bool`
   - `ai_monthly_usd_cap string` or integer cents
@@ -859,9 +948,11 @@ git commit -m "feat: add manual and opt-in scheduled ai controls"
 ## Task 12: Local Production Build Report
 
 **Files:**
+
 - Create: `docs/reports/production-local-build-report.md`
 
 **Interfaces:**
+
 - Produces handoff report for human external work.
 
 - [ ] **Step 1: Create report directory**
@@ -879,6 +970,8 @@ Report must include:
 - local commits completed,
 - exact tests run,
 - whether PostgreSQL integration test passed locally,
+- whether the app was run locally against PostgreSQL,
+- whether legacy SQLite is still used anywhere outside importer/demo/test compatibility,
 - RDS values needed,
 - owner account CLI command to run after deploy,
 - production `.env` template,
@@ -918,6 +1011,7 @@ The human must provide or complete:
 **Blocked until:** Human provides RDS details, production secrets, and backup destination.
 
 **Files:**
+
 - Modify: `deploy/aws/Caddyfile`
 - Modify: `deploy/aws/compose.yaml`
 - Modify: `deploy/aws/README.md`
@@ -925,6 +1019,7 @@ The human must provide or complete:
 - Create: `deploy/aws/backup-pull-macbook.md`
 
 **Interfaces:**
+
 - Consumes production RDS `DATABASE_URL`.
 - Consumes `SESSION_SECRET`.
 - Consumes `JOBSCRAPER_IMAGE`.
@@ -970,6 +1065,7 @@ git commit -m "docs: update production rds deployment"
 ## Task 14: Final Local Verification
 
 **Files:**
+
 - No required source changes unless verification finds a bug.
 
 - [ ] **Step 1: Run full Go tests**
@@ -987,7 +1083,7 @@ Expected: all pass.
 Run with the local Docker PostgreSQL database from Task 3, or with a disposable RDS test database:
 
 ```bash
-JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_test?sslmode=disable' go test ./internal/storage -run Postgres -count=1
+JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go test ./internal/storage -run Postgres -count=1
 ```
 
 Expected: pass.
@@ -1004,12 +1100,13 @@ go build ./cmd/job-scraper-import
 
 Expected: all build.
 
-- [ ] **Step 4: Run local browser QA**
+- [ ] **Step 4: Run local browser QA against PostgreSQL**
 
-Start local app against SQLite:
+Start local PostgreSQL and run the app against it:
 
 ```bash
-./job-scraper --no-open --port 7777
+docker compose -f deploy/local/compose.yaml up -d
+DATABASE_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' ./job-scraper --no-open --port 7777
 ```
 
 Walk:
