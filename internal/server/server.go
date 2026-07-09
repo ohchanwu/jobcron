@@ -189,6 +189,48 @@ func (s *Server) ReconfigureAI(ctx context.Context) error {
 	return nil
 }
 
+func optionalUserID(userIDOpt []int64) int64 {
+	if len(userIDOpt) == 0 {
+		return 0
+	}
+	return userIDOpt[0]
+}
+
+func (s *Server) profileJSON(ctx context.Context, userID int64) (string, string, bool, error) {
+	if userID == 0 {
+		return s.store.Profile(ctx)
+	}
+	return s.store.ProfileForUser(ctx, userID)
+}
+
+func (s *Server) saveProfileJSON(ctx context.Context, userID int64, canonical string) (string, bool, error) {
+	if userID == 0 {
+		return s.store.SaveProfile(ctx, canonical)
+	}
+	return s.store.SaveProfileForUser(ctx, userID, canonical)
+}
+
+func (s *Server) scoresByPostingID(ctx context.Context, userID int64) (map[int64]storage.Score, error) {
+	if userID == 0 {
+		return s.store.ScoresByPostingID(ctx)
+	}
+	return s.store.ScoresByPostingID(ctx, userID)
+}
+
+func (s *Server) bookmarkedIDs(ctx context.Context, userID int64) (map[int64]bool, error) {
+	if userID == 0 {
+		return s.store.BookmarkedIDs(ctx)
+	}
+	return s.store.BookmarkedIDsForUser(ctx, userID)
+}
+
+func (s *Server) notInterestedIDs(ctx context.Context, userID int64) (map[int64]bool, error) {
+	if userID == 0 {
+		return s.store.NotInterestedIDs(ctx)
+	}
+	return s.store.NotInterestedIDs(ctx, userID)
+}
+
 // New builds a Server over the given storage and one or more scrapers. The
 // scrape pipeline iterates sources in the order they are registered, so the
 // most-trusted source should come first. It parses the embedded HTML
@@ -240,8 +282,9 @@ const scrapeAllKey = "_all_"
 // check → listing → detail fetch → upsert → sweep → score. Disabled sources
 // are skipped entirely and their data is frozen in the DB so re-enabling a
 // source does not require a fresh scrape.
-func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (ScrapeResult, error) {
-	prof, profileOK, err := s.loadProfile(ctx)
+func (s *Server) runScrape(ctx context.Context, emit func(event, data string), userIDOpt ...int64) (ScrapeResult, error) {
+	userID := optionalUserID(userIDOpt)
+	prof, profileOK, err := s.loadProfile(ctx, userID)
 	if err != nil {
 		return ScrapeResult{}, err
 	}
@@ -319,7 +362,7 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 	}
 
 	emit("status", "공고에 점수를 매기는 중...")
-	scored, err := s.scoreAll(ctx)
+	scored, err := s.scoreAll(ctx, userID)
 	if err != nil {
 		return res, err
 	}
@@ -333,13 +376,13 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string)) (
 	// (newAIBudget re-reads the ledger). aiPerCallCap bounds the spend per scrape;
 	// the rest stays for a manual 재평가.
 	if s.ai != nil && profileOK {
-		if vis, verr := s.visibleForRerate(ctx, "today", now); verr == nil && len(vis) > 0 {
+		if vis, verr := s.visibleForRerate(ctx, "today", now, userID); verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
 			rateBudget := s.newAIBudget(ctx)
 			rated, provErr := s.rateStage2(ctx, vis, prof, rateBudget, emit)
 			if rated > 0 {
 				// Merge the fresh Stage-2 deltas into the rendered scores.
-				if rescored, rerr := s.scoreAll(ctx); rerr == nil {
+				if rescored, rerr := s.scoreAll(ctx, userID); rerr == nil {
 					res.Scored = rescored
 				}
 			}
@@ -556,8 +599,9 @@ func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting,
 // loadProfile fetches the saved profile, returning ok=false when none has
 // been saved yet. Returning ok=false instead of an error keeps the scrape
 // pipeline from blowing up before the user even has a chance to set up.
-func (s *Server) loadProfile(ctx context.Context) (profile.Profile, bool, error) {
-	jsonStr, _, ok, err := s.store.Profile(ctx)
+func (s *Server) loadProfile(ctx context.Context, userIDOpt ...int64) (profile.Profile, bool, error) {
+	userID := optionalUserID(userIDOpt)
+	jsonStr, _, ok, err := s.profileJSON(ctx, userID)
 	if err != nil {
 		return profile.Profile{}, false, err
 	}
@@ -586,8 +630,9 @@ func (s *Server) RescoreAll(ctx context.Context) (int, error) {
 
 // scoreAll scores every stored posting against the current profile and upserts
 // the score rows. It is a no-op when no profile has been saved yet.
-func (s *Server) scoreAll(ctx context.Context) (int, error) {
-	profJSON, profHash, ok, err := s.store.Profile(ctx)
+func (s *Server) scoreAll(ctx context.Context, userIDOpt ...int64) (int, error) {
+	userID := optionalUserID(userIDOpt)
+	profJSON, profHash, ok, err := s.profileJSON(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -674,13 +719,19 @@ func (s *Server) scoreAll(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("server: marshal score: %w", err)
 		}
-		if err := s.store.UpsertScore(ctx, storage.Score{
+		sc := storage.Score{
 			PostingID:     p.ID,
 			ProfileHash:   profHash,
 			Total:         result.Total,
 			BreakdownJSON: string(breakdown),
 			ComputedAt:    time.Now().UTC(),
-		}); err != nil {
+		}
+		if userID == 0 {
+			err = s.store.UpsertScore(ctx, sc)
+		} else {
+			err = s.store.UpsertScoreForUser(ctx, userID, sc)
+		}
+		if err != nil {
 			return 0, fmt.Errorf("server: save score: %w", err)
 		}
 	}

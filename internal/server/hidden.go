@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/scoring"
+	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
 
 // hiddenView is the view model for the /hidden (숨긴 공고) page: every posting
@@ -20,7 +21,12 @@ type hiddenView struct {
 
 // handleHidden renders the user's manually-muted postings.
 func (s *Server) handleHidden(w http.ResponseWriter, r *http.Request) {
-	view, err := s.buildHidden(r.Context(), time.Now())
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	view, err := s.buildHidden(r.Context(), time.Now(), userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -34,8 +40,9 @@ func (s *Server) handleHidden(w http.ResponseWriter, r *http.Request) {
 // rendered in the on state (every row here is muted by definition) so clicking
 // it un-hides. Muted postings from a source the user later disabled still show
 // here, mirroring /bookmarks — this is the only place to un-hide them.
-func (s *Server) buildHidden(ctx context.Context, now time.Time) (hiddenView, error) {
-	postings, err := s.store.NotInterestedPostings(ctx)
+func (s *Server) buildHidden(ctx context.Context, now time.Time, userIDOpt ...int64) (hiddenView, error) {
+	userID := optionalUserID(userIDOpt)
+	postings, err := s.notInterestedPostings(ctx, userID)
 	if err != nil {
 		return hiddenView{}, err
 	}
@@ -45,11 +52,11 @@ func (s *Server) buildHidden(ctx context.Context, now time.Time) (hiddenView, er
 			return hiddenView{}, err
 		}
 	}
-	scores, err := s.store.ScoresByPostingID(ctx)
+	scores, err := s.scoresByPostingID(ctx, userID)
 	if err != nil {
 		return hiddenView{}, err
 	}
-	bookmarks, err := s.store.BookmarkedIDs(ctx)
+	bookmarks, err := s.bookmarkedIDs(ctx, userID)
 	if err != nil {
 		return hiddenView{}, err
 	}
@@ -76,4 +83,11 @@ func (s *Server) buildHidden(ctx context.Context, now time.Time) (hiddenView, er
 		view.Postings = append(view.Postings, dp)
 	}
 	return view, nil
+}
+
+func (s *Server) notInterestedPostings(ctx context.Context, userID int64) ([]scraper.Posting, error) {
+	if userID == 0 {
+		return s.store.NotInterestedPostings(ctx)
+	}
+	return s.store.NotInterestedPostingsForUser(ctx, userID)
 }

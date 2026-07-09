@@ -64,6 +64,17 @@ func (s *Server) userFromRequest(ctx context.Context, r *http.Request) (userID i
 	return user.ID, true
 }
 
+func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error) {
+	if !s.productionMode || s.demoMode {
+		return 0, nil
+	}
+	userID, ok := s.userFromRequest(ctx, r)
+	if !ok {
+		return 0, http.ErrNoCookie
+	}
+	return userID, nil
+}
+
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "login.html", loginPage{})
 }

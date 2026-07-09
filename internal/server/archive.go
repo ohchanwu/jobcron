@@ -67,7 +67,12 @@ func (v *archiveView) applyScoreSort() {
 // handleArchive renders every posting the scraper has ever stored, grouped
 // by the day it was first seen, most recent day first.
 func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
-	view, err := s.buildArchive(r.Context(), time.Now())
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	view, err := s.buildArchive(r.Context(), time.Now(), userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -111,23 +116,24 @@ func resolveArchiveSort(w http.ResponseWriter, r *http.Request) string {
 // open a new day group every time the KST date changes. Cross-portal
 // duplicates are hidden — only the canonical row appears — matching the
 // briefing's behavior.
-func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, error) {
+func (s *Server) buildArchive(ctx context.Context, now time.Time, userIDOpt ...int64) (archiveView, error) {
+	userID := optionalUserID(userIDOpt)
 	allPostings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return archiveView{}, err
 	}
-	scores, err := s.store.ScoresByPostingID(ctx)
+	scores, err := s.scoresByPostingID(ctx, userID)
 	if err != nil {
 		return archiveView{}, err
 	}
-	bookmarks, err := s.store.BookmarkedIDs(ctx)
+	bookmarks, err := s.bookmarkedIDs(ctx, userID)
 	if err != nil {
 		return archiveView{}, err
 	}
 	if s.demoMode {
 		bookmarks = map[int64]bool{}
 	}
-	muted, err := s.store.NotInterestedIDs(ctx)
+	muted, err := s.notInterestedIDs(ctx, userID)
 	if err != nil {
 		return archiveView{}, err
 	}
@@ -138,7 +144,7 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time) (archiveView, 
 	if err != nil {
 		return archiveView{}, err
 	}
-	prof, _, err := s.loadProfile(ctx)
+	prof, _, err := s.loadProfile(ctx, userID)
 	if err != nil {
 		return archiveView{}, err
 	}

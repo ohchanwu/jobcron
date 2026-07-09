@@ -149,6 +149,11 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "알 수 없는 화면이에요.", http.StatusBadRequest)
 		return
 	}
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
 	if s.ai == nil {
 		// No provider configured — there is nothing to re-rate. The button is
 		// hidden in this state; this guards a direct request. 503 (not 409): the
@@ -192,7 +197,7 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 	// SSE writes after disconnect are no-ops.
 	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
 	defer cancel()
-	analyzed, visible, err := s.runRerate(ctx, surface, sw.event)
+	analyzed, visible, err := s.runRerate(ctx, surface, sw.event, userID)
 	if err != nil {
 		// A provider failure (every attempted row errored) carries a calm,
 		// specific message; a storage/profile failure keeps the generic one. The
@@ -241,15 +246,16 @@ func rerateDoneMessage(analyzed, visible int) string {
 // cap, so a later press resumes on the still-uncached rows. It returns the
 // cumulative analyzed count (N — visible rows now cached against the current
 // goal) and the total visible rows (M) for the progress copy.
-func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string)) (analyzed, visible int, err error) {
-	prof, ok, err := s.loadProfile(ctx)
+func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userIDOpt ...int64) (analyzed, visible int, err error) {
+	userID := optionalUserID(userIDOpt)
+	prof, ok, err := s.loadProfile(ctx, userID)
 	if err != nil {
 		return 0, 0, err
 	}
 	if !ok {
 		return 0, 0, nil
 	}
-	postings, err := s.visibleForRerate(ctx, surface, time.Now())
+	postings, err := s.visibleForRerate(ctx, surface, time.Now(), userID)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -271,7 +277,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 		emit("status", providerFailureMessage(provErr))
 	}
 	emit("status", "점수를 다시 매기는 중...")
-	if _, err := s.scoreAll(ctx); err != nil {
+	if _, err := s.scoreAll(ctx, userID); err != nil {
 		return analyzed, visible, err
 	}
 	if analyzed == 0 && provErr != nil {
@@ -398,22 +404,23 @@ func (s *Server) rerateOne(
 // visibleForRerate returns the non-dealbreaker postings currently shown on a
 // surface — the exact rows the user sees, never the whole DB. Each surface
 // reuses its existing page builder so re-rate and render agree on "visible".
-func (s *Server) visibleForRerate(ctx context.Context, surface string, now time.Time) ([]scraper.Posting, error) {
+func (s *Server) visibleForRerate(ctx context.Context, surface string, now time.Time, userIDOpt ...int64) ([]scraper.Posting, error) {
+	userID := optionalUserID(userIDOpt)
 	switch surface {
 	case "today":
-		b, err := s.buildBriefing(ctx, now)
+		b, err := s.buildBriefing(ctx, now, userID)
 		if err != nil {
 			return nil, err
 		}
 		return postingsOf(b.Today), nil
 	case "bookmarks":
-		v, err := s.buildBookmarks(ctx, now)
+		v, err := s.buildBookmarks(ctx, now, userID)
 		if err != nil {
 			return nil, err
 		}
 		return postingsOf(v.Postings), nil
 	case "archive":
-		v, err := s.buildArchive(ctx, now)
+		v, err := s.buildArchive(ctx, now, userID)
 		if err != nil {
 			return nil, err
 		}

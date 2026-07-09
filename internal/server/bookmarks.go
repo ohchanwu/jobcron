@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/scoring"
+	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
 
 // bookmarksView is the view model for the /bookmarks page.
@@ -22,7 +23,12 @@ type bookmarksView struct {
 // clear them out.
 func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	view, err := s.buildBookmarks(ctx, time.Now())
+	userID, err := s.stateUserID(ctx, r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	view, err := s.buildBookmarks(ctx, time.Now(), userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -33,8 +39,9 @@ func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 // buildBookmarks assembles the bookmarks view: every bookmarked posting,
 // each carrying its current score chips and a deadline badge. Bookmark
 // order is most-recently-saved first (storage layer does the sort).
-func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksView, error) {
-	postings, err := s.store.BookmarkedPostings(ctx)
+func (s *Server) buildBookmarks(ctx context.Context, now time.Time, userIDOpt ...int64) (bookmarksView, error) {
+	userID := optionalUserID(userIDOpt)
+	postings, err := s.bookmarkedPostings(ctx, userID)
 	if err != nil {
 		return bookmarksView{}, err
 	}
@@ -44,14 +51,14 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 			return bookmarksView{}, err
 		}
 	}
-	scores, err := s.store.ScoresByPostingID(ctx)
+	scores, err := s.scoresByPostingID(ctx, userID)
 	if err != nil {
 		return bookmarksView{}, err
 	}
 	// A bookmarked posting can also be muted ("관심 없음"); it stays visible
 	// here (unlike on the briefing / 전체 공고 list) but renders its mute
 	// toggle in the on state so the user can un-mute it from here too.
-	muted, err := s.store.NotInterestedIDs(ctx)
+	muted, err := s.notInterestedIDs(ctx, userID)
 	if err != nil {
 		return bookmarksView{}, err
 	}
@@ -77,7 +84,7 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time) (bookmarksVi
 		}
 		view.Postings = append(view.Postings, dp)
 	}
-	prof, _, err := s.loadProfile(ctx)
+	prof, _, err := s.loadProfile(ctx, userID)
 	if err != nil {
 		return bookmarksView{}, err
 	}
@@ -92,7 +99,17 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.store.SetBookmark(r.Context(), id, time.Now()); err != nil {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	if userID == 0 {
+		err = s.store.SetBookmark(r.Context(), id, time.Now())
+	} else {
+		err = s.store.AddBookmark(r.Context(), userID, id)
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -106,11 +123,28 @@ func (s *Server) handleBookmarkRemove(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.store.ClearBookmark(r.Context(), id); err != nil {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	if userID == 0 {
+		err = s.store.ClearBookmark(r.Context(), id)
+	} else {
+		err = s.store.ClearBookmarkForUser(r.Context(), userID, id)
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeBookmarkState(w, false)
+}
+
+func (s *Server) bookmarkedPostings(ctx context.Context, userID int64) ([]scraper.Posting, error) {
+	if userID == 0 {
+		return s.store.BookmarkedPostings(ctx)
+	}
+	return s.store.BookmarkedPostingsForUser(ctx, userID)
 }
 
 // postingID extracts the {id} path value as a positive int64, writing

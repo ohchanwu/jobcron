@@ -15,7 +15,17 @@ func (s *Server) handleNotInterestedAdd(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	if err := s.store.SetNotInterested(r.Context(), id, time.Now()); err != nil {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	if userID == 0 {
+		err = s.store.SetNotInterested(r.Context(), id, time.Now())
+	} else {
+		err = s.store.AddNotInterested(r.Context(), userID, id, time.Now())
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -29,7 +39,17 @@ func (s *Server) handleNotInterestedRemove(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	if err := s.store.ClearNotInterested(r.Context(), id); err != nil {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	if userID == 0 {
+		err = s.store.ClearNotInterested(r.Context(), id)
+	} else {
+		err = s.store.ClearNotInterestedForUser(r.Context(), userID, id)
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

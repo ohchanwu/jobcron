@@ -137,6 +137,21 @@ SELECT id, email, password_hash, created_at, updated_at
 	return user, true, nil
 }
 
+// firstUserID is a transitional compatibility helper for legacy no-user
+// storage wrappers. Production request paths should pass the authenticated
+// user id and avoid this fallback.
+func (s *Store) firstUserID(ctx context.Context) (int64, bool, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM users ORDER BY id LIMIT 1`).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: first user id: %w", err)
+	}
+	return id, true, nil
+}
+
 func scanOwnerUser(row rowScanner) (User, error) {
 	var user User
 	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt); err != nil {

@@ -80,6 +80,11 @@ func (s *Server) rejectDemoMutation(w http.ResponseWriter, r *http.Request) bool
 // The lock is global rather than per-source because the user clicks one
 // button, sees one SSE stream, and would be confused by partial states.
 func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
 	if !s.flight.tryAcquire(scrapeAllKey) {
 		http.Error(w, "이미 스크랩이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
 		return
@@ -103,7 +108,7 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 	// (sseWriter.event ignores write errors).
 	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
 	defer cancel()
-	res, err := s.runScrape(ctx, sw.event)
+	res, err := s.runScrape(ctx, sw.event, userID)
 	if err != nil {
 		sw.event("failed", "스크랩에 실패했어요. 잠시 후 다시 시도해 주세요.")
 		return
@@ -149,7 +154,12 @@ var kstZone = time.FixedZone("KST", 9*60*60)
 // it redirects to the profile form.
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	_, _, hasProfile, err := s.store.Profile(ctx)
+	userID, err := s.stateUserID(ctx, r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	_, _, hasProfile, err := s.profileJSON(ctx, userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -158,7 +168,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/profile", http.StatusSeeOther)
 		return
 	}
-	b, err := s.buildBriefing(ctx, time.Now())
+	b, err := s.buildBriefing(ctx, time.Now(), userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -174,23 +184,24 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // portal duplicates are also filtered (only the canonical row is rendered;
 // the dashboardPosting carries its sibling sources via DuplicateSources for
 // the "also on …" badge).
-func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, error) {
+func (s *Server) buildBriefing(ctx context.Context, now time.Time, userIDOpt ...int64) (briefing, error) {
+	userID := optionalUserID(userIDOpt)
 	postings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return briefing{}, err
 	}
-	scores, err := s.store.ScoresByPostingID(ctx)
+	scores, err := s.scoresByPostingID(ctx, userID)
 	if err != nil {
 		return briefing{}, err
 	}
-	bookmarks, err := s.store.BookmarkedIDs(ctx)
+	bookmarks, err := s.bookmarkedIDs(ctx, userID)
 	if err != nil {
 		return briefing{}, err
 	}
 	if s.demoMode {
 		bookmarks = map[int64]bool{}
 	}
-	muted, err := s.store.NotInterestedIDs(ctx)
+	muted, err := s.notInterestedIDs(ctx, userID)
 	if err != nil {
 		return briefing{}, err
 	}
@@ -201,7 +212,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time) (briefing, er
 	if err != nil {
 		return briefing{}, err
 	}
-	prof, _, err := s.loadProfile(ctx)
+	prof, _, err := s.loadProfile(ctx, userID)
 	if err != nil {
 		return briefing{}, err
 	}
@@ -359,7 +370,12 @@ type profileForm struct {
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
 func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
-	jsonStr, _, ok, err := s.store.Profile(r.Context())
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	jsonStr, _, ok, err := s.profileJSON(r.Context(), userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -476,7 +492,12 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if _, _, err := s.store.SaveProfile(r.Context(), canonical); err != nil {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	if _, _, err := s.saveProfileJSON(r.Context(), userID, canonical); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -486,7 +507,7 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	if err := s.ReconfigureAI(r.Context()); err != nil {
 		log.Printf("server: AI reconfigure after profile save: %v", err)
 	}
-	if _, err := s.scoreAll(r.Context()); err != nil {
+	if _, err := s.scoreAll(r.Context(), userID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

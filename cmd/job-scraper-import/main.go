@@ -101,13 +101,13 @@ func runImport(ctx context.Context, opts importOptions) error {
 	if err := copyPostings(ctx, sourceDB, tx); err != nil {
 		return err
 	}
-	if err := copyScores(ctx, sourceDB, tx); err != nil {
+	if err := copyScores(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
-	if err := copyBookmarks(ctx, sourceDB, tx); err != nil {
+	if err := copyBookmarks(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
-	if err := copyNotInterested(ctx, sourceDB, tx); err != nil {
+	if err := copyNotInterested(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
 	if err := copyAIExtractions(ctx, sourceDB, tx); err != nil {
@@ -279,7 +279,7 @@ ON CONFLICT (id) DO UPDATE SET
 	return rows.Err()
 }
 
-func copyScores(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+func copyScores(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
 	rows, err := source.QueryContext(ctx, `SELECT posting_id, profile_hash, total, breakdown_json, computed_at FROM scores`)
 	if err != nil {
 		return fmt.Errorf("import: read scores: %w", err)
@@ -294,21 +294,21 @@ func copyScores(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
 			return fmt.Errorf("import: scan score: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO scores (posting_id, profile_hash, total, breakdown_json, computed_at)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (posting_id) DO UPDATE SET
+INSERT INTO scores (user_id, posting_id, profile_hash, total, breakdown_json, computed_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (user_id, posting_id) DO UPDATE SET
     profile_hash = EXCLUDED.profile_hash,
     total = EXCLUDED.total,
     breakdown_json = EXCLUDED.breakdown_json,
     computed_at = EXCLUDED.computed_at`,
-			postingID, profileHash, total, breakdownJSON, computedAt.UTC()); err != nil {
+			ownerID, postingID, profileHash, total, breakdownJSON, computedAt.UTC()); err != nil {
 			return fmt.Errorf("import: write score for posting %d: %w", postingID, err)
 		}
 	}
 	return rows.Err()
 }
 
-func copyBookmarks(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+func copyBookmarks(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
 	rows, err := source.QueryContext(ctx, `SELECT posting_id, bookmarked_at FROM bookmarks`)
 	if err != nil {
 		return fmt.Errorf("import: read bookmarks: %w", err)
@@ -321,17 +321,17 @@ func copyBookmarks(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
 			return fmt.Errorf("import: scan bookmark: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO bookmarks (posting_id, bookmarked_at)
-VALUES ($1, $2)
-ON CONFLICT (posting_id) DO UPDATE SET bookmarked_at = EXCLUDED.bookmarked_at`,
-			postingID, bookmarkedAt.UTC()); err != nil {
+INSERT INTO bookmarks (user_id, posting_id, bookmarked_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, posting_id) DO UPDATE SET bookmarked_at = EXCLUDED.bookmarked_at`,
+			ownerID, postingID, bookmarkedAt.UTC()); err != nil {
 			return fmt.Errorf("import: write bookmark for posting %d: %w", postingID, err)
 		}
 	}
 	return rows.Err()
 }
 
-func copyNotInterested(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+func copyNotInterested(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
 	rows, err := source.QueryContext(ctx, `SELECT posting_id, muted_at FROM not_interested`)
 	if err != nil {
 		return fmt.Errorf("import: read not_interested: %w", err)
@@ -344,10 +344,10 @@ func copyNotInterested(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
 			return fmt.Errorf("import: scan not_interested: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO not_interested (posting_id, muted_at)
-VALUES ($1, $2)
-ON CONFLICT (posting_id) DO UPDATE SET muted_at = EXCLUDED.muted_at`,
-			postingID, mutedAt.UTC()); err != nil {
+INSERT INTO not_interested (user_id, posting_id, muted_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, posting_id) DO UPDATE SET muted_at = EXCLUDED.muted_at`,
+			ownerID, postingID, mutedAt.UTC()); err != nil {
 			return fmt.Errorf("import: write not_interested for posting %d: %w", postingID, err)
 		}
 	}
