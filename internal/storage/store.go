@@ -84,6 +84,10 @@ func (s *Store) Close() error { return s.db.Close() }
 // Dialect returns the SQL backend used by this store.
 func (s *Store) Dialect() Dialect { return s.dialect }
 
+// SQLDB returns the underlying database handle for command-line maintenance
+// tools that need table-level operations outside the app's runtime methods.
+func (s *Store) SQLDB() *sql.DB { return s.db }
+
 // DefaultDBPath is the database path under the user's OS config directory,
 // e.g. ~/Library/Application Support/job-scraper/jobs.db on macOS.
 func DefaultDBPath() (string, error) {
