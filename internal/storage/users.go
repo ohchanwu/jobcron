@@ -90,11 +90,14 @@ func (s *Store) ResetOwnerPassword(ctx context.Context, email, passwordHash stri
 
 	row := tx.QueryRowContext(ctx, `
 UPDATE users
-   SET email = $1,
-       password_hash = $2,
+   SET password_hash = $2,
        updated_at = now()
+ WHERE email = $1
  RETURNING id, email, password_hash, created_at, updated_at`, email, passwordHash)
 	user, err := scanOwnerUser(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, errors.New("storage: owner user does not match email")
+	}
 	if err != nil {
 		return User{}, fmt.Errorf("storage: reset owner password: %w", err)
 	}

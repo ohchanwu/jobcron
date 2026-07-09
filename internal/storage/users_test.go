@@ -62,3 +62,33 @@ func TestResetOwnerPasswordUpdatesExistingOwner(t *testing.T) {
 		t.Fatalf("updated role = %q, want owner", updated.Role)
 	}
 }
+
+func TestResetOwnerPasswordRejectsWrongEmailWithoutRenamingOwner(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+
+	created, err := st.CreateOwnerUser(ctx, "owner@example.com", "old-hash")
+	if err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+
+	_, err = st.ResetOwnerPassword(ctx, "wrong@example.com", "new-hash")
+	if err == nil {
+		t.Fatal("ResetOwnerPassword error = nil, want email mismatch error")
+	}
+	if !strings.Contains(err.Error(), "owner user does not match email") {
+		t.Fatalf("ResetOwnerPassword error = %v", err)
+	}
+
+	var email, passwordHash string
+	if err := st.SQLDB().QueryRowContext(ctx, `SELECT email, password_hash FROM users WHERE id = $1`, created.ID).
+		Scan(&email, &passwordHash); err != nil {
+		t.Fatalf("query owner after failed reset: %v", err)
+	}
+	if email != "owner@example.com" {
+		t.Fatalf("owner email = %q, want unchanged owner@example.com", email)
+	}
+	if passwordHash != "old-hash" {
+		t.Fatalf("owner password hash = %q, want unchanged old-hash", passwordHash)
+	}
+}

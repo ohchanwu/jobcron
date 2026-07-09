@@ -101,6 +101,52 @@ func TestRunCreateOwnerFailsWhenOwnerExistsUntilResetPassword(t *testing.T) {
 	}
 }
 
+func TestRunResetPasswordWithWrongEmailFailsWithoutRenamingOwner(t *testing.T) {
+	postgresURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	if postgresURL == "" {
+		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+	}
+	schema := createUserCLITestSchema(t, postgresURL)
+	databaseURL := databaseURLWithSearchPath(postgresURL, schema)
+
+	if err := run(context.Background(), []string{
+		"create-owner",
+		"--database-url", databaseURL,
+		"--email", "owner@example.com",
+	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "first password"}, nil, &bytes.Buffer{}); err != nil {
+		t.Fatalf("create-owner: %v", err)
+	}
+
+	err := run(context.Background(), []string{
+		"reset-password",
+		"--database-url", databaseURL,
+		"--email", "wrong@example.com",
+	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("reset-password error = nil, want email mismatch error")
+	}
+	if !strings.Contains(err.Error(), "owner user does not match email") {
+		t.Fatalf("reset-password error = %v", err)
+	}
+
+	st, err := storage.OpenPostgres(databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPostgres verify: %v", err)
+	}
+	defer st.Close()
+	var email, encodedHash string
+	if err := st.SQLDB().QueryRow(`SELECT email, password_hash FROM users`).Scan(&email, &encodedHash); err != nil {
+		t.Fatalf("query owner after failed reset: %v", err)
+	}
+	if email != "owner@example.com" {
+		t.Fatalf("owner email = %q, want owner@example.com", email)
+	}
+	ok, err := auth.VerifyPassword(encodedHash, "first password")
+	if err != nil || !ok {
+		t.Fatalf("VerifyPassword original after failed reset ok=%v err=%v", ok, err)
+	}
+}
+
 func TestRunCreateOwnerRequiresPassword(t *testing.T) {
 	err := run(context.Background(), []string{
 		"create-owner",
@@ -112,6 +158,20 @@ func TestRunCreateOwnerRequiresPassword(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "owner password is required") {
 		t.Fatalf("run error = %v", err)
+	}
+}
+
+func TestOwnerPasswordReadsFromNonTerminalReader(t *testing.T) {
+	var out bytes.Buffer
+	password, err := ownerPassword(envMap{}, strings.NewReader("typed password\n"), &out)
+	if err != nil {
+		t.Fatalf("ownerPassword: %v", err)
+	}
+	if password != "typed password" {
+		t.Fatalf("password = %q", password)
+	}
+	if out.String() != "Owner password: " {
+		t.Fatalf("prompt output = %q", out.String())
 	}
 }
 
