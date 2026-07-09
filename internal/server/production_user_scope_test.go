@@ -56,6 +56,19 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 	assertBookmarkedForUser(t, st, userB, postingID, true)
 	assertPageMissing(t, srv, cookieA, "/bookmarks", "공유 북마크 공고")
 	assertPageContains(t, srv, cookieB, "/bookmarks", "공유 북마크 공고")
+
+	userBOnlyPostingID := mustUpsert(t, st, listingPosting("user-b-bookmark", "유저B 전용 북마크"))
+	putBReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/bookmark/%d", userBOnlyPostingID), nil)
+	putBReq.AddCookie(cookieB)
+	putBRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(putBRec, putBReq)
+	if putBRec.Code != http.StatusOK {
+		t.Fatalf("userB bookmark add status = %d, want 200", putBRec.Code)
+	}
+	assertBookmarkedForUser(t, st, userA, userBOnlyPostingID, false)
+	assertBookmarkedForUser(t, st, userB, userBOnlyPostingID, true)
+	assertPageMissing(t, srv, cookieA, "/bookmarks", "유저B 전용 북마크")
+	assertPageContains(t, srv, cookieB, "/bookmarks", "유저B 전용 북마크")
 }
 
 func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
@@ -96,6 +109,19 @@ func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
 	assertHiddenForUser(t, st, userB, postingID, true)
 	assertPageMissing(t, srv, cookieA, "/hidden", "공유 숨김 공고")
 	assertPageContains(t, srv, cookieB, "/hidden", "공유 숨김 공고")
+
+	userBOnlyPostingID := mustUpsert(t, st, listingPosting("user-b-hidden", "유저B 전용 숨김"))
+	putBReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/not-interested/%d", userBOnlyPostingID), nil)
+	putBReq.AddCookie(cookieB)
+	putBRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(putBRec, putBReq)
+	if putBRec.Code != http.StatusOK {
+		t.Fatalf("userB not-interested add status = %d, want 200", putBRec.Code)
+	}
+	assertHiddenForUser(t, st, userA, userBOnlyPostingID, false)
+	assertHiddenForUser(t, st, userB, userBOnlyPostingID, true)
+	assertPageMissing(t, srv, cookieA, "/hidden", "유저B 전용 숨김")
+	assertPageContains(t, srv, cookieB, "/hidden", "유저B 전용 숨김")
 }
 
 func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
@@ -147,6 +173,38 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 	assertPageContains(t, srv, cookieA, "/profile", "유저A 새 목표")
 	assertPageMissing(t, srv, cookieA, "/profile", "유저B 기존 목표")
 	assertPageContains(t, srv, cookieB, "/profile", "유저B 기존 목표")
+	assertPageMissing(t, srv, cookieB, "/profile", "유저A 새 목표")
+
+	form = url.Values{}
+	form.Set("career_years", "0")
+	form.Set("job_likes", "유저B 새 목표")
+	req = httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookieB)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("userB profile save status = %d, want 303; body=%q", rec.Code, rec.Body.String())
+	}
+
+	gotA, _, ok, err = st.ProfileForUser(ctx, userA)
+	if err != nil || !ok {
+		t.Fatalf("ProfileForUser userA after userB save: ok=%v err=%v", ok, err)
+	}
+	gotB, _, ok, err = st.ProfileForUser(ctx, userB)
+	if err != nil || !ok {
+		t.Fatalf("ProfileForUser userB after userB save: ok=%v err=%v", ok, err)
+	}
+	if !strings.Contains(gotA, "유저A 새 목표") || strings.Contains(gotA, "유저B 새 목표") {
+		t.Fatalf("userA profile = %s, want unchanged userA goal only", gotA)
+	}
+	if !strings.Contains(gotB, "유저B 새 목표") {
+		t.Fatalf("userB profile = %s, want updated userB goal", gotB)
+	}
+
+	assertPageContains(t, srv, cookieA, "/profile", "유저A 새 목표")
+	assertPageMissing(t, srv, cookieA, "/profile", "유저B 새 목표")
+	assertPageContains(t, srv, cookieB, "/profile", "유저B 새 목표")
 	assertPageMissing(t, srv, cookieB, "/profile", "유저A 새 목표")
 }
 
