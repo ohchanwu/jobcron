@@ -145,8 +145,8 @@ func (s *Server) keysPath() (string, error) {
 // OFF (provider nil, silent regex fallback) when the profile selects no provider
 // or the selected provider has no saved key. A bad provider name / build error
 // also leaves AI off and is returned for the caller to log — never fatal.
-func (s *Server) ReconfigureAI(ctx context.Context) error {
-	prof, ok, err := s.loadProfile(ctx)
+func (s *Server) ReconfigureAI(ctx context.Context, userIDOpt ...int64) error {
+	prof, ok, err := s.loadProfile(ctx, userIDOpt...)
 	if err != nil {
 		return err
 	}

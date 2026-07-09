@@ -178,6 +178,7 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 	form = url.Values{}
 	form.Set("career_years", "0")
 	form.Set("job_likes", "유저B 새 목표")
+	form.Set("ai_daily_token_cap", "222222")
 	req = httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookieB)
@@ -200,6 +201,9 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 	}
 	if !strings.Contains(gotB, "유저B 새 목표") {
 		t.Fatalf("userB profile = %s, want updated userB goal", gotB)
+	}
+	if srv.aiDailyTokenCap != 222222 {
+		t.Fatalf("aiDailyTokenCap = %d, want userB cap 222222", srv.aiDailyTokenCap)
 	}
 
 	assertPageContains(t, srv, cookieA, "/profile", "유저A 새 목표")

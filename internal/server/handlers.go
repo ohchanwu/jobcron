@@ -504,7 +504,7 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	// Re-wire AI from the just-saved provider/model + key so a key entered here
 	// goes live immediately (no restart). A configuration error leaves AI off;
 	// surface it rather than 500ing — the profile saved fine.
-	if err := s.ReconfigureAI(r.Context()); err != nil {
+	if err := s.ReconfigureAI(r.Context(), userID); err != nil {
 		log.Printf("server: AI reconfigure after profile save: %v", err)
 	}
 	if _, err := s.scoreAll(r.Context(), userID); err != nil {
