@@ -52,11 +52,16 @@ This is the next milestone after A.
 
 The app should support multiple independent users:
 
-- Public or invite-only signup.
+- **overseer feedback:** Public signup, not invite-only signup, is the target for Milestone B.
 - Separate profile per user.
 - Separate bookmark and hidden state per user.
 - User-specific scores, because scoring depends on the user's profile.
-- Per-user AI settings or a controlled shared AI budget.
+- **overseer feedback:** Per-user AI settings should use bring-your-own-key (BYOK). The app should make it easy for users to find provider setup pages:
+  - Claude / Anthropic Console: <https://console.anthropic.com/>
+  - Anthropic API docs: <https://platform.claude.com/docs/en/get-started>
+  - OpenAI API keys: <https://platform.openai.com/api-keys>
+  - OpenAI API docs: <https://developers.openai.com/api/docs/quickstart>
+  Current app support should stay Anthropic-first unless an OpenAI provider is reintroduced later. Budget copy should tell users that expected usage is roughly around USD $5/month for this product shape, with the exact cost depending on model, scrape volume, and how often they request AI scoring.
 - Stronger abuse controls around login, scrape visibility, AI spend, and account creation.
 
 Milestone A should avoid designs that block Milestone B. For example, even if A has only one user, the database should introduce `users` and `user_id` columns early so the later migration is smaller.
@@ -101,6 +106,7 @@ To do:
 - Add a `users` table.
 - Add one owner account for Milestone A.
 - Store password hashes using Argon2id or bcrypt.
+  - **overseer feedback:** Prefer Argon2id unless deployment constraints force bcrypt. Argon2id is the current stronger default for new systems because it is memory-hard, making large offline cracking attempts more expensive. Its downside is slightly more tuning work and more memory use per login. Bcrypt is older, widely available, and operationally simple, but it is CPU-hard rather than memory-hard and has awkward password length behavior. For this app, Argon2id is the better first choice; bcrypt is the fallback if the chosen Go dependency or deployment memory profile causes problems.
 - Add `sessions` table with hashed session tokens.
 - Set secure, HTTP-only, SameSite cookies.
 - Add login and logout routes.
@@ -118,11 +124,11 @@ Production user state should live in PostgreSQL.
 To do:
 
 - Remove localStorage as the source of truth for bookmarks and hidden postings in production mode.
-- Keep localStorage only for anonymous demo behavior, or remove demo localStorage once production login exists.
+- **overseer feedback:** Remove localStorage from the production app once login exists. Keep the current anonymous demo behavior live at `demo.jobcron.app` for backward compatibility even after the production version launches at `jobcron.app`.
 - Make profile state user-scoped.
 - Make bookmarks user-scoped.
 - Make hidden postings user-scoped.
-- Make score rows user-scoped or keyed by profile hash plus user identity.
+- **overseer feedback:** Choose the easiest maintainable score ownership model. The likely implementation is user-scoped scores keyed by `user_id`, `posting_id`, and `profile_hash`, because that is explicit and prepares the schema for Milestone B without requiring clever lookup rules.
 - Update `/bookmarks`, `/hidden`, daily briefing, and archive views to read the logged-in user's state.
 
 For Milestone A, this still means adding `user_id` even though there is only one account. That keeps the schema ready for Milestone B.
@@ -142,15 +148,17 @@ To do:
 - Add environment config for schedule time, for example `JOBSCRAPER_DAILY_SCRAPE_TIME=08:00`.
 - Add a way to disable the scheduler in local development and tests.
 
-Open question: AI scoring during automated scrape.
+AI scoring during automated scrape.
 
-We need a deliberate decision before implementation:
+The available choices are:
 
 - Option 1: scheduled scrape does no fresh AI work. It only scrapes and uses cached AI results. Lowest cost and safest, but new postings may lack AI chips until a manual AI run happens.
 - Option 2: scheduled scrape runs AI only for new postings, bounded by strict daily token caps. Best product experience, but requires real Anthropic spend and careful failure handling.
 - Option 3: scheduled scrape runs normal scrape first, then queues AI scoring as a separate background job. Most production-friendly, but more moving parts.
 
-Recommendation for Milestone A: start with Option 2 if budget caps are reliable and visible in admin status. If we want the safest launch, start with Option 1 and add Option 3 later.
+**overseer feedback:** Decision for Milestone A: default to Option 1. Scheduled scrape should not run fresh AI by default. Instead, the logged-in owner gets a manual AI run button. Option 2 should be an explicit opt-in setting: scheduled scrape can run AI for new postings only after the user enables it. The front page should show a prominent tip when scheduled AI is off, so the user knows they can enable automatic AI scoring.
+
+**overseer feedback:** Use a reasonable initial AI budget cap rather than leaving this undecided. Proposed defaults: USD $5/month estimated budget, USD $0.25/day hard cap, and a per-run cap equivalent to roughly USD $0.15. The UI should show these as estimates, because actual cost depends on provider pricing, selected model, number of new postings, and prompt size.
 
 ### 5. Production deployment
 
@@ -159,13 +167,19 @@ Move from demo deployment to production deployment.
 To do:
 
 - Add PostgreSQL to deployment.
-- Prefer AWS RDS PostgreSQL if we want managed backups and fewer server-disk risks.
-- Use Docker Compose PostgreSQL on the EC2 instance only if cost is the overriding concern.
+- Prefer AWS RDS PostgreSQL if we want managed database operations and fewer server-disk risks.
+- Use Docker Compose PostgreSQL on the EC2 instance if minimizing monthly spend is the overriding concern.
+- **overseer feedback:** Rough cost estimate, assuming a small single-AZ PostgreSQL deployment:
+  - RDS PostgreSQL: a `db.t4g.micro`-class instance is roughly USD $0.016/hour in common US regions, or about USD $12/month before storage, backup, and regional differences. With small storage and backup overhead, plan for roughly USD $15-25/month unless AWS Free Tier applies. Final numbers should be checked against the AWS RDS pricing page before deployment: <https://aws.amazon.com/rds/postgresql/pricing/>.
+  - Docker Compose PostgreSQL on the existing EC2 instance: no extra database compute charge. The main incremental cost is EBS storage and backups, likely a few dollars/month at this project size.
+  - For about 20 daily active users in the first month, either option is technically fine. For about 200 daily active users later, RDS becomes more attractive because backups, recovery, monitoring, and database resource isolation matter more than the small monthly savings.
+  - Migration from self-hosted Docker PostgreSQL to RDS later should be moderate, not hard, if Milestone A uses `DATABASE_URL`, standard PostgreSQL migrations, and no local filesystem assumptions. The migration path is `pg_dump` from Docker PostgreSQL, restore into RDS, point `DATABASE_URL` at RDS, run verification, then restart the app. Expect a short planned maintenance window for early scale.
 - Add backup process:
   - RDS snapshots if using RDS.
+    - **overseer feedback:** Do not let snapshots accumulate indefinitely in RDS or on the EBS volume. Add a backup export pipeline that rotates recent server-side backups and sends older backup archives to the MacBook. A simple first version can run `pg_dump`, compress the dump, keep a short rolling window on the server, and use `rsync`/`scp` from the MacBook or a server cron job to transfer older dumps off the EC2 instance.
   - Scheduled `pg_dump` if self-hosted.
 - Add persistent storage for Postgres if self-hosted.
-- Update Caddy config only if production hostnames change.
+- **overseer feedback:** Update Caddy for production hostnames `jobcron.app` and `www.jobcron.app`, not only `demo.jobcron.app`. Caddy should request certificates for both names and redirect the less-preferred host to the canonical production host.
 - Add production `.env` documentation:
   - `DATABASE_URL`
   - `SESSION_SECRET`
@@ -217,19 +231,27 @@ Alerting can wait until Milestone B, but the app should expose enough state that
 6. User-scope profile, bookmarks, hidden postings, and scores.
 7. Replace production localStorage state with server-backed state.
 8. Add scheduled daily scrape.
-9. Decide and implement automated AI scoring behavior.
+9. Implement manual AI run and opt-in scheduled AI behavior.
 10. Add scrape run history and admin status.
 11. Update AWS deployment for PostgreSQL and backups.
 12. Run full browser QA on login, profile, daily briefing, archive, bookmarks, hidden postings, and admin status.
 
-## Product decisions still needed
+## Product decisions
+
+Remaining decision:
 
 1. Should Milestone A use RDS PostgreSQL or self-host PostgreSQL in Docker Compose?
-2. Should scheduled scrape run AI automatically?
-3. If AI runs automatically, what is the daily budget ceiling?
-4. Should the first owner account be created by CLI command, environment variables, or first-run setup page?
-5. Should anonymous demo mode remain available after production login exists?
-6. Should Milestone B be public signup, invite-only signup, or admin-created users?
+
+Resolved decisions:
+
+1. **overseer feedback:** Scheduled scrape should not run AI automatically by default. The user can enable scheduled AI later through a prominent opt-in setting.
+2. **overseer feedback:** Initial AI budget defaults should be set by the app: estimated USD $5/month, USD $0.25/day hard cap, and about USD $0.15 per automated run.
+3. Should the first owner account be created by CLI command, environment variables, or first-run setup page?
+   - **overseer feedback:** A first-run setup page means a temporary browser page shown only when no owner account exists, allowing the first visitor to create the owner account. For this app, avoid that for Milestone A because a public server briefly exposing first-owner setup is easy to misconfigure. Prefer a CLI command or one-time environment bootstrap instead.
+4. Should anonymous demo mode remain available after production login exists?
+   - **overseer feedback:** Yes. Keep `demo.jobcron.app` for backward compatibility after `jobcron.app` launches.
+5. Should Milestone B be public signup, invite-only signup, or admin-created users?
+   - **overseer feedback:** Public signup.
 
 ## Acceptance criteria for Milestone A
 
@@ -256,5 +278,6 @@ Alerting can wait until Milestone B, but the app should expose enough state that
 - Admin user management.
 - Multiple production app instances.
 - Full alerting pipeline.
+- **overseer feedback:** A full control dashboard with alarms and operational controls.
 
 These are Milestone B or later.
