@@ -24,6 +24,7 @@ type Config struct {
 	SchedulerEnabled bool
 	DailyScrapeTime  string
 	AdminToken       string
+	ProxySecret      string
 	WorknetKey       string
 	Host             string
 	Port             int
@@ -43,6 +44,7 @@ func Load(args []string, env map[string]string) (Config, error) {
 		SchedulerEnabled: envBool(envValue(env, "JOBSCRAPER_SCHEDULER_ENABLED")),
 		DailyScrapeTime:  envDefault(env, "JOBSCRAPER_DAILY_SCRAPE_TIME", defaultDailyScrapeTime),
 		AdminToken:       envValue(env, "JOBSCRAPER_ADMIN_TOKEN"),
+		ProxySecret:      envValue(env, "JOBSCRAPER_PROXY_SECRET"),
 		WorknetKey:       envValue(env, "JOBSCRAPER_WORKNET_KEY"),
 		Host:             envDefault(env, "JOBSCRAPER_HOST", defaultHost),
 		Port:             defaultPort,

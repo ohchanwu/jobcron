@@ -1,3 +1,5 @@
 demo.jobcron.app {
-	reverse_proxy app:7777
+	reverse_proxy app:7777 {
+		header_up X-Jobcron-Proxy {$JOBSCRAPER_PROXY_SECRET}
+	}
 }

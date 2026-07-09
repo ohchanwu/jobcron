@@ -162,9 +162,11 @@ Add these lines. Use the same image name you pushed from your Mac, and use the r
 ```sh
 JOBSCRAPER_IMAGE=ohchanwu/jobcron:0.1-linuxarm64
 JOBSCRAPER_ADMIN_TOKEN=<paste-random-token-here>
+JOBSCRAPER_PROXY_SECRET=<paste-another-random-token-here>
 ```
 
 The token is a safety hatch for operator-triggered `/api/scrape` in demo mode. Visitors still cannot write profile, bookmark, hide, or AI re-rate data.
+The proxy secret lets the app trust Caddy's forwarded client-IP header for login rate limiting. Use a different value from `JOBSCRAPER_ADMIN_TOKEN`.
 
 ## 8. Pull the image and start the app
 

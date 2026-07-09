@@ -74,6 +74,7 @@ func main() {
 	srv.SetDemoMode(cfg.Demo)
 	srv.SetProductionMode(cfg.Production)
 	srv.SetAdminToken(cfg.AdminToken)
+	srv.SetProxySecret(cfg.ProxySecret)
 	// Wire BYOK AI from the saved profile + ai_keys.json. Non-fatal: any error
 	// (or simply no key configured) leaves AI off and the briefing falls back to
 	// the v1.5 offline scoring. The user enables AI on /profile.

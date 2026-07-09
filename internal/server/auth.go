@@ -87,8 +87,8 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
 	password := r.FormValue("password")
-	ip := clientIP(r)
-	if !s.loginLimiter.allow(ip, email) {
+	ip := s.clientIP(r)
+	if !s.loginLimiter.reserveFailure(ip, email) {
 		http.Error(w, "too many login attempts", http.StatusTooManyRequests)
 		return
 	}
@@ -98,13 +98,11 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		s.loginLimiter.recordFailure(ip, email)
 		s.renderLoginFailure(w, r)
 		return
 	}
 	matches, err := auth.VerifyPassword(user.PasswordHash, password)
 	if err != nil || !matches {
-		s.loginLimiter.recordFailure(ip, email)
 		s.renderLoginFailure(w, r)
 		return
 	}

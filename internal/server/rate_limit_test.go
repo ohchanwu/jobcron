@@ -69,7 +69,37 @@ func TestLoginRateLimitDoesNotTrustForwardedFor(t *testing.T) {
 	}
 }
 
-func TestLoginRateLimitTrustsForwardedForFromPrivateProxy(t *testing.T) {
+func TestLoginRateLimitTrustsForwardedForWithProxySecret(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	srv.SetProxySecret("proxy-secret")
+	hash, err := auth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if _, err := st.CreateOwnerUser(context.Background(), "owner@example.com", hash); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+
+	for i := 0; i < 5; i++ {
+		rec := postLoginWithForwardedForAndProxySecret(t, srv, "172.18.0.2:1234", "203.0.113.10", "proxy-secret", "owner@example.com", "wrong-password")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status = %d, want 401", i+1, rec.Code)
+		}
+	}
+
+	rec := postLoginWithForwardedForAndProxySecret(t, srv, "172.18.0.2:1234", "203.0.113.11", "proxy-secret", "owner@example.com", "wrong-password")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("different forwarded client status = %d, want 401", rec.Code)
+	}
+
+	rec = postLoginWithForwardedForAndProxySecret(t, srv, "172.18.0.2:1234", "203.0.113.10", "proxy-secret", "owner@example.com", "wrong-password")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("sixth original client status = %d, want 429", rec.Code)
+	}
+}
+
+func TestLoginRateLimitDoesNotTrustPrivatePeerForwardedForWithoutProxySecret(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	srv.SetProductionMode(true)
 	hash, err := auth.HashPassword("correct-password")
@@ -81,20 +111,15 @@ func TestLoginRateLimitTrustsForwardedForFromPrivateProxy(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		rec := postLoginWithForwardedFor(t, srv, "172.18.0.2:1234", "203.0.113.10", "owner@example.com", "wrong-password")
+		rec := postLoginWithForwardedFor(t, srv, "10.0.0.10:1234", fmt.Sprintf("203.0.113.%d", i+1), "owner@example.com", "wrong-password")
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d status = %d, want 401", i+1, rec.Code)
 		}
 	}
 
-	rec := postLoginWithForwardedFor(t, srv, "172.18.0.2:1234", "203.0.113.11", "owner@example.com", "wrong-password")
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("different forwarded client status = %d, want 401", rec.Code)
-	}
-
-	rec = postLoginWithForwardedFor(t, srv, "172.18.0.2:1234", "203.0.113.10", "owner@example.com", "wrong-password")
+	rec := postLoginWithForwardedFor(t, srv, "10.0.0.10:1234", "203.0.113.99", "owner@example.com", "wrong-password")
 	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("sixth original client status = %d, want 429", rec.Code)
+		t.Fatalf("sixth status = %d, want 429", rec.Code)
 	}
 }
 
@@ -103,18 +128,31 @@ func TestLoginRateLimitPrunesExpiredAttempts(t *testing.T) {
 	now := time.Date(2026, 7, 10, 1, 0, 0, 0, time.UTC)
 	limiter.now = func() time.Time { return now }
 
-	limiter.recordFailure("198.51.100.1", "first@example.com")
-	limiter.recordFailure("198.51.100.2", "second@example.com")
+	limiter.reserveFailure("198.51.100.1", "first@example.com")
+	limiter.reserveFailure("198.51.100.2", "second@example.com")
 	if got := len(limiter.attempts); got != 2 {
 		t.Fatalf("attempts before expiry = %d, want 2", got)
 	}
 
 	now = now.Add(loginRateLimitWindow + time.Second)
-	if !limiter.allow("198.51.100.3", "third@example.com") {
+	if !limiter.reserveFailure("198.51.100.3", "third@example.com") {
 		t.Fatal("new key should be allowed after pruning")
 	}
-	if got := len(limiter.attempts); got != 0 {
-		t.Fatalf("attempts after pruning = %d, want 0", got)
+	if got := len(limiter.attempts); got != 1 {
+		t.Fatalf("attempts after pruning = %d, want 1", got)
+	}
+}
+
+func TestLoginRateLimitReservationIsAtomic(t *testing.T) {
+	limiter := newLoginRateLimiter()
+	var allowed int
+	for i := 0; i < loginRateLimitMaxFailures+1; i++ {
+		if limiter.reserveFailure("198.51.100.10", "owner@example.com") {
+			allowed++
+		}
+	}
+	if allowed != loginRateLimitMaxFailures {
+		t.Fatalf("allowed reservations = %d, want %d", allowed, loginRateLimitMaxFailures)
 	}
 }
 
@@ -123,6 +161,10 @@ func postLogin(t *testing.T, srv *Server, remoteAddr, email, password string) *h
 }
 
 func postLoginWithForwardedFor(t *testing.T, srv *Server, remoteAddr, forwardedFor, email, password string) *httptest.ResponseRecorder {
+	return postLoginWithForwardedForAndProxySecret(t, srv, remoteAddr, forwardedFor, "", email, password)
+}
+
+func postLoginWithForwardedForAndProxySecret(t *testing.T, srv *Server, remoteAddr, forwardedFor, proxySecret, email, password string) *httptest.ResponseRecorder {
 	t.Helper()
 	form := url.Values{"email": {email}, "password": {password}}
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
@@ -130,6 +172,9 @@ func postLoginWithForwardedFor(t *testing.T, srv *Server, remoteAddr, forwardedF
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if forwardedFor != "" {
 		req.Header.Set("X-Forwarded-For", forwardedFor)
+	}
+	if proxySecret != "" {
+		req.Header.Set(proxySecretHeaderName, proxySecret)
 	}
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-cookie"})
 	req.Header.Set(csrfHeaderName, srv.csrfToken("csrf-cookie", ""))

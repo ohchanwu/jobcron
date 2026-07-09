@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,6 +90,7 @@ type Server struct {
 	demoMode        bool   // read-only public demo mode
 	productionMode  bool   // require owner login for protected HTTP routes
 	adminToken      string // optional safety token for operator GET mutators in demo mode
+	proxySecret     string // optional shared secret that allows Caddy forwarded-client headers
 }
 
 // SetAIProvider enables AI with the given provider and model. A nil provider
@@ -128,6 +130,11 @@ func (s *Server) SetSessionSecret(secret []byte) {
 // SetAdminToken sets the operator token accepted by /api/scrape in demo mode.
 // An empty token means the endpoint is refused like every other mutator.
 func (s *Server) SetAdminToken(token string) { s.adminToken = token }
+
+// SetProxySecret allows the app to trust forwarded client-IP headers stamped
+// by the configured reverse proxy. Leave empty unless the proxy injects the
+// same secret and the app is not directly exposed to the public internet.
+func (s *Server) SetProxySecret(secret string) { s.proxySecret = strings.TrimSpace(secret) }
 
 func (s *Server) validAdminToken(r *http.Request) bool {
 	if s.adminToken == "" {

@@ -12,6 +12,7 @@ services:
     environment:
       JOBSCRAPER_DEMO: "1"
       JOBSCRAPER_ADMIN_TOKEN: "${JOBSCRAPER_ADMIN_TOKEN:?set JOBSCRAPER_ADMIN_TOKEN in .env}"
+      JOBSCRAPER_PROXY_SECRET: "${JOBSCRAPER_PROXY_SECRET:?set JOBSCRAPER_PROXY_SECRET in .env}"
     volumes:
       - /srv/job-scraper/data:/data
     ports:
@@ -22,6 +23,8 @@ services:
     image: caddy:2.8-alpine
     depends_on:
       - app
+    environment:
+      JOBSCRAPER_PROXY_SECRET: "${JOBSCRAPER_PROXY_SECRET:?set JOBSCRAPER_PROXY_SECRET in .env}"
     ports:
       - "80:80"
       - "443:443"

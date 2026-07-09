@@ -11,6 +11,7 @@ import (
 const (
 	loginRateLimitMaxFailures = 5
 	loginRateLimitWindow      = 15 * time.Minute
+	proxySecretHeaderName     = "X-Jobcron-Proxy"
 )
 
 type loginRateLimiter struct {
@@ -31,20 +32,7 @@ func newLoginRateLimiter() *loginRateLimiter {
 	}
 }
 
-func (l *loginRateLimiter) allow(ip, email string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	key := loginRateLimitKey(ip, email)
-	now := l.now()
-	l.pruneExpired(now)
-	a, ok := l.attempts[key]
-	if !ok || !now.Before(a.windowEnd) {
-		return true
-	}
-	return a.count < loginRateLimitMaxFailures
-}
-
-func (l *loginRateLimiter) recordFailure(ip, email string) {
+func (l *loginRateLimiter) reserveFailure(ip, email string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	key := loginRateLimitKey(ip, email)
@@ -53,10 +41,14 @@ func (l *loginRateLimiter) recordFailure(ip, email string) {
 	a, ok := l.attempts[key]
 	if !ok || !now.Before(a.windowEnd) {
 		l.attempts[key] = loginAttempts{count: 1, windowEnd: now.Add(loginRateLimitWindow)}
-		return
+		return true
+	}
+	if a.count >= loginRateLimitMaxFailures {
+		return false
 	}
 	a.count++
 	l.attempts[key] = a
+	return true
 }
 
 func (l *loginRateLimiter) reset(ip, email string) {
@@ -78,9 +70,9 @@ func loginRateLimitKey(ip, email string) string {
 	return strings.ToLower(strings.TrimSpace(ip)) + "\x00" + strings.ToLower(strings.TrimSpace(email))
 }
 
-func clientIP(r *http.Request) string {
+func (s *Server) clientIP(r *http.Request) string {
 	host := remoteHost(r.RemoteAddr)
-	if trustedProxyIP(host) {
+	if s.trustedProxyRequest(r) {
 		if forwarded := forwardedClientIP(r); forwarded != "" {
 			return forwarded
 		}
@@ -96,12 +88,22 @@ func remoteHost(remoteAddr string) string {
 	return remoteAddr
 }
 
-func trustedProxyIP(host string) bool {
-	ip := net.ParseIP(host)
-	if ip == nil {
+func (s *Server) trustedProxyRequest(r *http.Request) bool {
+	if s.proxySecret == "" {
 		return false
 	}
-	return ip.IsLoopback() || ip.IsPrivate()
+	return subtleConstantTimeEqual(r.Header.Get(proxySecretHeaderName), s.proxySecret)
+}
+
+func subtleConstantTimeEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	var diff byte
+	for i := 0; i < len(a); i++ {
+		diff |= a[i] ^ b[i]
+	}
+	return diff == 0
 }
 
 func forwardedClientIP(r *http.Request) string {

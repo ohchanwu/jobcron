@@ -95,8 +95,9 @@ func TestLoadInvalidEnvPortReturnsError(t *testing.T) {
 
 func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	env := map[string]string{
-		"JOBSCRAPER_DEMO":        "1",
-		"JOBSCRAPER_WORKNET_KEY": "env-key",
+		"JOBSCRAPER_DEMO":         "1",
+		"JOBSCRAPER_PROXY_SECRET": "proxy-secret",
+		"JOBSCRAPER_WORKNET_KEY":  "env-key",
 	}
 	cfg, err := config.Load([]string{
 		"--host", "0.0.0.0",
@@ -123,6 +124,9 @@ func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	}
 	if cfg.DBPath != "/tmp/jobs.db" {
 		t.Fatalf("DBPath = %q, want /tmp/jobs.db", cfg.DBPath)
+	}
+	if cfg.ProxySecret != "proxy-secret" {
+		t.Fatalf("ProxySecret = %q, want proxy-secret", cfg.ProxySecret)
 	}
 	if cfg.WorknetKey != "flag-key" {
 		t.Fatalf("WorknetKey = %q, want flag-key", cfg.WorknetKey)

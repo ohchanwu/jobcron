@@ -29,10 +29,13 @@ Create `/srv/job-scraper/app/deploy/aws/.env`:
 ```sh
 JOBSCRAPER_IMAGE=<registry>/<namespace>/job-scraper-demo:<tag>
 JOBSCRAPER_ADMIN_TOKEN=<long random string>
+JOBSCRAPER_PROXY_SECRET=<another long random string>
 ```
 
 The token is only a safety hatch for operator-triggered `/api/scrape` in demo
 mode. Visitors cannot write profile, bookmark, hide, or AI re-rate data.
+The proxy secret lets the app trust Caddy's forwarded client-IP header for
+login rate limiting; do not reuse the admin token.
 
 ## Build and push the app image from your Mac
 
