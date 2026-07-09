@@ -102,6 +102,11 @@ VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil 
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_scores`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_usage`, 1)
 	assertAIUsage(t, db, "2026-07-09", 123, 45)
+	ownerID := lookupUserIDByEmail(t, db, ownerEmail)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM profiles WHERE user_id = %d`, ownerID), 1)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM scores WHERE posting_id = 1 AND user_id = %d`, ownerID), 1)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM bookmarks WHERE posting_id = 1 AND user_id = %d`, ownerID), 1)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM not_interested WHERE posting_id = 1 AND user_id = %d`, ownerID), 1)
 
 	if _, err := db.Exec(`
 UPDATE ai_usage
@@ -283,6 +288,15 @@ func assertAIUsage(t *testing.T, db *sql.DB, day string, wantInput, wantOutput i
 	if gotInput != wantInput || gotOutput != wantOutput {
 		t.Fatalf("ai_usage[%s] = input %d output %d, want input %d output %d", day, gotInput, gotOutput, wantInput, wantOutput)
 	}
+}
+
+func lookupUserIDByEmail(t *testing.T, db *sql.DB, email string) int64 {
+	t.Helper()
+	var id int64
+	if err := db.QueryRow(`SELECT id FROM users WHERE email = $1`, email).Scan(&id); err != nil {
+		t.Fatalf("query user id for %s: %v", email, err)
+	}
+	return id
 }
 
 var nonSchemaChars = regexp.MustCompile(`[^a-z0-9_]`)
