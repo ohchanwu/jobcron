@@ -36,14 +36,13 @@ import (
 var version = "dev"
 
 func main() {
-	if hasVersionFlag(os.Args[1:]) {
-		fmt.Println("job-scraper", version)
-		return
-	}
-
 	cfg, err := config.Load(os.Args[1:], environMap(os.Environ()))
 	if err != nil {
 		log.Fatalf("job-scraper: %v", err)
+	}
+	if cfg.ShowVersion {
+		fmt.Println("job-scraper", version)
+		return
 	}
 
 	store, err := openConfiguredStore(cfg)
@@ -123,7 +122,7 @@ func main() {
 // from the local DB path/default location outside production.
 func openConfiguredStore(cfg config.Config) (*storage.Store, error) {
 	if cfg.Production {
-		return nil, fmt.Errorf("postgres storage is implemented in Task 2")
+		return storage.OpenPostgres(cfg.DatabaseURL)
 	}
 	if cfg.DBPath != "" {
 		return storage.OpenAt(cfg.DBPath)
@@ -153,17 +152,4 @@ func environMap(environ []string) map[string]string {
 		env[key] = value
 	}
 	return env
-}
-
-func hasVersionFlag(args []string) bool {
-	for _, arg := range args {
-		if arg == "--version" || arg == "-version" {
-			return true
-		}
-		name, value, ok := strings.Cut(arg, "=")
-		if ok && (name == "--version" || name == "-version") {
-			return value == "true" || value == "TRUE" || value == "1"
-		}
-	}
-	return false
 }

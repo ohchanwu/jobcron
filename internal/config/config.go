@@ -30,6 +30,7 @@ type Config struct {
 	NoOpen           bool
 	Demo             bool
 	DBPath           string
+	ShowVersion      bool
 }
 
 // Load parses job-scraper configuration. Existing CLI flags override matching
@@ -44,10 +45,17 @@ func Load(args []string, env map[string]string) (Config, error) {
 		AdminToken:       envValue(env, "JOBSCRAPER_ADMIN_TOKEN"),
 		WorknetKey:       envValue(env, "JOBSCRAPER_WORKNET_KEY"),
 		Host:             envDefault(env, "JOBSCRAPER_HOST", defaultHost),
-		Port:             envIntDefault(env, "JOBSCRAPER_PORT", defaultPort),
+		Port:             defaultPort,
 		NoOpen:           envBool(envValue(env, "JOBSCRAPER_NO_OPEN")),
 		Demo:             envBool(envValue(env, "JOBSCRAPER_DEMO")),
 		DBPath:           envValue(env, "JOBSCRAPER_DB"),
+	}
+	if v := envValue(env, "JOBSCRAPER_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("JOBSCRAPER_PORT: %w", err)
+		}
+		cfg.Port = port
 	}
 
 	fs := flag.NewFlagSet("job-scraper", flag.ContinueOnError)
@@ -59,9 +67,12 @@ func Load(args []string, env map[string]string) (Config, error) {
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "database file path (default: under the OS config dir)")
 	fs.StringVar(&cfg.WorknetKey, "worknet-api-key", cfg.WorknetKey,
 		"워크넷 OpenAPI key (free at data.go.kr). Disables the 워크넷 source when empty.")
-	fs.Bool("version", false, "print the version and exit")
+	fs.BoolVar(&cfg.ShowVersion, "version", cfg.ShowVersion, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
+	}
+	if cfg.ShowVersion {
+		return cfg, nil
 	}
 
 	if cfg.Production {
@@ -87,18 +98,6 @@ func envDefault(env map[string]string, name, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func envIntDefault(env map[string]string, name string, fallback int) int {
-	v := envValue(env, name)
-	if v == "" {
-		return fallback
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return fallback
-	}
-	return n
 }
 
 func envBool(v string) bool {

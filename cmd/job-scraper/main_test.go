@@ -2,7 +2,6 @@ package main
 
 import (
 	"net"
-	"strings"
 	"testing"
 
 	"github.com/ohchanwu/job-scraper/internal/config"
@@ -41,39 +40,15 @@ func TestListenUsesConfiguredHost(t *testing.T) {
 	}
 }
 
-func TestHasVersionFlagAcceptsBooleanTrueForms(t *testing.T) {
-	tests := [][]string{
-		{"--version"},
-		{"-version"},
-		{"--version=true"},
-		{"-version=true"},
-	}
-	for _, args := range tests {
-		if !hasVersionFlag(args) {
-			t.Fatalf("hasVersionFlag(%v) = false, want true", args)
-		}
-	}
-}
-
-func TestHasVersionFlagIgnoresBooleanFalseForms(t *testing.T) {
-	tests := [][]string{
-		{"--version=false"},
-		{"-version=false"},
-		{"--port", "7777"},
-	}
-	for _, args := range tests {
-		if hasVersionFlag(args) {
-			t.Fatalf("hasVersionFlag(%v) = true, want false", args)
-		}
-	}
-}
-
-func TestOpenConfiguredStoreProductionReturnsTask2Error(t *testing.T) {
+func TestOpenConfiguredStoreProductionUsesPostgresPath(t *testing.T) {
 	_, err := openConfiguredStore(config.Config{
 		Production:  true,
-		DatabaseURL: "postgres://db.example.invalid/jobs",
+		DatabaseURL: "://not-a-valid-postgres-url",
 	})
-	if err == nil || !strings.Contains(err.Error(), "Task 2") {
-		t.Fatalf("openConfiguredStore error = %v, want Task 2 postgres storage error", err)
+	if err == nil {
+		t.Fatal("openConfiguredStore succeeded with an invalid PostgreSQL URL")
+	}
+	if got, want := err.Error(), "storage: open postgres"; len(got) < len(want) || got[:len(want)] != want {
+		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
 	}
 }

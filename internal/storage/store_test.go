@@ -3,7 +3,9 @@ package storage
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -126,6 +128,59 @@ func TestOpenAtIsIdempotent(t *testing.T) {
 		t.Fatalf("second OpenAt: %v", err)
 	}
 	defer st2.Close()
+}
+
+func TestOpenAtUsesSQLiteDialect(t *testing.T) {
+	st := newTestStore(t)
+	if st.Dialect() != DialectSQLite {
+		t.Fatalf("Dialect = %v, want sqlite", st.Dialect())
+	}
+}
+
+func TestDialectPlaceholder(t *testing.T) {
+	if got := DialectSQLite.Placeholder(3); got != "?" {
+		t.Fatalf("sqlite placeholder = %q, want ?", got)
+	}
+	if got := DialectPostgres.Placeholder(3); got != "$3" {
+		t.Fatalf("postgres placeholder = %q, want $3", got)
+	}
+}
+
+func TestOpenPostgresInvalidURLReturnsOpenError(t *testing.T) {
+	_, err := OpenPostgres("://not-a-valid-postgres-url")
+	if err == nil {
+		t.Fatal("OpenPostgres succeeded with invalid URL")
+	}
+}
+
+func TestOpenPostgresAppliesSchema(t *testing.T) {
+	databaseURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	if databaseURL == "" {
+		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+	}
+	st, err := OpenPostgres(databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPostgres: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if st.Dialect() != DialectPostgres {
+		t.Fatalf("Dialect = %v, want postgres", st.Dialect())
+	}
+	for _, name := range []string{"postings", "profile", "scores", "bookmarks", "not_interested", "ai_extractions", "ai_scores", "ai_usage"} {
+		var got string
+		err := st.db.QueryRow(
+			`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`, name).Scan(&got)
+		if err != nil {
+			t.Errorf("table %q not found after OpenPostgres: %v", name, err)
+		}
+	}
+	var version int
+	if err := st.db.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version); err != nil && err != sql.ErrNoRows {
+		t.Fatalf("query schema_migrations: %v", err)
+	}
+	if version < 2 {
+		t.Fatalf("schema version = %d, want at least 2", version)
+	}
 }
 
 func TestUpsertPostingInsertsNewPosting(t *testing.T) {

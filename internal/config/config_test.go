@@ -52,6 +52,47 @@ func TestLoadUsesExplicitDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadParsesVersionFlag(t *testing.T) {
+	tests := [][]string{
+		{"--version"},
+		{"-version"},
+		{"--version=true"},
+		{"-version=true"},
+	}
+	for _, args := range tests {
+		cfg, err := config.Load(args, map[string]string{})
+		if err != nil {
+			t.Fatalf("Load(%v): %v", args, err)
+		}
+		if !cfg.ShowVersion {
+			t.Fatalf("Load(%v).ShowVersion = false, want true", args)
+		}
+	}
+}
+
+func TestLoadParsesVersionFalseForms(t *testing.T) {
+	tests := [][]string{
+		{"--version=false"},
+		{"-version=false"},
+	}
+	for _, args := range tests {
+		cfg, err := config.Load(args, map[string]string{})
+		if err != nil {
+			t.Fatalf("Load(%v): %v", args, err)
+		}
+		if cfg.ShowVersion {
+			t.Fatalf("Load(%v).ShowVersion = true, want false", args)
+		}
+	}
+}
+
+func TestLoadInvalidEnvPortReturnsError(t *testing.T) {
+	_, err := config.Load(nil, map[string]string{"JOBSCRAPER_PORT": "abc"})
+	if err == nil || !strings.Contains(err.Error(), "JOBSCRAPER_PORT") {
+		t.Fatalf("Load error = %v, want JOBSCRAPER_PORT error", err)
+	}
+}
+
 func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	env := map[string]string{
 		"JOBSCRAPER_DEMO":        "1",
@@ -85,5 +126,12 @@ func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	}
 	if cfg.WorknetKey != "flag-key" {
 		t.Fatalf("WorknetKey = %q, want flag-key", cfg.WorknetKey)
+	}
+}
+
+func TestLoadInvalidFlagPortReturnsError(t *testing.T) {
+	_, err := config.Load([]string{"--port", "abc"}, map[string]string{})
+	if err == nil || !strings.Contains(err.Error(), "invalid value") {
+		t.Fatalf("Load error = %v, want invalid port error", err)
 	}
 }
