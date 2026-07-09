@@ -12,9 +12,12 @@ import (
 	"github.com/ohchanwu/job-scraper/internal/storage"
 )
 
+const defaultOwnerEmail = "sqlite-import-owner@job-scraper.local"
+
 type importOptions struct {
 	sqlitePath  string
 	postgresURL string
+	ownerEmail  string
 	dryRun      bool
 	out         io.Writer
 }
@@ -34,6 +37,7 @@ func main() {
 	var opts importOptions
 	flag.StringVar(&opts.sqlitePath, "sqlite", "", "path to the source SQLite jobs.db")
 	flag.StringVar(&opts.postgresURL, "postgres", "", "target PostgreSQL database URL")
+	flag.StringVar(&opts.ownerEmail, "owner-email", defaultOwnerEmail, "owner account email for imported single-user profile and state")
 	flag.BoolVar(&opts.dryRun, "dry-run", false, "report source counts without writing PostgreSQL")
 	flag.Parse()
 	opts.out = os.Stdout
@@ -53,6 +57,9 @@ func runImport(ctx context.Context, opts importOptions) error {
 	}
 	if opts.postgresURL == "" {
 		return fmt.Errorf("import: --postgres is required")
+	}
+	if opts.ownerEmail == "" {
+		opts.ownerEmail = defaultOwnerEmail
 	}
 
 	source, err := storage.OpenSQLiteAt(opts.sqlitePath)
@@ -84,7 +91,7 @@ func runImport(ctx context.Context, opts importOptions) error {
 	}
 	defer tx.Rollback()
 
-	ownerID, err := ensureOwnerUser(ctx, tx)
+	ownerID, err := ensureOwnerUser(ctx, tx, opts.ownerEmail)
 	if err != nil {
 		return err
 	}
@@ -157,21 +164,14 @@ func printCounts(w io.Writer, dryRun bool, c tableCounts) {
 	fmt.Fprintf(w, "ai_usage: %d\n", c.AIUsage)
 }
 
-func ensureOwnerUser(ctx context.Context, tx *sql.Tx) (int64, error) {
+func ensureOwnerUser(ctx context.Context, tx *sql.Tx, ownerEmail string) (int64, error) {
 	var id int64
-	err := tx.QueryRowContext(ctx, `SELECT id FROM users ORDER BY id LIMIT 1`).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-	if err != sql.ErrNoRows {
-		return 0, fmt.Errorf("import: query owner user: %w", err)
-	}
 	if err := tx.QueryRowContext(ctx, `
 INSERT INTO users (email, password_hash, created_at, updated_at)
 VALUES ($1, $2, now(), now())
-ON CONFLICT (email) DO UPDATE SET updated_at = users.updated_at
+ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
 RETURNING id`,
-		"sqlite-import-owner@job-scraper.local", "imported-sqlite-no-login").Scan(&id); err != nil {
+		ownerEmail, "imported-sqlite-no-login").Scan(&id); err != nil {
 		return 0, fmt.Errorf("import: create owner user: %w", err)
 	}
 	return id, nil

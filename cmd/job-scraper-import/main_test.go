@@ -36,7 +36,7 @@ func TestImportDryRunReportsSQLiteCountsWithoutPostgres(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"dry run: true",
-		"postings: 1",
+		"postings: 2",
 		"profile: 1",
 		"scores: 1",
 		"bookmarks: 1",
@@ -59,12 +59,27 @@ func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testin
 	sqlitePath := seedSQLiteImportFixture(t)
 	schema := createPostgresImportSchema(t, postgresURL)
 	targetURL := databaseURLWithSearchPath(postgresURL, schema)
+	ownerEmail := "intended-owner@example.com"
+
+	preexisting, err := storage.OpenPostgres(targetURL)
+	if err != nil {
+		t.Fatalf("OpenPostgres preexisting target: %v", err)
+	}
+	if _, err := preexisting.SQLDB().Exec(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil {
+		t.Fatalf("seed preexisting user: %v", err)
+	}
+	if err := preexisting.Close(); err != nil {
+		t.Fatalf("close preexisting target: %v", err)
+	}
 
 	for i := 0; i < 2; i++ {
 		var out bytes.Buffer
 		if err := runImport(context.Background(), importOptions{
 			sqlitePath:  sqlitePath,
 			postgresURL: targetURL,
+			ownerEmail:  ownerEmail,
 			out:         &out,
 		}); err != nil {
 			t.Fatalf("runImport pass %d: %v\n%s", i+1, err, out.String())
@@ -77,8 +92,8 @@ func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testin
 	}
 	defer db.Close()
 
-	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 1)
-	assertPostgresScalar(t, db, `SELECT count(*) FROM postings`, 1)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 2)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM postings`, 2)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM profiles`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM scores`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM bookmarks`, 1)
@@ -87,16 +102,17 @@ func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testin
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_scores`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_usage`, 1)
 
-	var title, company, profileJSON string
+	var title, company, profileJSON, importedOwnerEmail string
 	if err := db.QueryRow(`
-SELECT p.title, p.company, pr.profile_json
+SELECT p.title, p.company, pr.profile_json, u.email
 FROM postings p
 JOIN scores s ON s.posting_id = p.id
 JOIN bookmarks b ON b.posting_id = p.id
 JOIN not_interested n ON n.posting_id = p.id
-JOIN profiles pr ON pr.user_id = 1
+JOIN profiles pr ON pr.profile_json LIKE '%"stacks":["Go"]%'
+JOIN users u ON u.id = pr.user_id
 WHERE p.source = 'jumpit' AND p.source_posting_id = 'import-1' AND s.total = 87`,
-	).Scan(&title, &company, &profileJSON); err != nil {
+	).Scan(&title, &company, &profileJSON, &importedOwnerEmail); err != nil {
 		t.Fatalf("query representative imported data: %v", err)
 	}
 	if title != "신입 백엔드 개발자" || company != "테스트컴퍼니" {
@@ -104,6 +120,17 @@ WHERE p.source = 'jumpit' AND p.source_posting_id = 'import-1' AND s.total = 87`
 	}
 	if !strings.Contains(profileJSON, `"stacks":["Go"]`) {
 		t.Fatalf("profile_json = %s", profileJSON)
+	}
+	if importedOwnerEmail != ownerEmail {
+		t.Fatalf("profile owner email = %q, want %q", importedOwnerEmail, ownerEmail)
+	}
+
+	var duplicateOf sql.NullInt64
+	if err := db.QueryRow(`SELECT duplicate_of FROM postings WHERE source_posting_id = 'import-duplicate'`).Scan(&duplicateOf); err != nil {
+		t.Fatalf("query duplicate_of: %v", err)
+	}
+	if !duplicateOf.Valid || duplicateOf.Int64 != 1 {
+		t.Fatalf("duplicate_of = %+v, want posting 1", duplicateOf)
 	}
 }
 
@@ -143,6 +170,30 @@ func seedSQLiteImportFixture(t *testing.T) string {
 	})
 	if err != nil {
 		t.Fatalf("UpsertPosting: %v", err)
+	}
+	duplicateID, _, err := st.UpsertPosting(ctx, scraper.Posting{
+		Source:          "rallit",
+		SourcePostingID: "import-duplicate",
+		URL:             "https://rallit.example/jobs/import-duplicate",
+		Title:           "신입 백엔드 개발자",
+		Company:         "테스트컴퍼니",
+		Location:        "서울",
+		Newcomer:        true,
+		MinCareer:       0,
+		MaxCareer:       0,
+		CareerLevel:     "신입",
+		StackTags:       []string{"Go"},
+		Description:     "중복 공고",
+		RawJSON:         `{"id":"import-duplicate"}`,
+		AlwaysOpen:      true,
+		FirstSeenAt:     time.Date(2026, 7, 9, 1, 3, 3, 0, time.UTC),
+		LastSeenAt:      time.Date(2026, 7, 9, 1, 3, 3, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("UpsertPosting duplicate: %v", err)
+	}
+	if _, err := st.SQLDB().ExecContext(ctx, `UPDATE postings SET duplicate_of = ? WHERE id = ?`, id, duplicateID); err != nil {
+		t.Fatalf("set duplicate_of: %v", err)
 	}
 	when := time.Date(2026, 7, 9, 2, 3, 4, 0, time.UTC)
 	if err := st.UpsertScore(ctx, storage.Score{PostingID: id, ProfileHash: profileHash, Total: 87, BreakdownJSON: `[{"label":"stack"}]`, ComputedAt: when}); err != nil {
