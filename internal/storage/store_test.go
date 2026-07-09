@@ -23,6 +23,7 @@ import (
 var requiredObjects = []string{
 	"postings", "postings_fts", "profile", "scores", "bookmarks",
 	"ai_extractions", "ai_scores", "ai_usage", // migration 0008 (BYOK AI v2.0)
+	"users", "sessions", // migration 0011 (production auth)
 }
 
 // newTestStore opens a fresh, migrated database in a temp directory.
@@ -175,8 +176,8 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version); err != nil && err != sql.ErrNoRows {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if version != 4 {
-		t.Fatalf("schema version = %d, want 4", version)
+	if version != 5 {
+		t.Fatalf("schema version = %d, want 5", version)
 	}
 }
 

@@ -156,6 +156,21 @@ nav.primary a.active {
   color: var(--ink);
   border-bottom-color: var(--accent);
 }
+.nav-logout {
+  margin: 0 0 0 auto;
+  padding: 0;
+}
+.nav-logout button {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 3px;
+  border-bottom: 2px solid transparent;
+}
+.nav-logout button:hover { color: var(--ink); }
 
 /* Scrape row */
 .scrape-row {
@@ -206,6 +221,20 @@ nav.primary a.active {
 .btn-primary:hover { opacity: 0.9; }
 .btn-primary:disabled { opacity: 0.4; cursor: default; }
 .btn-primary .arrow { color: var(--accent); margin-left: 0.45rem; }
+.login-wrap { max-width: 560px; }
+.login-main { padding-top: 2rem; }
+.login-form {
+  display: grid;
+  gap: 1.2rem;
+}
+.form-error {
+  margin: 0 0 1.2rem;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--highlight);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
 
 /* 재평가 — a secondary/ghost button (gold outline + text), never a second
    primary; the black 스크랩 시작 stays the single primary on /. has-stale lifts
@@ -691,6 +720,10 @@ form label {
   font-weight: 600;
   font-size: 0.92rem;
 }
+form.login-form label {
+  display: grid;
+  gap: 0.35rem;
+}
 form label.check {
   font-weight: 400;
   display: flex;
@@ -712,7 +745,7 @@ form label.check {
   font-family: var(--mono);
   font-weight: 500;
 }
-input[type="text"], input[type="number"], select, textarea {
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
   width: 100%;
   margin-top: 0.45rem;
   padding: 0.55rem 0.7rem;
@@ -730,6 +763,10 @@ input:focus, select:focus, textarea:focus {
 }
 form label.check input { width: auto; margin: 0; }
 textarea { resize: vertical; min-height: 4rem; }
+form.login-form input {
+  width: 100%;
+  margin-top: 0;
+}
 .hint {
   color: var(--ink-soft);
   font-size: 0.83rem;

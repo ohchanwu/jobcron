@@ -85,6 +85,7 @@ type Server struct {
 	aiPerCallCap    int    // 재평가: not-yet-analyzed rows analyzed per press (legibility knob, not a hard cap)
 	aiKeysPath      string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
 	demoMode        bool   // read-only public demo mode
+	productionMode  bool   // require owner login for protected HTTP routes
 	adminToken      string // optional safety token for operator GET mutators in demo mode
 }
 
@@ -108,6 +109,9 @@ func (s *Server) SetAIKeysPath(path string) { s.aiKeysPath = path }
 // SetDemoMode makes the HTTP surface read-only. Visitor bookmark/hide state is
 // handled by browser localStorage in this mode; no request should mutate the DB.
 func (s *Server) SetDemoMode(on bool) { s.demoMode = on }
+
+// SetProductionMode requires cookie-session authentication for protected pages.
+func (s *Server) SetProductionMode(on bool) { s.productionMode = on }
 
 // SetAdminToken sets the operator token accepted by /api/scrape in demo mode.
 // An empty token means the endpoint is refused like every other mutator.
@@ -208,6 +212,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		"sourcePillGroups":  srv.sourcePillGroups,
 		"absInt":            absInt,
 		"demoMode":          func() bool { return srv.demoMode },
+		"productionMode":    func() bool { return srv.productionMode },
 	}
 	srv.tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
 	return srv

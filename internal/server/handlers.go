@@ -28,6 +28,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /hidden", s.handleHidden)
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
+	mux.HandleFunc("GET /login", s.handleLoginForm)
+	mux.HandleFunc("POST /login", s.handleLoginPost)
+	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
 	mux.HandleFunc("GET /api/rerate", s.handleRerateSSE)
 	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
@@ -39,14 +42,18 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /favicon.ico", http.RedirectHandler("/static/favicon.ico", http.StatusMovedPermanently))
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
 		http.FileServer(http.FS(web.FS))))
+	var handler http.Handler = mux
+	if s.productionMode && !s.demoMode {
+		handler = s.requireAuth(handler)
+	}
 	if !s.demoMode {
-		return mux
+		return handler
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.rejectDemoMutation(w, r) {
 			return
 		}
-		mux.ServeHTTP(w, r)
+		handler.ServeHTTP(w, r)
 	})
 }
 

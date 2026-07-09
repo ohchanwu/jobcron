@@ -1,0 +1,122 @@
+package server
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/ohchanwu/job-scraper/internal/auth"
+)
+
+const (
+	sessionCookieName = "job_scraper_session"
+	sessionTTL        = 30 * 24 * time.Hour
+	loginErrorCopy    = "이메일 또는 비밀번호를 확인해주세요."
+)
+
+type loginPage struct {
+	Error string
+	Email string
+}
+
+func (s *Server) requireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if publicAuthPath(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if _, ok := s.userFromRequest(r.Context(), r); ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	})
+}
+
+func publicAuthPath(r *http.Request) bool {
+	if r.URL.Path == "/login" && (r.Method == http.MethodGet || r.Method == http.MethodPost) {
+		return true
+	}
+	if r.URL.Path == "/logout" && r.Method == http.MethodPost {
+		return true
+	}
+	if r.URL.Path == "/favicon.ico" {
+		return true
+	}
+	return strings.HasPrefix(r.URL.Path, "/static/")
+}
+
+func (s *Server) userFromRequest(ctx context.Context, r *http.Request) (userID int64, ok bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return 0, false
+	}
+	user, ok, err := s.store.UserBySessionToken(ctx, cookie.Value)
+	if err != nil || !ok {
+		return 0, false
+	}
+	return user.ID, true
+}
+
+func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
+	s.render(w, "login.html", loginPage{})
+}
+
+func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	email := strings.TrimSpace(r.FormValue("email"))
+	password := r.FormValue("password")
+	user, ok, err := s.store.UserByEmail(r.Context(), email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		s.renderLoginFailure(w)
+		return
+	}
+	matches, err := auth.VerifyPassword(user.PasswordHash, password)
+	if err != nil || !matches {
+		s.renderLoginFailure(w)
+		return
+	}
+	token, err := auth.GenerateSessionToken()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.store.CreateSession(r.Context(), user.ID, auth.HashSessionToken(token), time.Now().Add(sessionTTL)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, s.sessionCookie(token, time.Now().Add(sessionTTL)))
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) renderLoginFailure(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusUnauthorized)
+	s.render(w, "login.html", loginPage{Error: loginErrorCopy})
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie := s.sessionCookie("", time.Unix(0, 0))
+	cookie.MaxAge = -1
+	http.SetCookie(w, cookie)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func (s *Server) sessionCookie(token string, expiresAt time.Time) *http.Cookie {
+	return &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		Expires:  expiresAt.UTC(),
+		HttpOnly: true,
+		Secure:   s.productionMode,
+		SameSite: http.SameSiteLaxMode,
+	}
+}

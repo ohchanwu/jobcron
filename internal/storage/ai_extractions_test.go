@@ -16,10 +16,10 @@ func TestMigration0008AppliesTo8(t *testing.T) {
 	if err := st.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("read user_version: %v", err)
 	}
-	// Latest migration is 0010 (detail_fetched_at); 0006 is intentionally
+	// Latest migration is 0011 (production auth tables); 0006 is intentionally
 	// skipped. Bump this when a new migration lands.
-	if v != 10 {
-		t.Fatalf("user_version = %d, want 10 after 0010 applies (0006 skipped)", v)
+	if v != 11 {
+		t.Fatalf("user_version = %d, want 11 after 0011 applies (0006 skipped)", v)
 	}
 }
 

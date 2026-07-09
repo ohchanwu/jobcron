@@ -46,10 +46,11 @@ func (s *Store) CreateOwnerUser(ctx context.Context, email, passwordHash string)
 		return User{}, errors.New("storage: owner user already exists")
 	}
 
-	row := tx.QueryRowContext(ctx, `
+	now := time.Now().UTC()
+	row := tx.QueryRowContext(ctx, s.query(`
 INSERT INTO users (email, password_hash, created_at, updated_at)
-VALUES ($1, $2, now(), now())
-RETURNING id, email, password_hash, created_at, updated_at`, email, passwordHash)
+VALUES (?, ?, ?, ?)
+RETURNING id, email, password_hash, created_at, updated_at`), email, passwordHash, now, now)
 	user, err := scanOwnerUser(row)
 	if err != nil {
 		return User{}, fmt.Errorf("storage: create owner user: %w", err)
@@ -88,12 +89,13 @@ func (s *Store) ResetOwnerPassword(ctx context.Context, email, passwordHash stri
 		return User{}, errors.New("storage: multiple users exist; refusing owner password reset")
 	}
 
-	row := tx.QueryRowContext(ctx, `
+	now := time.Now().UTC()
+	row := tx.QueryRowContext(ctx, s.query(`
 UPDATE users
-   SET password_hash = $2,
-       updated_at = now()
- WHERE email = $1
- RETURNING id, email, password_hash, created_at, updated_at`, email, passwordHash)
+   SET password_hash = ?,
+       updated_at = ?
+ WHERE email = ?
+ RETURNING id, email, password_hash, created_at, updated_at`), passwordHash, now, email)
 	user, err := scanOwnerUser(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, errors.New("storage: owner user does not match email")
@@ -114,6 +116,25 @@ func (s *Store) lockUsersForOwnerChange(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+// UserByEmail returns an application user by email address.
+func (s *Store) UserByEmail(ctx context.Context, email string) (User, bool, error) {
+	if email == "" {
+		return User{}, false, nil
+	}
+	row := s.db.QueryRowContext(ctx, s.query(`
+SELECT id, email, password_hash, created_at, updated_at
+  FROM users
+ WHERE email = ?`), email)
+	user, err := scanOwnerUser(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, false, nil
+	}
+	if err != nil {
+		return User{}, false, fmt.Errorf("storage: user by email: %w", err)
+	}
+	return user, true, nil
 }
 
 func scanOwnerUser(row rowScanner) (User, error) {
