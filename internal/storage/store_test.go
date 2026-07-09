@@ -176,14 +176,17 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version); err != nil && err != sql.ErrNoRows {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("schema version = %d, want 5", version)
+	if version != 6 {
+		t.Fatalf("schema version = %d, want 6", version)
 	}
 }
 
 func TestPostgresRuntimeStorageMethods(t *testing.T) {
 	st := newPostgresTestStore(t)
 	ctx := context.Background()
+	if _, err := st.CreateOwnerUser(ctx, "runtime-owner@example.test", "hash"); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
 
 	p := samplePosting()
 	p.SourcePostingID = fmt.Sprintf("pg-runtime-%s-%d", strings.ReplaceAll(t.Name(), "/", "-"), time.Now().UnixNano())
