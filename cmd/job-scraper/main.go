@@ -8,18 +8,19 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/pkg/browser"
 
+	"github.com/ohchanwu/job-scraper/internal/config"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 	"github.com/ohchanwu/job-scraper/internal/scraper/demoday"
 	"github.com/ohchanwu/job-scraper/internal/scraper/greenhouse"
@@ -35,22 +36,17 @@ import (
 var version = "dev"
 
 func main() {
-	port := flag.Int("port", 7777, "preferred port; the next ten are tried if it is busy")
-	host := flag.String("host", "127.0.0.1", "host/interface to bind")
-	noOpen := flag.Bool("no-open", false, "do not open a browser window on startup")
-	demo := flag.Bool("demo", envBool("JOBSCRAPER_DEMO"), "run in read-only public demo mode")
-	dbPath := flag.String("db", "", "database file path (default: under the OS config dir)")
-	showVersion := flag.Bool("version", false, "print the version and exit")
-	worknetKey := flag.String("worknet-api-key", os.Getenv("JOBSCRAPER_WORKNET_KEY"),
-		"워크넷 OpenAPI key (free at data.go.kr). Disables the 워크넷 source when empty.")
-	flag.Parse()
-
-	if *showVersion {
+	if hasVersionFlag(os.Args[1:]) {
 		fmt.Println("job-scraper", version)
 		return
 	}
 
-	store, err := openStore(*dbPath)
+	cfg, err := config.Load(os.Args[1:], environMap(os.Environ()))
+	if err != nil {
+		log.Fatalf("job-scraper: %v", err)
+	}
+
+	store, err := openConfiguredStore(cfg)
 	if err != nil {
 		log.Fatalf("job-scraper: %v", err)
 	}
@@ -63,8 +59,8 @@ func main() {
 		jumpit.New(), rallit.New(), demoday.New(), greeting.New(),
 		greenhouse.Daangn(), greenhouse.Krafton(), greenhouse.Moloco(), greenhouse.Sendbird(),
 	}
-	if *worknetKey != "" {
-		wn, err := worknet.New(*worknetKey)
+	if cfg.WorknetKey != "" {
+		wn, err := worknet.New(cfg.WorknetKey)
 		if err != nil {
 			log.Fatalf("job-scraper: %v", err)
 		}
@@ -75,8 +71,8 @@ func main() {
 			"워크넷도 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
-	srv.SetDemoMode(*demo)
-	srv.SetAdminToken(os.Getenv("JOBSCRAPER_ADMIN_TOKEN"))
+	srv.SetDemoMode(cfg.Demo)
+	srv.SetAdminToken(cfg.AdminToken)
 	// Wire BYOK AI from the saved profile + ai_keys.json. Non-fatal: any error
 	// (or simply no key configured) leaves AI off and the briefing falls back to
 	// the v1.5 offline scoring. The user enables AI on /profile.
@@ -92,14 +88,14 @@ func main() {
 		log.Printf("job-scraper: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
 	}
 
-	ln, addr, err := listen(*host, *port)
+	ln, addr, err := listen(cfg.Host, cfg.Port)
 	if err != nil {
 		log.Fatalf("job-scraper: %v", err)
 	}
 	url := "http://" + addr
 	fmt.Printf("job-scraper: %s 에서 실행 중입니다. 종료하려면 Ctrl+C를 누르세요.\n", url)
 
-	if !*noOpen {
+	if !cfg.NoOpen {
 		_ = browser.OpenURL(url) // best effort — failure is non-fatal
 	}
 
@@ -123,11 +119,14 @@ func main() {
 	}
 }
 
-// openStore opens the database at path, or at the default OS-config-dir
-// location when path is empty.
-func openStore(path string) (*storage.Store, error) {
-	if path != "" {
-		return storage.OpenAt(path)
+// openConfiguredStore opens the database from DATABASE_URL in production, or
+// from the local DB path/default location outside production.
+func openConfiguredStore(cfg config.Config) (*storage.Store, error) {
+	if cfg.Production {
+		return nil, fmt.Errorf("postgres storage is implemented in Task 2")
+	}
+	if cfg.DBPath != "" {
+		return storage.OpenAt(cfg.DBPath)
 	}
 	return storage.Open()
 }
@@ -144,11 +143,27 @@ func listen(host string, preferred int) (net.Listener, string, error) {
 	return nil, "", fmt.Errorf("no free port in %d..%d", preferred, preferred+10)
 }
 
-func envBool(name string) bool {
-	switch os.Getenv(name) {
-	case "1", "true", "TRUE", "yes", "YES", "on", "ON":
-		return true
-	default:
-		return false
+func environMap(environ []string) map[string]string {
+	env := make(map[string]string, len(environ))
+	for _, item := range environ {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok {
+			continue
+		}
+		env[key] = value
 	}
+	return env
+}
+
+func hasVersionFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--version" || arg == "-version" {
+			return true
+		}
+		name, value, ok := strings.Cut(arg, "=")
+		if ok && (name == "--version" || name == "-version") {
+			return value == "true" || value == "TRUE" || value == "1"
+		}
+	}
+	return false
 }
