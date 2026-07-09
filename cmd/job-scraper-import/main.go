@@ -434,8 +434,8 @@ func copyAIUsage(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
 INSERT INTO ai_usage (day, input_tokens, output_tokens)
 VALUES ($1, $2, $3)
 ON CONFLICT (day) DO UPDATE SET
-    input_tokens = EXCLUDED.input_tokens,
-    output_tokens = EXCLUDED.output_tokens`,
+    input_tokens = GREATEST(ai_usage.input_tokens, EXCLUDED.input_tokens),
+    output_tokens = GREATEST(ai_usage.output_tokens, EXCLUDED.output_tokens)`,
 			day, inputTokens, outputTokens); err != nil {
 			return fmt.Errorf("import: write ai_usage for day %s: %w", day, err)
 		}

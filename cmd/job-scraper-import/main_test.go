@@ -101,6 +101,24 @@ VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil 
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_extractions`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_scores`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_usage`, 1)
+	assertAIUsage(t, db, "2026-07-09", 123, 45)
+
+	if _, err := db.Exec(`
+UPDATE ai_usage
+SET input_tokens = 200, output_tokens = 60
+WHERE day = '2026-07-09'`); err != nil {
+		t.Fatalf("raise target ai_usage: %v", err)
+	}
+	var out bytes.Buffer
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  ownerEmail,
+		out:         &out,
+	}); err != nil {
+		t.Fatalf("runImport after higher live usage: %v\n%s", err, out.String())
+	}
+	assertAIUsage(t, db, "2026-07-09", 200, 60)
 
 	var title, company, profileJSON, importedOwnerEmail string
 	if err := db.QueryRow(`
@@ -252,6 +270,18 @@ func assertPostgresScalar(t *testing.T, db *sql.DB, query string, want int) {
 	}
 	if got != want {
 		t.Fatalf("%s = %d, want %d", query, got, want)
+	}
+}
+
+func assertAIUsage(t *testing.T, db *sql.DB, day string, wantInput, wantOutput int) {
+	t.Helper()
+	var gotInput, gotOutput int
+	if err := db.QueryRow(`SELECT input_tokens, output_tokens FROM ai_usage WHERE day = $1`, day).
+		Scan(&gotInput, &gotOutput); err != nil {
+		t.Fatalf("query ai_usage for %s: %v", day, err)
+	}
+	if gotInput != wantInput || gotOutput != wantOutput {
+		t.Fatalf("ai_usage[%s] = input %d output %d, want input %d output %d", day, gotInput, gotOutput, wantInput, wantOutput)
 	}
 }
 
