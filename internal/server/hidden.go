@@ -15,8 +15,9 @@ import (
 // real home for muted jobs — the eye button hides them from / and /archive
 // entirely, and this page is where the user sees and un-hides them.
 type hiddenView struct {
-	Postings []dashboardPosting
-	Date     string // today's date, for header symmetry with the other pages
+	Postings  []dashboardPosting
+	Date      string // today's date, for header symmetry with the other pages
+	CSRFToken string
 }
 
 // handleHidden renders the user's manually-muted postings.
@@ -31,7 +32,7 @@ func (s *Server) handleHidden(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "hidden.html", view)
+	s.renderWithRequest(w, r, "hidden.html", view)
 }
 
 // buildHidden assembles the 숨긴 공고 view: every muted posting (ordered

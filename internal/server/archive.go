@@ -22,12 +22,13 @@ type archiveDay struct {
 
 // archiveView is the view model for the /archive (전체 공고) page.
 type archiveView struct {
-	Today    string // header date, mirroring the briefing view's Date field
-	Days     []archiveDay
-	Excluded []dashboardPosting // below-MinScore / dealbreaker rows, collapsed
-	Total    int                // total posting count (main + excluded), for the header counter
-	Rerate   *rerateInfo        // re-rate button state; nil = no AI key (button hidden)
-	SortMode string             // "date" (day-grouped, default) | "score" (one flat fit ranking)
+	Today     string // header date, mirroring the briefing view's Date field
+	Days      []archiveDay
+	Excluded  []dashboardPosting // below-MinScore / dealbreaker rows, collapsed
+	Total     int                // total posting count (main + excluded), for the header counter
+	Rerate    *rerateInfo        // re-rate button state; nil = no AI key (button hidden)
+	SortMode  string             // "date" (day-grouped, default) | "score" (one flat fit ranking)
+	CSRFToken string
 }
 
 // Archive sort modes. 날짜순 (date) is the default day-grouped view; 점수순
@@ -81,7 +82,7 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
 	if view.SortMode == archiveSortScore {
 		view.applyScoreSort()
 	}
-	s.render(w, "archive.html", view)
+	s.renderWithRequest(w, r, "archive.html", view)
 }
 
 // archiveSortCookie remembers the 전체 공고 sort per-browser.

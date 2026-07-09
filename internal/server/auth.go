@@ -17,8 +17,9 @@ const (
 )
 
 type loginPage struct {
-	Error string
-	Email string
+	Error     string
+	Email     string
+	CSRFToken string
 }
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
@@ -76,7 +77,7 @@ func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error
 }
 
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "login.html", loginPage{})
+	s.renderWithRequest(w, r, "login.html", loginPage{})
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
@@ -86,20 +87,28 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.TrimSpace(r.FormValue("email"))
 	password := r.FormValue("password")
+	ip := clientIP(r)
+	if !s.loginLimiter.allow(ip, email) {
+		http.Error(w, "too many login attempts", http.StatusTooManyRequests)
+		return
+	}
 	user, ok, err := s.store.UserByEmail(r.Context(), email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if !ok {
-		s.renderLoginFailure(w)
+		s.loginLimiter.recordFailure(ip, email)
+		s.renderLoginFailure(w, r)
 		return
 	}
 	matches, err := auth.VerifyPassword(user.PasswordHash, password)
 	if err != nil || !matches {
-		s.renderLoginFailure(w)
+		s.loginLimiter.recordFailure(ip, email)
+		s.renderLoginFailure(w, r)
 		return
 	}
+	s.loginLimiter.reset(ip, email)
 	token, err := auth.GenerateSessionToken()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -113,9 +122,9 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (s *Server) renderLoginFailure(w http.ResponseWriter) {
+func (s *Server) renderLoginFailure(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusUnauthorized)
-	s.render(w, "login.html", loginPage{Error: loginErrorCopy})
+	s.renderWithRequest(w, r, "login.html", loginPage{Error: loginErrorCopy})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

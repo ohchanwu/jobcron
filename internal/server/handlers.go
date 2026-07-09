@@ -44,7 +44,7 @@ func (s *Server) Handler() http.Handler {
 		http.FileServer(http.FS(web.FS))))
 	var handler http.Handler = mux
 	if s.productionMode && !s.demoMode {
-		handler = s.requireAuth(handler)
+		handler = s.requireAuth(s.csrfProtect(handler))
 	}
 	if !s.demoMode {
 		return handler
@@ -138,10 +138,11 @@ type dashboardPosting struct {
 // briefing is the daily-briefing view model: postings first seen today, split
 // into the scored list and the dealbreaker-excluded list.
 type briefing struct {
-	Today    []dashboardPosting
-	Excluded []dashboardPosting
-	Date     string      // "2026 / 05 / 23" (KST)
-	Rerate   *rerateInfo // re-rate button state; nil = no AI key (button hidden)
+	Today     []dashboardPosting
+	Excluded  []dashboardPosting
+	Date      string      // "2026 / 05 / 23" (KST)
+	Rerate    *rerateInfo // re-rate button state; nil = no AI key (button hidden)
+	CSRFToken string
 }
 
 // briefingCap bounds how many postings the daily briefing lists.
@@ -173,7 +174,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "index.html", b)
+	s.renderWithRequest(w, r, "index.html", b)
 }
 
 // buildBriefing assembles today's briefing: postings first seen today and not
@@ -333,6 +334,7 @@ func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) deadline
 // profileForm is the view model for the profile form — flat string/int fields
 // matching the HTML inputs.
 type profileForm struct {
+	CSRFToken        string
 	CareerYears      int
 	CareerWeight     int
 	CareerNearMiss   int // derived: round(CareerWeight × 2/5), shown as a hint
@@ -390,7 +392,7 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 	form := toProfileForm(p)
 	form.Sources = s.sourceOptions(p.DisabledSources)
 	s.fillAIFormState(r.Context(), &form, p)
-	s.render(w, "profile.html", form)
+	s.renderWithRequest(w, r, "profile.html", form)
 }
 
 // fillAIFormState populates the AI section of the profile form: whether a key is

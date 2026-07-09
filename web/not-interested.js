@@ -35,6 +35,11 @@
     btn.setAttribute('aria-pressed', String(on));
   }
 
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') || '' : '';
+  }
+
   function syncDemoHidden() {
     if (!demoMode()) return;
     var hidden = readSet();
@@ -96,6 +101,7 @@
 
     fetch('/api/not-interested/' + encodeURIComponent(id), {
       method: wasOn ? 'DELETE' : 'PUT',
+      headers: { 'X-CSRF-Token': csrfToken() },
     })
       .then(function (r) {
         if (!r.ok) throw new Error('not-interested request failed: ' + r.status);

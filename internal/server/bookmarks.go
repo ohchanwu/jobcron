@@ -13,9 +13,10 @@ import (
 
 // bookmarksView is the view model for the /bookmarks page.
 type bookmarksView struct {
-	Postings []dashboardPosting
-	Date     string      // today's date, for header symmetry with the briefing
-	Rerate   *rerateInfo // re-rate button state; nil = no AI key (button hidden)
+	Postings  []dashboardPosting
+	Date      string      // today's date, for header symmetry with the briefing
+	Rerate    *rerateInfo // re-rate button state; nil = no AI key (button hidden)
+	CSRFToken string
 }
 
 // handleBookmarks renders the user's saved postings, most recently saved
@@ -33,7 +34,7 @@ func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "bookmarks.html", view)
+	s.renderWithRequest(w, r, "bookmarks.html", view)
 }
 
 // buildBookmarks assembles the bookmarks view: every bookmarked posting,

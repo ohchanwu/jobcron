@@ -66,10 +66,12 @@ const defaultRunTokenCap = 150_000
 
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
 type Server struct {
-	store   *storage.Store
-	sources []scraper.Scraper
-	tmpl    *template.Template
-	flight  *singleFlight
+	store        *storage.Store
+	sources      []scraper.Scraper
+	tmpl         *template.Template
+	flight       *singleFlight
+	csrfSecret   []byte
+	loginLimiter *loginRateLimiter
 
 	// AI extraction (BYOK, v2.0). ai is nil when no provider is configured —
 	// the default — and the pipeline behaves exactly like v1.5 (regex scoring,
@@ -244,6 +246,8 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		store:           store,
 		sources:         sources,
 		flight:          newSingleFlight(),
+		csrfSecret:      newCSRFSecret(),
+		loginLimiter:    newLoginRateLimiter(),
 		aiRunTokenCap:   defaultRunTokenCap,
 		aiDailyTokenCap: profile.DefaultDailyTokenCap,
 		aiPerCallCap:    profile.DefaultAIPerCallCap,

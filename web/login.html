@@ -14,6 +14,7 @@
   </script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
+  <meta name="csrf-token" content="{{.CSRFToken}}">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body data-demo="{{demoMode}}">
@@ -31,6 +32,7 @@
     <main class="login-main">
       {{if .Error}}<p class="form-error" role="alert">{{.Error}}</p>{{end}}
       <form class="login-form" method="post" action="/login">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <label>이메일
           <input type="email" name="email" autocomplete="username" value="{{.Email}}" required autofocus>
         </label>

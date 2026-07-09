@@ -27,6 +27,11 @@
     btn.setAttribute('aria-pressed', String(on));
   }
 
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') || '' : '';
+  }
+
   function syncDemoBookmarks() {
     if (!demoMode()) return;
     var saved = readSet();
@@ -74,6 +79,7 @@
 
     fetch('/api/bookmark/' + encodeURIComponent(id), {
       method: wasOn ? 'DELETE' : 'PUT',
+      headers: { 'X-CSRF-Token': csrfToken() },
     })
       .then(function (r) {
         if (!r.ok) throw new Error('bookmark request failed: ' + r.status);

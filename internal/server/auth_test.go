@@ -112,6 +112,7 @@ func TestLoginFailureUsesGenericError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRF(t, srv, req, "")
 	srv.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
@@ -142,6 +143,7 @@ func TestLoginSuccessSetsSecureSessionCookie(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRF(t, srv, req, "")
 	srv.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusSeeOther {
@@ -186,6 +188,7 @@ func TestLogoutClearsSessionCookie(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "raw-session-token"})
+	addCSRF(t, srv, req, "raw-session-token")
 	srv.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusSeeOther {
@@ -217,6 +220,7 @@ func TestLogoutRevokesSessionToken(t *testing.T) {
 	loginRec := httptest.NewRecorder()
 	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRF(t, srv, loginReq, "")
 	srv.Handler().ServeHTTP(loginRec, loginReq)
 	if loginRec.Code != http.StatusSeeOther {
 		t.Fatalf("login status = %d, want 303; body=%q", loginRec.Code, loginRec.Body.String())
@@ -226,6 +230,7 @@ func TestLogoutRevokesSessionToken(t *testing.T) {
 	logoutRec := httptest.NewRecorder()
 	logoutReq := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	logoutReq.AddCookie(sessionCookie)
+	addCSRF(t, srv, logoutReq, sessionCookie.Value)
 	srv.Handler().ServeHTTP(logoutRec, logoutReq)
 	if logoutRec.Code != http.StatusSeeOther {
 		t.Fatalf("logout status = %d, want 303", logoutRec.Code)
@@ -250,4 +255,11 @@ func seedProfile(t *testing.T, st interface {
 	if _, _, err := st.SaveProfile(ctx, `{"career_years":0}`); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
+}
+
+func addCSRF(t *testing.T, srv *Server, req *http.Request, sessionValue string) {
+	t.Helper()
+	const cookieValue = "csrf-cookie"
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: cookieValue})
+	req.Header.Set(csrfHeaderName, srv.csrfToken(cookieValue, sessionValue))
 }

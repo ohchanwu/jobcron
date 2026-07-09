@@ -14,6 +14,7 @@
   </script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48">
+  <meta name="csrf-token" content="{{.CSRFToken}}">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body data-demo="{{demoMode}}">
@@ -51,7 +52,7 @@
       <a href="/bookmarks" class="active">북마크</a>
       <a href="/hidden">숨긴 공고</a>
       <a href="/profile">프로필 설정</a>
-      {{if productionMode}}<form method="post" action="/logout" class="nav-logout"><button type="submit">로그아웃</button></form>{{end}}
+      {{if productionMode}}<form method="post" action="/logout" class="nav-logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">로그아웃</button></form>{{end}}
     </nav>
 
     <div class="scrape-row">

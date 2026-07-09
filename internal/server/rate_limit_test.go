@@ -1,0 +1,58 @@
+package server
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ohchanwu/job-scraper/internal/auth"
+)
+
+func TestLoginRateLimitBlocksSixthFailedAttemptUntilWindowExpires(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	now := time.Date(2026, 7, 10, 1, 0, 0, 0, time.UTC)
+	srv.loginLimiter.now = func() time.Time { return now }
+	hash, err := auth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if _, err := st.CreateOwnerUser(context.Background(), "owner@example.com", hash); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+
+	for i := 0; i < 5; i++ {
+		rec := postLogin(t, srv, "198.51.100.10:1234", "owner@example.com", "wrong-password")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status = %d, want 401", i+1, rec.Code)
+		}
+	}
+
+	rec := postLogin(t, srv, "198.51.100.10:1234", "owner@example.com", "wrong-password")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("sixth status = %d, want 429", rec.Code)
+	}
+
+	now = now.Add(loginRateLimitWindow + time.Second)
+	rec = postLogin(t, srv, "198.51.100.10:1234", "owner@example.com", "wrong-password")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("after window status = %d, want 401", rec.Code)
+	}
+}
+
+func postLogin(t *testing.T, srv *Server, remoteAddr, email, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	form := url.Values{"email": {email}, "password": {password}}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.RemoteAddr = remoteAddr
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-cookie"})
+	req.Header.Set(csrfHeaderName, srv.csrfToken("csrf-cookie", ""))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	return rec
+}
