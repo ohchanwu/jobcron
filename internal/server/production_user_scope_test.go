@@ -36,6 +36,7 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 
 	putReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/bookmark/%d", postingID), nil)
 	putReq.AddCookie(cookieA)
+	addCSRFToRequest(putReq, srv, cookieA)
 	putRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(putRec, putReq)
 	if putRec.Code != http.StatusOK {
@@ -47,6 +48,7 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 
 	deleteReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/bookmark/%d", postingID), nil)
 	deleteReq.AddCookie(cookieA)
+	addCSRFToRequest(deleteReq, srv, cookieA)
 	deleteRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(deleteRec, deleteReq)
 	if deleteRec.Code != http.StatusOK {
@@ -60,6 +62,7 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 	userBOnlyPostingID := mustUpsert(t, st, listingPosting("user-b-bookmark", "유저B 전용 북마크"))
 	putBReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/bookmark/%d", userBOnlyPostingID), nil)
 	putBReq.AddCookie(cookieB)
+	addCSRFToRequest(putBReq, srv, cookieB)
 	putBRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(putBRec, putBReq)
 	if putBRec.Code != http.StatusOK {
@@ -89,6 +92,7 @@ func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
 
 	putReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/not-interested/%d", postingID), nil)
 	putReq.AddCookie(cookieA)
+	addCSRFToRequest(putReq, srv, cookieA)
 	putRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(putRec, putReq)
 	if putRec.Code != http.StatusOK {
@@ -100,6 +104,7 @@ func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
 
 	deleteReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/not-interested/%d", postingID), nil)
 	deleteReq.AddCookie(cookieA)
+	addCSRFToRequest(deleteReq, srv, cookieA)
 	deleteRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(deleteRec, deleteReq)
 	if deleteRec.Code != http.StatusOK {
@@ -113,6 +118,7 @@ func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
 	userBOnlyPostingID := mustUpsert(t, st, listingPosting("user-b-hidden", "유저B 전용 숨김"))
 	putBReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/not-interested/%d", userBOnlyPostingID), nil)
 	putBReq.AddCookie(cookieB)
+	addCSRFToRequest(putBReq, srv, cookieB)
 	putBRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(putBRec, putBReq)
 	if putBRec.Code != http.StatusOK {
@@ -149,6 +155,7 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookieA)
+	addCSRFToRequest(req, srv, cookieA)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -182,6 +189,7 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookieB)
+	addCSRFToRequest(req, srv, cookieB)
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -258,6 +266,12 @@ RETURNING id`, email, passwordHash).Scan(&userID); err != nil {
 		t.Fatalf("CreateSession %s: %v", email, err)
 	}
 	return userID, &http.Cookie{Name: sessionCookieName, Value: rawToken}
+}
+
+func addCSRFToRequest(req *http.Request, srv *Server, sessionCookie *http.Cookie) {
+	const csrfCookieValue = "test-csrf-cookie"
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfCookieValue})
+	req.Header.Set(csrfHeaderName, srv.csrfToken(csrfCookieValue, sessionCookie.Value))
 }
 
 func assertBookmarkedForUser(t *testing.T, st *storage.Store, userID, postingID int64, want bool) {

@@ -68,6 +68,27 @@ func TestCSRFAllowsValidToken(t *testing.T) {
 	}
 }
 
+func TestCSRFUsesConfiguredSessionSecret(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	srv.SetSessionSecret([]byte("configured-session-secret-32-byte-minimum"))
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-cookie"})
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "raw-session"})
+	req.Header.Set(csrfHeaderName, srv.csrfToken("csrf-cookie", "raw-session"))
+	rec := httptest.NewRecorder()
+
+	srv.SetSessionSecret([]byte("different-session-secret-32-byte-minimum"))
+	srv.csrfProtect(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("handler should not run with token signed by old secret")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
 func TestCSRFDoesNotBlockGET(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	srv.SetProductionMode(true)

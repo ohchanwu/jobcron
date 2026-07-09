@@ -70,6 +70,7 @@ func main() {
 			"워크넷도 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
+	srv.SetSessionSecret(cfg.SessionSecret)
 	srv.SetDemoMode(cfg.Demo)
 	srv.SetProductionMode(cfg.Production)
 	srv.SetAdminToken(cfg.AdminToken)

@@ -115,6 +115,16 @@ func (s *Server) SetDemoMode(on bool) { s.demoMode = on }
 // SetProductionMode requires cookie-session authentication for protected pages.
 func (s *Server) SetProductionMode(on bool) { s.productionMode = on }
 
+// SetSessionSecret makes security tokens derive from the configured production
+// SESSION_SECRET. New still creates a random development secret so tests and
+// local non-production runs do not need configuration.
+func (s *Server) SetSessionSecret(secret []byte) {
+	if len(secret) == 0 {
+		return
+	}
+	s.csrfSecret = append([]byte(nil), secret...)
+}
+
 // SetAdminToken sets the operator token accepted by /api/scrape in demo mode.
 // An empty token means the endpoint is refused like every other mutator.
 func (s *Server) SetAdminToken(token string) { s.adminToken = token }
