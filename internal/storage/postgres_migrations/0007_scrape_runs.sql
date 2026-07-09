@@ -1,6 +1,7 @@
--- 0007_scrape_runs.sql — durable history for manual and scheduled scrape runs.
+-- 0007_scrape_runs.sql — convert the legacy production scrape_runs table into
+-- the new history shape used by Task 9.
 
-CREATE TABLE scrape_runs (
+CREATE TABLE scrape_runs_new (
     id            BIGSERIAL PRIMARY KEY,
     trigger       TEXT NOT NULL,
     status        TEXT NOT NULL,
@@ -15,5 +16,28 @@ CREATE TABLE scrape_runs (
     failed        INTEGER NOT NULL DEFAULT 0,
     error_summary TEXT NOT NULL DEFAULT ''
 );
+
+INSERT INTO scrape_runs_new (
+    id, "trigger", status, started_at, finished_at,
+    listed, new_count, refreshed, scored, removed, duplicates, failed, error_summary
+)
+SELECT
+    id,
+    'manual',
+    status,
+    started_at,
+    finished_at,
+    0,
+    COALESCE(new_posting_count, 0),
+    0,
+    0,
+    0,
+    0,
+    0,
+    error_summary
+  FROM scrape_runs;
+
+DROP TABLE scrape_runs;
+ALTER TABLE scrape_runs_new RENAME TO scrape_runs;
 
 CREATE INDEX idx_scrape_runs_started_at ON scrape_runs(started_at DESC);
