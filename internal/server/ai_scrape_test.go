@@ -10,6 +10,7 @@ import (
 	"github.com/ohchanwu/job-scraper/internal/ai"
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/job-scraper/internal/storage"
 )
 
 // newcomerStub is an AI provider that always extracts "신입 OK, 0 years, no
@@ -77,6 +78,72 @@ func TestRunScrapeAutoRatesFreshBriefingWithStage2(t *testing.T) {
 	// current goal — no 재평가 needed.
 	if n := countAIScores(t, srv); n != 2 {
 		t.Fatalf("after scrape: %d Stage-2 deltas cached, want 2 (auto-rated, no manual 재평가)", n)
+	}
+}
+
+func TestScheduledScrapeSkipsFreshAIByDefault(t *testing.T) {
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "백엔드 신입")},
+		details: map[string]scraper.Posting{"1": listingPosting("1", "백엔드 신입")},
+	}
+	srv, st := newTestServer(t, f)
+	stub := rerateStub()
+	srv.SetAIProvider(stub, "test-model")
+	saveSinipProfile(t, srv)
+	ctx := context.Background()
+
+	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit); err != nil {
+		t.Fatalf("scheduled runScrape: %v", err)
+	}
+
+	if stub.Calls != 0 {
+		t.Fatalf("Extract calls = %d, want 0 for scheduled AI default-off", stub.Calls)
+	}
+	if stub.ScoreDeltaCalls != 0 {
+		t.Fatalf("ScoreDelta calls = %d, want 0 for scheduled AI default-off", stub.ScoreDeltaCalls)
+	}
+	if n := aiExtractionCount(t, srv); n != 0 {
+		t.Fatalf("ai_extractions rows = %d, want 0", n)
+	}
+	if n := countAIScores(t, srv); n != 0 {
+		t.Fatalf("ai_scores rows = %d, want 0", n)
+	}
+	if _, err := st.ScoresByPostingID(ctx); err != nil {
+		t.Fatalf("regular scores should still be readable: %v", err)
+	}
+}
+
+func TestScheduledScrapeRunsFreshAIWhenEnabled(t *testing.T) {
+	p := listingPosting("1", "백엔드 신입")
+	p.Description = "서버 개발자를 찾습니다"
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "백엔드 신입")},
+		details: map[string]scraper.Posting{"1": p},
+	}
+	srv, st := newTestServer(t, f)
+	stub := rerateStub()
+	srv.SetAIProvider(stub, "test-model")
+	ctx := context.Background()
+	zero := 0
+	pj, _ := profile.Marshal(profile.Profile{
+		CareerYears:        0,
+		MinScore:           &zero,
+		JobLikes:           "백엔드 서버 개발",
+		ScheduledAIEnabled: true,
+	})
+	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit); err != nil {
+		t.Fatalf("scheduled runScrape: %v", err)
+	}
+
+	if stub.ScoreDeltaCalls == 0 {
+		t.Fatal("scheduled AI opt-in should run Stage-2 over the fresh briefing")
+	}
+	if n := countAIScores(t, srv); n != 1 {
+		t.Fatalf("ai_scores rows = %d, want 1", n)
 	}
 }
 

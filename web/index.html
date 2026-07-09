@@ -60,6 +60,15 @@
       <div class="count">새 공고 <strong>{{len .Today}}</strong>개</div>
     </div>
     {{template "rerateButton" .Rerate}}
+    {{if .ShowScheduledAITip}}
+    <div class="ai-schedule-tip">
+      <div>
+        <strong>예약 스크랩은 지금 AI 비용을 쓰지 않아요.</strong>
+        <span>자동 AI 분석을 켜면 새 공고도 예약 실행 중에 분석돼요. 기본 하루 예상 한도는 {{usdCents .AIEstimatedDailyCents}}예요.</span>
+      </div>
+      <a href="/profile">설정에서 켜기</a>
+    </div>
+    {{end}}
 
     <main>
       <input type="search" id="posting-search" class="posting-search" placeholder="제목·회사로 찾기" aria-label="공고 검색" autocomplete="off">

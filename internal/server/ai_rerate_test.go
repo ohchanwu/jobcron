@@ -109,6 +109,26 @@ func TestRunRerateReconnectReusesCache(t *testing.T) {
 	}
 }
 
+func TestRunRerateBudgetMessagePointsToProfileSettings(t *testing.T) {
+	srv, _ := seedRerate(t)
+	srv.aiRunTokenCap = 0
+	ctx := context.Background()
+	var messages []string
+	emit := func(event, data string) {
+		if event == "status" {
+			messages = append(messages, data)
+		}
+	}
+
+	if _, _, err := srv.runRerate(ctx, "today", emit); err != nil {
+		t.Fatalf("runRerate: %v", err)
+	}
+	body := strings.Join(messages, "\n")
+	if !strings.Contains(body, "오늘 AI 예산을 다 써서") || !strings.Contains(body, "프로필 설정") {
+		t.Fatalf("budget cap message should explain the cap and point to settings, got:\n%s", body)
+	}
+}
+
 // TestRerateProgressesAcrossPressesUnderBudget proves the behavior a user with a
 // large list depends on: when the per-run token budget halts a re-rate partway,
 // each following press skips the already-rated rows (Stage-2 cache hits, no

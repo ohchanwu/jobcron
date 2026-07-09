@@ -139,11 +139,13 @@ type dashboardPosting struct {
 // briefing is the daily-briefing view model: postings first seen today, split
 // into the scored list and the dealbreaker-excluded list.
 type briefing struct {
-	Today     []dashboardPosting
-	Excluded  []dashboardPosting
-	Date      string      // "2026 / 05 / 23" (KST)
-	Rerate    *rerateInfo // re-rate button state; nil = no AI key (button hidden)
-	CSRFToken string
+	Today                 []dashboardPosting
+	Excluded              []dashboardPosting
+	Date                  string      // "2026 / 05 / 23" (KST)
+	Rerate                *rerateInfo // re-rate button state; nil = no AI key (button hidden)
+	ShowScheduledAITip    bool
+	AIEstimatedDailyCents int
+	CSRFToken             string
 }
 
 // briefingCap bounds how many postings the daily briefing lists.
@@ -273,6 +275,8 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time, userIDOpt ...
 		b.Today = b.Today[:briefingCap]
 	}
 	b.Rerate = s.buildRerateInfo(ctx, prof, "today", b.Today)
+	b.ShowScheduledAITip = b.Rerate != nil && !prof.ScheduledAIEnabled
+	b.AIEstimatedDailyCents = prof.EffectiveAIDailyUSDCapCents()
 	return b, nil
 }
 
@@ -369,6 +373,13 @@ type profileForm struct {
 	AIRemainingToday    int
 	AIPerCallCap        int // raw (0 = use default); the form input value
 	AIPerCallCapEffect  int // the per-call cap actually in force, for the placeholder/hint
+	ScheduledAIEnabled  bool
+	AIMonthlyUSDCap     int
+	AIMonthlyUSDDefault int
+	AIDailyUSDCap       int
+	AIDailyUSDDefault   int
+	AIRunUSDCap         int
+	AIRunUSDDefault     int
 }
 
 // handleProfileForm renders the profile form, pre-filled with any saved profile.
@@ -404,6 +415,9 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profile.Profile) {
 	form.AIDailyCapEffective = p.EffectiveAIDailyTokenCap()
 	form.AIPerCallCapEffect = p.EffectiveAIPerCallCap()
+	form.AIMonthlyUSDDefault = profile.DefaultAIMonthlyUSDCents
+	form.AIDailyUSDDefault = profile.DefaultAIDailyUSDCents
+	form.AIRunUSDDefault = profile.DefaultAIRunUSDCents
 	// Provider-aware model dropdown: the current provider's models render
 	// server-side; the full map drives the client-side swap when the provider
 	// select changes (so a model id can't be paired with the wrong provider).
@@ -459,6 +473,18 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	if perCallCap == profile.DefaultAIPerCallCap {
 		perCallCap = 0
 	}
+	monthlyUSDCap := atoi(r.FormValue("ai_monthly_usd_cap_cents"))
+	if monthlyUSDCap == profile.DefaultAIMonthlyUSDCents {
+		monthlyUSDCap = 0
+	}
+	dailyUSDCap := atoi(r.FormValue("ai_daily_usd_cap_cents"))
+	if dailyUSDCap == profile.DefaultAIDailyUSDCents {
+		dailyUSDCap = 0
+	}
+	runUSDCap := atoi(r.FormValue("ai_run_usd_cap_cents"))
+	if runUSDCap == profile.DefaultAIRunUSDCents {
+		runUSDCap = 0
+	}
 	p := profile.Profile{
 		CareerYears:    atoi(r.FormValue("career_years")),
 		CareerWeight:   atoi(r.FormValue("career_weight")),
@@ -472,16 +498,20 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 			Weight:   atoi(r.FormValue("location_weight")),
 			RemoteOK: r.FormValue("remote_ok") != "",
 		},
-		Dealbreakers:    parseLines(r.FormValue("dealbreakers")),
-		JobLikes:        strings.TrimSpace(r.FormValue("job_likes")),
-		JobDislikes:     strings.TrimSpace(r.FormValue("job_dislikes")),
-		ShortTermGoals:  strings.TrimSpace(r.FormValue("short_term_goals")),
-		LongTermGoals:   strings.TrimSpace(r.FormValue("long_term_goals")),
-		DisabledSources: disabled,
-		AIProvider:      aiProviderValue(r.FormValue("ai_provider")),
-		AIModel:         strings.TrimSpace(r.FormValue("ai_model")),
-		AIDailyTokenCap: dailyCap,
-		AIPerCallCap:    perCallCap,
+		Dealbreakers:         parseLines(r.FormValue("dealbreakers")),
+		JobLikes:             strings.TrimSpace(r.FormValue("job_likes")),
+		JobDislikes:          strings.TrimSpace(r.FormValue("job_dislikes")),
+		ShortTermGoals:       strings.TrimSpace(r.FormValue("short_term_goals")),
+		LongTermGoals:        strings.TrimSpace(r.FormValue("long_term_goals")),
+		DisabledSources:      disabled,
+		AIProvider:           aiProviderValue(r.FormValue("ai_provider")),
+		AIModel:              strings.TrimSpace(r.FormValue("ai_model")),
+		AIDailyTokenCap:      dailyCap,
+		AIPerCallCap:         perCallCap,
+		ScheduledAIEnabled:   r.FormValue("scheduled_ai_enabled") != "",
+		AIMonthlyUSDCapCents: monthlyUSDCap,
+		AIDailyUSDCapCents:   dailyUSDCap,
+		AIRunUSDCapCents:     runUSDCap,
 	}
 	// Persist a newly-entered API key to the 0600 ai_keys.json (never the DB). A
 	// blank key field keeps the existing key — the form shows "•••• 저장됨" and
@@ -557,27 +587,31 @@ func toProfileForm(p profile.Profile) profileForm {
 	}
 	careerNearMiss, salaryAmbiguous := scoring.WeightHints(p)
 	return profileForm{
-		CareerYears:      p.CareerYears,
-		CareerWeight:     p.EffectiveCareerWeight(),
-		CareerNearMiss:   careerNearMiss,
-		SalaryFloorMan:   p.SalaryFloorKRW / 10000,
-		SalaryWeight:     p.EffectiveSalaryWeight(),
-		SalaryAmbiguous:  salaryAmbiguous,
-		MinScore:         p.EffectiveMinScore(),
-		MaxEducation:     int(p.MaxEducation),
-		StacksText:       strings.Join(stacks, "\n"),
-		CitiesText:       strings.Join(p.Location.Cities, ", "),
-		LocationWeight:   p.Location.Weight,
-		RemoteOK:         p.Location.RemoteOK,
-		DealbreakersText: strings.Join(p.Dealbreakers, "\n"),
-		JobLikes:         p.JobLikes,
-		JobDislikes:      p.JobDislikes,
-		ShortTermGoals:   p.ShortTermGoals,
-		LongTermGoals:    p.LongTermGoals,
-		AIProvider:       p.AIProvider,
-		AIModel:          p.AIModel,
-		AIDailyTokenCap:  p.AIDailyTokenCap, // raw: 0 renders as an empty input
-		AIPerCallCap:     p.AIPerCallCap,    // raw: 0 renders as an empty input
+		CareerYears:        p.CareerYears,
+		CareerWeight:       p.EffectiveCareerWeight(),
+		CareerNearMiss:     careerNearMiss,
+		SalaryFloorMan:     p.SalaryFloorKRW / 10000,
+		SalaryWeight:       p.EffectiveSalaryWeight(),
+		SalaryAmbiguous:    salaryAmbiguous,
+		MinScore:           p.EffectiveMinScore(),
+		MaxEducation:       int(p.MaxEducation),
+		StacksText:         strings.Join(stacks, "\n"),
+		CitiesText:         strings.Join(p.Location.Cities, ", "),
+		LocationWeight:     p.Location.Weight,
+		RemoteOK:           p.Location.RemoteOK,
+		DealbreakersText:   strings.Join(p.Dealbreakers, "\n"),
+		JobLikes:           p.JobLikes,
+		JobDislikes:        p.JobDislikes,
+		ShortTermGoals:     p.ShortTermGoals,
+		LongTermGoals:      p.LongTermGoals,
+		AIProvider:         p.AIProvider,
+		AIModel:            p.AIModel,
+		AIDailyTokenCap:    p.AIDailyTokenCap, // raw: 0 renders as an empty input
+		AIPerCallCap:       p.AIPerCallCap,    // raw: 0 renders as an empty input
+		ScheduledAIEnabled: p.ScheduledAIEnabled,
+		AIMonthlyUSDCap:    p.AIMonthlyUSDCapCents,
+		AIDailyUSDCap:      p.AIDailyUSDCapCents,
+		AIRunUSDCap:        p.AIRunUSDCapCents,
 	}
 }
 
@@ -602,6 +636,13 @@ func absInt(n int) int {
 		return -n
 	}
 	return n
+}
+
+func usdCents(cents int) string {
+	if cents%100 == 0 {
+		return fmt.Sprintf("$%d", cents/100)
+	}
+	return fmt.Sprintf("$%d.%02d", cents/100, cents%100)
 }
 
 // parseLines splits textarea input into trimmed, non-empty lines.

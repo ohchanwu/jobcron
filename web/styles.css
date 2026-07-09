@@ -95,9 +95,10 @@ header {
 header h1 {
   font-weight: 700;
   font-size: 2.5rem;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   margin: 0;
   line-height: 1;
+  word-break: keep-all;
 }
 .head-right {
   text-align: right;
@@ -276,6 +277,36 @@ nav.primary a.active {
   white-space: nowrap;
 }
 .rerate-count.complete { color: var(--accent); }
+
+.ai-schedule-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.9rem 0 0;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+.ai-schedule-tip strong {
+  display: block;
+  font-weight: 600;
+}
+.ai-schedule-tip span {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+}
+.ai-schedule-tip a,
+.scrape-log a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ai-schedule-tip a:hover,
+.scrape-log a:hover { text-decoration: underline; }
 
 /* Streaming scrape log */
 .scrape-log { margin: 0.6rem 0 0; }
@@ -548,11 +579,21 @@ nav.primary a.active {
    the posting title. Tighten both so the row reads as one unit. Score
    also shrinks since the column is narrower. */
 @media (max-width: 639.98px) {
+  header { gap: 1rem; }
+  header h1 {
+    font-size: 2.2rem;
+    white-space: nowrap;
+  }
   .posting {
     grid-template-columns: 56px 1fr auto;
     gap: 0.55rem;
   }
   .score { font-size: 2.4rem; }
+  .ai-schedule-tip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .cap-grid { grid-template-columns: 1fr; }
 }
 
 /* Archive page — day-grouped sections. The day header sits above each
@@ -730,6 +771,16 @@ form label.check {
   align-items: center;
   gap: 0.5rem;
 }
+form label.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-weight: 600;
+}
+form label.check-row input {
+  width: auto;
+  margin: 0.2rem 0 0;
+}
 .field-hint {
   display: block;
   font-weight: 400;
@@ -762,6 +813,14 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
 }
 form label.check input { width: auto; margin: 0; }
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 0.9rem;
+}
+@media (max-width: 639.98px) {
+  .cap-grid { grid-template-columns: 1fr; }
+}
 textarea { resize: vertical; min-height: 4rem; }
 form.login-form input {
   width: 100%;

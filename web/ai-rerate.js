@@ -16,7 +16,15 @@
 
     function append(msg) {
       var p = document.createElement('p');
-      p.textContent = msg;
+      if (msg.indexOf('프로필 설정') !== -1) {
+        p.appendChild(document.createTextNode(msg.replace('프로필 설정', '')));
+        var a = document.createElement('a');
+        a.href = '/profile';
+        a.textContent = '프로필 설정';
+        p.appendChild(a);
+      } else {
+        p.textContent = msg;
+      }
       log.appendChild(p);
     }
     function progress(msg) {

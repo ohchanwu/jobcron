@@ -37,6 +37,14 @@ const (
 	// spend per click is predictable; pressing again continues where it left off.
 	// Cached rows are free and never count against it.
 	DefaultAIPerCallCap = 50
+
+	// Default AI cost caps are user-facing USD estimates, stored as cents to
+	// avoid float rounding. Token caps remain the internal enforcement layer for
+	// BYOK providers; these fields make the production budget contract explicit
+	// in the saved profile and settings UI.
+	DefaultAIMonthlyUSDCents = 1_000
+	DefaultAIDailyUSDCents   = 50
+	DefaultAIRunUSDCents     = 30
 )
 
 // Profile is the user's job-matching preferences, scored against each posting.
@@ -83,6 +91,18 @@ type Profile struct {
 	// goal-keyed AI cache. omitempty keeps a pre-v2.0 / unset profile's JSON
 	// byte-identical.
 	AIPerCallCap int `json:"ai_per_call_cap,omitempty"`
+
+	// ScheduledAIEnabled opts the background scheduler into fresh AI work. The
+	// default is false so scheduled scrapes only scrape/score with cached AI
+	// state; manual 재평가 remains available when AI is configured.
+	ScheduledAIEnabled bool `json:"scheduled_ai_enabled,omitempty"`
+
+	// User-facing estimated USD caps, stored as cents. A zero/absent field means
+	// use the defaults above so old profiles get the production-safe budget copy
+	// without rewriting their JSON.
+	AIMonthlyUSDCapCents int `json:"ai_monthly_usd_cap_cents,omitempty"`
+	AIDailyUSDCapCents   int `json:"ai_daily_usd_cap_cents,omitempty"`
+	AIRunUSDCapCents     int `json:"ai_run_usd_cap_cents,omitempty"`
 
 	// DisabledSources are source identifiers (e.g. "worknet") the user has
 	// opted out of. Default empty = every registered source is active. We
@@ -140,6 +160,27 @@ func (p Profile) EffectiveAIPerCallCap() int {
 		return p.AIPerCallCap
 	}
 	return DefaultAIPerCallCap
+}
+
+func (p Profile) EffectiveAIMonthlyUSDCapCents() int {
+	if p.AIMonthlyUSDCapCents > 0 {
+		return p.AIMonthlyUSDCapCents
+	}
+	return DefaultAIMonthlyUSDCents
+}
+
+func (p Profile) EffectiveAIDailyUSDCapCents() int {
+	if p.AIDailyUSDCapCents > 0 {
+		return p.AIDailyUSDCapCents
+	}
+	return DefaultAIDailyUSDCents
+}
+
+func (p Profile) EffectiveAIRunUSDCapCents() int {
+	if p.AIRunUSDCapCents > 0 {
+		return p.AIRunUSDCapCents
+	}
+	return DefaultAIRunUSDCents
 }
 
 // SourceEnabled reports whether the given source identifier should be active

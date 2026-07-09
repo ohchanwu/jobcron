@@ -269,7 +269,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	var provErr error
 	analyzed, provErr = s.rateStage2(ctx, postings, prof, budget, emit)
 	if budget != nil && budget.isDegraded() {
-		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요.")
+		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 	}
 	if provErr != nil && analyzed > 0 {
 		// Partial: some rows rated, some hit a provider error. Note it before the

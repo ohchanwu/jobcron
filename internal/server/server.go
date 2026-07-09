@@ -274,6 +274,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		"registeredSources": srv.allRegisteredSources,
 		"sourcePillGroups":  srv.sourcePillGroups,
 		"absInt":            absInt,
+		"usdCents":          usdCents,
 		"demoMode":          func() bool { return srv.demoMode },
 		"productionMode":    func() bool { return srv.productionMode },
 	}
@@ -313,7 +314,7 @@ func (s *Server) runScrapeWithHistory(ctx context.Context, trigger string, emit 
 			err = finishErr
 		}
 	}()
-	return s.runScrape(ctx, emit, userIDOpt...)
+	return s.runScrapeForTrigger(ctx, trigger, emit, userIDOpt...)
 }
 
 func truncateScrapeRunError(s string) string {
@@ -329,6 +330,10 @@ func truncateScrapeRunError(s string) string {
 // are skipped entirely and their data is frozen in the DB so re-enabling a
 // source does not require a fresh scrape.
 func (s *Server) runScrape(ctx context.Context, emit func(event, data string), userIDOpt ...int64) (ScrapeResult, error) {
+	return s.runScrapeForTrigger(ctx, storage.ScrapeTriggerManual, emit, userIDOpt...)
+}
+
+func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit func(event, data string), userIDOpt ...int64) (ScrapeResult, error) {
 	userID := optionalUserID(userIDOpt)
 	prof, profileOK, err := s.loadProfile(ctx, userID)
 	if err != nil {
@@ -355,7 +360,11 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string), u
 	var res ScrapeResult
 	// One AI token budget for the whole run (persists across sources). nil
 	// when AI is off, so no per-posting budget bookkeeping happens at all.
+	freshAI := s.freshAIAllowedForTrigger(trigger, profileOK, prof)
 	budget := s.newAIBudget(ctx)
+	if !freshAI {
+		budget = nil
+	}
 	// succeeded tracks sources that completed without error this run; only
 	// they get their data swept. A source that failed cannot tell us what
 	// is stale (no fresh baseline this run), so we leave its existing rows
@@ -404,7 +413,7 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string), u
 	// Stage-1 extraction, some postings were scored by regex instead of AI. A
 	// mixed briefing is fine — surface it calmly, never as a failure.
 	if budget != nil && budget.isDegraded() {
-		emit("status", "오늘 AI 예산을 다 써서 일부는 일반 점수로 분석했어요.")
+		emit("status", "오늘 AI 예산을 다 써서 일부는 일반 점수로 분석했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 	}
 
 	emit("status", "공고에 점수를 매기는 중...")
@@ -421,7 +430,7 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string), u
 	// own per-run cap; the daily cap still accounts for the scrape's Stage-1 spend
 	// (newAIBudget re-reads the ledger). aiPerCallCap bounds the spend per scrape;
 	// the rest stays for a manual 재평가.
-	if s.ai != nil && profileOK {
+	if freshAI {
 		if vis, verr := s.visibleForRerate(ctx, "today", now, userID); verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
 			rateBudget := s.newAIBudget(ctx)
@@ -438,11 +447,21 @@ func (s *Server) runScrape(ctx context.Context, emit func(event, data string), u
 				emit("status", providerFailureMessage(provErr))
 			}
 			if rateBudget != nil && rateBudget.isDegraded() {
-				emit("status", "오늘 AI 예산을 다 써서 일부 공고는 아직 분석하지 못했어요 — 재평가로 더 볼 수 있어요.")
+				emit("status", "오늘 AI 예산을 다 써서 일부 공고는 아직 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 			}
 		}
 	}
 	return res, nil
+}
+
+func (s *Server) freshAIAllowedForTrigger(trigger string, profileOK bool, prof profile.Profile) bool {
+	if s.ai == nil || !profileOK {
+		return false
+	}
+	if trigger == storage.ScrapeTriggerScheduled {
+		return prof.ScheduledAIEnabled
+	}
+	return true
 }
 
 // aiBudget gates AI spending for one run against two ceilings: a per-run,

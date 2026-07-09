@@ -88,6 +88,26 @@ func TestProfileUnmarshalIgnoresLegacyMustHave(t *testing.T) {
 	}
 }
 
+func TestAIProductionDefaults(t *testing.T) {
+	var p Profile
+	if p.ScheduledAIEnabled {
+		t.Fatal("scheduled AI must default to disabled")
+	}
+	if got := p.EffectiveAIMonthlyUSDCapCents(); got != DefaultAIMonthlyUSDCents {
+		t.Fatalf("monthly USD cap = %d, want %d", got, DefaultAIMonthlyUSDCents)
+	}
+	if got := p.EffectiveAIDailyUSDCapCents(); got != DefaultAIDailyUSDCents {
+		t.Fatalf("daily USD cap = %d, want %d", got, DefaultAIDailyUSDCents)
+	}
+	if got := p.EffectiveAIRunUSDCapCents(); got != DefaultAIRunUSDCents {
+		t.Fatalf("run USD cap = %d, want %d", got, DefaultAIRunUSDCents)
+	}
+	if DefaultAIMonthlyUSDCents != 1_000 || DefaultAIDailyUSDCents != 50 || DefaultAIRunUSDCents != 30 {
+		t.Fatalf("AI USD defaults drifted: monthly=%d daily=%d run=%d",
+			DefaultAIMonthlyUSDCents, DefaultAIDailyUSDCents, DefaultAIRunUSDCents)
+	}
+}
+
 func TestBuildStage2ProfileText(t *testing.T) {
 	if got := BuildStage2ProfileText(Profile{}); got != "" {
 		t.Errorf("empty goals should produce empty text, got %q", got)

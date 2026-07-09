@@ -180,6 +180,35 @@
                  value="{{if .AIPerCallCap}}{{.AIPerCallCap}}{{end}}"
                  placeholder="{{.AIPerCallCapEffect}}">
         </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="scheduled_ai_enabled"{{if .ScheduledAIEnabled}} checked{{end}}>
+          <span>
+            예약 스크랩 중 새 공고도 AI로 분석
+            <span class="field-hint">끄면 예약 실행은 비용을 쓰지 않고, 화면의 재평가 버튼으로만 AI를 실행해요.</span>
+          </span>
+        </label>
+
+        <div class="cap-grid">
+          <label>월 예상 한도
+            <span class="field-hint">센트 단위예요. 비우면 기본 {{usdCents .AIMonthlyUSDDefault}}.</span>
+            <input type="number" name="ai_monthly_usd_cap_cents" min="1"
+                   value="{{if .AIMonthlyUSDCap}}{{.AIMonthlyUSDCap}}{{end}}"
+                   placeholder="{{.AIMonthlyUSDDefault}}">
+          </label>
+          <label>일일 예상 한도
+            <span class="field-hint">센트 단위예요. 비우면 기본 {{usdCents .AIDailyUSDDefault}}.</span>
+            <input type="number" name="ai_daily_usd_cap_cents" min="1"
+                   value="{{if .AIDailyUSDCap}}{{.AIDailyUSDCap}}{{end}}"
+                   placeholder="{{.AIDailyUSDDefault}}">
+          </label>
+          <label>1회 실행 예상 한도
+            <span class="field-hint">센트 단위예요. 비우면 기본 {{usdCents .AIRunUSDDefault}}.</span>
+            <input type="number" name="ai_run_usd_cap_cents" min="1"
+                   value="{{if .AIRunUSDCap}}{{.AIRunUSDCap}}{{end}}"
+                   placeholder="{{.AIRunUSDDefault}}">
+          </label>
+        </div>
       </fieldset>
 
       <div class="form-actions">
