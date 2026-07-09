@@ -18,6 +18,12 @@ Run PostgreSQL integration tests:
 JOBSCRAPER_TEST_POSTGRES_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go test ./internal/storage -run Postgres -count=1
 ```
 
+Run the app against local PostgreSQL:
+
+```sh
+DATABASE_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go run ./cmd/job-scraper --no-open
+```
+
 Reset the local database:
 
 ```sh

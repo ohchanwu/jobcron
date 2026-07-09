@@ -139,7 +139,19 @@ cd job-scraper
 go build ./cmd/job-scraper
 ```
 
-Requires Go 1.26+. Pure Go — no CGO, no external runtime, no database to install.
+Requires Go 1.26+. Pure Go — no CGO.
+
+For production-app development, run the app against local PostgreSQL:
+
+```sh
+docker compose -f deploy/local/compose.yaml up -d
+DATABASE_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go run ./cmd/job-scraper --no-open
+```
+
+When `DATABASE_URL` is set, job-scraper opens PostgreSQL and applies the embedded
+PostgreSQL migrations. If `DATABASE_URL` is absent, the app still uses its legacy
+local SQLite database so release binaries and demo commands continue to work.
+More local PostgreSQL commands live in [deploy/local/README.md](deploy/local/README.md).
 
 ## Contributing
 
