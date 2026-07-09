@@ -89,6 +89,17 @@ func main() {
 	if _, err := srv.RescoreAll(context.Background()); err != nil {
 		log.Printf("job-scraper: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
 	}
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+	if cfg.SchedulerEnabled {
+		if _, err := server.StartScheduler(appCtx, server.SchedulerConfig{
+			Server:          srv,
+			DailyScrapeTime: cfg.DailyScrapeTime,
+		}); err != nil {
+			log.Fatalf("job-scraper: scheduler: %v", err)
+		}
+		log.Printf("job-scraper: 매일 %s KST에 자동 스크랩을 실행해요.", cfg.DailyScrapeTime)
+	}
 
 	ln, addr, err := listen(cfg.Host, cfg.Port)
 	if err != nil {
@@ -112,6 +123,7 @@ func main() {
 	go func() {
 		<-stop
 		fmt.Println("\njob-scraper: 종료 중...")
+		appCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(ctx)
