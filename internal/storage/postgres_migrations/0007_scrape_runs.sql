@@ -40,4 +40,10 @@ SELECT
 DROP TABLE scrape_runs;
 ALTER TABLE scrape_runs_new RENAME TO scrape_runs;
 
+SELECT setval(
+    pg_get_serial_sequence('scrape_runs', 'id'),
+    COALESCE((SELECT MAX(id) FROM scrape_runs), 0) + 1,
+    false
+);
+
 CREATE INDEX idx_scrape_runs_started_at ON scrape_runs(started_at DESC);

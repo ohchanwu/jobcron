@@ -168,6 +168,38 @@ func TestRunScrapeWithHistoryRecordsPanicAsFailure(t *testing.T) {
 	}
 }
 
+func TestRunScrapeWithHistoryRecordsReturnedErrorAsFailure(t *testing.T) {
+	f := &fakeScraper{listing: []scraper.Posting{listingPosting("1", "신입 공고")}}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+	if _, _, err := st.SaveProfile(ctx, "{not-json"); err != nil {
+		t.Fatalf("SaveProfile malformed JSON fixture: %v", err)
+	}
+
+	if _, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, noopEmit); err == nil {
+		t.Fatal("runScrapeWithHistory succeeded with malformed profile, want returned error")
+	}
+	run, ok, err := st.LatestScrapeRun(ctx)
+	if err != nil || !ok {
+		t.Fatalf("LatestScrapeRun ok=%v err=%v", ok, err)
+	}
+	if run.Trigger != storage.ScrapeTriggerManual {
+		t.Errorf("Trigger = %q, want manual", run.Trigger)
+	}
+	if run.Status != storage.ScrapeRunStatusFailure {
+		t.Errorf("Status = %q, want failure", run.Status)
+	}
+	if run.ErrorSummary == "" {
+		t.Fatal("ErrorSummary = empty, want returned error summary")
+	}
+	if !strings.Contains(run.ErrorSummary, "profile") {
+		t.Errorf("ErrorSummary = %q, want profile load error", run.ErrorSummary)
+	}
+	if run.FinishedAt == nil {
+		t.Fatal("FinishedAt = nil, want failure finish time")
+	}
+}
+
 func TestRunScrapeSkipsDetailForFreshKnownPostings(t *testing.T) {
 	f := &fakeScraper{
 		listing: []scraper.Posting{listingPosting("1", "기존 공고"), listingPosting("2", "새 공고")},
