@@ -12,16 +12,22 @@
     if (!surface) return;
     btn.disabled = true;
     log.textContent = '';
+    var sawBudgetNotice = false;
     var es = new EventSource('/api/rerate?surface=' + encodeURIComponent(surface));
 
     function append(msg) {
       var p = document.createElement('p');
-      if (msg.indexOf('프로필 설정') !== -1) {
-        p.appendChild(document.createTextNode(msg.replace('프로필 설정', '')));
+      var settingsText = '프로필 설정';
+      var settingsIdx = msg.indexOf(settingsText);
+      if (settingsIdx !== -1) {
+        sawBudgetNotice = true;
+        p.appendChild(document.createTextNode(msg.slice(0, settingsIdx)));
         var a = document.createElement('a');
         a.href = '/profile';
-        a.textContent = '프로필 설정';
+        a.className = 'budget-settings-link';
+        a.textContent = settingsText;
         p.appendChild(a);
+        p.appendChild(document.createTextNode(msg.slice(settingsIdx + settingsText.length)));
       } else {
         p.textContent = msg;
       }
@@ -39,7 +45,15 @@
 
     es.addEventListener('status', function (e) { append(e.data); });
     es.addEventListener('progress', function (e) { progress(e.data); });
-    es.addEventListener('done', function () { es.close(); location.reload(); });
+    es.addEventListener('done', function (e) {
+      es.close();
+      if (sawBudgetNotice) {
+        btn.disabled = false;
+        append(e.data);
+        return;
+      }
+      location.reload();
+    });
     es.addEventListener('failed', function (e) {
       es.close();
       btn.disabled = false;

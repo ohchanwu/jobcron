@@ -147,6 +147,76 @@ func TestScheduledScrapeRunsFreshAIWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestRunUSDCapHaltsManualScrapeExtractionAfterFirstCall(t *testing.T) {
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "백엔드 신입"), listingPosting("2", "서버 신입")},
+		details: map[string]scraper.Posting{
+			"1": listingPosting("1", "백엔드 신입"),
+			"2": listingPosting("2", "서버 신입"),
+		},
+	}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+	pj, _ := profile.Marshal(profile.Profile{CareerYears: 0, AIRunUSDCapCents: 1})
+	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	if err := srv.ReconfigureAI(ctx); err != nil {
+		t.Fatalf("ReconfigureAI: %v", err)
+	}
+	stub := &ai.StubProvider{
+		NameVal: "stub",
+		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
+			zero := 0
+			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "신입"},
+				ai.Usage{InputTokens: aiRunTokenCapForUSDCents(1) + 1}, nil
+		},
+	}
+	srv.SetAIProvider(stub, "test-model")
+
+	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+		t.Fatalf("runScrape: %v", err)
+	}
+	if stub.Calls != 1 {
+		t.Fatalf("Extract calls = %d, want 1 because the run USD cap stops the second posting", stub.Calls)
+	}
+}
+
+func TestRunUSDCapHaltsOptInScheduledScrapeExtractionAfterFirstCall(t *testing.T) {
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "백엔드 신입"), listingPosting("2", "서버 신입")},
+		details: map[string]scraper.Posting{
+			"1": listingPosting("1", "백엔드 신입"),
+			"2": listingPosting("2", "서버 신입"),
+		},
+	}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+	pj, _ := profile.Marshal(profile.Profile{CareerYears: 0, ScheduledAIEnabled: true, AIRunUSDCapCents: 1})
+	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+	if err := srv.ReconfigureAI(ctx); err != nil {
+		t.Fatalf("ReconfigureAI: %v", err)
+	}
+	stub := &ai.StubProvider{
+		NameVal: "stub",
+		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
+			zero := 0
+			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "신입"},
+				ai.Usage{InputTokens: aiRunTokenCapForUSDCents(1) + 1}, nil
+		},
+	}
+	srv.SetAIProvider(stub, "test-model")
+
+	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit); err != nil {
+		t.Fatalf("scheduled runScrape: %v", err)
+	}
+	if stub.Calls != 1 {
+		t.Fatalf("Extract calls = %d, want 1 because the run USD cap stops the second scheduled posting", stub.Calls)
+	}
+}
+
 func TestRunScrapeStubProviderExtractsNewPostings(t *testing.T) {
 	f := &fakeScraper{
 		listing: []scraper.Posting{listingPosting("1", "백엔드 신입"), listingPosting("2", "AI 신입")},

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 // AddAIUsage adds one call's token usage to the rolling daily ledger for the
@@ -40,4 +41,34 @@ func (s *Store) AIUsageForDay(ctx context.Context, day string) (inputTokens, out
 		return 0, 0, nil
 	}
 	return 0, 0, fmt.Errorf("storage: query ai usage: %w", err)
+}
+
+// AIUsageForMonth returns the input and output token totals recorded for a UTC
+// month string ("YYYY-MM"). The ai_usage day key is ISO-like, so a prefix range
+// over day strings is stable across SQLite and PostgreSQL.
+func (s *Store) AIUsageForMonth(ctx context.Context, month string) (inputTokens, outputTokens int, err error) {
+	if len(month) != len("2006-01") {
+		return 0, 0, fmt.Errorf("storage: invalid ai usage month %q", month)
+	}
+	start := month + "-01"
+	end := nextMonthKey(month)
+	err = s.db.QueryRowContext(ctx, s.query(`
+SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
+FROM ai_usage
+WHERE day >= ? AND day < ?`), start, end).Scan(&inputTokens, &outputTokens)
+	if err != nil {
+		return 0, 0, fmt.Errorf("storage: query monthly ai usage: %w", err)
+	}
+	return inputTokens, outputTokens, nil
+}
+
+func nextMonthKey(month string) string {
+	year, _ := strconv.Atoi(month[:4])
+	mon, _ := strconv.Atoi(month[5:7])
+	mon++
+	if mon == 13 {
+		year++
+		mon = 1
+	}
+	return fmt.Sprintf("%04d-%02d-01", year, mon)
 }

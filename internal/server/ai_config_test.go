@@ -99,6 +99,27 @@ func TestReconfigureAI(t *testing.T) {
 			t.Fatalf("daily cap = %d, want 12345 from the profile", srv.aiDailyTokenCap)
 		}
 	})
+
+	t.Run("estimated USD caps are mapped into runtime token ceilings", func(t *testing.T) {
+		saveProfileJSON(t, srv, profile.Profile{
+			AIProvider:           "",
+			AIMonthlyUSDCapCents: 2,
+			AIDailyUSDCapCents:   3,
+			AIRunUSDCapCents:     4,
+		})
+		if err := srv.ReconfigureAI(ctx); err != nil {
+			t.Fatalf("ReconfigureAI: %v", err)
+		}
+		if srv.aiMonthlyTokenCap != aiMonthlyTokenCapForUSDCents(2) {
+			t.Fatalf("monthly token cap = %d, want mapped cap", srv.aiMonthlyTokenCap)
+		}
+		if srv.aiDailyTokenCap != aiDailyTokenCapForUSDCents(3) {
+			t.Fatalf("daily token cap = %d, want mapped cap", srv.aiDailyTokenCap)
+		}
+		if srv.aiRunTokenCap != aiRunTokenCapForUSDCents(4) {
+			t.Fatalf("run token cap = %d, want mapped cap", srv.aiRunTokenCap)
+		}
+	})
 }
 
 // TestProfileSaveWritesKeyAt0600AndEnablesAI covers the verify bar: the settings
@@ -201,6 +222,59 @@ func TestDailyTokenCapHaltsAIRegexContinues(t *testing.T) {
 	// Regex scoring still ran: the posting is present and scored.
 	if res.New != 1 || res.Scored != 1 {
 		t.Errorf("ScrapeResult = %+v, want the posting inserted + scored by regex", res)
+	}
+}
+
+func TestDailyUSDCapHaltsManualRerate(t *testing.T) {
+	srv, _ := seedRerate(t)
+	ctx := context.Background()
+	saveProfileJSON(t, srv, profile.Profile{
+		CareerYears:        0,
+		JobLikes:           "백엔드 서버 개발",
+		AIDailyUSDCapCents: 1,
+	})
+	if err := srv.ReconfigureAI(ctx); err != nil {
+		t.Fatalf("ReconfigureAI: %v", err)
+	}
+	stub := rerateStub()
+	srv.SetAIProvider(stub, "test-model")
+	day := time.Now().UTC().Format("2006-01-02")
+	if err := srv.store.AddAIUsage(ctx, day, aiDailyTokenCapForUSDCents(1), 0); err != nil {
+		t.Fatalf("seed daily usage: %v", err)
+	}
+
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+		t.Fatalf("runRerate: %v", err)
+	}
+	if stub.ScoreDeltaCalls != 0 {
+		t.Fatalf("ScoreDelta calls = %d, want 0 when daily USD cap is exhausted", stub.ScoreDeltaCalls)
+	}
+}
+
+func TestMonthlyUSDCapHaltsManualRerate(t *testing.T) {
+	srv, _ := seedRerate(t)
+	ctx := context.Background()
+	saveProfileJSON(t, srv, profile.Profile{
+		CareerYears:          0,
+		JobLikes:             "백엔드 서버 개발",
+		AIMonthlyUSDCapCents: 1,
+	})
+	if err := srv.ReconfigureAI(ctx); err != nil {
+		t.Fatalf("ReconfigureAI: %v", err)
+	}
+	stub := rerateStub()
+	srv.SetAIProvider(stub, "test-model")
+	now := time.Now().UTC()
+	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	if err := srv.store.AddAIUsage(ctx, firstOfMonth, aiMonthlyTokenCapForUSDCents(1), 0); err != nil {
+		t.Fatalf("seed monthly usage: %v", err)
+	}
+
+	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+		t.Fatalf("runRerate: %v", err)
+	}
+	if stub.ScoreDeltaCalls != 0 {
+		t.Fatalf("ScoreDelta calls = %d, want 0 when monthly USD cap is exhausted", stub.ScoreDeltaCalls)
 	}
 }
 

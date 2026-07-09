@@ -65,6 +65,42 @@ const (
 // input.)
 const defaultRunTokenCap = 150_000
 
+func aiRunTokenCapForUSDCents(cents int) int {
+	return tokenCapForUSDCents(cents, profile.DefaultAIRunUSDCents, defaultRunTokenCap)
+}
+
+func aiDailyTokenCapForUSDCents(cents int) int {
+	return tokenCapForUSDCents(cents, profile.DefaultAIDailyUSDCents, profile.DefaultDailyTokenCap)
+}
+
+func aiMonthlyTokenCapForUSDCents(cents int) int {
+	return tokenCapForUSDCents(cents, profile.DefaultAIDailyUSDCents, profile.DefaultDailyTokenCap)
+}
+
+func tokenCapForUSDCents(cents, defaultCents, defaultTokens int) int {
+	if cents <= 0 {
+		cents = defaultCents
+	}
+	if defaultCents <= 0 {
+		return defaultTokens
+	}
+	cap := (defaultTokens * cents) / defaultCents
+	if cap < 1 {
+		return 1
+	}
+	return cap
+}
+
+func minPositive(a, b int) int {
+	if a <= 0 {
+		return b
+	}
+	if b <= 0 || a < b {
+		return a
+	}
+	return b
+}
+
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
 type Server struct {
 	store        *storage.Store
@@ -80,17 +116,18 @@ type Server struct {
 	// the profile's chosen provider/model; main.go calls it at startup and
 	// handleProfileSave on every save, so a key entered in the form goes live
 	// without a restart.
-	ai              ai.Provider
-	aiModel         string
-	aiVersion       string // ai.AIVersion(ai.Name(), aiModel), precomputed
-	aiRunTokenCap   int    // per-run, in-memory token ceiling (hard cap)
-	aiDailyTokenCap int    // rolling daily token ceiling, enforced against the persisted ai_usage ledger (hard cap)
-	aiPerCallCap    int    // 재평가: not-yet-analyzed rows analyzed per press (legibility knob, not a hard cap)
-	aiKeysPath      string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
-	demoMode        bool   // read-only public demo mode
-	productionMode  bool   // require owner login for protected HTTP routes
-	adminToken      string // optional safety token for operator GET mutators in demo mode
-	proxySecret     string // optional shared secret that allows Caddy forwarded-client headers
+	ai                ai.Provider
+	aiModel           string
+	aiVersion         string // ai.AIVersion(ai.Name(), aiModel), precomputed
+	aiRunTokenCap     int    // per-run, in-memory token ceiling (hard cap)
+	aiDailyTokenCap   int    // rolling daily token ceiling, enforced against the persisted ai_usage ledger (hard cap)
+	aiMonthlyTokenCap int    // rolling monthly token ceiling, derived from the persisted ai_usage ledger (hard cap)
+	aiPerCallCap      int    // 재평가: not-yet-analyzed rows analyzed per press (legibility knob, not a hard cap)
+	aiKeysPath        string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
+	demoMode          bool   // read-only public demo mode
+	productionMode    bool   // require owner login for protected HTTP routes
+	adminToken        string // optional safety token for operator GET mutators in demo mode
+	proxySecret       string // optional shared secret that allows Caddy forwarded-client headers
 }
 
 // SetAIProvider enables AI with the given provider and model. A nil provider
@@ -159,7 +196,7 @@ func (s *Server) keysPath() (string, error) {
 }
 
 // ReconfigureAI (re)builds the AI provider from the saved profile + ai_keys.json
-// and applies the profile's daily token cap. It is the single wiring point:
+// and applies the profile's AI budget caps. It is the single wiring point:
 // main.go calls it once at startup, handleProfileSave on every save. AI is left
 // OFF (provider nil, silent regex fallback) when the profile selects no provider
 // or the selected provider has no saved key. A bad provider name / build error
@@ -169,10 +206,13 @@ func (s *Server) ReconfigureAI(ctx context.Context, userIDOpt ...int64) error {
 	if err != nil {
 		return err
 	}
-	if ok && prof.EffectiveAIDailyTokenCap() > 0 {
-		s.aiDailyTokenCap = prof.EffectiveAIDailyTokenCap()
-	}
 	if ok {
+		s.aiRunTokenCap = aiRunTokenCapForUSDCents(prof.EffectiveAIRunUSDCapCents())
+		s.aiDailyTokenCap = minPositive(
+			prof.EffectiveAIDailyTokenCap(),
+			aiDailyTokenCapForUSDCents(prof.EffectiveAIDailyUSDCapCents()),
+		)
+		s.aiMonthlyTokenCap = aiMonthlyTokenCapForUSDCents(prof.EffectiveAIMonthlyUSDCapCents())
 		s.aiPerCallCap = prof.EffectiveAIPerCallCap()
 	}
 	if !ok || prof.AIProvider == "" {
@@ -260,14 +300,15 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		panic("server.New: at least one scraper is required")
 	}
 	srv := &Server{
-		store:           store,
-		sources:         sources,
-		flight:          newSingleFlight(),
-		csrfSecret:      newCSRFSecret(),
-		loginLimiter:    newLoginRateLimiter(),
-		aiRunTokenCap:   defaultRunTokenCap,
-		aiDailyTokenCap: profile.DefaultDailyTokenCap,
-		aiPerCallCap:    profile.DefaultAIPerCallCap,
+		store:             store,
+		sources:           sources,
+		flight:            newSingleFlight(),
+		csrfSecret:        newCSRFSecret(),
+		loginLimiter:      newLoginRateLimiter(),
+		aiRunTokenCap:     defaultRunTokenCap,
+		aiDailyTokenCap:   profile.DefaultDailyTokenCap,
+		aiMonthlyTokenCap: aiMonthlyTokenCapForUSDCents(profile.DefaultAIMonthlyUSDCents),
+		aiPerCallCap:      profile.DefaultAIPerCallCap,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,
@@ -472,11 +513,14 @@ func (s *Server) freshAIAllowedForTrigger(trigger string, profileOK bool, prof p
 // runs in the same day. (Within a single day, concurrent AI runs are kept from
 // double-spending the daily budget by the scrape⟷re-rate exclusion — T7.)
 type aiBudget struct {
-	store        *storage.Store
-	day          string // UTC date, e.g. "2026-06-03"
-	runCap       int
-	dailyCap     int
-	dailyAtStart int // ledger total (input+output) when the run began
+	store          *storage.Store
+	day            string // UTC date, e.g. "2026-06-03"
+	month          string // UTC month, e.g. "2026-06"
+	runCap         int
+	dailyCap       int
+	monthlyCap     int
+	dailyAtStart   int // ledger total (input+output) when the run began
+	monthlyAtStart int // ledger total for the UTC month when the run began
 
 	// mu guards the mutable counters so the concurrent 재평가 worker pool
 	// (handleRerateSSE) can canSpend/debit from several goroutines without a
@@ -497,17 +541,26 @@ func (s *Server) newAIBudget(ctx context.Context) *aiBudget {
 	if s.ai == nil {
 		return nil
 	}
-	day := time.Now().UTC().Format("2006-01-02")
+	now := time.Now().UTC()
+	day := now.Format("2006-01-02")
+	month := now.Format("2006-01")
 	in, out, err := s.store.AIUsageForDay(ctx, day)
 	if err != nil {
 		in, out = 0, 0 // a ledger read error must not block scoring — start from 0
 	}
+	monthIn, monthOut, err := s.store.AIUsageForMonth(ctx, month)
+	if err != nil {
+		monthIn, monthOut = 0, 0
+	}
 	return &aiBudget{
-		store:        s.store,
-		day:          day,
-		runCap:       s.aiRunTokenCap,
-		dailyCap:     s.aiDailyTokenCap,
-		dailyAtStart: in + out,
+		store:          s.store,
+		day:            day,
+		month:          month,
+		runCap:         s.aiRunTokenCap,
+		dailyCap:       s.aiDailyTokenCap,
+		monthlyCap:     s.aiMonthlyTokenCap,
+		dailyAtStart:   in + out,
+		monthlyAtStart: monthIn + monthOut,
 	}
 }
 
@@ -516,7 +569,9 @@ func (s *Server) newAIBudget(ctx context.Context) *aiBudget {
 func (b *aiBudget) canSpend() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.runSpent >= b.runCap || b.dailyAtStart+b.runSpent >= b.dailyCap {
+	if b.runSpent >= b.runCap ||
+		b.dailyAtStart+b.runSpent >= b.dailyCap ||
+		b.monthlyAtStart+b.runSpent >= b.monthlyCap {
 		b.degraded = true
 		return false
 	}

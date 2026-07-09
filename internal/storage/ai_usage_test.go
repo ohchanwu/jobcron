@@ -47,4 +47,26 @@ func TestAIUsageLedger(t *testing.T) {
 			t.Fatalf("day 1 input = %d, want 150 (unchanged)", in1)
 		}
 	})
+
+	t.Run("month aggregate sums only matching UTC month", func(t *testing.T) {
+		if err := st.AddAIUsage(ctx, "2026-06-30", 11, 1); err != nil {
+			t.Fatalf("AddAIUsage previous month: %v", err)
+		}
+		if err := st.AddAIUsage(ctx, "2026-07-01", 20, 2); err != nil {
+			t.Fatalf("AddAIUsage month day 1: %v", err)
+		}
+		if err := st.AddAIUsage(ctx, "2026-07-31", 30, 3); err != nil {
+			t.Fatalf("AddAIUsage month day 31: %v", err)
+		}
+		if err := st.AddAIUsage(ctx, "2026-08-01", 99, 9); err != nil {
+			t.Fatalf("AddAIUsage next month: %v", err)
+		}
+		in, out, err := st.AIUsageForMonth(ctx, "2026-07")
+		if err != nil {
+			t.Fatalf("AIUsageForMonth: %v", err)
+		}
+		if in != 50 || out != 5 {
+			t.Fatalf("month aggregate = (%d,%d), want (50,5)", in, out)
+		}
+	})
 }
