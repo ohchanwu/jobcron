@@ -282,15 +282,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 }
 
 // ScrapeResult summarizes one scrape run across every active source.
-type ScrapeResult struct {
-	Listed     int `json:"listed"`
-	New        int `json:"new"`
-	Refreshed  int `json:"refreshed"` // already-seen postings whose detail was re-fetched (T7)
-	Scored     int `json:"scored"`
-	Removed    int `json:"removed"`    // postings hard-deleted by the staleness sweep
-	Duplicates int `json:"duplicates"` // cross-portal duplicates collapsed onto a canonical
-	Failed     int `json:"failed"`     // sources that errored and were skipped this run
-}
+type ScrapeResult = storage.ScrapeResult
 
 // scrapeAllKey is the singleflight key for a multi-source scrape run. We
 // hold one global lock for the whole pipeline rather than one per source —
@@ -298,6 +290,39 @@ type ScrapeResult struct {
 // confused by partial states. Per-source locks would matter if scrapes were
 // triggered independently.
 const scrapeAllKey = "_all_"
+
+func (s *Server) runScrapeWithHistory(ctx context.Context, trigger string, emit func(event, data string), userIDOpt ...int64) (result ScrapeResult, err error) {
+	run, startErr := s.store.StartScrapeRun(ctx, trigger)
+	if startErr != nil {
+		return ScrapeResult{}, startErr
+	}
+	status := storage.ScrapeRunStatusSuccess
+	errorSummary := ""
+	defer func() {
+		if r := recover(); r != nil {
+			status = storage.ScrapeRunStatusFailure
+			err = fmt.Errorf("server: scrape panic: %v", r)
+			errorSummary = err.Error()
+		} else if err != nil {
+			status = storage.ScrapeRunStatusFailure
+			errorSummary = err.Error()
+		}
+		finishCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if finishErr := s.store.FinishScrapeRun(finishCtx, run.ID, result, status, truncateScrapeRunError(errorSummary)); finishErr != nil && err == nil {
+			err = finishErr
+		}
+	}()
+	return s.runScrape(ctx, emit, userIDOpt...)
+}
+
+func truncateScrapeRunError(s string) string {
+	const max = 500
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
+}
 
 // runScrape executes the full pipeline across every enabled source: robots
 // check → listing → detail fetch → upsert → sweep → score. Disabled sources

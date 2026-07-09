@@ -16,6 +16,7 @@ import (
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scoring"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/job-scraper/internal/storage"
 	"github.com/ohchanwu/job-scraper/web"
 )
 
@@ -108,7 +109,7 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 	// (sseWriter.event ignores write errors).
 	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
 	defer cancel()
-	res, err := s.runScrape(ctx, sw.event, userID)
+	res, err := s.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, sw.event, userID)
 	if err != nil {
 		sw.event("failed", "스크랩에 실패했어요. 잠시 후 다시 시도해 주세요.")
 		return

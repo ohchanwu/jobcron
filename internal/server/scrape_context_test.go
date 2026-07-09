@@ -8,6 +8,7 @@ import (
 
 	"github.com/ohchanwu/job-scraper/internal/profile"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/job-scraper/internal/storage"
 )
 
 // TestScrapeCompletesDespiteRequestCancellation locks in Bug 2A: a scrape must
@@ -49,5 +50,32 @@ func TestScrapeCompletesDespiteRequestCancellation(t *testing.T) {
 		if _, ok := scores[p.ID]; !ok {
 			t.Fatalf("posting %d (%q) left unscored — the end-of-run scoreAll never reached it", p.ID, p.Title)
 		}
+	}
+}
+
+func TestHandleScrapeSSERecordsManualRunHistory(t *testing.T) {
+	fs := &fakeScraper{listing: []scraper.Posting{listingPosting("p1", "신입 개발자 공고")}}
+	srv, st := newTestServer(t, fs)
+	ctx := context.Background()
+	profJSON, _ := profile.Marshal(profile.Profile{})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/scrape", nil)
+	srv.handleScrapeSSE(httptest.NewRecorder(), req)
+
+	run, ok, err := st.LatestScrapeRun(ctx)
+	if err != nil || !ok {
+		t.Fatalf("LatestScrapeRun ok=%v err=%v", ok, err)
+	}
+	if run.Trigger != storage.ScrapeTriggerManual {
+		t.Errorf("Trigger = %q, want manual", run.Trigger)
+	}
+	if run.Status != storage.ScrapeRunStatusSuccess {
+		t.Errorf("Status = %q, want success", run.Status)
+	}
+	if run.Result.New != 1 || run.Result.Scored != 1 {
+		t.Errorf("Result = %+v, want one new/scored posting", run.Result)
 	}
 }

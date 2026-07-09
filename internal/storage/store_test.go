@@ -24,6 +24,7 @@ var requiredObjects = []string{
 	"postings", "postings_fts", "profile", "scores", "bookmarks",
 	"ai_extractions", "ai_scores", "ai_usage", // migration 0008 (BYOK AI v2.0)
 	"users", "sessions", // migration 0011 (production auth)
+	"scrape_runs", // migration 0012 (scrape run history)
 }
 
 // newTestStore opens a fresh, migrated database in a temp directory.
@@ -164,7 +165,7 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if st.Dialect() != DialectPostgres {
 		t.Fatalf("Dialect = %v, want postgres", st.Dialect())
 	}
-	for _, name := range []string{"postings", "profile", "scores", "bookmarks", "not_interested", "ai_extractions", "ai_scores", "ai_usage"} {
+	for _, name := range []string{"postings", "profile", "scores", "bookmarks", "not_interested", "ai_extractions", "ai_scores", "ai_usage", "scrape_runs"} {
 		var got string
 		err := st.db.QueryRow(
 			`SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2`, schema, name).Scan(&got)
@@ -176,8 +177,8 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version); err != nil && err != sql.ErrNoRows {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if version != 6 {
-		t.Fatalf("schema version = %d, want 6", version)
+	if version != 7 {
+		t.Fatalf("schema version = %d, want 7", version)
 	}
 }
 

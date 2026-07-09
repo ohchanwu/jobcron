@@ -19,10 +19,11 @@ import (
 // fakeScraper is a test double for scraper.Scraper — it returns canned data
 // instead of hitting the live 점핏 API.
 type fakeScraper struct {
-	listing     []scraper.Posting
-	details     map[string]scraper.Posting
-	accessErr   error
-	detailCalls []string // SourcePostingIDs FetchDetail was called for
+	listing      []scraper.Posting
+	details      map[string]scraper.Posting
+	accessErr    error
+	listingPanic string
+	detailCalls  []string // SourcePostingIDs FetchDetail was called for
 }
 
 func (f *fakeScraper) Source() string                        { return "jumpit" }
@@ -30,6 +31,9 @@ func (f *fakeScraper) Kind() scraper.SourceKind              { return scraper.So
 func (f *fakeScraper) CheckAccess(ctx context.Context) error { return f.accessErr }
 
 func (f *fakeScraper) FetchListing(ctx context.Context, limit int) ([]scraper.Posting, error) {
+	if f.listingPanic != "" {
+		panic(f.listingPanic)
+	}
 	return f.listing, nil
 }
 
@@ -92,6 +96,75 @@ func TestRunScrapeStoresAndScoresPostings(t *testing.T) {
 	scores, err := st.ScoresByPostingID(ctx)
 	if err != nil || len(scores) != 2 {
 		t.Fatalf("ScoresByPostingID: got %d (err=%v), want 2", len(scores), err)
+	}
+}
+
+func TestRunScrapeWithHistoryRecordsScheduledSuccess(t *testing.T) {
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("1", "백엔드 신입")},
+		details: map[string]scraper.Posting{
+			"1": listingPosting("1", "백엔드 신입"),
+		},
+	}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+	profJSON, _ := profile.Marshal(profile.Profile{CareerYears: 0})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	res, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerScheduled, noopEmit)
+	if err != nil {
+		t.Fatalf("runScrapeWithHistory: %v", err)
+	}
+	if res.Listed != 1 || res.New != 1 || res.Scored != 1 {
+		t.Fatalf("ScrapeResult = %+v, want one listed/new/scored posting", res)
+	}
+	run, ok, err := st.LatestScrapeRun(ctx)
+	if err != nil || !ok {
+		t.Fatalf("LatestScrapeRun ok=%v err=%v", ok, err)
+	}
+	if run.Trigger != storage.ScrapeTriggerScheduled {
+		t.Errorf("Trigger = %q, want scheduled", run.Trigger)
+	}
+	if run.Status != storage.ScrapeRunStatusSuccess {
+		t.Errorf("Status = %q, want success", run.Status)
+	}
+	if run.Result != res {
+		t.Errorf("stored result = %+v, want %+v", run.Result, res)
+	}
+	if run.ErrorSummary != "" {
+		t.Errorf("ErrorSummary = %q, want empty", run.ErrorSummary)
+	}
+}
+
+func TestRunScrapeWithHistoryRecordsPanicAsFailure(t *testing.T) {
+	f := &fakeScraper{listingPanic: "listing exploded"}
+	srv, st := newTestServer(t, f)
+	ctx := context.Background()
+	profJSON, _ := profile.Marshal(profile.Profile{CareerYears: 0})
+	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	if _, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, noopEmit); err == nil {
+		t.Fatal("runScrapeWithHistory succeeded, want panic converted to error")
+	}
+	run, ok, err := st.LatestScrapeRun(ctx)
+	if err != nil || !ok {
+		t.Fatalf("LatestScrapeRun ok=%v err=%v", ok, err)
+	}
+	if run.Trigger != storage.ScrapeTriggerManual {
+		t.Errorf("Trigger = %q, want manual", run.Trigger)
+	}
+	if run.Status != storage.ScrapeRunStatusFailure {
+		t.Errorf("Status = %q, want failure", run.Status)
+	}
+	if !strings.Contains(run.ErrorSummary, "listing exploded") {
+		t.Errorf("ErrorSummary = %q, want panic text", run.ErrorSummary)
+	}
+	if run.FinishedAt == nil {
+		t.Fatal("FinishedAt = nil, want failure finish time")
 	}
 }
 
