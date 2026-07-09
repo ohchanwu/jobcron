@@ -14,9 +14,9 @@ import (
 // leaving the existing bookmarked_at intact if the posting is already
 // bookmarked. The caller passes the time so tests can pin it.
 func (s *Store) SetBookmark(ctx context.Context, postingID int64, at time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, s.query(`
 INSERT INTO bookmarks (posting_id, bookmarked_at) VALUES (?, ?)
-ON CONFLICT(posting_id) DO NOTHING`, postingID, at.UTC())
+ON CONFLICT(posting_id) DO NOTHING`), postingID, at.UTC())
 	if err != nil {
 		return fmt.Errorf("storage: set bookmark: %w", err)
 	}
@@ -27,7 +27,7 @@ ON CONFLICT(posting_id) DO NOTHING`, postingID, at.UTC())
 // posting is not bookmarked.
 func (s *Store) ClearBookmark(ctx context.Context, postingID int64) error {
 	if _, err := s.db.ExecContext(ctx,
-		`DELETE FROM bookmarks WHERE posting_id = ?`, postingID); err != nil {
+		s.query(`DELETE FROM bookmarks WHERE posting_id = ?`), postingID); err != nil {
 		return fmt.Errorf("storage: clear bookmark: %w", err)
 	}
 	return nil
@@ -37,7 +37,7 @@ func (s *Store) ClearBookmark(ctx context.Context, postingID int64) error {
 func (s *Store) IsBookmarked(ctx context.Context, postingID int64) (bool, error) {
 	var one int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT 1 FROM bookmarks WHERE posting_id = ?`, postingID).Scan(&one)
+		s.query(`SELECT 1 FROM bookmarks WHERE posting_id = ?`), postingID).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil

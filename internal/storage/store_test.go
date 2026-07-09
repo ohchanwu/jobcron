@@ -5,12 +5,15 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ohchanwu/job-scraper/internal/ai"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
 
@@ -181,6 +184,142 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if version < 2 {
 		t.Fatalf("schema version = %d, want at least 2", version)
 	}
+}
+
+func TestPostgresRuntimeStorageMethods(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+
+	p := samplePosting()
+	p.SourcePostingID = fmt.Sprintf("pg-runtime-%s-%d", strings.ReplaceAll(t.Name(), "/", "-"), time.Now().UnixNano())
+	id, isNew, err := st.UpsertPosting(ctx, p)
+	if err != nil {
+		t.Fatalf("UpsertPosting: %v", err)
+	}
+	if !isNew {
+		t.Fatal("isNew = false, want true")
+	}
+	p.ID = id
+	got, ok, err := st.PostingByID(ctx, id)
+	if err != nil || !ok {
+		t.Fatalf("PostingByID: ok=%v err=%v", ok, err)
+	}
+	assertPosting(t, got, p)
+	if postings, err := st.AllPostings(ctx); err != nil || len(postings) == 0 {
+		t.Fatalf("AllPostings len=%d err=%v", len(postings), err)
+	}
+	if postings, err := st.CanonicalPostings(ctx); err != nil || len(postings) == 0 {
+		t.Fatalf("CanonicalPostings len=%d err=%v", len(postings), err)
+	}
+	if ids, err := st.KnownSourceIDs(ctx, p.Source); err != nil || !ids[p.SourcePostingID] {
+		t.Fatalf("KnownSourceIDs has source posting = %v err=%v", ids[p.SourcePostingID], err)
+	}
+	if seen, err := st.SeenDetail(ctx, p.Source); err != nil || seen[p.SourcePostingID].ID != id {
+		t.Fatalf("SeenDetail id=%d err=%v", seen[p.SourcePostingID].ID, err)
+	}
+
+	profileInput := fmt.Sprintf(`{"stacks":["Go"],"run":%d}`, time.Now().UnixNano())
+	hash, changed, err := st.SaveProfile(ctx, profileInput)
+	if err != nil || !changed {
+		t.Fatalf("SaveProfile hash=%q changed=%v err=%v", hash, changed, err)
+	}
+	profileJSON, profileHash, ok, err := st.Profile(ctx)
+	if err != nil || !ok || profileJSON != profileInput || profileHash != hash {
+		t.Fatalf("Profile json=%q hash=%q ok=%v err=%v", profileJSON, profileHash, ok, err)
+	}
+
+	when := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	if err := st.SetBookmark(ctx, id, when); err != nil {
+		t.Fatalf("SetBookmark: %v", err)
+	}
+	if bookmarked, err := st.IsBookmarked(ctx, id); err != nil || !bookmarked {
+		t.Fatalf("IsBookmarked=%v err=%v", bookmarked, err)
+	}
+	if ids, err := st.BookmarkedIDs(ctx); err != nil || !ids[id] {
+		t.Fatalf("BookmarkedIDs has id=%v err=%v", ids[id], err)
+	}
+	if postings, err := st.BookmarkedPostings(ctx); err != nil || len(postings) == 0 {
+		t.Fatalf("BookmarkedPostings len=%d err=%v", len(postings), err)
+	}
+	if err := st.ClearBookmark(ctx, id); err != nil {
+		t.Fatalf("ClearBookmark: %v", err)
+	}
+
+	if err := st.SetNotInterested(ctx, id, when); err != nil {
+		t.Fatalf("SetNotInterested: %v", err)
+	}
+	if muted, err := st.IsNotInterested(ctx, id); err != nil || !muted {
+		t.Fatalf("IsNotInterested=%v err=%v", muted, err)
+	}
+	if ids, err := st.NotInterestedIDs(ctx); err != nil || !ids[id] {
+		t.Fatalf("NotInterestedIDs has id=%v err=%v", ids[id], err)
+	}
+	if postings, err := st.NotInterestedPostings(ctx); err != nil || len(postings) == 0 {
+		t.Fatalf("NotInterestedPostings len=%d err=%v", len(postings), err)
+	}
+	if err := st.ClearNotInterested(ctx, id); err != nil {
+		t.Fatalf("ClearNotInterested: %v", err)
+	}
+
+	sc := Score{PostingID: id, ProfileHash: hash, Total: 88, BreakdownJSON: `[]`, ComputedAt: when}
+	if err := st.UpsertScore(ctx, sc); err != nil {
+		t.Fatalf("UpsertScore: %v", err)
+	}
+	if got, ok, err := st.ScoreByPostingID(ctx, id); err != nil || !ok || got.Total != sc.Total {
+		t.Fatalf("ScoreByPostingID total=%d ok=%v err=%v", got.Total, ok, err)
+	}
+	if scores, err := st.ScoresByPostingID(ctx); err != nil || scores[id].Total != sc.Total {
+		t.Fatalf("ScoresByPostingID total=%d err=%v", scores[id].Total, err)
+	}
+
+	maxCareer := 3
+	ext := ai.Extraction{MinCareer: 1, MaxCareer: &maxCareer, Newcomer: true, EducationEnum: "bachelor", Evidence: "evidence"}
+	if err := st.UpsertAIExtraction(ctx, id, "content", "v1", ext, when); err != nil {
+		t.Fatalf("UpsertAIExtraction: %v", err)
+	}
+	if got, ok, err := st.AIExtraction(ctx, id, "content", "v1"); err != nil || !ok || got.MinCareer != ext.MinCareer {
+		t.Fatalf("AIExtraction min=%d ok=%v err=%v", got.MinCareer, ok, err)
+	}
+	if got, err := st.AIExtractionsByPostingID(ctx, "v1"); err != nil || got[id].MinCareer != ext.MinCareer {
+		t.Fatalf("AIExtractionsByPostingID min=%d err=%v", got[id].MinCareer, err)
+	}
+
+	delta := ai.Delta{Items: []ai.DeltaItem{{Signal: "Go", Kind: "positive", Delta: 4, Evidence: "Go", MatchedGoal: "Go"}}, NetDelta: 4}
+	if err := st.UpsertAIScore(ctx, id, "input", "v1", delta, when); err != nil {
+		t.Fatalf("UpsertAIScore: %v", err)
+	}
+	if got, ok, err := st.AIScore(ctx, id, "input", "v1"); err != nil || !ok || got.NetDelta != delta.NetDelta {
+		t.Fatalf("AIScore net=%d ok=%v err=%v", got.NetDelta, ok, err)
+	}
+	if got, err := st.AIScoresByPostingID(ctx, "input", "v1"); err != nil || got[id].NetDelta != delta.NetDelta {
+		t.Fatalf("AIScoresByPostingID net=%d err=%v", got[id].NetDelta, err)
+	}
+	if got, err := st.LatestAIScoresByPostingID(ctx, "v1"); err != nil || got[id].NetDelta != delta.NetDelta {
+		t.Fatalf("LatestAIScoresByPostingID net=%d err=%v", got[id].NetDelta, err)
+	}
+	if got, err := st.LatestAIScoresAnyVersionByPostingID(ctx); err != nil || got[id].NetDelta != delta.NetDelta {
+		t.Fatalf("LatestAIScoresAnyVersionByPostingID net=%d err=%v", got[id].NetDelta, err)
+	}
+	if err := st.AddAIUsage(ctx, "2026-07-09", 10, 3); err != nil {
+		t.Fatalf("AddAIUsage: %v", err)
+	}
+	if in, out, err := st.AIUsageForDay(ctx, "2026-07-09"); err != nil || in < 10 || out < 3 {
+		t.Fatalf("AIUsageForDay in=%d out=%d err=%v", in, out, err)
+	}
+}
+
+func newPostgresTestStore(t *testing.T) *Store {
+	t.Helper()
+	databaseURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	if databaseURL == "" {
+		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+	}
+	st, err := OpenPostgres(databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPostgres: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return st
 }
 
 func TestUpsertPostingInsertsNewPosting(t *testing.T) {

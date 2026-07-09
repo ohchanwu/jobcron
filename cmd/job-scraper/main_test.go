@@ -52,3 +52,15 @@ func TestOpenConfiguredStoreProductionUsesPostgresPath(t *testing.T) {
 		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
 	}
 }
+
+func TestOpenConfiguredStoreDatabaseURLUsesPostgresOutsideProduction(t *testing.T) {
+	_, err := openConfiguredStore(config.Config{
+		DatabaseURL: "://not-a-valid-postgres-url",
+	})
+	if err == nil {
+		t.Fatal("openConfiguredStore succeeded with an invalid PostgreSQL URL")
+	}
+	if got, want := err.Error(), "storage: open postgres"; len(got) < len(want) || got[:len(want)] != want {
+		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
+	}
+}

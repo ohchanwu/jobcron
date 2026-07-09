@@ -23,14 +23,14 @@ type Score struct {
 // so re-scoring a posting overwrites its previous score row — the design keeps
 // exactly one score per posting, with no history.
 func (s *Store) UpsertScore(ctx context.Context, sc Score) error {
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, s.query(`
 INSERT INTO scores (posting_id, profile_hash, total, breakdown_json, computed_at)
 VALUES (?,?,?,?,?)
 ON CONFLICT(posting_id) DO UPDATE SET
     profile_hash   = excluded.profile_hash,
     total          = excluded.total,
     breakdown_json = excluded.breakdown_json,
-    computed_at    = excluded.computed_at`,
+    computed_at    = excluded.computed_at`),
 		sc.PostingID, sc.ProfileHash, sc.Total, sc.BreakdownJSON, sc.ComputedAt.UTC())
 	if err != nil {
 		return fmt.Errorf("storage: upsert score: %w", err)
@@ -68,9 +68,9 @@ func (s *Store) ScoreByPostingID(ctx context.Context, postingID int64) (Score, b
 		sc         Score
 		computedAt time.Time
 	)
-	err := s.db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, s.query(`
 SELECT posting_id, profile_hash, total, breakdown_json, computed_at
-FROM scores WHERE posting_id = ?`, postingID).Scan(
+FROM scores WHERE posting_id = ?`), postingID).Scan(
 		&sc.PostingID, &sc.ProfileHash, &sc.Total, &sc.BreakdownJSON, &computedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Score{}, false, nil

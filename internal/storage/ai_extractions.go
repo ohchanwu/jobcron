@@ -23,7 +23,7 @@ func (s *Store) UpsertAIExtraction(
 	if ext.MaxCareer != nil {
 		maxCareer = sql.NullInt64{Int64: int64(*ext.MaxCareer), Valid: true}
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, s.query(`
 INSERT INTO ai_extractions
     (posting_id, content_hash, ai_version, min_career, max_career, newcomer, education_enum, evidence, computed_at)
 VALUES (?,?,?,?,?,?,?,?,?)
@@ -33,7 +33,7 @@ ON CONFLICT(posting_id, content_hash, ai_version) DO UPDATE SET
     newcomer       = excluded.newcomer,
     education_enum = excluded.education_enum,
     evidence       = excluded.evidence,
-    computed_at    = excluded.computed_at`,
+    computed_at    = excluded.computed_at`),
 		postingID, contentHash, aiVersion, ext.MinCareer, maxCareer,
 		ext.Newcomer, ext.EducationEnum, ext.Evidence, computedAt.UTC())
 	if err != nil {
@@ -48,10 +48,10 @@ ON CONFLICT(posting_id, content_hash, ai_version) DO UPDATE SET
 func (s *Store) AIExtraction(
 	ctx context.Context, postingID int64, contentHash, aiVersion string,
 ) (ai.Extraction, bool, error) {
-	row := s.db.QueryRowContext(ctx, `
+	row := s.db.QueryRowContext(ctx, s.query(`
 SELECT min_career, max_career, newcomer, education_enum, evidence
 FROM ai_extractions
-WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`,
+WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`),
 		postingID, contentHash, aiVersion)
 	ext, err := scanExtraction(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -69,11 +69,11 @@ WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`,
 // scoring merge (scoreAll) calls it once and looks up by posting id, never
 // N+1. Postings with no extraction are simply absent from the map.
 func (s *Store) AIExtractionsByPostingID(ctx context.Context, aiVersion string) (map[int64]ai.Extraction, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, s.query(`
 SELECT posting_id, min_career, max_career, newcomer, education_enum, evidence
 FROM ai_extractions
 WHERE ai_version = ?
-ORDER BY posting_id, computed_at DESC`, aiVersion)
+ORDER BY posting_id, computed_at DESC`), aiVersion)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query ai extractions: %w", err)
 	}

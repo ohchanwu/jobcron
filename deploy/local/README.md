@@ -24,11 +24,12 @@ Reset the local database:
 docker compose -f deploy/local/compose.yaml down -v
 ```
 
-Import from an old SQLite `jobs.db` after starting PostgreSQL:
+Import from an old SQLite `jobs.db` after starting PostgreSQL with the planned import command:
 
 ```sh
-sqlite3 "$HOME/Library/Application Support/job-scraper/jobs.db" .dump > /tmp/jobscraper-sqlite.sql
-psql 'postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' -f /tmp/jobscraper-sqlite.sql
+job-scraper-import \
+  --sqlite "$HOME/Library/Application Support/job-scraper/jobs.db" \
+  --postgres 'postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable'
 ```
 
-The dump may need manual adjustment for SQLite-only features such as FTS5 virtual tables. The production PostgreSQL schema uses ordinary tables plus a PostgreSQL full-text index on posting title, company, and description.
+The importer is planned for the PostgreSQL migration line. Avoid treating a raw `sqlite3 .dump | psql` transfer as reliable because SQLite-only details such as FTS5 virtual tables and type differences need project-aware conversion.

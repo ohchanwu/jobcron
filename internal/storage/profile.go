@@ -38,13 +38,13 @@ func (s *Store) SaveProfile(ctx context.Context, canonicalJSON string) (hash str
 		return hash, false, nil
 	}
 
-	if _, err := s.db.ExecContext(ctx, `
+	if _, err := s.db.ExecContext(ctx, s.query(`
 INSERT INTO profile (id, profile_json, profile_hash, updated_at)
 VALUES (1, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     profile_json = excluded.profile_json,
     profile_hash = excluded.profile_hash,
-    updated_at   = excluded.updated_at`,
+    updated_at   = excluded.updated_at`),
 		canonicalJSON, hash, time.Now().UTC()); err != nil {
 		return "", false, fmt.Errorf("storage: save profile: %w", err)
 	}

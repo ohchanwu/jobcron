@@ -14,9 +14,9 @@ import (
 // leaving an existing muted_at intact if the posting is already muted. The
 // caller passes the time so tests can pin it. Mirrors SetBookmark.
 func (s *Store) SetNotInterested(ctx context.Context, postingID int64, at time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, s.query(`
 INSERT INTO not_interested (posting_id, muted_at) VALUES (?, ?)
-ON CONFLICT(posting_id) DO NOTHING`, postingID, at.UTC())
+ON CONFLICT(posting_id) DO NOTHING`), postingID, at.UTC())
 	if err != nil {
 		return fmt.Errorf("storage: set not-interested: %w", err)
 	}
@@ -27,7 +27,7 @@ ON CONFLICT(posting_id) DO NOTHING`, postingID, at.UTC())
 // not muted.
 func (s *Store) ClearNotInterested(ctx context.Context, postingID int64) error {
 	if _, err := s.db.ExecContext(ctx,
-		`DELETE FROM not_interested WHERE posting_id = ?`, postingID); err != nil {
+		s.query(`DELETE FROM not_interested WHERE posting_id = ?`), postingID); err != nil {
 		return fmt.Errorf("storage: clear not-interested: %w", err)
 	}
 	return nil
@@ -37,7 +37,7 @@ func (s *Store) ClearNotInterested(ctx context.Context, postingID int64) error {
 func (s *Store) IsNotInterested(ctx context.Context, postingID int64) (bool, error) {
 	var one int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT 1 FROM not_interested WHERE posting_id = ?`, postingID).Scan(&one)
+		s.query(`SELECT 1 FROM not_interested WHERE posting_id = ?`), postingID).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil

@@ -121,7 +121,7 @@ func main() {
 // openConfiguredStore opens the database from DATABASE_URL in production, or
 // from the local DB path/default location outside production.
 func openConfiguredStore(cfg config.Config) (*storage.Store, error) {
-	if cfg.Production {
+	if cfg.DatabaseURL != "" {
 		return storage.OpenPostgres(cfg.DatabaseURL)
 	}
 	if cfg.DBPath != "" {

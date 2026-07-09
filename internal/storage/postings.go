@@ -35,7 +35,7 @@ const postingColumns = `source, source_posting_id, url, title, company, location
 func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64, isNew bool, err error) {
 	var existingID int64
 	err = s.db.QueryRowContext(ctx,
-		`SELECT id FROM postings WHERE source = ? AND source_posting_id = ?`,
+		s.query(`SELECT id FROM postings WHERE source = ? AND source_posting_id = ?`),
 		p.Source, p.SourcePostingID).Scan(&existingID)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -44,9 +44,9 @@ func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64,
 		return 0, false, fmt.Errorf("storage: look up posting: %w", err)
 	default:
 		if _, err := s.db.ExecContext(ctx,
-			`UPDATE postings
+			s.query(`UPDATE postings
 			    SET url = ?, title = ?, company = ?, location = ?, last_seen_at = ?
-			  WHERE id = ?`,
+			  WHERE id = ?`),
 			p.URL, p.Title, p.Company, p.Location, p.LastSeenAt.UTC(), existingID); err != nil {
 			return 0, false, fmt.Errorf("storage: update already-seen posting: %w", err)
 		}
@@ -66,19 +66,28 @@ func (s *Store) UpsertPosting(ctx context.Context, p scraper.Posting) (id int64,
 	// postingColumns/scanPosting plumbing (no Posting struct field) — only the
 	// scrape's bounded edited-JD refresh reads/writes it, via SeenDetail and
 	// RefreshPostingDetail.
-	res, err := s.db.ExecContext(ctx, `
-INSERT INTO postings (`+postingColumns+`, detail_fetched_at)
-VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	insertSQL := `
+INSERT INTO postings (` + postingColumns + `, detail_fetched_at)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	args := []any{
 		p.Source, p.SourcePostingID, p.URL, p.Title, p.Company, p.Location,
 		p.Newcomer, p.MinCareer, p.MaxCareer, p.CareerLevel, p.Education, p.EducationName,
 		string(stackJSON), string(tagsJSON), p.Description, p.RawJSON, utcPtr(p.PublishedAt), utcPtr(p.ClosedAt),
-		p.AlwaysOpen, p.FirstSeenAt.UTC(), p.LastSeenAt.UTC(), p.FirstSeenAt.UTC())
-	if err != nil {
-		return 0, false, fmt.Errorf("storage: insert posting: %w", err)
+		p.AlwaysOpen, p.FirstSeenAt.UTC(), p.LastSeenAt.UTC(), p.FirstSeenAt.UTC(),
 	}
-	id, err = res.LastInsertId()
-	if err != nil {
-		return 0, false, fmt.Errorf("storage: insert posting id: %w", err)
+	if s.dialect == DialectPostgres {
+		if err := s.db.QueryRowContext(ctx, s.query(insertSQL+" RETURNING id"), args...).Scan(&id); err != nil {
+			return 0, false, fmt.Errorf("storage: insert posting: %w", err)
+		}
+	} else {
+		res, err := s.db.ExecContext(ctx, insertSQL, args...)
+		if err != nil {
+			return 0, false, fmt.Errorf("storage: insert posting: %w", err)
+		}
+		id, err = res.LastInsertId()
+		if err != nil {
+			return 0, false, fmt.Errorf("storage: insert posting id: %w", err)
+		}
 	}
 	return id, true, nil
 }
@@ -91,7 +100,7 @@ const selectColumns = `id, ` + postingColumns + `, duplicate_of`
 // PostingByID returns the posting with the given row id, or ok=false if none.
 func (s *Store) PostingByID(ctx context.Context, id int64) (scraper.Posting, bool, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT `+selectColumns+` FROM postings WHERE id = ?`, id)
+		s.query(`SELECT `+selectColumns+` FROM postings WHERE id = ?`), id)
 	p, err := scanPosting(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return scraper.Posting{}, false, nil
@@ -106,7 +115,7 @@ func (s *Store) PostingByID(ctx context.Context, id int64) (scraper.Posting, boo
 // for the given source — used to tell new postings from already-seen ones.
 func (s *Store) KnownSourceIDs(ctx context.Context, source string) (map[string]bool, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT source_posting_id FROM postings WHERE source = ?`, source)
+		s.query(`SELECT source_posting_id FROM postings WHERE source = ?`), source)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query known ids: %w", err)
 	}
@@ -139,7 +148,7 @@ type SeenPostingDetail struct {
 // it oldest so it is refreshed first.
 func (s *Store) SeenDetail(ctx context.Context, source string) (map[string]SeenPostingDetail, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT source_posting_id, id, detail_fetched_at FROM postings WHERE source = ?`, source)
+		s.query(`SELECT source_posting_id, id, detail_fetched_at FROM postings WHERE source = ?`), source)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query seen detail: %w", err)
 	}
@@ -176,14 +185,14 @@ func (s *Store) RefreshPostingDetail(ctx context.Context, id int64, p scraper.Po
 	if err != nil {
 		return fmt.Errorf("storage: marshal tags: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, s.query(`
 UPDATE postings SET
     url = ?, title = ?, company = ?, location = ?,
     newcomer = ?, min_career = ?, max_career = ?, career_level = ?,
     education = ?, education_name = ?, stack_tags_json = ?, tags_json = ?,
     description = ?, raw_json = ?, published_at = ?, closed_at = ?, always_open = ?,
     last_seen_at = ?, detail_fetched_at = ?
-  WHERE id = ?`,
+  WHERE id = ?`),
 		p.URL, p.Title, p.Company, p.Location,
 		p.Newcomer, p.MinCareer, p.MaxCareer, p.CareerLevel,
 		p.Education, p.EducationName, string(stackJSON), string(tagsJSON),
@@ -235,18 +244,31 @@ func (s *Store) SweepStalePostings(
 	var baselines []sourceBaseline
 	for rows.Next() {
 		var src string
-		// modernc.org/sqlite drops the DATETIME column tag on MAX(), so
-		// sql.NullTime cannot scan the result — read as a string and parse.
-		var maxRaw sql.NullString
-		if err := rows.Scan(&src, &maxRaw); err != nil {
-			return 0, fmt.Errorf("storage: scan source baseline: %w", err)
-		}
-		if !maxRaw.Valid {
-			continue
-		}
-		t, err := time.Parse(timeStoreFormat, maxRaw.String)
-		if err != nil {
-			return 0, fmt.Errorf("storage: parse max last_seen_at %q: %w", maxRaw.String, err)
+		var t time.Time
+		if s.dialect == DialectPostgres {
+			var maxRaw sql.NullTime
+			if err := rows.Scan(&src, &maxRaw); err != nil {
+				return 0, fmt.Errorf("storage: scan source baseline: %w", err)
+			}
+			if !maxRaw.Valid {
+				continue
+			}
+			t = maxRaw.Time
+		} else {
+			// modernc.org/sqlite drops the DATETIME column tag on MAX(), so
+			// sql.NullTime cannot scan the result — read as a string and parse.
+			var maxRaw sql.NullString
+			if err := rows.Scan(&src, &maxRaw); err != nil {
+				return 0, fmt.Errorf("storage: scan source baseline: %w", err)
+			}
+			if !maxRaw.Valid {
+				continue
+			}
+			parsed, err := time.Parse(timeStoreFormat, maxRaw.String)
+			if err != nil {
+				return 0, fmt.Errorf("storage: parse max last_seen_at %q: %w", maxRaw.String, err)
+			}
+			t = parsed
 		}
 		baselines = append(baselines, sourceBaseline{source: src, maxLastSeen: t.UTC()})
 	}
@@ -262,14 +284,14 @@ func (s *Store) SweepStalePostings(
 			continue // disabled source: freeze the data, do not sweep
 		}
 		staleBefore := b.maxLastSeen.Add(-staleWindow)
-		res, err := s.db.ExecContext(ctx, `
+		res, err := s.db.ExecContext(ctx, s.query(`
 DELETE FROM postings
 WHERE source = ?
   AND id NOT IN (SELECT posting_id FROM bookmarks)
   AND (
     last_seen_at < ?
     OR (first_seen_at < ? AND always_open = 0)
-  )`, b.source, staleBefore, oldBefore)
+  )`), b.source, staleBefore, oldBefore)
 		if err != nil {
 			return total, fmt.Errorf("storage: sweep %s: %w", b.source, err)
 		}
@@ -354,7 +376,7 @@ func (s *Store) MarkDuplicate(ctx context.Context, duplicateID, canonicalID int6
 		return fmt.Errorf("storage: MarkDuplicate: id %d cannot be a duplicate of itself", duplicateID)
 	}
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE postings SET duplicate_of = ? WHERE id = ?`,
+		s.query(`UPDATE postings SET duplicate_of = ? WHERE id = ?`),
 		canonicalID, duplicateID)
 	if err != nil {
 		return fmt.Errorf("storage: mark duplicate %d -> %d: %w", duplicateID, canonicalID, err)
@@ -424,7 +446,7 @@ ORDER BY duplicate_of, id`)
 // returned so the caller can also link to alternate URLs if it wants.
 func (s *Store) DuplicatesOf(ctx context.Context, canonicalID int64) ([]scraper.Posting, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+selectColumns+` FROM postings WHERE duplicate_of = ? ORDER BY first_seen_at, id`,
+		s.query(`SELECT `+selectColumns+` FROM postings WHERE duplicate_of = ? ORDER BY first_seen_at, id`),
 		canonicalID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query duplicates of %d: %w", canonicalID, err)
