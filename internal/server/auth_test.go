@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -23,6 +24,47 @@ func TestProductionAuthRedirectsAnonymousPageToLogin(t *testing.T) {
 	}
 	if loc := rec.Header().Get("Location"); loc != "/login" {
 		t.Fatalf("Location = %q, want /login", loc)
+	}
+}
+
+func TestProductionAuthRejectsAnonymousAPIWithUnauthorizedJSON(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+	}{
+		{name: "scrape stream", method: http.MethodGet, target: "/api/scrape"},
+		{name: "bookmark mutation", method: http.MethodPut, target: "/api/bookmark/1"},
+		{name: "not interested mutation", method: http.MethodDelete, target: "/api/not-interested/1"},
+		{name: "rerate stream", method: http.MethodGet, target: "/api/rerate?surface=today"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tt.method, tt.target, nil)
+			srv.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401", rec.Code)
+			}
+			if loc := rec.Header().Get("Location"); loc != "" {
+				t.Fatalf("Location = %q, want empty for API 401", loc)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Fatalf("Content-Type = %q, want application/json", ct)
+			}
+			var body map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body %q: %v", rec.Body.String(), err)
+			}
+			if body["error"] != "authentication required" {
+				t.Fatalf("error = %q, want authentication required", body["error"])
+			}
+		})
 	}
 }
 
@@ -155,6 +197,49 @@ func TestLogoutClearsSessionCookie(t *testing.T) {
 	}
 	if cookies[0].Name != sessionCookieName || cookies[0].MaxAge != -1 {
 		t.Fatalf("logout cookie = %+v, want cleared session cookie", cookies[0])
+	}
+}
+
+func TestLogoutRevokesSessionToken(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	ctx := context.Background()
+	seedProfile(t, st, ctx)
+	hash, err := auth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if _, err := st.CreateOwnerUser(ctx, "owner@example.com", hash); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+
+	form := url.Values{"email": {"owner@example.com"}, "password": {"correct-password"}}
+	loginRec := httptest.NewRecorder()
+	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.Handler().ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusSeeOther {
+		t.Fatalf("login status = %d, want 303; body=%q", loginRec.Code, loginRec.Body.String())
+	}
+	sessionCookie := loginRec.Result().Cookies()[0]
+
+	logoutRec := httptest.NewRecorder()
+	logoutReq := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	logoutReq.AddCookie(sessionCookie)
+	srv.Handler().ServeHTTP(logoutRec, logoutReq)
+	if logoutRec.Code != http.StatusSeeOther {
+		t.Fatalf("logout status = %d, want 303", logoutRec.Code)
+	}
+
+	pageRec := httptest.NewRecorder()
+	pageReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	pageReq.AddCookie(sessionCookie)
+	srv.Handler().ServeHTTP(pageRec, pageReq)
+	if pageRec.Code != http.StatusSeeOther {
+		t.Fatalf("post-logout page status = %d, want 303", pageRec.Code)
+	}
+	if loc := pageRec.Header().Get("Location"); loc != "/login" {
+		t.Fatalf("post-logout Location = %q, want /login", loc)
 	}
 }
 

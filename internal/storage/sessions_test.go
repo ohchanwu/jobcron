@@ -67,6 +67,31 @@ func TestUserBySessionTokenRejectsExpiredSession(t *testing.T) {
 	}
 }
 
+func TestRevokeSessionTokenRemovesMatchingSession(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	user, err := st.CreateOwnerUser(ctx, "owner@example.com", "password-hash")
+	if err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	rawToken := "revoked-session-token"
+	if err := st.CreateSession(ctx, user.ID, sessionHashForTest(rawToken), time.Now().Add(time.Hour).UTC()); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	if err := st.RevokeSessionToken(ctx, rawToken); err != nil {
+		t.Fatalf("RevokeSessionToken: %v", err)
+	}
+
+	_, ok, err := st.UserBySessionToken(ctx, rawToken)
+	if err != nil {
+		t.Fatalf("UserBySessionToken after revoke: %v", err)
+	}
+	if ok {
+		t.Fatal("revoked session still authenticates")
+	}
+}
+
 func sessionHashForTest(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

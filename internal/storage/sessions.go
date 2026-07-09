@@ -57,3 +57,17 @@ UPDATE sessions
 	}
 	return user, true, nil
 }
+
+// RevokeSessionToken deletes the session row for a raw bearer token. Missing
+// rows are treated as already-revoked success.
+func (s *Store) RevokeSessionToken(ctx context.Context, token string) error {
+	if token == "" {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, s.query(`
+DELETE FROM sessions
+ WHERE session_token_hash = ?`), auth.HashSessionToken(token)); err != nil {
+		return fmt.Errorf("storage: revoke session token: %w", err)
+	}
+	return nil
+}
