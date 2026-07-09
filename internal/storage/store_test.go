@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -157,22 +159,14 @@ func TestOpenPostgresInvalidURLReturnsOpenError(t *testing.T) {
 }
 
 func TestOpenPostgresAppliesSchema(t *testing.T) {
-	databaseURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
-	if databaseURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
-	}
-	st, err := OpenPostgres(databaseURL)
-	if err != nil {
-		t.Fatalf("OpenPostgres: %v", err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st, schema := newPostgresTestStoreWithSchema(t)
 	if st.Dialect() != DialectPostgres {
 		t.Fatalf("Dialect = %v, want postgres", st.Dialect())
 	}
 	for _, name := range []string{"postings", "profile", "scores", "bookmarks", "not_interested", "ai_extractions", "ai_scores", "ai_usage"} {
 		var got string
 		err := st.db.QueryRow(
-			`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`, name).Scan(&got)
+			`SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2`, schema, name).Scan(&got)
 		if err != nil {
 			t.Errorf("table %q not found after OpenPostgres: %v", name, err)
 		}
@@ -181,8 +175,8 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version); err != nil && err != sql.ErrNoRows {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if version < 2 {
-		t.Fatalf("schema version = %d, want at least 2", version)
+	if version != 3 {
+		t.Fatalf("schema version = %d, want 3", version)
 	}
 }
 
@@ -303,7 +297,7 @@ func TestPostgresRuntimeStorageMethods(t *testing.T) {
 	if err := st.AddAIUsage(ctx, "2026-07-09", 10, 3); err != nil {
 		t.Fatalf("AddAIUsage: %v", err)
 	}
-	if in, out, err := st.AIUsageForDay(ctx, "2026-07-09"); err != nil || in < 10 || out < 3 {
+	if in, out, err := st.AIUsageForDay(ctx, "2026-07-09"); err != nil || in != 10 || out != 3 {
 		t.Fatalf("AIUsageForDay in=%d out=%d err=%v", in, out, err)
 	}
 }
@@ -314,12 +308,53 @@ func newPostgresTestStore(t *testing.T) *Store {
 	if databaseURL == "" {
 		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
 	}
-	st, err := OpenPostgres(databaseURL)
+	schema := postgresTestSchemaName(t)
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres admin: %v", err)
+	}
+	if _, err := admin.Exec(`CREATE SCHEMA ` + schema); err != nil {
+		admin.Close()
+		t.Fatalf("create postgres test schema %s: %v", schema, err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.Exec(`DROP SCHEMA IF EXISTS ` + schema + ` CASCADE`)
+		_ = admin.Close()
+	})
+	st, err := OpenPostgres(databaseURLWithSearchPath(databaseURL, schema))
 	if err != nil {
 		t.Fatalf("OpenPostgres: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
 	return st
+}
+
+func newPostgresTestStoreWithSchema(t *testing.T) (*Store, string) {
+	t.Helper()
+	st := newPostgresTestStore(t)
+	var schema string
+	if err := st.db.QueryRow(`SELECT current_schema()`).Scan(&schema); err != nil {
+		t.Fatalf("current_schema: %v", err)
+	}
+	return st, schema
+}
+
+var nonSchemaChars = regexp.MustCompile(`[^a-z0-9_]`)
+
+func postgresTestSchemaName(t *testing.T) string {
+	t.Helper()
+	name := strings.ToLower(t.Name())
+	name = strings.ReplaceAll(name, "/", "_")
+	name = nonSchemaChars.ReplaceAllString(name, "_")
+	return fmt.Sprintf("test_%s_%d_%d", name, time.Now().UnixNano(), rand.Uint64())
+}
+
+func databaseURLWithSearchPath(databaseURL, schema string) string {
+	separator := "?"
+	if strings.Contains(databaseURL, "?") {
+		separator = "&"
+	}
+	return databaseURL + separator + "search_path=" + schema
 }
 
 func TestUpsertPostingInsertsNewPosting(t *testing.T) {
