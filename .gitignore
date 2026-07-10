@@ -40,3 +40,6 @@ screenshots/
 
 # Local research scratch notes
 /docs/research/resources.md
+
+# Local production handoff with human review notes and secrets.
+/docs/reports/production-local-build-report.md
