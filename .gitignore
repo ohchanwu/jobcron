@@ -14,6 +14,7 @@
 # Local environment files. Production values are created directly on the server.
 .env
 .env.*
+!.env.example
 deploy/demo/.env
 
 # 점핏 API spike material — raw captured responses kept locally as Step 4
