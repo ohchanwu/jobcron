@@ -1,5 +1,11 @@
 # Local PostgreSQL
 
+The local development database runs PostgreSQL 18 on port `55432`. Its Docker
+volume is separate from the older PostgreSQL 16 local volume, so switching to 18
+does not delete the old local dev data. PostgreSQL 18 Docker images use a
+cluster-style mount at `/var/lib/postgresql`, which lets the image keep
+major-version-specific data directories internally.
+
 Start the local PostgreSQL service:
 
 ```sh
@@ -29,6 +35,9 @@ Reset the local database:
 ```sh
 docker compose -f deploy/local/compose.yaml down -v
 ```
+
+That removes only the PostgreSQL 18 local dev cluster volume declared in
+`deploy/local/compose.yaml`.
 
 Import from an old SQLite `jobs.db` after starting PostgreSQL with the planned import command:
 
