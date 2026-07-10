@@ -74,8 +74,8 @@
 - Create `internal/server/admin.go`: owner-only status page or JSON endpoint.
 - Modify `internal/server/rerate.go`: manual AI run and cap-hit notification behavior.
 - Modify `web/*.html`, `web/*.js`, `web/styles.css`: login, server-backed state, status/tips.
-- Modify `deploy/aws/Caddyfile`, `deploy/aws/compose.yaml`, `deploy/aws/README.md`, `deploy/aws/HUMAN_DEPLOY_GUIDE.md`: production hostnames, RDS, env, backup docs.
-- Create `deploy/aws/backup-pull-macbook.md`: MacBook pull-based backup runbook.
+- Create `deploy/production/Caddyfile`, `deploy/production/compose.yaml`, `deploy/production/README.md`, `deploy/production/HUMAN_DEPLOY_GUIDE.md`: production hostnames, RDS, env, backup docs.
+- Create `deploy/production/backup-pull-macbook.md`: MacBook pull-based backup runbook.
 - Create `docs/reports/production-local-build-report.md`: handoff report after local work.
 
 ---
@@ -1013,11 +1013,11 @@ The human must provide or complete:
 
 **Files:**
 
-- Modify: `deploy/aws/Caddyfile`
-- Modify: `deploy/aws/compose.yaml`
-- Modify: `deploy/aws/README.md`
-- Modify: `deploy/aws/HUMAN_DEPLOY_GUIDE.md`
-- Create: `deploy/aws/backup-pull-macbook.md`
+- Create: `deploy/production/Caddyfile`
+- Create: `deploy/production/compose.yaml`
+- Create: `deploy/production/README.md`
+- Create: `deploy/production/HUMAN_DEPLOY_GUIDE.md`
+- Create: `deploy/production/backup-pull-macbook.md`
 
 **Interfaces:**
 
@@ -1057,7 +1057,7 @@ Document:
 - [ ] **Step 5: Commit locally**
 
 ```bash
-git add deploy/aws
+git add deploy/production
 git commit -m "docs: update production rds deployment"
 ```
 

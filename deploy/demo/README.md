@@ -4,6 +4,10 @@ This stack runs the read-only job-scraper demo on one AWS EC2 t4g.micro arm64
 instance. AI is off on the server. Upload only `jobs.db`; never upload
 `ai_keys.json`.
 
+This directory is **demo-only**. It is not the production deployment for
+`jobcron.app`. The production app should use a separate production deploy
+configuration with PostgreSQL/RDS, login sessions, and no `--demo` flag.
+
 ## DNS and instance assumptions
 
 - Hostname: `demo.jobcron.app`
@@ -16,7 +20,7 @@ instance. AI is off on the server. Upload only `jobs.db`; never upload
 ## Files on the instance
 
 Clone or pull this repository to `/srv/job-scraper/app`, then run Compose from
-`/srv/job-scraper/app/deploy/aws`.
+`/srv/job-scraper/app/deploy/demo`.
 
 Put the prepared database at:
 
@@ -24,7 +28,7 @@ Put the prepared database at:
 /srv/job-scraper/data/jobs.db
 ```
 
-Create `/srv/job-scraper/app/deploy/aws/.env`:
+Create `/srv/job-scraper/app/deploy/demo/.env`:
 
 ```sh
 JOBSCRAPER_IMAGE=<registry>/<namespace>/job-scraper-demo:<tag>
@@ -51,13 +55,13 @@ From the project root on your Mac, build the arm64 image and push it:
 ```sh
 cd /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper
 IMAGE=<registry>/<namespace>/job-scraper-demo:latest
-docker buildx build --platform linux/arm64 -f deploy/aws/Dockerfile -t "$IMAGE" --push .
+docker buildx build --platform linux/arm64 -f deploy/demo/Dockerfile -t "$IMAGE" --push .
 ```
 
 On the EC2 instance, pull the image before starting Compose:
 
 ```sh
-cd /srv/job-scraper/app/deploy/aws
+cd /srv/job-scraper/app/deploy/demo
 set -a
 . ./.env
 set +a
@@ -83,7 +87,7 @@ GitHub releases into:
 ## Start
 
 ```sh
-cd /srv/job-scraper/app/deploy/aws
+cd /srv/job-scraper/app/deploy/demo
 set -a
 . ./.env
 set +a

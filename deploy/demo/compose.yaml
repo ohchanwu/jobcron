@@ -1,3 +1,12 @@
+# Demo-only deployment stack for https://demo.jobcron.app.
+#
+# This compose file intentionally runs the read-only public demo:
+# - SQLite database mounted at /data/jobs.db
+# - --demo mode enabled
+# - no production login/session configuration
+# - no RDS/PostgreSQL DATABASE_URL
+#
+# Do not use this file for the private production app at jobcron.app.
 services:
   app:
     image: "${JOBSCRAPER_IMAGE:?set JOBSCRAPER_IMAGE in .env}"

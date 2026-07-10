@@ -2,12 +2,16 @@
 
 This guide deploys the read-only job-scraper demo to AWS.
 
+This directory is **demo-only**. Do not use this compose/Caddy setup for the
+private production app at `jobcron.app`; production needs a separate
+PostgreSQL/RDS deploy configuration with login sessions and no `--demo` flag.
+
 The deploy files in this directory are configured for:
 
 - Public URL: `https://demo.jobcron.app`
 - App data file on the server: `/srv/job-scraper/data/jobs.db`
 - App repository directory on the server: `/srv/job-scraper/app`
-- App compose directory on the server: `/srv/job-scraper/app/deploy/aws`
+- App compose directory on the server: `/srv/job-scraper/app/deploy/demo`
 - Local prepared database backup: `/tmp/jobs.db`
 
 Do not upload `ai_keys.json`. AI runs locally before deployment. The server reads cached AI results from `jobs.db`.
@@ -52,7 +56,7 @@ Build the arm64 Linux image and push it from your Mac:
 
 ```sh
 cd /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper
-docker buildx build --platform linux/arm64 -f deploy/aws/Dockerfile -t ohchanwu/jobcron:0.1-linuxarm64 --push .
+docker buildx build --platform linux/arm64 -f deploy/demo/Dockerfile -t ohchanwu/jobcron:0.1-linuxarm64 --push .
 ```
 
 This creates an arm64 Linux image that can run on the AWS instance, then stores it in your registry.
@@ -147,7 +151,7 @@ docker login <registry>
 On the server:
 
 ```sh
-cd /srv/job-scraper/app/deploy/aws
+cd /srv/job-scraper/app/deploy/demo
 openssl rand -hex 32
 ```
 
@@ -173,7 +177,7 @@ The proxy secret lets the app trust Caddy's forwarded client-IP header for login
 On the server:
 
 ```sh
-cd /srv/job-scraper/app/deploy/aws
+cd /srv/job-scraper/app/deploy/demo
 set -a
 . ./.env
 set +a

@@ -1,3 +1,7 @@
+# Demo/development image used by deploy/demo.
+# Production may reuse the binary build idea, but this Dockerfile is currently
+# documented and wired for the read-only demo deployment, not the private
+# jobcron.app production stack.
 FROM golang:1.26-alpine AS build
 
 WORKDIR /src

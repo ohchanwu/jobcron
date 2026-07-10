@@ -1,0 +1,7 @@
+# Demo-only Caddy config for demo.jobcron.app.
+# Production jobcron.app / www.jobcron.app needs a separate Caddy config.
+demo.jobcron.app {
+	reverse_proxy app:7777 {
+		header_up X-Jobcron-Proxy {$JOBSCRAPER_PROXY_SECRET}
+	}
+}
