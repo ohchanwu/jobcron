@@ -141,7 +141,7 @@ go build ./cmd/job-scraper
 
 Requires Go 1.26+. Pure Go — no CGO.
 
-For production-app development, run the app against local PostgreSQL:
+For production-app development, run the app against local PostgreSQL 18:
 
 ```sh
 docker compose -f deploy/local/compose.yaml up -d

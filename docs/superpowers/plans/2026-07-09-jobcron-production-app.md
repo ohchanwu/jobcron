@@ -281,21 +281,22 @@ Create `deploy/local/compose.yaml`:
 ```yaml
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_DB: jobscraper_dev
     ports:
       - "55432:5432"
     volumes:
-      - jobscraper-postgres-data:/var/lib/postgresql/data
+      - jobscraper-postgres18-cluster:/var/lib/postgresql
 
 volumes:
-  jobscraper-postgres-data:
+  jobscraper-postgres18-cluster:
 ```
 
 Create `deploy/local/README.md` with:
 
+- PostgreSQL 18 local dev target and its cluster-style Docker volume,
 - start: `docker compose -f deploy/local/compose.yaml up -d`,
 - local `DATABASE_URL`: `postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable`,
 - reset command using `docker compose -f deploy/local/compose.yaml down -v`,
