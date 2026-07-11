@@ -81,6 +81,16 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 - **macOS Gatekeeper** may block an unsigned binary. Right-click the file → Open,
   or run `xattr -d com.apple.quarantine ./jobcron`.
 - **Windows SmartScreen**: choose **More info → Run anyway**.
+- **Upgrading from `job-scraper`:** fully stop every old `job-scraper` process
+  before the first normal `jobcron` launch. That launch atomically renames the
+  whole application-data directory to `jobcron`, keeping the database, SQLite
+  sidecar files, backups, and AI keys together.
+- If both the old and new application-data directories exist, `jobcron` refuses
+  to start and modifies neither. With both apps stopped, back up both directories,
+  determine which contains the current data, and move the other aside so only the
+  intended directory remains before retrying. To roll back, stop `jobcron`, confirm
+  no process has the database open, rename the `jobcron` directory back to
+  `job-scraper`, and then start the old binary.
 
 ## Usage
 

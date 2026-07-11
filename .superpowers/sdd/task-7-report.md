@@ -2,9 +2,42 @@
 
 ## Result
 
-The jobcron hard rename is verified from baseline `01cdb02` through implementation
-HEAD `0a1a8d0`. No implementation defect required a source-code fix. This report
-and the progress ledger are the only Task 7 file changes.
+The original jobcron hard-rename verification covered baseline `01cdb02` through
+implementation HEAD `0a1a8d0`. The final whole-change review started from
+`38d0228` and found three follow-up defects: `--version` prepared application
+data, the production secret example satisfied Compose without a real secret,
+and migration safety instructions and matrix coverage were incomplete. The
+review-fix commit containing this addendum corrects those findings. No push was
+performed.
+
+## Final Whole-Change Review Addendum
+
+The `--version` regression test failed before the fix because the legacy nested
+database disappeared from its original path. After moving the version return
+before `os.UserConfigDir` and application-data preparation, the same test passed.
+App-data coverage now preserves a nested backup and calls `Prepare` twice.
+PostgreSQL migration coverage now executes migration 0013 twice when the
+canonical sentinel already exists and proves its ID and email remain unchanged.
+
+Fresh verification for the review-fix commit:
+
+```text
+gofmt -l .                                               PASS (no output)
+go build ./...                                           PASS
+go vet ./...                                             PASS
+JOBCRON_TEST_POSTGRES_URL=postgres://.../postgres go test ./... -count=1
+                                                           PASS (18 packages)
+docker compose --env-file deploy/production/.env.example \
+  -f deploy/production/compose.yaml config               FAIL as required:
+  SESSION_SECRET is missing a value
+SESSION_SECRET=<verification-value> docker compose ... \
+  config --quiet                                         PASS
+```
+
+The production example keeps the real generation command and leaves
+`SESSION_SECRET` empty. The English and Korean first-run notes now require the
+old process to be stopped, describe the atomic rename and collision refusal,
+and provide recovery and rollback steps.
 
 The local Git remote was already canonical:
 

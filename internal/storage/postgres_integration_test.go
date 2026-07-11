@@ -63,6 +63,46 @@ SELECT id, email, password_hash
 	}
 }
 
+func TestRenameImportOwnerMigrationAlreadyRenamedIsIdempotent(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.SQLDB().ExecContext(ctx, `DELETE FROM users`); err != nil {
+		t.Fatal(err)
+	}
+	var canonicalID int64
+	if err := st.SQLDB().QueryRowContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('sqlite-import-owner@jobcron.local', 'imported-sqlite-no-login', now(), now())
+RETURNING id`).Scan(&canonicalID); err != nil {
+		t.Fatal(err)
+	}
+
+	executeRenameImportOwnerMigration(t, st)
+	executeRenameImportOwnerMigration(t, st)
+
+	var gotID int64
+	if err := st.SQLDB().QueryRowContext(ctx, `
+SELECT id
+  FROM users
+ WHERE email = 'sqlite-import-owner@jobcron.local'
+   AND password_hash = 'imported-sqlite-no-login'`).Scan(&gotID); err != nil {
+		t.Fatal(err)
+	}
+	if gotID != canonicalID {
+		t.Fatalf("already-renamed owner ID = %d, want %d", gotID, canonicalID)
+	}
+	var legacyCount int
+	if err := st.SQLDB().QueryRowContext(ctx, `
+SELECT count(*)
+  FROM users
+ WHERE email = 'sqlite-import-owner@job-scraper.local'`).Scan(&legacyCount); err != nil {
+		t.Fatal(err)
+	}
+	if legacyCount != 0 {
+		t.Fatalf("legacy owner count = %d, want 0", legacyCount)
+	}
+}
+
 func TestRenameImportOwnerMigrationPreservesRealOwner(t *testing.T) {
 	st := newPostgresTestStore(t)
 	ctx := context.Background()

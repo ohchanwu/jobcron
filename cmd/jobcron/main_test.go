@@ -86,3 +86,35 @@ func TestPrepareApplicationDataMigratesLegacyDirectory(t *testing.T) {
 		t.Fatalf("migrated database = %q, err = %v", got, err)
 	}
 }
+
+func TestVersionDoesNotPrepareApplicationData(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
+
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("UserConfigDir: %v", err)
+	}
+	legacyFile := filepath.Join(appdata.LegacyDir(configRoot), "nested", "jobs.db")
+	if err := os.MkdirAll(filepath.Dir(legacyFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyFile, []byte("database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"jobcron", "--version"}
+	t.Cleanup(func() { os.Args = oldArgs })
+	main()
+
+	got, err := os.ReadFile(legacyFile)
+	if err != nil || string(got) != "database" {
+		t.Fatalf("legacy data after --version = %q, err = %v", got, err)
+	}
+	if _, err := os.Stat(appdata.Dir(configRoot)); !os.IsNotExist(err) {
+		t.Fatalf("canonical path changed by --version: %v", err)
+	}
+}

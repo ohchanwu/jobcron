@@ -21,4 +21,4 @@ Rename Task 3: complete (commits aea4896..fd170d6, review clean after existing-r
 Rename Task 4: complete (commit fd170d6..4c14035, review clean)
 Rename Task 5: complete (commits 4c14035..f9cddd8, review clean after exact EC2 checkout path fix)
 Rename Task 6: complete (commits f9cddd8..0a1a8d0, review clean after active-interface fixes and explicit exception policy)
-Rename Task 7: complete (full Go, PostgreSQL 18, command-path migration, frontend, container, release, scan, and cumulative-diff verification; local report/ledger commit only, no push)
+Rename Task 7: complete (full Go, PostgreSQL 18, command-path migration, frontend, container, release, scan, and cumulative-diff verification; final whole-change review fixed side-effectful version output, unsafe secret example, migration runbook gaps, and missing idempotency coverage; local commits only, no push)

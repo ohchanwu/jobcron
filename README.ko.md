@@ -82,6 +82,16 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 - **macOS Gatekeeper**가 서명되지 않은 바이너리를 차단할 수 있습니다. 파일을 우클릭 →
   Open을 선택하거나, `xattr -d com.apple.quarantine ./jobcron`을 실행하세요.
 - **Windows SmartScreen**: **More info → Run anyway**를 선택하세요.
+- **`job-scraper`에서 업그레이드하는 경우:** 처음으로 `jobcron`을 정상 실행하기 전에
+  기존 `job-scraper` 프로세스를 모두 완전히 종료하세요. 첫 정상 실행은 데이터베이스,
+  SQLite 보조 파일, 백업, AI 키를 함께 보존하도록 애플리케이션 데이터 디렉터리 전체를
+  `jobcron`으로 원자적으로 이름 변경합니다.
+- 이전 디렉터리와 새 디렉터리가 모두 있으면 `jobcron`은 둘 중 어느 것도 변경하지 않고
+  시작을 거부합니다. 두 앱을 모두 종료한 상태에서 두 디렉터리를 각각 백업하고, 어느 쪽에
+  최신 데이터가 있는지 확인한 다음, 사용할 디렉터리만 남도록 다른 쪽을 별도 위치로
+  옮긴 후 다시 실행하세요. 롤백하려면 `jobcron`을 종료하고 데이터베이스를 사용 중인
+  프로세스가 없는지 확인한 뒤, `jobcron` 디렉터리 이름을 `job-scraper`로 되돌리고 기존
+  바이너리를 실행하세요.
 
 ## 사용법 (Usage)
 

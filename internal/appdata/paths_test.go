@@ -77,7 +77,11 @@ func TestPrepareMigratesLegacyDirectoryAtomically(t *testing.T) {
 	if err := os.MkdirAll(legacy, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"jobs.db", "jobs.db-wal", "jobs.db-shm", "jobs.db.bak", "ai_keys.json"} {
+	files := []string{"jobs.db", "jobs.db-wal", "jobs.db-shm", "jobs.db.bak", "ai_keys.json", filepath.Join("backups", "daily", "jobs.db")}
+	for _, name := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(legacy, name)), 0o700); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(filepath.Join(legacy, name), []byte(name), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -86,10 +90,13 @@ func TestPrepareMigratesLegacyDirectoryAtomically(t *testing.T) {
 	if err := Prepare(root); err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
+	if err := Prepare(root); err != nil {
+		t.Fatalf("second Prepare: %v", err)
+	}
 	if _, err := os.Stat(legacy); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("legacy still exists: %v", err)
 	}
-	for _, name := range []string{"jobs.db", "jobs.db-wal", "jobs.db-shm", "jobs.db.bak", "ai_keys.json"} {
+	for _, name := range files {
 		if got, err := os.ReadFile(filepath.Join(Dir(root), name)); err != nil || string(got) != name {
 			t.Fatalf("%s: got=%q err=%v", name, got, err)
 		}

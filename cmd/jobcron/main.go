@@ -41,16 +41,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("jobcron: %v", err)
 	}
+	if cfg.ShowVersion {
+		fmt.Println("jobcron", version)
+		return
+	}
 	configRoot, err := os.UserConfigDir()
 	if err != nil {
 		log.Fatalf("jobcron: locate user config dir: %v", err)
 	}
 	if err := prepareApplicationData(configRoot); err != nil {
 		log.Fatalf("jobcron: %v", err)
-	}
-	if cfg.ShowVersion {
-		fmt.Println("jobcron", version)
-		return
 	}
 
 	store, err := openConfiguredStore(cfg)
