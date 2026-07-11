@@ -58,7 +58,7 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ## Additional scrapers (원티드, Programmers, Saramin, JobKorea, direct company pages)
 
-**Update (2026-06-06).** Multi-portal scraping has since shipped: 점핏 · 랠릿 · 데모데이 · 그리팅 + the Greenhouse company boards (당근 · 크래프톤 · 몰로코 · 센드버드), plus optional 워크넷. The browser-gated portals (원티드 / 카카오 / 쿠팡 / 그룹바이) were evaluated and **decided-against** — 원티드 on ToS, the others on low 신입-dev value / operator anti-bot signals; 쿠팡's data is already on the public Greenhouse `coupang` token (~0 신입). Full analysis + the chromedp/uTLS architecture (for if it's ever revisited): `docs/plans/browser-driven-scrapers.md`. Remaining unscraped sources (Programmers, Saramin/JobKorea official APIs) are partner-key-gated → conflict with the onboarding-friction principle.
+**Update (2026-06-06).** Multi-portal scraping has since shipped: 점핏 · 랠릿 · 데모데이 · 그리팅 + the Greenhouse company boards (당근 · 크래프톤 · 몰로코 · 센드버드), plus optional 워크넷. The browser-gated portals (원티드 / 카카오 / 쿠팡 / 그룹바이) were evaluated and **decided-against** — 원티드 on ToS, the others on low 신입-dev value / operator anti-bot signals; 쿠팡's data is already on the public Greenhouse `coupang` token (~0 신입). Full analysis + the chromedp/uTLS architecture (for if it's ever revisited): `docs/research/2026-06-06-browser-driven-scrapers.md`. Remaining unscraped sources (Programmers, Saramin/JobKorea official APIs) are partner-key-gated → conflict with the onboarding-friction principle.
 
 **What.** Implement the `Scraper` interface for additional sources, register them, let the user pick which to enable in the profile.
 

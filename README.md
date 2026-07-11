@@ -14,8 +14,8 @@ briefing — each match explained, no notifications, no setup, no account. (워�
 turns on with a free government API key — see *Usage*.)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png">
-  <img src="docs/dashboard.png" alt="The daily briefing — warm cream in light mode, warm charcoal in dark mode, with gold score numerals and chip-style breakdowns">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/dashboard-dark.png">
+  <img src="docs/assets/screenshots/dashboard.png" alt="The daily briefing — warm cream in light mode, warm charcoal in dark mode, with gold score numerals and chip-style breakdowns">
 </picture>
 
 ## Why
@@ -166,7 +166,7 @@ More local PostgreSQL commands live in [deploy/local/README.md](deploy/local/REA
 ## Contributing
 
 Issues and pull requests are welcome, especially from other Korean dev job
-seekers. Parked future ideas live in [feature-ideas.md](feature-ideas.md).
+seekers. Parked future ideas live in [feature-ideas.md](docs/product/feature-ideas.md).
 
 ## License
 

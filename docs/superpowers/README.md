@@ -6,12 +6,12 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Interactive local preview, first-run guidance, and navigation](plans/2026-07-11-interactive-preview-navigation.md)
+- [Interactive local preview, first-run guidance, and navigation](plans/260711-interactive-preview-navigation.md)
   is planned but not approved for execution.
 
 ## Stable Decisions
 
-- [Jobcron production and rename decisions](decisions/2026-07-11-jobcron-production.md)
+- [Jobcron production and rename decisions](decisions/260711-jobcron-production.md)
 
 ## Context Policy
 

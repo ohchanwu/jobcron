@@ -10,7 +10,7 @@ import (
 // job-family field and must infer "is this a developer role?" from the
 // title and description (데모데이's keyword fallback and every Greenhouse
 // board). The keyword sets target the broad GitHub-entry-level audience
-// defined in scraper-list.md — software engineering plus 보안 / 데이터 /
+// defined in docs/scraping/source-catalog.md — software engineering plus 보안 / 데이터 /
 // DevOps·인프라 / AI·ML / QA / 임베디드 — which the bare "engineer" and
 // "엔지니어" tokens already cover (Security Engineer, Cloud Engineer, Data
 // Engineer, QA Engineer all match).

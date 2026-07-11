@@ -117,7 +117,7 @@ One integration note specific to your code: the current Anthropic transport pins
 - **Mi:dm 2.0 GGUF builds are community-repackaged** — verify the tokenizer and chat template before trusting it, or stick to Qwen2.5/Kanana which have mature, widely-used distributions.
 - **Ollama's JSON-Schema → GBNF support is a subset.** Deeply nested schemas, `oneOf`/`anyOf`/`allOf`, regex patterns, and unconstrained free-text string fields can misbehave (there are open repetition-loop issues on free-text fields). Keep the schema tight and prefer enums/bounded types — which your Stage-1 schema mostly already is.
 - **The motivating problem is gone.** The JSON-parse failure that made local inference look attractive was fixed on Haiku (T6, 2026-06-08). Re-confirm _why_ you want local — cost, offline operation, privacy, or no-rate-limit batch — because it is **not** a quality or reliability upgrade over the current hosted path, and on Stage-2 it is a downgrade.
-- **This is a `feature-ideas.md`-class scope question, not a bug fix.** Local-LLM sidecar support is a new capability; confirm it's actually in scope (and check whether `feature-ideas.md` already has a position) before building past the spike.
+- **This is a `docs/product/feature-ideas.md`-class scope question, not a bug fix.** Local-LLM sidecar support is a new capability; confirm it's actually in scope (and check whether `docs/product/feature-ideas.md` already has a position) before building past the spike.
 
 ---
 

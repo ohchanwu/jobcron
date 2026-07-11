@@ -505,9 +505,9 @@ git commit -m "build: rename release and deployment contract to jobcron"
 - Modify: `README.ko.md`
 - Modify: `AGENTS.md`
 - Modify: `CLAUDE.md`
-- Modify: `feature-ideas.md`
-- Modify: `feature-ideas.ko.md`
-- Modify: `docs/plans/production-app-roadmap.md`
+- Modify: `docs/product/feature-ideas.md`
+- Modify: `docs/product/feature-ideas.ko.md`
+- Modify: `docs/superpowers/archive/2026-07-09-production-app/260709-production-app-roadmap.md`
 - Modify: `docs/superpowers/plans/2026-07-09-jobcron-production-app.md`
 - Modify: `docs/superpowers/specs/2026-07-10-production-deploy-prep-report.md`
 - Modify: `docs/superpowers/specs/2026-07-10-rds-production-settings-recommendation.md`
@@ -634,7 +634,7 @@ added, and no unrelated refactor entered the diff.
 - [ ] **Step 7: Commit verification-only fixes if any**
 
 ```bash
-git add .github/workflows/ci.yml .goreleaser.yml .gitignore go.mod cmd internal web deploy docs README.md README.ko.md AGENTS.md CLAUDE.md feature-ideas.md feature-ideas.ko.md
+git add .github/workflows/ci.yml .goreleaser.yml .gitignore go.mod cmd internal web deploy docs README.md README.ko.md AGENTS.md CLAUDE.md docs/product/feature-ideas.md docs/product/feature-ideas.ko.md
 git commit -m "fix: complete jobcron rename verification"
 ```
 

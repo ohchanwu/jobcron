@@ -16,7 +16,7 @@ cross the project's own ToS/operator-signal line or add little 신입-dev value:
   2026-06-06: the board has 570 jobs / 276 Korea / **0 newcomer-marked dev
   roles** — a relevance skip, not an access problem.
 - **그룹바이** has a **pure-Go path** (uTLS — single binary preserved, no
-  browser). The existing scraper-list.md claim that "uTLS breaks the pure-Go
+  browser). The existing docs/scraping/source-catalog.md claim that "uTLS breaks the pure-Go
   single-binary thesis" is **factually wrong**. But its live board is
   experienced-skewed and overlaps 데모데이 / 랠릿 / 그리팅, and bypassing its
   TLS-fingerprint wall is an operator "no bots" signal.
@@ -36,13 +36,13 @@ the pure-Go constraint and which captures most of what 원티드 would add. The
 browser-gated tier is not worth the architectural escalation now. This doc
 records the architecture *for if that ever changes*, the lightweight uTLS path
 (decoupled from the browser question), the per-source verdicts, and two factual
-corrections to scraper-list.md.
+corrections to docs/scraping/source-catalog.md.
 
 ---
 
 ## 1. The premise to challenge
 
-scraper-list.md groups 원티드 / 쿠팡 / 그룹바이 / 잡플래닛 as "same blocker —
+docs/scraping/source-catalog.md groups 원티드 / 쿠팡 / 그룹바이 / 잡플래닛 as "same blocker —
 needs a headless browser, which breaks the single-binary thesis," and notes a
 Playwright path would "unlock several sources at once." Two things are wrong
 with that framing:
@@ -123,7 +123,7 @@ build ./...` stays clean and the binary-size delta is acceptable.
 ## 4. The lightweight path: uTLS for TLS-fingerprint sources (decoupled)
 
 This is **independent of the browser question** and corrects a factual error in
-scraper-list.md.
+docs/scraping/source-catalog.md.
 
 `refraction-networking/utls` is a fork of the standard `crypto/tls` that lets a
 net/http-style client present a Chrome-identical TLS ClientHello. Its entire
@@ -217,11 +217,11 @@ Value = marginal 신입-dev volume *and* uniqueness vs what the app already reac
 
 ## 8. Doc corrections to make (factual errors found)
 
-1. **scraper-list.md 쿠팡 row** ("coupang.jobs — Cloudflare challenge wall, same
+1. **docs/scraping/source-catalog.md 쿠팡 row** ("coupang.jobs — Cloudflare challenge wall, same
    blocker as 원티드") is stale: 쿠팡's listings are on the public Greenhouse
    `coupang` token (already evaluated, senior-skewed). Reconcile the row to
    point at Greenhouse, not Cloudflare.
-2. **scraper-list.md 그룹바이 row** ("utls/CycleTLS break the pure-Go +
+2. **docs/scraping/source-catalog.md 그룹바이 row** ("utls/CycleTLS break the pure-Go +
    single-binary distribution thesis") is wrong: uTLS is pure-Go and builds
    under `CGO_ENABLED=0`. The deferral should stand on operator-signal + value
    grounds, with the technical reasoning corrected.

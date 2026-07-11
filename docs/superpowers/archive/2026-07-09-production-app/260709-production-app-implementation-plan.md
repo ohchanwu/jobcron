@@ -335,7 +335,7 @@ git commit -m "feat: add storage dialect foundation"
 - Create: `internal/storage/postgres_integration_test.go`
 - Modify: `cmd/job-scraper/main.go`
 - Modify: `README.md` or existing local run docs if present.
-- Modify: `docs/plans/production-app-roadmap.md` only if a real plan correction is discovered.
+- Modify: `docs/superpowers/archive/2026-07-09-production-app/260709-production-app-roadmap.md` only if a real plan correction is discovered.
 
 **Interfaces:**
 

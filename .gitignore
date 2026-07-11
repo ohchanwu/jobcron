@@ -42,6 +42,5 @@ screenshots/
 # Local research scratch notes
 /docs/research/resources.md
 
-# Local production handoff with human review notes and secrets.
-/docs/reports/*
+# Local implementation artifacts and human-only handoff notes.
 /.superpowers/archive/
