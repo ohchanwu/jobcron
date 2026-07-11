@@ -8,23 +8,23 @@ You have standing authorization to commit completed features without asking, as 
 
 ## Running the dev server without hijacking the user's browser
 
-`go run ./cmd/job-scraper` calls `pkg/browser.OpenURL` to open `http://localhost:7777` in the user's default browser (Firefox). **Always pass `--no-open` when invoking the program from an autonomous session**:
+`go run ./cmd/jobcron` calls `pkg/browser.OpenURL` to open `http://localhost:7777` in the user's default browser (Firefox). **Always pass `--no-open` when invoking the program from an autonomous session**:
 
 ```sh
-go run ./cmd/job-scraper --no-open
+go run ./cmd/jobcron --no-open
 ```
 
-The `--no-open` flag is defined at `cmd/job-scraper/main.go:36` and gates the `browser.OpenURL` call at `cmd/job-scraper/main.go:74-76`. For browser smoke checks (the UI verification required for commit authorization), use the gstack `/browse` skill or playwright MCP against `http://127.0.0.1:7777` — both run headless and won't touch Firefox.
+The `--no-open` flag is defined at `cmd/jobcron/main.go:36` and gates the `browser.OpenURL` call at `cmd/jobcron/main.go:74-76`. For browser smoke checks (the UI verification required for commit authorization), use the gstack `/browse` skill or playwright MCP against `http://127.0.0.1:7777` — both run headless and won't touch Firefox.
 
 ## What this project is
 
-`job-scraper` is a single-binary local web app that scrapes several Korean job boards — 점핏, 랠릿, 데모데이, the 그리팅 (Greeting) Korean-ATS tenants, and the Greenhouse company boards (당근·크래프톤·몰로코·센드버드), plus optional 워크넷 (needs a free data.go.kr key) — for Korean 신입 (new-grad) IT job postings, scores them against a user profile, and renders a calm daily briefing. The product thesis is _emotional_ as much as functional: every UX decision is filtered through "does this make a stressed 신입 feel calmer?" — that constraint (P6 in the design doc) is first-class, not decorative.
+`jobcron` is a single-binary local web app that scrapes several Korean job boards — 점핏, 랠릿, 데모데이, the 그리팅 (Greeting) Korean-ATS tenants, and the Greenhouse company boards (당근·크래프톤·몰로코·센드버드), plus optional 워크넷 (needs a free data.go.kr key) — for Korean 신입 (new-grad) IT job postings, scores them against a user profile, and renders a calm daily briefing. The product thesis is _emotional_ as much as functional: every UX decision is filtered through "does this make a stressed 신입 feel calmer?" — that constraint (P6 in the design doc) is first-class, not decorative.
 
 Korean UI strings are inlined in Go and templates by design; do not introduce i18n machinery in v1.
 
 ## Design docs — peers, newest wins on conflict
 
-Design docs live in `~/.gstack/projects/job-scraper/`. They are **peers, not a hierarchy** — no single doc is "the source of truth." On a _minor_ contradiction between docs, prefer the **newest** one (older docs may be outdated), use your judgement, and log the choice for review; on a _significant_ contradiction, surface it for review before proceeding.
+Design docs live in `~/.gstack/projects/jobcron/`. They are **peers, not a hierarchy** — no single doc is "the source of truth." On a _minor_ contradiction between docs, prefer the **newest** one (older docs may be outdated), use your judgement, and log the choice for review; on a _significant_ contradiction, surface it for review before proceeding.
 
 - `chanbla11mit-main-design-20260519-183759.md` (round-5) holds the original v1 rationale: the three-tier scraping plan, scoring math and weight caps, the Step 0 FTS5 spike result, SSE gotchas, Non-goals, and Reviewer Concerns. Still the best reference for _why_ v1 is shaped the way it is — but its contents may be stale where later work moved on. Read it before architectural changes, then check for a newer doc that extends or supersedes it.
 - `chanbla11mit-main-design-20260601-180235.md` is the **v2.0 BYOK-AI design** (APPROVED 2026-06-01): an evidence-cited score delta on a quiet-fixer foundation. Read it before any AI-integration work.
@@ -37,12 +37,12 @@ Design docs live in `~/.gstack/projects/job-scraper/`. They are **peers, not a h
 ## Build / test / run
 
 ```sh
-go build ./cmd/job-scraper           # builds the shipped binary
+go build ./cmd/jobcron               # builds the shipped binary
 go test ./...                         # full unit suite — no network
 go test -tags integration ./internal/scraper/jumpit/   # live 점핏 hit; ~10s, polite 1 req/s
 go vet ./...
 gofmt -l .                            # CI fails if this prints anything
-go run ./cmd/job-scraper              # opens http://localhost:7777 in a browser
+go run ./cmd/jobcron                  # opens http://localhost:7777 in a browser
 go run ./cmd/capture                  # dev tool: refresh the Step 5.5 QA fixture from live data
 ```
 
@@ -110,7 +110,7 @@ The 1 req/s pacing is `time.Sleep` in `internal/scraper/jumpit/client.go` — de
 
 ## Storage layout
 
-The DB lives at `os.UserConfigDir() + "/job-scraper/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.6+ parsers. (`0006` is intentionally skipped — the runner keys on the 4-digit filename prefix, not contiguity.) Latest is `0010_detail_fetched_at.sql` (adds `postings.detail_fetched_at` for the T7 edited-JD refresh, backfilled from `first_seen_at`); `0009_purge_orphan_scores.sql` is a one-time orphan cleanup.
+The DB lives at `os.UserConfigDir() + "/jobcron/jobs.db"` (overridable with `--db`). Migrations are embedded via `embed.FS`, named `NNNN_description.sql`, and tracked via `PRAGMA user_version`. `raw_json` is kept on every posting for forward compatibility with v1.6+ parsers. (`0006` is intentionally skipped — the runner keys on the 4-digit filename prefix, not contiguity.) Latest is `0010_detail_fetched_at.sql` (adds `postings.detail_fetched_at` for the T7 edited-JD refresh, backfilled from `first_seen_at`); `0009_purge_orphan_scores.sql` is a one-time orphan cleanup.
 
 Migration `0008_byok_ai.sql` (v2.0) adds the full AI schema in one file: `ai_extractions` (Stage-1 career/education cache, keyed `posting_id + content_hash + ai_version`), `ai_scores` (Stage-2 delta cache, keyed `posting_id + ai_input_hash + ai_version` + `computed_at`), and `ai_usage` (rolling daily token ledger, one row per UTC day). Both AI caches `REFERENCES postings(id) ON DELETE CASCADE`, so the staleness sweep cleans them with the posting. All three tables are written: `ai_extractions` by Stage-1 extraction at scrape time; `ai_scores` by Stage-2 — at scrape time (the auto-rate of the fresh briefing, since 2026-06-06) and on a 재평가; `ai_usage` (the token ledger) debited by both stages. The token budget has two ceilings — a per-run in-memory cap and a rolling daily cap enforced against `ai_usage` (read once at run start, written through on each debit, so it holds across restarts). The BYOK key file (`ai_keys.json`, 0600) lives in the same config dir but is **not** in the DB.
 

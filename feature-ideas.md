@@ -202,7 +202,7 @@ Original framing kept below for archaeology in case the v1.x decision needs to b
 
 This is structurally identical to 원티드 (already noted under "Additional scrapers" above). Bypassing Cloudflare reliably needs either a paid residential-IP proxy, a stealth-headless browser with anti-detection (puppeteer-stealth, Playwright Firefox with fingerprint masking), or Cloudflare's official scraping allowlist — none of which fit v1's pure-Go, no-CGO, no-external-dependency design.
 
-**Re-recon trigger.** When the project adopts an opt-in stealth-headless scraping path (e.g. a `JOBSCRAPER_USE_HEADLESS=1` flag that activates a Chromium subprocess), 쿠팡 and 원티드 become viable together. Until then, hard-blocked.
+**Re-recon trigger.** When the project adopts an opt-in stealth-headless scraping path (e.g. a `JOBCRON_USE_HEADLESS=1` flag that activates a Chromium subprocess), 쿠팡 and 원티드 become viable together. Until then, hard-blocked.
 
 ---
 
@@ -212,7 +212,7 @@ This is structurally identical to 원티드 (already noted under "Additional scr
 
 **Why we want it.** Gatekeeper warning ("cannot be opened because it is from an unidentified developer") is a real install-friction point and a trust signal.
 
-**Why not v1.** Requires a paid Apple Developer account (~$99/year). v1's README will document the workaround (`xattr -d com.apple.quarantine ./job-scraper` or right-click → Open).
+**Why not v1.** Requires a paid Apple Developer account (~$99/year). v1's README will document the workaround (`xattr -d com.apple.quarantine ./jobcron` or right-click → Open).
 
 **Build trigger.** Project has stable maintainership AND budget. Could also be funded by a sponsorship / GitHub Sponsors.
 

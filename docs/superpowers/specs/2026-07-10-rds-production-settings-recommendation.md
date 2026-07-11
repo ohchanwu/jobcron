@@ -92,7 +92,7 @@ layer.
 MacBook backup path currently proposed by overseer feedback:
 
 ```text
-/Users/chanbla11mit/mystuff/projects/job-scraper/backups
+/Users/chanbla11mit/mystuff/projects/jobcron/backups
 ```
 
 ## Security

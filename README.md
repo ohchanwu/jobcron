@@ -1,10 +1,10 @@
-# job-scraper — 신입 IT Job Briefing
+# jobcron — 신입 IT Job Briefing
 
 _[한국어로 보기 🇰🇷](README.ko.md)_
 
 A calm daily job-posting briefing for Korean new-grad (신입) IT job seekers.
 
-`job-scraper` is a single binary that opens a local web app. Click **스크랩 시작**
+`jobcron` is a single binary that opens a local web app. Click **스크랩 시작**
 and it scrapes Korean job boards — the aggregators [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
 [랠릿 (Rallit)](https://www.rallit.com), [데모데이](https://demoday.co.kr), and
 [그리팅 (Greeting)](https://greetinghr.com), plus the company career boards
@@ -25,7 +25,7 @@ doing algorithm prep, resume writing, and portfolio work. Existing tools amplify
 the stress — notification spam, spreadsheet exports, ATS-style scoring that feels
 like surveillance.
 
-job-scraper is built for the *emotional layer*: a calm morning ritual that does
+jobcron is built for the *emotional layer*: a calm morning ritual that does
 the daily grind for you. Warm colors, encouraging copy, and zero-match days that
 say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 
@@ -55,31 +55,31 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
 ## Install
 
 Download the binary for your platform from the
-[latest release](https://github.com/ohchanwu/job-scraper/releases/latest), unpack
+[latest release](https://github.com/ohchanwu/jobcron/releases/latest), unpack
 it, and run it. The app opens at <http://localhost:7777>.
 
 **macOS (Apple Silicon)**
 
 ```sh
-curl -L https://github.com/ohchanwu/job-scraper/releases/latest/download/job-scraper_darwin_arm64.tar.gz | tar xz
-./job-scraper
+curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_darwin_arm64.tar.gz | tar xz
+./jobcron
 ```
 
-**macOS (Intel)** — use `job-scraper_darwin_amd64.tar.gz`.
+**macOS (Intel)** — use `jobcron_darwin_amd64.tar.gz`.
 
 **Linux (x86-64)**
 
 ```sh
-curl -L https://github.com/ohchanwu/job-scraper/releases/latest/download/job-scraper_linux_amd64.tar.gz | tar xz
-./job-scraper
+curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_linux_amd64.tar.gz | tar xz
+./jobcron
 ```
 
-**Windows** — download `job-scraper_windows_amd64.zip`, unzip, run `job-scraper.exe`.
+**Windows** — download `jobcron_windows_amd64.zip`, unzip, run `jobcron.exe`.
 
 ### First-run notes
 
 - **macOS Gatekeeper** may block an unsigned binary. Right-click the file → Open,
-  or run `xattr -d com.apple.quarantine ./job-scraper`.
+  or run `xattr -d com.apple.quarantine ./jobcron`.
 - **Windows SmartScreen**: choose **More info → Run anyway**.
 
 ## Usage
@@ -94,11 +94,11 @@ Run it once a day. That is the whole ritual.
 Flags: `--port` (default `7777`), `--no-open` (do not open a browser),
 `--db` (override the database path), `--worknet-api-key` (enable the 워크넷
 source — a free key from [data.go.kr](https://www.data.go.kr); also read from
-`JOBSCRAPER_WORKNET_KEY`), `--version`.
+`JOBCRON_WORKNET_KEY`), `--version`.
 
 Your data lives in one SQLite file under the OS config directory
-(`~/Library/Application Support/job-scraper/` on macOS, `~/.config/job-scraper/`
-on Linux, `%APPDATA%\job-scraper\` on Windows).
+(`~/Library/Application Support/jobcron/` on macOS, `~/.config/jobcron/`
+on Linux, `%APPDATA%\jobcron\` on Windows).
 
 ## Known limitations
 
@@ -134,9 +134,9 @@ whether or not AI is configured.
 ## Build from source
 
 ```sh
-git clone https://github.com/ohchanwu/job-scraper
-cd job-scraper
-go build ./cmd/job-scraper
+git clone https://github.com/ohchanwu/jobcron
+cd jobcron
+go build ./cmd/jobcron
 ```
 
 Requires Go 1.26+. Pure Go — no CGO.
@@ -145,10 +145,10 @@ For production-app development, run the app against local PostgreSQL 18:
 
 ```sh
 docker compose -f deploy/local/compose.yaml up -d
-DATABASE_URL='postgres://postgres@localhost:55432/jobscraper_dev?sslmode=disable' go run ./cmd/job-scraper --no-open
+DATABASE_URL='postgres://postgres@localhost:55432/jobcron_dev?sslmode=disable' go run ./cmd/jobcron --no-open
 ```
 
-When `DATABASE_URL` is set, job-scraper opens PostgreSQL and applies the embedded
+When `DATABASE_URL` is set, jobcron opens PostgreSQL and applies the embedded
 PostgreSQL migrations. If `DATABASE_URL` is absent, the app still uses its legacy
 local SQLite database so release binaries and demo commands continue to work.
 More local PostgreSQL commands live in [deploy/local/README.md](deploy/local/README.md).

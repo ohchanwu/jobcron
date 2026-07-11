@@ -1,7 +1,7 @@
 # Jobcron Hard Rename Design
 
 Date: 2026-07-11
-Status: Approved direction; human feedback incorporated; implementation planning pending
+Status: Approved direction; Tasks 1-5 integrated; Task 6 documents the completed rename
 
 ## Summary
 
@@ -53,7 +53,7 @@ The hard rename has three deliberate compatibility exceptions:
 
 ## Canonical Naming
 
-| Surface             | Current                           | Canonical                         |
+| Surface             | Legacy                            | Canonical                         |
 | ------------------- | --------------------------------- | --------------------------------- |
 | Product             | `job-scraper`                     | `jobcron`                         |
 | Go module           | `github.com/ohchanwu/job-scraper` | `github.com/ohchanwu/jobcron`     |

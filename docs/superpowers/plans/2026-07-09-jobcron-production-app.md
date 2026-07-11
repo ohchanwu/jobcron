@@ -1,5 +1,9 @@
 # Jobcron Production App Implementation Plan
 
+> Rename note (2026-07-11): This document records commands and paths used before
+> the application was renamed from `job-scraper` to `jobcron`. Historical command
+> output remains unchanged; current interfaces use `jobcron` and `JOBCRON_*`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the current read-only demo into a single-user production app with PostgreSQL, owner login, cookie sessions, server-side user state, scheduled daily scraping, manual/opt-in AI scoring, RDS deployment docs, and a human handoff report.

@@ -37,8 +37,9 @@ docker compose -f deploy/local/compose.yaml down -v
 ```
 
 That removes only the fresh `jobcron-postgres18-cluster` volume declared in
-`deploy/local/compose.yaml`. The legacy `jobscraper-postgres18-cluster` volume
-is not part of this stack and remains available for rollback.
+`deploy/local/compose.yaml`. The pre-rename legacy
+`jobscraper-postgres18-cluster` volume is not part of this stack and remains
+available for rollback.
 
 Import from an old SQLite `jobs.db` after starting PostgreSQL with the planned import command:
 

@@ -146,7 +146,8 @@ To do:
 - Store scrape run history in `scrape_runs`.
 - Record started time, finished time, status, source counts, new posting count, and error summaries.
 - Add an admin status page or endpoint showing last scrape, next scrape, and last failure.
-- Add environment config for schedule time, for example `JOBSCRAPER_DAILY_SCRAPE_TIME=08:00`.
+- Add environment config for schedule time, `JOBCRON_DAILY_SCRAPE_TIME=05:00`.
+- **overseer feedback - settled:** Production uses `05:00` Korea Standard Time.
 - Add a way to disable the scheduler in local development and tests.
 
 AI scoring during automated scrape.
@@ -185,10 +186,10 @@ To do:
 - Add production `.env` documentation:
   - `DATABASE_URL`
   - `SESSION_SECRET`
-  - `JOBSCRAPER_ADMIN_TOKEN`
-  - `JOBSCRAPER_DAILY_SCRAPE_TIME`
-  - `JOBSCRAPER_SCHEDULER_ENABLED`
-  - `JOBSCRAPER_WORKNET_KEY`
+  - `JOBCRON_ADMIN_TOKEN`
+  - `JOBCRON_DAILY_SCRAPE_TIME`
+  - `JOBCRON_SCHEDULER_ENABLED`
+  - `JOBCRON_WORKNET_KEY`
   - Anthropic key configuration, depending on the AI decision
 - Add a health endpoint that checks app and database connectivity.
 

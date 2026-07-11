@@ -1,5 +1,9 @@
 # Production Deploy Prep Report
 
+> Rename note (2026-07-11): This document records commands and paths used before
+> the application was renamed from `job-scraper` to `jobcron`. Historical command
+> output remains unchanged; current interfaces use `jobcron` and `JOBCRON_*`.
+
 Date: 2026-07-10 KST
 
 ## Summary
@@ -16,14 +20,14 @@ No production secrets were added to Git.
 - `deploy/production/Dockerfile`
   - Builds the `job-scraper` web binary for Linux arm64.
   - Intended for MacBook build-and-push, not EC2 image builds.
-    - **overseer feedback** actually, I want to standardize the name to "jobcron" now, to prevent future confusion.
+    - **overseer feedback - settled:** the application is now named `jobcron`.
 - `deploy/production/compose.yaml`
   - Runs the app from `JOBSCRAPER_IMAGE`.
-    - **overseer feedback** I want to standardize the name to "jobcron" now, to prevent future confusion.
+    - **overseer feedback - settled:** the application image and runtime contract now use `jobcron`.
   - Requires `DATABASE_URL` and `SESSION_SECRET`.
   - Sets `JOBSCRAPER_ENV=production`, `JOBSCRAPER_NO_OPEN=1`, and the daily
     scrape scheduler at `09:00`.
-    - **OF**: Let's set it to `05:00` actually. We want the stuff to be scraped by the time the early birds wake up.
+    - **overseer feedback - settled:** the production schedule is `05:00` Korea Standard Time.
   - Does not set `JOBSCRAPER_DEMO`, `JOBSCRAPER_ADMIN_TOKEN`,
     `JOBSCRAPER_WORKNET_KEY`, or `JOBSCRAPER_PROXY_SECRET`.
 - `deploy/production/Caddyfile`
@@ -98,10 +102,9 @@ start the binary, not that production can connect to RDS.
 
 - Enter the real `DATABASE_URL` password and `SESSION_SECRET` only on the
   production EC2 instance.
-  - **overseer feedback** I already did this.
+  - **overseer feedback - settled:** the EC2 values were entered without adding them to Git.
 - Choose the real registry image name/tag for `JOBSCRAPER_IMAGE`.
-  - **OF** could we make the env variable name JOBCRON_IMAGE instead? For standardization.
-  - And let's make it `ohchanwu/jobcron:0.2-linuxarm64`, unless you have objections
+  - **overseer feedback - settled:** use `JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64`.
 - Build and push the production image from the MacBook using the chosen image
   name.
 - Pull and start the image on EC2 with `docker compose --env-file .env up -d`.
