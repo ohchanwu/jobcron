@@ -23,7 +23,7 @@ trap cleanup EXIT HUP INT TERM
 echo "Preview state: $state_dir"
 echo "Preview URL: http://127.0.0.1:$port"
 
-go build -o "$binary" ./cmd/job-scraper
+go build -o "$binary" ./cmd/jobcron
 
 export HOME="$state_dir"
 export JOBSCRAPER_DB="$db"

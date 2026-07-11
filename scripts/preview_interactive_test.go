@@ -3,6 +3,7 @@ package scripts
 import (
 	"bufio"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,5 +89,27 @@ func TestPreviewInteractiveUsesIsolatedState(t *testing.T) {
 	}
 	if info, err := os.Stat(stateDir); err != nil || !info.IsDir() {
 		t.Fatalf("preview state directory %q was not created: %v", stateDir, err)
+	}
+
+	client := &http.Client{
+		Timeout: 500 * time.Millisecond,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	previewURL := "http://127.0.0.1:" + strconv.Itoa(port) + "/"
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		response, requestErr := client.Get(previewURL)
+		if requestErr == nil {
+			_ = response.Body.Close()
+			if response.StatusCode < http.StatusInternalServerError {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("preview server never became reachable at %s: %v", previewURL, requestErr)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
