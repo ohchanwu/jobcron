@@ -20,14 +20,14 @@ var migrationsFS embed.FS
 //go:embed postgres_migrations/*.sql
 var postgresMigrationsFS embed.FS
 
-// Store is the job-scraper persistence layer: a single concrete handle over
+// Store is the jobcron persistence layer: a single concrete handle over
 // the configured SQL database, with every repository method hanging off it.
 type Store struct {
 	db      *sql.DB
 	dialect Dialect
 }
 
-// Open opens (creating if needed) the job-scraper database under the user's
+// Open opens (creating if needed) the jobcron database under the user's
 // OS config directory and applies any pending migrations.
 func Open() (*Store, error) {
 	path, err := DefaultDBPath()

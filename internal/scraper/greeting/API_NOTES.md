@@ -1,5 +1,9 @@
 # 그리팅 (Greeting / greetinghr.com) — notes
 
+> Rename note (2026-07-11): This document records commands and paths used before
+> the application was renamed from `job-scraper` to `jobcron`. Historical command
+> output remains unchanged; current interfaces use `jobcron` and `JOBCRON_*`.
+
 그리팅, by 두들린, is the leading Korean-native ATS. Each company runs a
 server-rendered Next.js board at `{slug}.career.greetinghr.com`. Unlike the
 Greenhouse boards, Greeting exposes a **structured 신입 signal**, so detection

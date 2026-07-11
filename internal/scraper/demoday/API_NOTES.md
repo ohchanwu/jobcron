@@ -28,7 +28,7 @@ Both calls require two Supabase auth headers — `apikey` and `Authorization: Be
 
 The scraper picks the key in this order:
 
-1. Env var `JOBSCRAPER_DEMODAY_ANON_KEY` if set (use this when 데모데이 rotates the key — paste the new value from a current page bundle).
+1. Env var `JOBCRON_DEMODAY_ANON_KEY` if set (use this when 데모데이 rotates the key — paste the new value from a current page bundle).
 2. `bakedInSupabaseAnonKey` constant in `demoday.go` otherwise.
 
 If both end up stale, the next scrape returns HTTP 401 with a message that points at both rotation paths. That's the rotation contract for this scraper; there's no recovery beyond replacing the key.

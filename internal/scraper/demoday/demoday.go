@@ -29,7 +29,7 @@ const (
 	listingPath       = "/rest/v1/recruits"
 	recruitsRobots    = "/rest/v1/recruits"
 	siteRobotsCheck   = "/recruits"
-	userAgent         = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
+	userAgent         = "jobcron/0.1 (+github.com/ohchanwu/jobcron)"
 	robotsTTL         = 24 * time.Hour
 	requestTimeout    = 30 * time.Second
 )

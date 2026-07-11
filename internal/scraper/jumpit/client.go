@@ -17,9 +17,9 @@ const (
 	// user-facing site).
 	defaultBaseURL = "https://jumpit-api.saramin.co.kr"
 
-	// userAgent identifies job-scraper politely, per the design's operational
+	// userAgent identifies jobcron politely, per the design's operational
 	// commitments.
-	userAgent     = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
+	userAgent     = "jobcron/0.1 (+github.com/ohchanwu/jobcron)"
 	originHeader  = "https://jumpit.saramin.co.kr"
 	refererHeader = "https://jumpit.saramin.co.kr/"
 )

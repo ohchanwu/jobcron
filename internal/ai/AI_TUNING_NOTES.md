@@ -169,7 +169,7 @@ is the durable record. Numbers will drift with model, corpus, and account tier.*
 # Local-model Stage-2 survivor diagnosis + presence-first prototype (2026-06-09)
 
 Context: office-hours spike on a LOCAL Ollama provider (design doc
-`~/.gstack/projects/job-scraper/chanbla11mit-main-design-20260609-122122.md`).
+`~/.gstack/projects/jobcron/chanbla11mit-main-design-20260609-122122.md`).
 Measured on the 20-posting `internal/scoring/testdata/qa_postings.json` fixture via
 the build-tagged harness `internal/ai/spike_test.go` (tag `aispike`), reusing the
 real prompts, parsers, and `GateDelta`. The harness's per-item gate replay

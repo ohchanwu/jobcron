@@ -36,7 +36,7 @@ import (
 const Source = "greeting"
 
 const (
-	userAgent       = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
+	userAgent       = "jobcron/0.1 (+github.com/ohchanwu/jobcron)"
 	robotsCheckPath = "/ko/"
 	robotsTTL       = 24 * time.Hour
 	requestTimeout  = 30 * time.Second

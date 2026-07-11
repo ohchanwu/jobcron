@@ -126,7 +126,7 @@ keep 3.**
 ## Curated token list
 
 Tokens live in `tenant.go` as `Daangn()` / `Krafton()` / `Moloco()` /
-`Sendbird()`, registered individually in `cmd/job-scraper/main.go`.
+`Sendbird()`, registered individually in `cmd/jobcron/main.go`.
 
 - **Ship:** `daangn`, `krafton` (AI Research interns + 신입 tracks — strongest),
   `moloco` (Seoul ML/SWE interns), `sendbird` (Seoul AI engineer interns).

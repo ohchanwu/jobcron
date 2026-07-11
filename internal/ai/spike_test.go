@@ -3,7 +3,7 @@
 // Throwaway spike harness (office-hours 2026-06-09): measure a LOCAL Ollama model
 // against Claude Haiku 4.5 on the real Stage-1/Stage-2 prompts + GateDelta, over
 // the 20-posting QA fixture, to decide go/no-go on the local-provider design doc
-// (~/.gstack/projects/job-scraper/chanbla11mit-main-design-20260609-122122.md).
+// (~/.gstack/projects/jobcron/chanbla11mit-main-design-20260609-122122.md).
 //
 // It is build-tagged `aispike` so it never runs in the normal suite. Run:
 //
@@ -109,7 +109,7 @@ func ollamaChat(ctx context.Context, model, system, user string) (string, error)
 
 func anthropicKey(t *testing.T) string {
 	home, _ := os.UserHomeDir()
-	path := home + "/Library/Application Support/job-scraper/ai_keys.json"
+	path := home + "/Library/Application Support/jobcron/ai_keys.json"
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read key file: %v", err)

@@ -1,5 +1,5 @@
 // Package web holds the embedded HTML templates and static assets for the
-// job-scraper web UI.
+// jobcron web UI.
 package web
 
 import "embed"

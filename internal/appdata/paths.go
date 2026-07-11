@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	dirName       = "jobcron"
+	dirName = "jobcron"
+	// legacyDirName is retained only to migrate existing pre-rename app data.
 	legacyDirName = "job-scraper"
 )
 

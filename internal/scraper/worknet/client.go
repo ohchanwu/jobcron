@@ -20,9 +20,9 @@ const (
 	// calls, distinguished by the callTp parameter.
 	wantedPath = "/opi/opi/opia/wantedApi.do"
 
-	// userAgent identifies job-scraper politely, matching the Jumpit
+	// userAgent identifies jobcron politely, matching the Jumpit
 	// scraper's etiquette.
-	userAgent = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
+	userAgent = "jobcron/0.1 (+github.com/ohchanwu/jobcron)"
 
 	// robotsTTL is how long a robots.txt verdict is cached.
 	robotsTTL = 24 * time.Hour

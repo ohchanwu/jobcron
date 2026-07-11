@@ -29,7 +29,7 @@ This is the same two-phase shape as 점핏, so it fits the existing
 API key is passed as the `authKey` query parameter — there is no header
 auth. Keys are issued per app at <https://www.data.go.kr/data/3038225/openapi.do>
 after registering an account. The key is a long URL-safe string; the
-binary takes it via `--worknet-api-key` flag or `JOBSCRAPER_WORKNET_KEY`
+binary takes it via `--worknet-api-key` flag or `JOBCRON_WORKNET_KEY`
 env var. **Never log the key**; redact it from any printed URL.
 
 ## Listing call

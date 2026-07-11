@@ -144,7 +144,7 @@ func (s *Server) SetAIProvider(p ai.Provider, model string) {
 
 // SetAIKeysPath overrides where ReconfigureAI reads/writes the BYOK key file.
 // Empty (the default) uses ai.DefaultKeysPath(). Tests point this at a temp dir
-// so they never touch the real ~/.../job-scraper/ai_keys.json.
+// so they never touch the real ~/.../jobcron/ai_keys.json.
 func (s *Server) SetAIKeysPath(path string) { s.aiKeysPath = path }
 
 // SetDemoMode makes the HTTP surface read-only. Visitor bookmark/hide state is
