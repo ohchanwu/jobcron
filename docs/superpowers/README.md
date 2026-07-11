@@ -15,6 +15,8 @@ decision records needed for the current task.
 
 ## Stable Decisions
 
+- [No browser-driven scraping for v1.x](decisions/260606-no-browser-driven-scraping.md)
+- [RDS production settings](decisions/260710-rds-production-settings.md)
 - [Jobcron production and rename decisions](decisions/260711-jobcron-production.md)
 
 ## Context Policy
