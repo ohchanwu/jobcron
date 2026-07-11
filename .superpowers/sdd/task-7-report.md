@@ -334,27 +334,77 @@ Inbox: mayor/ (59 messages, 0 unread)
 (no messages)
 ```
 
-High escalation `hq-wisp-2tu5mv` was read. Live verification showed the shared
-Dolt server healthy on port `33327`; the escalation was acknowledged without a
-restart or broad repair command.
+This read-only inbox check is the only Gas Town operation included as Task 7
+evidence. Task 7 itself did not mutate Gas Town state.
+
+### Independent Mayor Operational Duty
+
+High escalation `hq-wisp-2tu5mv` was handled separately after Task 7 because a
+high-priority user/system alert required the Mayor to process it before going
+idle. It was not rename verification and is not part of Task 7. The escalation
+was read, live verification showed the shared Dolt server healthy on port
+`33327`, and it was acknowledged without a restart or broad repair command.
 
 ## Exact Human Deployment Handoff
 
-Run these steps in order. The image is built on the local MacBook and pushed to
-the registry; EC2 only pulls the prebuilt image.
+Run these steps in order. This autonomous run did not and will not push. A human
+must review and push the local commits, prove that the reviewed commit and
+deployment files are present on the remote, and prove that the reviewed image is
+present in the registry before stopping the current production stack. The image
+is built on the local MacBook and pushed to the registry; EC2 only pulls the
+prebuilt image.
 
-1. On the MacBook, build and push the canonical Linux arm64 image:
+1. On the MacBook, review the complete local rename history and choose the exact
+   commit approved for deployment:
 
    ```sh
    cd /path/to/jobcron
+   git status --short
+   git log --oneline 01cdb02..HEAD
+   git diff --check 01cdb02..HEAD
+   git diff --stat 01cdb02..HEAD
+   REVIEWED_COMMIT=<full-reviewed-commit-sha>
+   test "$(git rev-parse "$REVIEWED_COMMIT")" = "$REVIEWED_COMMIT"
+   ```
+
+2. After human approval, the human pushes the reviewed branch. This command is
+   intentionally not run by the autonomous agent:
+
+   ```sh
+   git push origin main
+   ```
+
+3. Verify that GitHub/origin contains the exact reviewed commit and its
+   production deployment files:
+
+   ```sh
+   git fetch origin
+   test "$(git rev-parse origin/main)" = "$REVIEWED_COMMIT"
+   git ls-remote origin refs/heads/main | awk '{print $1}' | grep -Fx "$REVIEWED_COMMIT"
+   git show "origin/main:deploy/production/compose.yaml" >/dev/null
+   git show "origin/main:deploy/production/Caddyfile" >/dev/null
+   git show "origin/main:deploy/production/HUMAN_DEPLOY_GUIDE.md" >/dev/null
+   ```
+
+4. On the MacBook, build and push the canonical Linux arm64 image from that
+   reviewed commit, then verify the registry contains it:
+
+   ```sh
+   cd /path/to/jobcron
+   test "$(git rev-parse HEAD)" = "$REVIEWED_COMMIT"
    IMAGE=ohchanwu/jobcron:0.2-linuxarm64
    docker buildx build --platform linux/arm64 \
      -f deploy/production/Dockerfile \
      -t "$IMAGE" \
      --push .
+   docker buildx imagetools inspect "$IMAGE"
    ```
 
-2. On EC2, stop the old production stack before moving its checkout and
+   Do not continue to EC2 until steps 1-4 all pass. In particular, do not stop
+   the current production stack until both the reviewed remote commit and the
+   registry image are confirmed.
+
+5. On EC2, stop the old production stack before moving its checkout and
    server-only `.env` together:
 
    ```sh
@@ -367,15 +417,18 @@ the registry; EC2 only pulls the prebuilt image.
    sudo chown -R ec2-user:ec2-user /srv/jobcron
    ```
 
-3. Update the moved checkout from the canonical repository:
+6. Update the moved checkout from the canonical repository and verify EC2
+   checked out the same reviewed commit:
 
    ```sh
+   REVIEWED_COMMIT=<full-reviewed-commit-sha>
    cd /srv/jobcron
    git remote set-url origin git@github.com:ohchanwu/jobcron.git
    git pull --ff-only
+   test "$(git rev-parse HEAD)" = "$REVIEWED_COMMIT"
    ```
 
-4. Validate the server-only production environment without printing secrets:
+7. Validate the server-only production environment without printing secrets:
 
    ```sh
    cd /srv/jobcron/deploy/production
@@ -392,7 +445,7 @@ the registry; EC2 only pulls the prebuilt image.
    remains off. Neither `JOBCRON_PROXY_SECRET` nor
    `JOBSCRAPER_PROXY_SECRET` is present.
 
-5. Authenticate to the registry if required, then pull and start the prebuilt
+8. Authenticate to the registry if required, then pull and start the prebuilt
    image. Do not build on EC2:
 
    ```sh
@@ -406,7 +459,7 @@ the registry; EC2 only pulls the prebuilt image.
 
    Do not run `docker compose build` or `docker compose up --build` on EC2.
 
-6. Create the owner account from a source checkout with Go and RDS network
+9. Create the owner account from a source checkout with Go and RDS network
    access, entering the temporary password outside Git:
 
    ```sh
@@ -418,7 +471,7 @@ the registry; EC2 only pulls the prebuilt image.
    unset JOBCRON_OWNER_PASSWORD
    ```
 
-7. In a real browser, verify HTTPS, redirects, owner login, PostgreSQL-backed
+10. In a real browser, verify HTTPS, redirects, owner login, PostgreSQL-backed
    data, and the `05:00` Korea Standard Time schedule:
 
    ```text
