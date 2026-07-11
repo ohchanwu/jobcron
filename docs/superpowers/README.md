@@ -6,8 +6,8 @@ decision records needed for the current task.
 
 ## Active Work
 
-- Interactive local preview, first-run guidance, and navigation: implementation
-  plan to be added under `plans/`.
+- [Interactive local preview, first-run guidance, and navigation](plans/2026-07-11-interactive-preview-navigation.md)
+  is planned but not approved for execution.
 
 ## Stable Decisions
 
@@ -27,4 +27,3 @@ decision records needed for the current task.
   artifacts to `.superpowers/archive/`.
 - Git history is the authoritative fallback for old detail. Do not keep verbose
   completed reports active merely for discoverability.
-
