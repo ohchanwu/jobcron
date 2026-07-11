@@ -111,8 +111,19 @@ func TestPrepareRejectsDirectoryCollision(t *testing.T) {
 
 func TestPrepareReturnsRenameFailure(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(LegacyDir(root), 0o700); err != nil {
+	legacy := LegacyDir(root)
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
 		t.Fatal(err)
+	}
+	fixtures := map[string][]byte{
+		"jobs.db":      []byte("database bytes"),
+		"jobs.db-wal":  []byte("write-ahead log bytes"),
+		"ai_keys.json": []byte(`{"openai":"key bytes"}`),
+	}
+	for name, contents := range fixtures {
+		if err := os.WriteFile(filepath.Join(legacy, name), contents, 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
 	}
 	want := errors.New("rename denied")
 
@@ -120,8 +131,14 @@ func TestPrepareReturnsRenameFailure(t *testing.T) {
 	if !errors.Is(err, want) {
 		t.Fatalf("prepare error = %v, want wrapped %v", err, want)
 	}
-	assertDirectoryExists(t, LegacyDir(root), true)
+	assertDirectoryExists(t, legacy, true)
 	assertDirectoryExists(t, Dir(root), false)
+	for name, contents := range fixtures {
+		got, err := os.ReadFile(filepath.Join(legacy, name))
+		if err != nil || string(got) != string(contents) {
+			t.Fatalf("%s after rename failure: got=%q err=%v", name, got, err)
+		}
+	}
 }
 
 func assertDirectoryExists(t *testing.T, path string, want bool) {
