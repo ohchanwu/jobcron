@@ -6,8 +6,12 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Interactive local preview, first-run guidance, and navigation](plans/260711-interactive-preview-navigation.md)
-  is planned but not approved for execution.
+- None.
+
+## Recently Archived
+
+- [Interactive local preview, first-run guidance, and navigation](archive/2026-07-11-interactive-preview-navigation/260711-interactive-preview-navigation.md)
+- [Integrated verification report](archive/2026-07-11-interactive-preview-navigation/260711-interactive-preview-navigation-verification.md)
 
 ## Stable Decisions
 
