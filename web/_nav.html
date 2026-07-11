@@ -1,0 +1,10 @@
+{{define "primaryNav"}}
+<nav class="primary" data-primary-nav>
+  <a href="/briefing" class="briefing-nav-link{{if eq .Active "briefing"}} active{{end}}">데일리 브리핑<span class="briefing-dot" role="status" aria-label="새 데일리 브리핑 있음" hidden></span></a>
+  <a href="/"{{if eq .Active "archive"}} class="active"{{end}}>전체 공고</a>
+  <a href="/bookmarks"{{if eq .Active "bookmarks"}} class="active"{{end}}>북마크</a>
+  <a href="/hidden"{{if eq .Active "hidden"}} class="active"{{end}}>숨긴 공고</a>
+  <a href="/profile"{{if eq .Active "profile"}} class="active"{{end}}>프로필 설정</a>
+  {{if productionMode}}<form method="post" action="/logout" class="nav-logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">로그아웃</button></form>{{end}}
+</nav>
+{{end}}

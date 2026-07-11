@@ -160,6 +160,24 @@ nav.primary a.active {
   color: var(--ink);
   border-bottom-color: var(--accent);
 }
+
+.briefing-nav-link {
+  position: relative;
+}
+
+.briefing-dot {
+  position: absolute;
+
+  top: -0.05rem;
+  right: -0.55rem;
+  width: 0.42rem;
+  height: 0.42rem;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--highlight);
+  box-sizing: border-box;
+  pointer-events: none;
+}
 .nav-logout {
   margin: 0 0 0 auto;
   padding: 0;

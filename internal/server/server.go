@@ -318,6 +318,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		"usdCents":          usdCents,
 		"demoMode":          func() bool { return srv.demoMode },
 		"productionMode":    func() bool { return srv.productionMode },
+		"navData":           func(active, csrfToken string) navView { return navView{Active: active, CSRFToken: csrfToken} },
 	}
 	srv.tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(web.FS, "*.html"))
 	return srv

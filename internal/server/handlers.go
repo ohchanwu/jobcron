@@ -35,6 +35,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
 	mux.HandleFunc("GET /api/rerate", s.handleRerateSSE)
+	mux.HandleFunc("GET /api/briefing-status", s.handleBriefingStatus)
 	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
 	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)
 	mux.HandleFunc("PUT /api/not-interested/{id}", s.handleNotInterestedAdd)
@@ -57,6 +58,56 @@ func (s *Server) Handler() http.Handler {
 		}
 		handler.ServeHTTP(w, r)
 	})
+}
+
+type briefingStatus struct {
+	ProfileRequired bool   `json:"profile_required"`
+	Latest          string `json:"latest"`
+}
+
+type navView struct {
+	Active    string
+	CSRFToken string
+}
+
+// handleBriefingStatus reports whether the current browser has a briefing to
+// read. It is deliberately read-only: seen state belongs in browser storage.
+func (s *Server) handleBriefingStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, err := s.stateUserID(ctx, r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
+	_, _, hasProfile, err := s.profileJSON(ctx, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	status := briefingStatus{ProfileRequired: !hasProfile}
+	if hasProfile {
+		b, err := s.buildBriefing(ctx, time.Now(), userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var latest time.Time
+		for _, postings := range [][]dashboardPosting{b.Today, b.Excluded} {
+			for _, posting := range postings {
+				if posting.Posting.FirstSeenAt.After(latest) {
+					latest = posting.Posting.FirstSeenAt
+				}
+			}
+		}
+		if !latest.IsZero() {
+			status.Latest = latest.UTC().Format(time.RFC3339)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		log.Printf("encode briefing status: %v", err)
+	}
 }
 
 func (s *Server) rejectDemoMutation(w http.ResponseWriter, r *http.Request) bool {

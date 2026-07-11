@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/ohchanwu/jobcron/internal/profile"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/storage"
+	"github.com/ohchanwu/jobcron/web"
 )
 
 // fakeScraper is a test double for scraper.Scraper — it returns canned data
@@ -131,6 +133,128 @@ func TestProfileRequiredGuidanceOnlyAppearsForReason(t *testing.T) {
 				t.Errorf("GET %s missing profile canonical link", tc.path)
 			}
 		})
+	}
+}
+
+func TestBriefingStatus(t *testing.T) {
+	t.Run("profile required", func(t *testing.T) {
+		srv, _ := newTestServer(t, &fakeScraper{})
+		got := requestBriefingStatus(t, srv)
+		if !got.ProfileRequired || got.Latest != "" {
+			t.Fatalf("status = %+v, want profile_required with no latest", got)
+		}
+	})
+
+	t.Run("profile with no postings", func(t *testing.T) {
+		srv, st := newTestServer(t, &fakeScraper{})
+		saveTestProfile(t, st, profile.Profile{})
+		got := requestBriefingStatus(t, srv)
+		if got.ProfileRequired || got.Latest != "" {
+			t.Fatalf("status = %+v, want empty ready status", got)
+		}
+	})
+
+	t.Run("latest eligible posting", func(t *testing.T) {
+		srv, st := newTestServer(t, &fakeScraper{})
+		saveTestProfile(t, st, profile.Profile{})
+
+		now := time.Now().UTC().Truncate(time.Second)
+		older := listingPosting("older", "먼저 본 공고")
+		older.FirstSeenAt, older.LastSeenAt = now.Add(-time.Hour), now.Add(-time.Hour)
+		newer := listingPosting("newer", "나중에 본 공고")
+		newer.FirstSeenAt, newer.LastSeenAt = now, now
+		for _, posting := range []scraper.Posting{older, newer} {
+			if _, _, err := st.UpsertPosting(context.Background(), posting); err != nil {
+				t.Fatalf("UpsertPosting(%s): %v", posting.SourcePostingID, err)
+			}
+		}
+		if _, err := srv.scoreAll(context.Background()); err != nil {
+			t.Fatalf("scoreAll: %v", err)
+		}
+
+		got := requestBriefingStatus(t, srv)
+		if got.ProfileRequired || got.Latest != now.Format(time.RFC3339) {
+			t.Fatalf("status = %+v, want latest %q", got, now.Format(time.RFC3339))
+		}
+	})
+
+	t.Run("ineligible postings do not create a notification", func(t *testing.T) {
+		srv, st := newTestServer(t, &fakeScraper{})
+		saveTestProfile(t, st, profile.Profile{DisabledSources: []string{"jumpit"}})
+		now := time.Now().UTC().Truncate(time.Second)
+		posting := listingPosting("disabled", "비활성 소스 공고")
+		posting.FirstSeenAt, posting.LastSeenAt = now, now
+		if _, _, err := st.UpsertPosting(context.Background(), posting); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+		if _, err := srv.scoreAll(context.Background()); err != nil {
+			t.Fatalf("scoreAll: %v", err)
+		}
+		got := requestBriefingStatus(t, srv)
+		if got.Latest != "" {
+			t.Fatalf("disabled posting produced latest = %q", got.Latest)
+		}
+	})
+}
+
+type briefingStatusResponse struct {
+	ProfileRequired bool   `json:"profile_required"`
+	Latest          string `json:"latest"`
+}
+
+func requestBriefingStatus(t *testing.T, srv *Server) briefingStatusResponse {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/briefing-status", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/briefing-status status = %d, body = %q", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	var status briefingStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode briefing status: %v", err)
+	}
+	return status
+}
+
+func saveTestProfile(t *testing.T, st *storage.Store, p profile.Profile) {
+	t.Helper()
+	profJSON, err := profile.Marshal(p)
+	if err != nil {
+		t.Fatalf("Marshal profile: %v", err)
+	}
+	if _, _, err := st.SaveProfile(context.Background(), profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+}
+
+func TestApplicationPagesUseSharedPrimaryNav(t *testing.T) {
+	for _, name := range []string{"index.html", "archive.html", "bookmarks.html", "hidden.html", "profile.html"} {
+		t.Run(name, func(t *testing.T) {
+			body, err := web.FS.ReadFile(name)
+			if err != nil {
+				t.Fatalf("ReadFile(%s): %v", name, err)
+			}
+			if !strings.Contains(string(body), `{{template "primaryNav"`) {
+				t.Fatalf("%s does not invoke the shared primaryNav template", name)
+			}
+		})
+	}
+
+	shared, err := web.FS.ReadFile("_nav.html")
+	if err != nil {
+		t.Fatalf("ReadFile(_nav.html): %v", err)
+	}
+	nav := string(shared)
+	for _, want := range []string{`{{define "primaryNav"}}`, `href="/briefing"`, `class="briefing-dot"`, `aria-label="새 데일리 브리핑 있음"`} {
+		if !strings.Contains(nav, want) {
+			t.Errorf("shared nav missing %q", want)
+		}
 	}
 }
 
