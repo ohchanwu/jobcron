@@ -9,8 +9,8 @@ Production assumptions:
 - Caddy is the only public entry point and terminates HTTPS directly.
 - Cloudflare proxy is off for this first pass.
 - The app uses AWS RDS PostgreSQL 18 through `DATABASE_URL`.
-- Worknet stays disabled until a human explicitly adds `JOBSCRAPER_WORKNET_KEY`.
-- `JOBSCRAPER_PROXY_SECRET`, `JOBSCRAPER_DEMO`, and `JOBSCRAPER_ADMIN_TOKEN`
+- Worknet stays disabled until a human explicitly adds `JOBCRON_WORKNET_KEY`.
+- `JOBCRON_PROXY_SECRET`, `JOBCRON_DEMO`, and `JOBCRON_ADMIN_TOKEN`
   are intentionally unset.
 
 ## Files
@@ -30,13 +30,13 @@ Use dummy values only:
 
 ```sh
 cd deploy/production
-JOBSCRAPER_IMAGE=example/job-scraper:prod \
+JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64 \
 DATABASE_URL='postgres://jobcron_admin:dummy@example-rds.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require' \
 SESSION_SECRET=dummy-session-secret \
 docker compose config
 ```
 
 The rendered config should include `DATABASE_URL`, `SESSION_SECRET`,
-`JOBSCRAPER_ENV=production`, `JOBSCRAPER_SCHEDULER_ENABLED=1`, and
-`JOBSCRAPER_DAILY_SCRAPE_TIME=09:00`. It should not include demo mode, an admin
+`JOBCRON_ENV=production`, `JOBCRON_SCHEDULER_ENABLED=1`, and
+`JOBCRON_DAILY_SCRAPE_TIME=05:00`. It should not include demo mode, an admin
 token, a Worknet key, or a proxy secret.

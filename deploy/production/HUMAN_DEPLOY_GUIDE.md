@@ -1,12 +1,12 @@
 # Human deploy guide for jobcron.app production
 
-This guide deploys the production job-scraper app to AWS using an image built on
+This guide deploys the production jobcron app to AWS using an image built on
 your Mac, an AWS EC2 host, AWS RDS PostgreSQL 18, and Caddy-managed HTTPS.
 
 The production deploy files are configured for:
 
 - Public URLs: `https://jobcron.app` and `https://www.jobcron.app`
-- App compose directory on EC2: `/srv/job-scraper/app/deploy/production`
+- App compose directory on EC2: `/srv/jobcron/app/deploy/production`
 - Database: AWS RDS PostgreSQL 18 through `DATABASE_URL`
 - App port inside Docker: `7777`
 
@@ -19,12 +19,12 @@ Do not build the app image on the EC2 instance. Build an arm64 Linux image on
 your Mac and push it to your registry:
 
 ```sh
-cd /Users/chanbla11mit/gt/jobscraper/mayor/rig
-IMAGE=<registry>/<namespace>/job-scraper:<tag>
+cd /path/to/jobcron
+IMAGE=ohchanwu/jobcron:0.2-linuxarm64
 docker buildx build --platform linux/arm64 -f deploy/production/Dockerfile -t "$IMAGE" --push .
 ```
 
-Use the same image name later as `JOBSCRAPER_IMAGE`.
+Use the same image name later as `JOBCRON_IMAGE`.
 
 ## 2. Confirm AWS RDS PostgreSQL 18
 
@@ -97,15 +97,15 @@ docker login <registry>
 Create the app directory and clone or update the repo:
 
 ```sh
-sudo mkdir -p /srv/job-scraper/app
-sudo chown -R ec2-user:ec2-user /srv/job-scraper
-git clone <repo-url> /srv/job-scraper/app
+sudo mkdir -p /srv/jobcron/app
+sudo chown -R ec2-user:ec2-user /srv/jobcron
+git clone <repo-url> /srv/jobcron/app
 ```
 
 For later deploys:
 
 ```sh
-cd /srv/job-scraper/app
+cd /srv/jobcron/app
 git pull --ff-only
 ```
 
@@ -114,7 +114,7 @@ git pull --ff-only
 On EC2:
 
 ```sh
-cd /srv/job-scraper/app/deploy/production
+cd /srv/jobcron/app/deploy/production
 cp .env.example .env
 openssl rand -base64 48
 nano .env
@@ -123,7 +123,7 @@ nano .env
 Fill in:
 
 ```sh
-JOBSCRAPER_IMAGE=<registry>/<namespace>/job-scraper:<tag>
+JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64
 DATABASE_URL=postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require
 SESSION_SECRET=<paste-random-session-secret-here>
 ```
@@ -131,21 +131,21 @@ SESSION_SECRET=<paste-random-session-secret-here>
 Do not add these variables for this first production pass:
 
 ```text
-JOBSCRAPER_DEMO
-JOBSCRAPER_ADMIN_TOKEN
-JOBSCRAPER_PROXY_SECRET
-JOBSCRAPER_WORKNET_KEY
+JOBCRON_DEMO
+JOBCRON_ADMIN_TOKEN
+JOBCRON_PROXY_SECRET
+JOBCRON_WORKNET_KEY
 ```
 
 The compose file already sets:
 
 ```text
-JOBSCRAPER_ENV=production
-JOBSCRAPER_HOST=0.0.0.0
-JOBSCRAPER_PORT=7777
-JOBSCRAPER_NO_OPEN=1
-JOBSCRAPER_SCHEDULER_ENABLED=1
-JOBSCRAPER_DAILY_SCRAPE_TIME=09:00
+JOBCRON_ENV=production
+JOBCRON_HOST=0.0.0.0
+JOBCRON_PORT=7777
+JOBCRON_NO_OPEN=1
+JOBCRON_SCHEDULER_ENABLED=1
+JOBCRON_DAILY_SCRAPE_TIME=05:00
 ```
 
 ## 7. Pull the image and start production
@@ -153,14 +153,14 @@ JOBSCRAPER_DAILY_SCRAPE_TIME=09:00
 On EC2:
 
 ```sh
-cd /srv/job-scraper/app/deploy/production
+cd /srv/jobcron/app/deploy/production
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 docker compose logs -f
 ```
 
 Do not run `docker compose build` or `docker compose up --build` on EC2. The
-compose file uses the image named by `JOBSCRAPER_IMAGE`.
+compose file uses the image named by `JOBCRON_IMAGE`.
 
 Expected behavior:
 
@@ -175,11 +175,11 @@ From a source checkout with Go installed and network access to RDS:
 
 ```sh
 export DATABASE_URL='postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require'
-export JOBSCRAPER_OWNER_PASSWORD='<temporary-owner-password>'
-go run ./cmd/job-scraper-user create-owner \
+export JOBCRON_OWNER_PASSWORD='<temporary-owner-password>'
+go run ./cmd/jobcron-user create-owner \
   --database-url "$DATABASE_URL" \
   --email 'ohchanwu@gmail.com'
-unset JOBSCRAPER_OWNER_PASSWORD
+unset JOBCRON_OWNER_PASSWORD
 ```
 
 ## 9. Final checks
@@ -198,9 +198,9 @@ Check:
 - `https://www.jobcron.app/` redirects to `https://jobcron.app/`.
 - The owner can log in.
 - The app can load its production PostgreSQL-backed data.
-- The daily scrape is scheduled for `09:00`, or a first manual scrape is run
+- The daily scrape is scheduled for `05:00` KST, or a first manual scrape is run
   after deploy to populate the briefing.
-- Worknet is absent unless a human later adds `JOBSCRAPER_WORKNET_KEY`.
+- Worknet is absent unless a human later adds `JOBCRON_WORKNET_KEY`.
 
 If the app cannot connect to RDS, check the RDS security group, the database
 endpoint, the username and password in `DATABASE_URL`, and `sslmode=require`.

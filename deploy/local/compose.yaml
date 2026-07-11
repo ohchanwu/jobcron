@@ -3,11 +3,11 @@ services:
     image: postgres:18-alpine
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
-      POSTGRES_DB: jobscraper_dev
+      POSTGRES_DB: jobcron_dev
     ports:
       - "55432:5432"
     volumes:
-      - jobscraper-postgres18-cluster:/var/lib/postgresql
+      - jobcron-postgres18-cluster:/var/lib/postgresql
 
 volumes:
-  jobscraper-postgres18-cluster:
+  jobcron-postgres18-cluster:

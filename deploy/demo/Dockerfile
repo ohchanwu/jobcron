@@ -8,12 +8,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/job-scraper ./cmd/job-scraper
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/jobcron ./cmd/jobcron
 
 FROM alpine:3.22
 
 RUN apk add --no-cache ca-certificates
-COPY --from=build /out/job-scraper /usr/local/bin/job-scraper
+COPY --from=build /out/jobcron /usr/local/bin/jobcron
 
 EXPOSE 7777
-ENTRYPOINT ["job-scraper"]
+ENTRYPOINT ["jobcron"]

@@ -1,6 +1,6 @@
 # AWS demo deploy: demo.jobcron.app
 
-This stack runs the read-only job-scraper demo on one AWS EC2 t4g.micro arm64
+This stack runs the read-only jobcron demo on one AWS EC2 t4g.micro arm64
 instance. AI is off on the server. Upload only `jobs.db`; never upload
 `ai_keys.json`.
 
@@ -19,21 +19,21 @@ configuration with PostgreSQL/RDS, login sessions, and no `--demo` flag.
 
 ## Files on the instance
 
-Clone or pull this repository to `/srv/job-scraper/app`, then run Compose from
-`/srv/job-scraper/app/deploy/demo`.
+Clone or pull this repository to `/srv/jobcron/app`, then run Compose from
+`/srv/jobcron/app/deploy/demo`.
 
 Put the prepared database at:
 
 ```sh
-/srv/job-scraper/data/jobs.db
+/srv/jobcron/data/jobs.db
 ```
 
-Create `/srv/job-scraper/app/deploy/demo/.env`:
+Create `/srv/jobcron/app/deploy/demo/.env`:
 
 ```sh
-JOBSCRAPER_IMAGE=<registry>/<namespace>/job-scraper-demo:<tag>
-JOBSCRAPER_ADMIN_TOKEN=<long random string>
-JOBSCRAPER_PROXY_SECRET=<another long random string>
+JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64
+JOBCRON_ADMIN_TOKEN=<long random string>
+JOBCRON_PROXY_SECRET=<another long random string>
 ```
 
 The token is only a safety hatch for operator-triggered `/api/scrape` in demo
@@ -46,26 +46,22 @@ login rate limiting; do not reuse the admin token.
 Do not build the app image on the EC2 instance. A t4g.micro does not have enough
 memory for the Docker build.
 
-Choose a registry image name first. For GitHub Container Registry, it will look
-like `ghcr.io/<github-user>/job-scraper-demo:latest`. For Docker Hub, it will
-look like `<dockerhub-user>/job-scraper-demo:latest`.
-
 From the project root on your Mac, build the arm64 image and push it:
 
 ```sh
-cd /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper
-IMAGE=<registry>/<namespace>/job-scraper-demo:latest
+cd /path/to/jobcron
+IMAGE=ohchanwu/jobcron:0.2-linuxarm64
 docker buildx build --platform linux/arm64 -f deploy/demo/Dockerfile -t "$IMAGE" --push .
 ```
 
 On the EC2 instance, pull the image before starting Compose:
 
 ```sh
-cd /srv/job-scraper/app/deploy/demo
+cd /srv/jobcron/app/deploy/demo
 set -a
 . ./.env
 set +a
-docker pull "$JOBSCRAPER_IMAGE"
+docker pull "$JOBCRON_IMAGE"
 ```
 
 ## Docker setup on Amazon Linux 2023
@@ -87,17 +83,17 @@ GitHub releases into:
 ## Start
 
 ```sh
-cd /srv/job-scraper/app/deploy/demo
+cd /srv/jobcron/app/deploy/demo
 set -a
 . ./.env
 set +a
-docker pull "$JOBSCRAPER_IMAGE"
+docker pull "$JOBCRON_IMAGE"
 docker compose --env-file .env up -d
 docker compose logs -f
 ```
 
 Do not run `docker compose build` or `docker compose up --build` on the EC2
-instance. The compose file expects the image named by `JOBSCRAPER_IMAGE` to
+instance. The compose file expects the image named by `JOBCRON_IMAGE` to
 already exist locally after `docker pull`, and it will not build a replacement
 image.
 
@@ -110,7 +106,7 @@ After the final local scrape and AI re-rate, stop the local app and create a
 clean SQLite backup:
 
 ```sh
-sqlite3 "$HOME/Library/Application Support/job-scraper/jobs.db" ".backup '/tmp/jobs.db'"
+sqlite3 "$HOME/Library/Application Support/jobcron/jobs.db" ".backup '/tmp/jobs.db'"
 ```
 
-Upload only `/tmp/jobs.db` to `/srv/job-scraper/data/jobs.db`.
+Upload only `/tmp/jobs.db` to `/srv/jobcron/data/jobs.db`.

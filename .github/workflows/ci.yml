@@ -24,8 +24,8 @@ jobs:
       - run: go test ./...
       - name: cross-compile arm64 targets
         run: |
-          GOOS=linux GOARCH=arm64 go build ./cmd/job-scraper
-          GOOS=darwin GOARCH=arm64 go build ./cmd/job-scraper
+          GOOS=linux GOARCH=arm64 go build ./cmd/jobcron
+          GOOS=darwin GOARCH=arm64 go build ./cmd/jobcron
 
   smoke:
     name: smoke (${{ matrix.os }})
@@ -39,4 +39,4 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
-      - run: go run ./cmd/job-scraper --version
+      - run: go run ./cmd/jobcron --version

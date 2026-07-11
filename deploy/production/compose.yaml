@@ -7,7 +7,7 @@
 # - leaves Worknet and proxy-secret support disabled for the first pass
 services:
   app:
-    image: "${JOBSCRAPER_IMAGE:?set JOBSCRAPER_IMAGE in .env}"
+    image: "${JOBCRON_IMAGE:?set JOBCRON_IMAGE in .env}"
     pull_policy: always
     command:
       - --no-open
@@ -16,14 +16,14 @@ services:
       - --port
       - "7777"
     environment:
-      JOBSCRAPER_ENV: production
-      JOBSCRAPER_HOST: 0.0.0.0
-      JOBSCRAPER_PORT: "7777"
-      JOBSCRAPER_NO_OPEN: "1"
+      JOBCRON_ENV: production
+      JOBCRON_HOST: 0.0.0.0
+      JOBCRON_PORT: "7777"
+      JOBCRON_NO_OPEN: "1"
       DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
       SESSION_SECRET: "${SESSION_SECRET:?set SESSION_SECRET in .env}"
-      JOBSCRAPER_SCHEDULER_ENABLED: "1"
-      JOBSCRAPER_DAILY_SCRAPE_TIME: "09:00"
+      JOBCRON_SCHEDULER_ENABLED: "1"
+      JOBCRON_DAILY_SCRAPE_TIME: "05:00"
     expose:
       - "7777"
     restart: unless-stopped

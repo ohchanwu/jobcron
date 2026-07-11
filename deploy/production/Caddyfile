@@ -1,7 +1,7 @@
 # Production Caddy config for jobcron.app.
 #
 # Caddy is the only public entry point. The app container is private on the
-# Docker network, and JOBSCRAPER_PROXY_SECRET stays unset for this first pass.
+# Docker network, and JOBCRON_PROXY_SECRET stays unset for this first pass.
 
 www.jobcron.app {
 	redir https://jobcron.app{uri} permanent

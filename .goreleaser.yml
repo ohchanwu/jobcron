@@ -1,4 +1,4 @@
-# GoReleaser config — cross-compiles job-scraper for every v1 target platform.
+# GoReleaser config — cross-compiles jobcron for every v1 target platform.
 # Validate with `goreleaser check`; dry-run with `goreleaser release --snapshot --clean`.
 version: 2
 
@@ -7,9 +7,9 @@ before:
     - go mod tidy
 
 builds:
-  - id: job-scraper
-    main: ./cmd/job-scraper
-    binary: job-scraper
+  - id: jobcron
+    main: ./cmd/jobcron
+    binary: jobcron
     env:
       - CGO_ENABLED=0 # modernc.org/sqlite is pure Go — fully static builds
     goos:
@@ -31,7 +31,7 @@ archives:
   - id: default
     # Version-free names so README install URLs (releases/latest/download/...)
     # stay stable across releases.
-    name_template: "job-scraper_{{ .Os }}_{{ .Arch }}"
+    name_template: "jobcron_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
     format_overrides:
@@ -48,7 +48,7 @@ checksum:
 release:
   github:
     owner: ohchanwu
-    name: job-scraper
+    name: jobcron
   # Mark pre-release tags (-alpha / -beta / -rc) as GitHub prereleases so they
   # do NOT become "latest". The archives use version-free names served from
   # releases/latest/download/… (the README install URLs), so an alpha must not

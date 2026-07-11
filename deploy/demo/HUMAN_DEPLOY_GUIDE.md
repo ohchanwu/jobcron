@@ -1,6 +1,6 @@
 # Human deploy guide for demo.jobcron.app
 
-This guide deploys the read-only job-scraper demo to AWS.
+This guide deploys the read-only jobcron demo to AWS.
 
 This directory is **demo-only**. Do not use this compose/Caddy setup for the
 private production app at `jobcron.app`; production needs a separate
@@ -9,9 +9,9 @@ PostgreSQL/RDS deploy configuration with login sessions and no `--demo` flag.
 The deploy files in this directory are configured for:
 
 - Public URL: `https://demo.jobcron.app`
-- App data file on the server: `/srv/job-scraper/data/jobs.db`
-- App repository directory on the server: `/srv/job-scraper/app`
-- App compose directory on the server: `/srv/job-scraper/app/deploy/demo`
+- App data file on the server: `/srv/jobcron/data/jobs.db`
+- App repository directory on the server: `/srv/jobcron/app`
+- App compose directory on the server: `/srv/jobcron/app/deploy/demo`
 - Local prepared database backup: `/tmp/jobs.db`
 
 Do not upload `ai_keys.json`. AI runs locally before deployment. The server reads cached AI results from `jobs.db`.
@@ -55,8 +55,8 @@ Do not build the app image on the EC2 instance. A `t4g.micro` does not have enou
 Build the arm64 Linux image and push it from your Mac:
 
 ```sh
-cd /Users/chanbla11mit/gt/jobscraper/polecats/chrome/jobscraper
-docker buildx build --platform linux/arm64 -f deploy/demo/Dockerfile -t ohchanwu/jobcron:0.1-linuxarm64 --push .
+cd /path/to/jobcron
+docker buildx build --platform linux/arm64 -f deploy/demo/Dockerfile -t ohchanwu/jobcron:0.2-linuxarm64 --push .
 ```
 
 This creates an arm64 Linux image that can run on the AWS instance, then stores it in your registry.
@@ -73,14 +73,14 @@ KEY=~/path/to/your-key.pem
 Create the server directories, then clone the repository if this is the first deploy:
 
 ```sh
-ssh -i "$KEY" ec2-user@$EC2_HOST 'sudo mkdir -p /srv/job-scraper/app /srv/job-scraper/data && sudo chown -R ec2-user:ec2-user /srv/job-scraper'
-ssh -i "$KEY" ec2-user@$EC2_HOST 'git clone <repo-url> /srv/job-scraper/app'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'sudo mkdir -p /srv/jobcron/app /srv/jobcron/data && sudo chown -R ec2-user:ec2-user /srv/jobcron'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'git clone <repo-url> /srv/jobcron/app'
 ```
 
 For later deploys, pull the latest code instead:
 
 ```sh
-ssh -i "$KEY" ec2-user@$EC2_HOST 'cd /srv/job-scraper/app && git pull --ff-only'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'cd /srv/jobcron/app && git pull --ff-only'
 ```
 
 Using Git for the app files is safe for this repo because the tracked files do not include the runtime database, `.env`, or `ai_keys.json`. Those stay local to your Mac or the server.
@@ -90,13 +90,13 @@ Using Git for the app files is safe for this repo because the tracked files do n
 The database is runtime data, not source code. Copy only the prepared SQLite backup:
 
 ```sh
-scp -i "$KEY" /tmp/jobs.db ec2-user@$EC2_HOST:/srv/job-scraper/data/jobs.db
+scp -i "$KEY" /tmp/jobs.db ec2-user@$EC2_HOST:/srv/jobcron/data/jobs.db
 ```
 
 Do not copy:
 
 ```text
-~/Library/Application Support/job-scraper/ai_keys.json
+~/Library/Application Support/jobcron/ai_keys.json
 ```
 
 Do not commit or upload:
@@ -151,7 +151,7 @@ docker login <registry>
 On the server:
 
 ```sh
-cd /srv/job-scraper/app/deploy/demo
+cd /srv/jobcron/app/deploy/demo
 openssl rand -hex 32
 ```
 
@@ -164,29 +164,29 @@ nano .env
 Add these lines. Use the same image name you pushed from your Mac, and use the random token from `openssl`:
 
 ```sh
-JOBSCRAPER_IMAGE=ohchanwu/jobcron:0.1-linuxarm64
-JOBSCRAPER_ADMIN_TOKEN=<paste-random-token-here>
-JOBSCRAPER_PROXY_SECRET=<paste-another-random-token-here>
+JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64
+JOBCRON_ADMIN_TOKEN=<paste-random-token-here>
+JOBCRON_PROXY_SECRET=<paste-another-random-token-here>
 ```
 
 The token is a safety hatch for operator-triggered `/api/scrape` in demo mode. Visitors still cannot write profile, bookmark, hide, or AI re-rate data.
-The proxy secret lets the app trust Caddy's forwarded client-IP header for login rate limiting. Use a different value from `JOBSCRAPER_ADMIN_TOKEN`.
+The proxy secret lets the app trust Caddy's forwarded client-IP header for login rate limiting. Use a different value from `JOBCRON_ADMIN_TOKEN`.
 
 ## 8. Pull the image and start the app
 
 On the server:
 
 ```sh
-cd /srv/job-scraper/app/deploy/demo
+cd /srv/jobcron/app/deploy/demo
 set -a
 . ./.env
 set +a
-docker pull "$JOBSCRAPER_IMAGE"
+docker pull "$JOBCRON_IMAGE"
 docker compose --env-file .env up -d
 docker compose logs -f
 ```
 
-Do not run `docker compose build` or `docker compose up --build` on the EC2 instance. The compose file uses the prebuilt image named by `JOBSCRAPER_IMAGE`, and it will not build a replacement image.
+Do not run `docker compose build` or `docker compose up --build` on the EC2 instance. The compose file uses the prebuilt image named by `JOBCRON_IMAGE`, and it will not build a replacement image.
 
 Expected behavior:
 

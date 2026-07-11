@@ -9,7 +9,7 @@
 # Do not use this file for the private production app at jobcron.app.
 services:
   app:
-    image: "${JOBSCRAPER_IMAGE:?set JOBSCRAPER_IMAGE in .env}"
+    image: "${JOBCRON_IMAGE:?set JOBCRON_IMAGE in .env}"
     pull_policy: never
     command:
       - --no-open
@@ -19,11 +19,11 @@ services:
       - --db
       - /data/jobs.db
     environment:
-      JOBSCRAPER_DEMO: "1"
-      JOBSCRAPER_ADMIN_TOKEN: "${JOBSCRAPER_ADMIN_TOKEN:?set JOBSCRAPER_ADMIN_TOKEN in .env}"
-      JOBSCRAPER_PROXY_SECRET: "${JOBSCRAPER_PROXY_SECRET:?set JOBSCRAPER_PROXY_SECRET in .env}"
+      JOBCRON_DEMO: "1"
+      JOBCRON_ADMIN_TOKEN: "${JOBCRON_ADMIN_TOKEN:?set JOBCRON_ADMIN_TOKEN in .env}"
+      JOBCRON_PROXY_SECRET: "${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}"
     volumes:
-      - /srv/job-scraper/data:/data
+      - /srv/jobcron/data:/data
     ports:
       - "127.0.0.1:7777:7777"
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
     depends_on:
       - app
     environment:
-      JOBSCRAPER_PROXY_SECRET: "${JOBSCRAPER_PROXY_SECRET:?set JOBSCRAPER_PROXY_SECRET in .env}"
+      JOBCRON_PROXY_SECRET: "${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}"
     ports:
       - "80:80"
       - "443:443"
