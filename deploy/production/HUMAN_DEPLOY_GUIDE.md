@@ -6,7 +6,7 @@ your Mac, an AWS EC2 host, AWS RDS PostgreSQL 18, and Caddy-managed HTTPS.
 The production deploy files are configured for:
 
 - Public URLs: `https://jobcron.app` and `https://www.jobcron.app`
-- App compose directory on EC2: `/srv/jobcron/app/deploy/production`
+- App compose directory on EC2: `/srv/jobcron/deploy/production`
 - Database: AWS RDS PostgreSQL 18 through `DATABASE_URL`
 - App port inside Docker: `7777`
 
@@ -97,15 +97,15 @@ docker login <registry>
 Create the app directory and clone or update the repo:
 
 ```sh
-sudo mkdir -p /srv/jobcron/app
+sudo mkdir -p /srv/jobcron
 sudo chown -R ec2-user:ec2-user /srv/jobcron
-git clone <repo-url> /srv/jobcron/app
+git clone <repo-url> /srv/jobcron
 ```
 
 For later deploys:
 
 ```sh
-cd /srv/jobcron/app
+cd /srv/jobcron
 git pull --ff-only
 ```
 
@@ -114,7 +114,7 @@ git pull --ff-only
 On EC2:
 
 ```sh
-cd /srv/jobcron/app/deploy/production
+cd /srv/jobcron/deploy/production
 cp .env.example .env
 openssl rand -base64 48
 nano .env
@@ -153,7 +153,7 @@ JOBCRON_DAILY_SCRAPE_TIME=05:00
 On EC2:
 
 ```sh
-cd /srv/jobcron/app/deploy/production
+cd /srv/jobcron/deploy/production
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 docker compose logs -f

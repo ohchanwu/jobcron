@@ -10,8 +10,8 @@ The deploy files in this directory are configured for:
 
 - Public URL: `https://demo.jobcron.app`
 - App data file on the server: `/srv/jobcron/data/jobs.db`
-- App repository directory on the server: `/srv/jobcron/app`
-- App compose directory on the server: `/srv/jobcron/app/deploy/demo`
+- App repository directory on the server: `/srv/jobcron`
+- App compose directory on the server: `/srv/jobcron/deploy/demo`
 - Local prepared database backup: `/tmp/jobs.db`
 
 Do not upload `ai_keys.json`. AI runs locally before deployment. The server reads cached AI results from `jobs.db`.
@@ -73,14 +73,15 @@ KEY=~/path/to/your-key.pem
 Create the server directories, then clone the repository if this is the first deploy:
 
 ```sh
-ssh -i "$KEY" ec2-user@$EC2_HOST 'sudo mkdir -p /srv/jobcron/app /srv/jobcron/data && sudo chown -R ec2-user:ec2-user /srv/jobcron'
-ssh -i "$KEY" ec2-user@$EC2_HOST 'git clone <repo-url> /srv/jobcron/app'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'sudo mkdir -p /srv/jobcron && sudo chown -R ec2-user:ec2-user /srv/jobcron'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'git clone <repo-url> /srv/jobcron'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'mkdir -p /srv/jobcron/data'
 ```
 
 For later deploys, pull the latest code instead:
 
 ```sh
-ssh -i "$KEY" ec2-user@$EC2_HOST 'cd /srv/jobcron/app && git pull --ff-only'
+ssh -i "$KEY" ec2-user@$EC2_HOST 'cd /srv/jobcron && git pull --ff-only'
 ```
 
 Using Git for the app files is safe for this repo because the tracked files do not include the runtime database, `.env`, or `ai_keys.json`. Those stay local to your Mac or the server.
@@ -151,7 +152,7 @@ docker login <registry>
 On the server:
 
 ```sh
-cd /srv/jobcron/app/deploy/demo
+cd /srv/jobcron/deploy/demo
 openssl rand -hex 32
 ```
 
@@ -177,7 +178,7 @@ The proxy secret lets the app trust Caddy's forwarded client-IP header for login
 On the server:
 
 ```sh
-cd /srv/jobcron/app/deploy/demo
+cd /srv/jobcron/deploy/demo
 set -a
 . ./.env
 set +a

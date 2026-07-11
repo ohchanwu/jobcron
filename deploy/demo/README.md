@@ -19,8 +19,8 @@ configuration with PostgreSQL/RDS, login sessions, and no `--demo` flag.
 
 ## Files on the instance
 
-Clone or pull this repository to `/srv/jobcron/app`, then run Compose from
-`/srv/jobcron/app/deploy/demo`.
+Clone or pull this repository to `/srv/jobcron`, then run Compose from
+`/srv/jobcron/deploy/demo`.
 
 Put the prepared database at:
 
@@ -28,7 +28,7 @@ Put the prepared database at:
 /srv/jobcron/data/jobs.db
 ```
 
-Create `/srv/jobcron/app/deploy/demo/.env`:
+Create `/srv/jobcron/deploy/demo/.env`:
 
 ```sh
 JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64
@@ -57,7 +57,7 @@ docker buildx build --platform linux/arm64 -f deploy/demo/Dockerfile -t "$IMAGE"
 On the EC2 instance, pull the image before starting Compose:
 
 ```sh
-cd /srv/jobcron/app/deploy/demo
+cd /srv/jobcron/deploy/demo
 set -a
 . ./.env
 set +a
@@ -83,7 +83,7 @@ GitHub releases into:
 ## Start
 
 ```sh
-cd /srv/jobcron/app/deploy/demo
+cd /srv/jobcron/deploy/demo
 set -a
 . ./.env
 set +a
