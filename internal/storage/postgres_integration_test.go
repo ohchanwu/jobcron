@@ -31,6 +31,118 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 	}
 }
 
+func TestRenameImportOwnerMigrationRenamesLegacyFallbackAndPreservesID(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.SQLDB().ExecContext(ctx, `DELETE FROM users`); err != nil {
+		t.Fatal(err)
+	}
+	var legacyID int64
+	if err := st.SQLDB().QueryRowContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('sqlite-import-owner@job-scraper.local', 'imported-sqlite-no-login', now(), now())
+RETURNING id`).Scan(&legacyID); err != nil {
+		t.Fatal(err)
+	}
+
+	executeRenameImportOwnerMigration(t, st)
+
+	var gotID int64
+	var gotEmail, gotPasswordHash string
+	if err := st.SQLDB().QueryRowContext(ctx, `
+SELECT id, email, password_hash
+  FROM users
+ WHERE email = 'sqlite-import-owner@jobcron.local'`).Scan(&gotID, &gotEmail, &gotPasswordHash); err != nil {
+		t.Fatal(err)
+	}
+	if gotID != legacyID {
+		t.Fatalf("renamed owner ID = %d, want %d", gotID, legacyID)
+	}
+	if gotEmail != "sqlite-import-owner@jobcron.local" || gotPasswordHash != "imported-sqlite-no-login" {
+		t.Fatalf("renamed owner = email %q password_hash %q", gotEmail, gotPasswordHash)
+	}
+}
+
+func TestRenameImportOwnerMigrationPreservesRealOwner(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.SQLDB().ExecContext(ctx, `DELETE FROM users`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SQLDB().ExecContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('owner@example.com', 'real-hash', now(), now())`); err != nil {
+		t.Fatal(err)
+	}
+
+	executeRenameImportOwnerMigration(t, st)
+
+	var count int
+	if err := st.SQLDB().QueryRowContext(ctx, `
+SELECT count(*)
+  FROM users
+ WHERE email = 'owner@example.com'
+   AND password_hash = 'real-hash'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("real owner count = %d, want 1", count)
+	}
+}
+
+func TestRenameImportOwnerMigrationPreservesLegacyRowWhenCanonicalAddressExists(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.SQLDB().ExecContext(ctx, `DELETE FROM users`); err != nil {
+		t.Fatal(err)
+	}
+	var legacyID, canonicalID int64
+	if err := st.SQLDB().QueryRowContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('sqlite-import-owner@job-scraper.local', 'imported-sqlite-no-login', now(), now())
+RETURNING id`).Scan(&legacyID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SQLDB().QueryRowContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('sqlite-import-owner@jobcron.local', 'canonical-owner-hash', now(), now())
+RETURNING id`).Scan(&canonicalID); err != nil {
+		t.Fatal(err)
+	}
+
+	executeRenameImportOwnerMigration(t, st)
+
+	var gotLegacyID, gotCanonicalID int64
+	if err := st.SQLDB().QueryRowContext(ctx, `
+SELECT id
+  FROM users
+ WHERE email = 'sqlite-import-owner@job-scraper.local'
+   AND password_hash = 'imported-sqlite-no-login'`).Scan(&gotLegacyID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SQLDB().QueryRowContext(ctx, `
+SELECT id
+  FROM users
+ WHERE email = 'sqlite-import-owner@jobcron.local'
+   AND password_hash = 'canonical-owner-hash'`).Scan(&gotCanonicalID); err != nil {
+		t.Fatal(err)
+	}
+	if gotLegacyID != legacyID || gotCanonicalID != canonicalID {
+		t.Fatalf("user IDs after collision = legacy %d canonical %d, want legacy %d canonical %d", gotLegacyID, gotCanonicalID, legacyID, canonicalID)
+	}
+}
+
+func executeRenameImportOwnerMigration(t *testing.T, st *Store) {
+	t.Helper()
+	sqlBytes, err := postgresMigrationsFS.ReadFile("postgres_migrations/0013_rename_import_owner_email.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SQLDB().ExecContext(context.Background(), string(sqlBytes)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPostgresScrapeRunsStartFinishAndLatestRuntime(t *testing.T) {
 	st, _ := newPostgresTestStoreWithSchema(t)
 	ctx := context.Background()

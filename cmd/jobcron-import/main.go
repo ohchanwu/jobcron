@@ -12,7 +12,7 @@ import (
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
-const defaultOwnerEmail = "sqlite-import-owner@job-scraper.local"
+const defaultOwnerEmail = "sqlite-import-owner@jobcron.local"
 
 type importOptions struct {
 	sqlitePath  string

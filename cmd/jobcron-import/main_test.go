@@ -51,6 +51,12 @@ func TestImportDryRunReportsSQLiteCountsWithoutPostgres(t *testing.T) {
 	}
 }
 
+func TestImportOwnerDefaultEmailUsesCanonicalJobcronAddress(t *testing.T) {
+	if defaultOwnerEmail != "sqlite-import-owner@jobcron.local" {
+		t.Fatalf("default owner email = %q, want canonical jobcron address", defaultOwnerEmail)
+	}
+}
+
 func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testing.T) {
 	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
