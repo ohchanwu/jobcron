@@ -163,6 +163,67 @@ WHERE p.source = 'jumpit' AND p.source_posting_id = 'import-1' AND s.total = 87`
 	}
 }
 
+func TestImportSQLiteToPostgresUsesExistingOwnerWithoutChangingPassword(t *testing.T) {
+	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
+	if postgresURL == "" {
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
+	}
+	sqlitePath := seedSQLiteImportFixture(t)
+	schema := createPostgresImportSchema(t, postgresURL)
+	targetURL := databaseURLWithSearchPath(postgresURL, schema)
+	ownerEmail := "existing-owner@example.com"
+	passwordHash := "real-owner-password-hash"
+
+	preexisting, err := storage.OpenPostgres(targetURL)
+	if err != nil {
+		t.Fatalf("OpenPostgres preexisting target: %v", err)
+	}
+	var ownerID int64
+	if err := preexisting.SQLDB().QueryRow(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ($1, $2, now(), now())
+RETURNING id`, ownerEmail, passwordHash).Scan(&ownerID); err != nil {
+		_ = preexisting.Close()
+		t.Fatalf("seed existing owner: %v", err)
+	}
+	if err := preexisting.Close(); err != nil {
+		t.Fatalf("close preexisting target: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  ownerEmail,
+		out:         &out,
+	}); err != nil {
+		t.Fatalf("runImport: %v\n%s", err, out.String())
+	}
+
+	db, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatalf("open postgres verification db: %v", err)
+	}
+	defer db.Close()
+
+	if gotOwnerID := lookupUserIDByEmail(t, db, ownerEmail); gotOwnerID != ownerID {
+		t.Fatalf("imported owner ID = %d, want existing owner ID %d", gotOwnerID, ownerID)
+	}
+	var gotPasswordHash string
+	if err := db.QueryRow(`SELECT password_hash FROM users WHERE id = $1`, ownerID).Scan(&gotPasswordHash); err != nil {
+		t.Fatalf("query existing owner password hash: %v", err)
+	}
+	if gotPasswordHash != passwordHash {
+		t.Fatalf("existing owner password hash = %q, want %q", gotPasswordHash, passwordHash)
+	}
+
+	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 1)
+	for _, table := range []string{"profiles", "scores", "bookmarks", "not_interested"} {
+		assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id = %d`, table, ownerID), 1)
+		assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id <> %d`, table, ownerID), 0)
+	}
+}
+
 func seedSQLiteImportFixture(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
