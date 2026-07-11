@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 func TestFaviconServedFromStatic(t *testing.T) {

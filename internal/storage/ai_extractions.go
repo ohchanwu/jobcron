@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/ai"
 )
 
 // UpsertAIExtraction caches one Stage-1 extraction, keyed by

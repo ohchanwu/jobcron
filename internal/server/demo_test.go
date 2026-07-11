@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
-	"github.com/ohchanwu/job-scraper/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 func TestDemoModeRejectsWriteRoutes(t *testing.T) {

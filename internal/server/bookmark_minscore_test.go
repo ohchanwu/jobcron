@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/profile"
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 // scoreEach upserts a Total for each posting id, failing the test on error.

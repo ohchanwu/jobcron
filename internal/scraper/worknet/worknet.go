@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // Source is the stable source identifier persisted on every Posting we

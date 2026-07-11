@@ -2,7 +2,7 @@
 // internal/scoring/testdata/qa_postings.json. It is a developer tool for
 // refreshing the Step 5.5 dealbreaker QA fixture as postings expire — run it
 // with `go run ./cmd/capture`. Not part of the shipped product; the release
-// workflow builds only ./cmd/job-scraper.
+// workflow builds only ./cmd/jobcron.
 package main
 
 import (
@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
-	"github.com/ohchanwu/job-scraper/internal/scraper/jumpit"
+	"github.com/ohchanwu/jobcron/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper/jumpit"
 )
 
 const (

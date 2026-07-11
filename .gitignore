@@ -1,6 +1,6 @@
 # Compiled binaries
-/job-scraper
-/job-scraper.exe
+/jobcron
+/jobcron.exe
 *.exe
 
 # GoReleaser output

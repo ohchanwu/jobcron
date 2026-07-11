@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // detection is the per-job verdict produced by the tenant's 신입 detector.

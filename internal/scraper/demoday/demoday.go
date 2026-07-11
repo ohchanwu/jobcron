@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // Source is the stable source identifier persisted on every Posting we
@@ -29,7 +29,7 @@ const (
 	listingPath       = "/rest/v1/recruits"
 	recruitsRobots    = "/rest/v1/recruits"
 	siteRobotsCheck   = "/recruits"
-	userAgent         = "job-scraper/0.1 (+github.com/ohchanwu/job-scraper)"
+	userAgent         = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
 	robotsTTL         = 24 * time.Hour
 	requestTimeout    = 30 * time.Second
 )
@@ -42,7 +42,7 @@ const (
 // scrape will 401 until the binary is updated.
 //
 // The scraper picks the key in this order:
-//  1. JOBSCRAPER_DEMODAY_ANON_KEY env var, if set and non-empty.
+//  1. JOBCRON_DEMODAY_ANON_KEY env var, if set and non-empty.
 //  2. This baked-in constant otherwise.
 //
 // The env-var path lets the user paste a fresh key from a current
@@ -54,7 +54,7 @@ const bakedInSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
 	"cYTA9nOmjVbwVF784xr8BjGK1pkyFAA4_aQzfV73LhU"
 
 // anonKeyEnvVar is the env var that overrides the baked-in key.
-const anonKeyEnvVar = "JOBSCRAPER_DEMODAY_ANON_KEY"
+const anonKeyEnvVar = "JOBCRON_DEMODAY_ANON_KEY"
 
 // resolveAnonKey returns the env-var key when set, falling back to the
 // baked-in default. Pulled into a function so tests can swap it.

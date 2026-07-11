@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // postingColumns is the column list shared by the insert and select queries,

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // Cross-portal deduplication — design notes.

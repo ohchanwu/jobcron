@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // SetNotInterested marks postingID as "관심 없음" with the given timestamp,

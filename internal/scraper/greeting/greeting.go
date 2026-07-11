@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // Source is the stable identifier persisted on every Posting and matched
@@ -36,7 +36,7 @@ import (
 const Source = "greeting"
 
 const (
-	userAgent       = "job-scraper/0.1 (+github.com/ohchanwu/job-scraper)"
+	userAgent       = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
 	robotsCheckPath = "/ko/"
 	robotsTTL       = 24 * time.Hour
 	requestTimeout  = 30 * time.Second

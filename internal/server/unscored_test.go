@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 // TestBuildBriefingSkipsUnscoredPosting locks in Bug 2B: a posting that exists

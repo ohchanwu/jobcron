@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/config"
+	"github.com/ohchanwu/jobcron/internal/config"
 )
 
 func TestLoadProductionRequiresDatabaseURL(t *testing.T) {
-	env := map[string]string{"JOBSCRAPER_ENV": "production", "SESSION_SECRET": strings.Repeat("a", 32)}
+	env := map[string]string{"JOBCRON_ENV": "production", "SESSION_SECRET": strings.Repeat("a", 32)}
 	_, err := config.Load(nil, env)
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
 		t.Fatalf("Load error = %v, want DATABASE_URL requirement", err)
@@ -16,7 +16,7 @@ func TestLoadProductionRequiresDatabaseURL(t *testing.T) {
 }
 
 func TestLoadProductionRequiresSessionSecret(t *testing.T) {
-	env := map[string]string{"JOBSCRAPER_ENV": "production", "DATABASE_URL": "postgres://db.example.invalid/jobs"}
+	env := map[string]string{"JOBCRON_ENV": "production", "DATABASE_URL": "postgres://db.example.invalid/jobs"}
 	_, err := config.Load(nil, env)
 	if err == nil || !strings.Contains(err.Error(), "SESSION_SECRET") {
 		t.Fatalf("Load error = %v, want SESSION_SECRET requirement", err)
@@ -87,17 +87,17 @@ func TestLoadParsesVersionFalseForms(t *testing.T) {
 }
 
 func TestLoadInvalidEnvPortReturnsError(t *testing.T) {
-	_, err := config.Load(nil, map[string]string{"JOBSCRAPER_PORT": "abc"})
-	if err == nil || !strings.Contains(err.Error(), "JOBSCRAPER_PORT") {
-		t.Fatalf("Load error = %v, want JOBSCRAPER_PORT error", err)
+	_, err := config.Load(nil, map[string]string{"JOBCRON_PORT": "abc"})
+	if err == nil || !strings.Contains(err.Error(), "JOBCRON_PORT") {
+		t.Fatalf("Load error = %v, want JOBCRON_PORT error", err)
 	}
 }
 
 func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	env := map[string]string{
-		"JOBSCRAPER_DEMO":         "1",
-		"JOBSCRAPER_PROXY_SECRET": "proxy-secret",
-		"JOBSCRAPER_WORKNET_KEY":  "env-key",
+		"JOBCRON_DEMO":         "1",
+		"JOBCRON_PROXY_SECRET": "proxy-secret",
+		"JOBCRON_WORKNET_KEY":  "env-key",
 	}
 	cfg, err := config.Load([]string{
 		"--host", "0.0.0.0",
@@ -130,6 +130,22 @@ func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	}
 	if cfg.WorknetKey != "flag-key" {
 		t.Fatalf("WorknetKey = %q, want flag-key", cfg.WorknetKey)
+	}
+}
+
+func TestLoadIgnoresLegacyEnvironmentPrefix(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{
+		"JOBSCRAPER_ENV":  "production",
+		"JOBSCRAPER_PORT": "9000",
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Production {
+		t.Fatal("legacy JOBSCRAPER_ENV enabled production")
+	}
+	if cfg.Port == 9000 {
+		t.Fatal("legacy JOBSCRAPER_PORT changed port")
 	}
 }
 

@@ -3,7 +3,7 @@ package scoring
 import (
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 // TestNearMissCareerAward locks the round(w × 2/5) derivation the profile UI

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
-	"github.com/ohchanwu/job-scraper/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 // TestInternGuardEndToEnd (R3): scoreAll reads a bad cached extraction

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/auth"
 )
 
 func TestLoginRateLimitBlocksSixthFailedAttemptUntilWindowExpires(t *testing.T) {

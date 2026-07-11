@@ -1,4 +1,4 @@
-// Command job-scraper-user manages production app user accounts.
+// Command jobcron-user manages production app user accounts.
 package main
 
 import (
@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ohchanwu/job-scraper/internal/auth"
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/storage"
 	"golang.org/x/term"
 )
 
@@ -31,7 +31,7 @@ func run(ctx context.Context, args []string, env envMap, in io.Reader, out io.Wr
 
 func runWithPrompt(ctx context.Context, args []string, env envMap, in io.Reader, out, promptOut io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: job-scraper-user create-owner|reset-password --database-url URL --email EMAIL")
+		return errors.New("usage: jobcron-user create-owner|reset-password --database-url URL --email EMAIL")
 	}
 	switch args[0] {
 	case "create-owner":
@@ -90,7 +90,7 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 }
 
 func ownerPassword(env envMap, in io.Reader, out io.Writer) (string, error) {
-	if password := env["JOBSCRAPER_OWNER_PASSWORD"]; password != "" {
+	if password := env["JOBCRON_OWNER_PASSWORD"]; password != "" {
 		return password, nil
 	}
 	if in == nil {

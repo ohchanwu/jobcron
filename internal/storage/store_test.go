@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
-	"github.com/ohchanwu/job-scraper/internal/appdata"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // requiredObjects are the tables / virtual tables the migrations must create.
@@ -322,9 +322,9 @@ func TestPostgresRuntimeStorageMethods(t *testing.T) {
 
 func newPostgresTestStore(t *testing.T) *Store {
 	t.Helper()
-	databaseURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	databaseURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if databaseURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
 	}
 	schema := postgresTestSchemaName(t)
 	admin, err := sql.Open("pgx", databaseURL)

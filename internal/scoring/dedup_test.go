@@ -3,7 +3,7 @@ package scoring
 import (
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 func TestNormalizeCompany(t *testing.T) {

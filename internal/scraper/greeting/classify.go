@@ -3,7 +3,7 @@ package greeting
 import (
 	"strings"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // careerType enum values from jobPositionCareer.careerType.

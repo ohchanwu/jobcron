@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scoring"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scoring"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // bookmarksView is the view model for the /bookmarks page.

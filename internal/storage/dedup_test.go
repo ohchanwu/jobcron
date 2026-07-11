@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // dedupPosting builds a sample posting with the given source and id, so a

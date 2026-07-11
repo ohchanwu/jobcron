@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // envelope is the shared response wrapper for every rallit endpoint. We

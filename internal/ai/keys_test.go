@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/appdata"
 )
 
 func TestKeyStoreRoundTrip(t *testing.T) {

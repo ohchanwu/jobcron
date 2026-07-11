@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 // Scheduler runs the optional daily scheduled scrape loop.

@@ -1,4 +1,4 @@
-// Command job-scraper runs the 신입 IT Job Briefing — a local web app that
+// Command jobcron runs the 신입 IT Job Briefing — a local web app that
 // scrapes several Korean job boards (점핏, 랠릿, 데모데이, the 그리팅 Korean-ATS
 // tenants, the Greenhouse company boards 당근·크래프톤·몰로코·센드버드, and optionally
 // 워크넷), scores new-grad IT job postings against a user profile, and renders a
@@ -20,17 +20,17 @@ import (
 
 	"github.com/pkg/browser"
 
-	"github.com/ohchanwu/job-scraper/internal/appdata"
-	"github.com/ohchanwu/job-scraper/internal/config"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
-	"github.com/ohchanwu/job-scraper/internal/scraper/demoday"
-	"github.com/ohchanwu/job-scraper/internal/scraper/greenhouse"
-	"github.com/ohchanwu/job-scraper/internal/scraper/greeting"
-	"github.com/ohchanwu/job-scraper/internal/scraper/jumpit"
-	"github.com/ohchanwu/job-scraper/internal/scraper/rallit"
-	"github.com/ohchanwu/job-scraper/internal/scraper/worknet"
-	"github.com/ohchanwu/job-scraper/internal/server"
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/config"
+	"github.com/ohchanwu/jobcron/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper/demoday"
+	"github.com/ohchanwu/jobcron/internal/scraper/greenhouse"
+	"github.com/ohchanwu/jobcron/internal/scraper/greeting"
+	"github.com/ohchanwu/jobcron/internal/scraper/jumpit"
+	"github.com/ohchanwu/jobcron/internal/scraper/rallit"
+	"github.com/ohchanwu/jobcron/internal/scraper/worknet"
+	"github.com/ohchanwu/jobcron/internal/server"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 // version is the build version, overridden by GoReleaser via -ldflags.
@@ -39,23 +39,23 @@ var version = "dev"
 func main() {
 	cfg, err := config.Load(os.Args[1:], environMap(os.Environ()))
 	if err != nil {
-		log.Fatalf("job-scraper: %v", err)
+		log.Fatalf("jobcron: %v", err)
 	}
 	configRoot, err := os.UserConfigDir()
 	if err != nil {
-		log.Fatalf("job-scraper: locate user config dir: %v", err)
+		log.Fatalf("jobcron: locate user config dir: %v", err)
 	}
 	if err := prepareApplicationData(configRoot); err != nil {
-		log.Fatalf("job-scraper: %v", err)
+		log.Fatalf("jobcron: %v", err)
 	}
 	if cfg.ShowVersion {
-		fmt.Println("job-scraper", version)
+		fmt.Println("jobcron", version)
 		return
 	}
 
 	store, err := openConfiguredStore(cfg)
 	if err != nil {
-		log.Fatalf("job-scraper: %v", err)
+		log.Fatalf("jobcron: %v", err)
 	}
 	defer store.Close()
 
@@ -69,13 +69,13 @@ func main() {
 	if cfg.WorknetKey != "" {
 		wn, err := worknet.New(cfg.WorknetKey)
 		if err != nil {
-			log.Fatalf("job-scraper: %v", err)
+			log.Fatalf("jobcron: %v", err)
 		}
 		sources = append(sources, wn)
 	} else {
-		fmt.Println("job-scraper: 워크넷 key가 없어 워크넷 출처는 꺼져 있어요",
+		fmt.Println("jobcron: 워크넷 key가 없어 워크넷 출처는 꺼져 있어요",
 			"(점핏·랠릿·데모데이·그리팅·당근·크래프톤·몰로코·센드버드는 켜져 있어요).",
-			"워크넷도 보려면 --worknet-api-key 플래그나 JOBSCRAPER_WORKNET_KEY 환경변수를 설정하세요.")
+			"워크넷도 보려면 --worknet-api-key 플래그나 JOBCRON_WORKNET_KEY 환경변수를 설정하세요.")
 	}
 	srv := server.New(store, sources...)
 	srv.SetSessionSecret(cfg.SessionSecret)
@@ -87,7 +87,7 @@ func main() {
 	// (or simply no key configured) leaves AI off and the briefing falls back to
 	// the v1.5 offline scoring. The user enables AI on /profile.
 	if err := srv.ReconfigureAI(context.Background()); err != nil {
-		log.Printf("job-scraper: AI 설정을 불러오지 못해 일반 점수로 시작해요: %v", err)
+		log.Printf("jobcron: AI 설정을 불러오지 못해 일반 점수로 시작해요: %v", err)
 	}
 	// Heal any posting left unscored by an interrupted scrape (e.g. a crash or
 	// restart between insert and the end-of-run scoring) so it never renders as
@@ -95,7 +95,7 @@ func main() {
 	// it never calls the provider, so there is no startup cost or token spend.
 	// Non-fatal: a transient error just defers healing to the next scrape/save.
 	if _, err := srv.RescoreAll(context.Background()); err != nil {
-		log.Printf("job-scraper: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
+		log.Printf("jobcron: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
 	}
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
@@ -104,17 +104,17 @@ func main() {
 			Server:          srv,
 			DailyScrapeTime: cfg.DailyScrapeTime,
 		}); err != nil {
-			log.Fatalf("job-scraper: scheduler: %v", err)
+			log.Fatalf("jobcron: scheduler: %v", err)
 		}
-		log.Printf("job-scraper: 매일 %s KST에 자동 스크랩을 실행해요.", cfg.DailyScrapeTime)
+		log.Printf("jobcron: 매일 %s KST에 자동 스크랩을 실행해요.", cfg.DailyScrapeTime)
 	}
 
 	ln, addr, err := listen(cfg.Host, cfg.Port)
 	if err != nil {
-		log.Fatalf("job-scraper: %v", err)
+		log.Fatalf("jobcron: %v", err)
 	}
 	url := "http://" + addr
-	fmt.Printf("job-scraper: %s 에서 실행 중입니다. 종료하려면 Ctrl+C를 누르세요.\n", url)
+	fmt.Printf("jobcron: %s 에서 실행 중입니다. 종료하려면 Ctrl+C를 누르세요.\n", url)
 
 	if !cfg.NoOpen {
 		_ = browser.OpenURL(url) // best effort — failure is non-fatal
@@ -130,14 +130,14 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
-		fmt.Println("\njob-scraper: 종료 중...")
+		fmt.Println("\njobcron: 종료 중...")
 		appCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(ctx)
 	}()
 	if err := httpSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("job-scraper: %v", err)
+		log.Fatalf("jobcron: %v", err)
 	}
 }
 

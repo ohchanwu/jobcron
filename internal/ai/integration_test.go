@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // Live BYOK provider tests. Excluded from normal runs by the `integration` build
 // tag AND skipped unless the provider's key env var is set, so they never run in
 // CI and never spend tokens without an explicit opt-in. Run one with:
 //
-//	JOBSCRAPER_ANTHROPIC_KEY=sk-ant-... go test -tags integration -run Live ./internal/ai/
+//	JOBCRON_ANTHROPIC_KEY=sk-ant-... go test -tags integration -run Live ./internal/ai/
 //
 // They confirm the REAL request/response shape and JSON-mode parsing — the
 // external-surface check a stub cannot give: that the live model honors the
@@ -37,7 +37,7 @@ func liveProvider(t *testing.T, name, envKey, model string) Provider {
 	if key == "" {
 		t.Skipf("%s not set — skipping live %s test", envKey, name)
 	}
-	if m := os.Getenv("JOBSCRAPER_AI_MODEL"); m != "" {
+	if m := os.Getenv("JOBCRON_AI_MODEL"); m != "" {
 		model = m // let the runner override the model
 	}
 	p, err := New(name, key, model, time.Second)
@@ -92,5 +92,5 @@ func runLiveContract(t *testing.T, p Provider) {
 }
 
 func TestLiveAnthropic(t *testing.T) {
-	runLiveContract(t, liveProvider(t, "anthropic", "JOBSCRAPER_ANTHROPIC_KEY", DefaultModel("anthropic")))
+	runLiveContract(t, liveProvider(t, "anthropic", "JOBCRON_ANTHROPIC_KEY", DefaultModel("anthropic")))
 }

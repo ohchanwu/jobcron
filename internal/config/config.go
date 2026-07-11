@@ -34,33 +34,33 @@ type Config struct {
 	ShowVersion      bool
 }
 
-// Load parses job-scraper configuration. Existing CLI flags override matching
+// Load parses jobcron configuration. Existing CLI flags override matching
 // environment defaults.
 func Load(args []string, env map[string]string) (Config, error) {
 	cfg := Config{
-		Production:       envValue(env, "JOBSCRAPER_ENV") == "production",
+		Production:       envValue(env, "JOBCRON_ENV") == "production",
 		DatabaseURL:      envValue(env, "DATABASE_URL"),
 		SessionSecret:    []byte(envValue(env, "SESSION_SECRET")),
-		SchedulerEnabled: envBool(envValue(env, "JOBSCRAPER_SCHEDULER_ENABLED")),
-		DailyScrapeTime:  envDefault(env, "JOBSCRAPER_DAILY_SCRAPE_TIME", defaultDailyScrapeTime),
-		AdminToken:       envValue(env, "JOBSCRAPER_ADMIN_TOKEN"),
-		ProxySecret:      envValue(env, "JOBSCRAPER_PROXY_SECRET"),
-		WorknetKey:       envValue(env, "JOBSCRAPER_WORKNET_KEY"),
-		Host:             envDefault(env, "JOBSCRAPER_HOST", defaultHost),
+		SchedulerEnabled: envBool(envValue(env, "JOBCRON_SCHEDULER_ENABLED")),
+		DailyScrapeTime:  envDefault(env, "JOBCRON_DAILY_SCRAPE_TIME", defaultDailyScrapeTime),
+		AdminToken:       envValue(env, "JOBCRON_ADMIN_TOKEN"),
+		ProxySecret:      envValue(env, "JOBCRON_PROXY_SECRET"),
+		WorknetKey:       envValue(env, "JOBCRON_WORKNET_KEY"),
+		Host:             envDefault(env, "JOBCRON_HOST", defaultHost),
 		Port:             defaultPort,
-		NoOpen:           envBool(envValue(env, "JOBSCRAPER_NO_OPEN")),
-		Demo:             envBool(envValue(env, "JOBSCRAPER_DEMO")),
-		DBPath:           envValue(env, "JOBSCRAPER_DB"),
+		NoOpen:           envBool(envValue(env, "JOBCRON_NO_OPEN")),
+		Demo:             envBool(envValue(env, "JOBCRON_DEMO")),
+		DBPath:           envValue(env, "JOBCRON_DB"),
 	}
-	if v := envValue(env, "JOBSCRAPER_PORT"); v != "" {
+	if v := envValue(env, "JOBCRON_PORT"); v != "" {
 		port, err := strconv.Atoi(v)
 		if err != nil {
-			return Config{}, fmt.Errorf("JOBSCRAPER_PORT: %w", err)
+			return Config{}, fmt.Errorf("JOBCRON_PORT: %w", err)
 		}
 		cfg.Port = port
 	}
 
-	fs := flag.NewFlagSet("job-scraper", flag.ContinueOnError)
+	fs := flag.NewFlagSet("jobcron", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.IntVar(&cfg.Port, "port", cfg.Port, "preferred port; the next ten are tried if it is busy")
 	fs.StringVar(&cfg.Host, "host", cfg.Host, "host/interface to bind")

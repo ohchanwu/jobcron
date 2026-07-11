@@ -1,6 +1,6 @@
 package server
 
-import "github.com/ohchanwu/job-scraper/internal/scraper"
+import "github.com/ohchanwu/jobcron/internal/scraper"
 
 // sourceLabels maps source identifiers to the short Korean display label
 // rendered in the UI ("점핏" inline after the company name). When a new

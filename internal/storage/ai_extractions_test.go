@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/ai"
 )
 
 func ptr(n int) *int { return &n }

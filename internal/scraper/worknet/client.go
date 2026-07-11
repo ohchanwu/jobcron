@@ -22,7 +22,7 @@ const (
 
 	// userAgent identifies job-scraper politely, matching the Jumpit
 	// scraper's etiquette.
-	userAgent = "job-scraper/0.1 (+github.com/ohchanwu/job-scraper)"
+	userAgent = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
 
 	// robotsTTL is how long a robots.txt verdict is cached.
 	robotsTTL = 24 * time.Hour

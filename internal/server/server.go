@@ -13,12 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
-	"github.com/ohchanwu/job-scraper/internal/profile"
-	"github.com/ohchanwu/job-scraper/internal/scoring"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
-	"github.com/ohchanwu/job-scraper/internal/storage"
-	"github.com/ohchanwu/job-scraper/web"
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/scoring"
+	"github.com/ohchanwu/jobcron/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/storage"
+	"github.com/ohchanwu/jobcron/web"
 )
 
 // scrapeNewCap bounds how many new postings one scrape will detail-fetch — a

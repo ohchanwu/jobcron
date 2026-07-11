@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 const defaultOwnerEmail = "sqlite-import-owner@job-scraper.local"

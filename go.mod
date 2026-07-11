@@ -1,4 +1,4 @@
-module github.com/ohchanwu/job-scraper
+module github.com/ohchanwu/jobcron
 
 go 1.26.3
 

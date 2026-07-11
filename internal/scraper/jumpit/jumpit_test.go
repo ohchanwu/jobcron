@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // listingJSON builds a minimal listing envelope with the given position ids.

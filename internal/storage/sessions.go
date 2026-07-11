@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/auth"
 )
 
 // CreateSession stores a hashed session token for a user. Callers must pass the

@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // pure-Go PostgreSQL driver, registered as "pgx"
-	"github.com/ohchanwu/job-scraper/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/appdata"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver, registered as "sqlite"
 )
 

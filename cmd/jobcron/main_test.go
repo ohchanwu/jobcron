@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/appdata"
-	"github.com/ohchanwu/job-scraper/internal/config"
+	"github.com/ohchanwu/jobcron/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/config"
 )
 
 func TestListenFallsBackWhenPortBusy(t *testing.T) {

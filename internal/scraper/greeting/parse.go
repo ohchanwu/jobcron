@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // nextDataPattern pulls the JSON payload out of the SSR Next.js page. The

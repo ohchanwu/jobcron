@@ -9,14 +9,14 @@ import (
 	"testing"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/ohchanwu/job-scraper/internal/auth"
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 func TestRunCreateOwnerUsesPasswordFromEnv(t *testing.T) {
-	postgresURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
 	}
 	schema := createUserCLITestSchema(t, postgresURL)
 	databaseURL := databaseURLWithSearchPath(postgresURL, schema)
@@ -26,7 +26,7 @@ func TestRunCreateOwnerUsesPasswordFromEnv(t *testing.T) {
 		"create-owner",
 		"--database-url", databaseURL,
 		"--email", "owner@example.com",
-	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "top secret"}, nil, &out)
+	}, envMap{"JOBCRON_OWNER_PASSWORD": "top secret"}, nil, &out)
 	if err != nil {
 		t.Fatalf("run create-owner: %v", err)
 	}
@@ -50,14 +50,14 @@ func TestRunCreateOwnerUsesPasswordFromEnv(t *testing.T) {
 }
 
 func TestRunCreateOwnerFailsWhenOwnerExistsUntilResetPassword(t *testing.T) {
-	postgresURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
 	}
 	schema := createUserCLITestSchema(t, postgresURL)
 	databaseURL := databaseURLWithSearchPath(postgresURL, schema)
 
-	env := envMap{"JOBSCRAPER_OWNER_PASSWORD": "first password"}
+	env := envMap{"JOBCRON_OWNER_PASSWORD": "first password"}
 	if err := run(context.Background(), []string{
 		"create-owner",
 		"--database-url", databaseURL,
@@ -70,7 +70,7 @@ func TestRunCreateOwnerFailsWhenOwnerExistsUntilResetPassword(t *testing.T) {
 		"create-owner",
 		"--database-url", databaseURL,
 		"--email", "owner@example.com",
-	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{})
+	}, envMap{"JOBCRON_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("second create-owner error = nil, want owner-exists error")
 	}
@@ -82,7 +82,7 @@ func TestRunCreateOwnerFailsWhenOwnerExistsUntilResetPassword(t *testing.T) {
 		"reset-password",
 		"--database-url", databaseURL,
 		"--email", "owner@example.com",
-	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{}); err != nil {
+	}, envMap{"JOBCRON_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{}); err != nil {
 		t.Fatalf("reset-password: %v", err)
 	}
 
@@ -102,9 +102,9 @@ func TestRunCreateOwnerFailsWhenOwnerExistsUntilResetPassword(t *testing.T) {
 }
 
 func TestRunResetPasswordWithWrongEmailFailsWithoutRenamingOwner(t *testing.T) {
-	postgresURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
 	}
 	schema := createUserCLITestSchema(t, postgresURL)
 	databaseURL := databaseURLWithSearchPath(postgresURL, schema)
@@ -113,7 +113,7 @@ func TestRunResetPasswordWithWrongEmailFailsWithoutRenamingOwner(t *testing.T) {
 		"create-owner",
 		"--database-url", databaseURL,
 		"--email", "owner@example.com",
-	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "first password"}, nil, &bytes.Buffer{}); err != nil {
+	}, envMap{"JOBCRON_OWNER_PASSWORD": "first password"}, nil, &bytes.Buffer{}); err != nil {
 		t.Fatalf("create-owner: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestRunResetPasswordWithWrongEmailFailsWithoutRenamingOwner(t *testing.T) {
 		"reset-password",
 		"--database-url", databaseURL,
 		"--email", "wrong@example.com",
-	}, envMap{"JOBSCRAPER_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{})
+	}, envMap{"JOBCRON_OWNER_PASSWORD": "second password"}, nil, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("reset-password error = nil, want email mismatch error")
 	}

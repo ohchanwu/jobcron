@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/auth"
 )
 
 const (

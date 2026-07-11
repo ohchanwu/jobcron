@@ -19,7 +19,7 @@ const (
 
 	// userAgent identifies job-scraper politely, per the design's operational
 	// commitments.
-	userAgent     = "job-scraper/0.1 (+github.com/ohchanwu/job-scraper)"
+	userAgent     = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
 	originHeader  = "https://jumpit.saramin.co.kr"
 	refererHeader = "https://jumpit.saramin.co.kr/"
 )

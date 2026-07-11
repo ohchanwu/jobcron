@@ -25,7 +25,7 @@ func TestClientGetSendsPoliteHeaders(t *testing.T) {
 	if string(body) != `{"ok":true}` {
 		t.Errorf("body = %q, want the response body", body)
 	}
-	if ua := got.Get("User-Agent"); ua != "job-scraper/0.1 (+github.com/ohchanwu/job-scraper)" {
+	if ua := got.Get("User-Agent"); ua != "job-scraper/0.1 (+github.com/ohchanwu/jobcron)" {
 		t.Errorf("User-Agent = %q", ua)
 	}
 	if o := got.Get("Origin"); o != "https://jumpit.saramin.co.kr" {

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ohchanwu/job-scraper/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/appdata"
 )
 
 // keysFileMode is the permission the BYOK key file is held at. 0600 keeps the

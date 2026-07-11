@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // injectedJD is a posting BODY carrying a hidden instruction trying to hijack

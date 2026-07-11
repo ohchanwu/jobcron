@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ohchanwu/job-scraper/internal/scoring"
+	"github.com/ohchanwu/jobcron/internal/scoring"
 )
 
 // markCrossPortalDuplicates collapses postings that match by source

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // listingRoot is the wrapper for a callTp=L response. The inner <wanted>

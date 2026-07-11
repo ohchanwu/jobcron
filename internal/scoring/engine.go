@@ -3,9 +3,9 @@ package scoring
 import (
 	"sort"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
-	"github.com/ohchanwu/job-scraper/internal/profile"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // aiLineLabel is the chip label for the merged Stage-2 AI delta.

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ohchanwu/job-scraper/internal/profile"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // TestScoreCareerOverride exercises the path where the parsed experience

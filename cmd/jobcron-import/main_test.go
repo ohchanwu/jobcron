@@ -14,9 +14,9 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/ohchanwu/job-scraper/internal/ai"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 func TestImportDryRunReportsSQLiteCountsWithoutPostgres(t *testing.T) {
@@ -52,9 +52,9 @@ func TestImportDryRunReportsSQLiteCountsWithoutPostgres(t *testing.T) {
 }
 
 func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testing.T) {
-	postgresURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
 	}
 	sqlitePath := seedSQLiteImportFixture(t)
 	schema := createPostgresImportSchema(t, postgresURL)

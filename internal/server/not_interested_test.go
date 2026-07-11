@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 // decodeNotInterested parses a {"not_interested": bool} response body.

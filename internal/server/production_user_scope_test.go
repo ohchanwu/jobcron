@@ -15,8 +15,8 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/ohchanwu/job-scraper/internal/auth"
-	"github.com/ohchanwu/job-scraper/internal/storage"
+	"github.com/ohchanwu/jobcron/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
@@ -222,9 +222,9 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 
 func newPostgresTestServer(t *testing.T, f *fakeScraper) (*Server, *storage.Store) {
 	t.Helper()
-	databaseURL := os.Getenv("JOBSCRAPER_TEST_POSTGRES_URL")
+	databaseURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if databaseURL == "" {
-		t.Skip("JOBSCRAPER_TEST_POSTGRES_URL not set")
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
 	}
 	schema := postgresTestSchemaName(t)
 	admin, err := sql.Open("pgx", databaseURL)

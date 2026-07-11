@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scoring"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scoring"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // hiddenView is the view model for the /hidden (숨긴 공고) page: every posting

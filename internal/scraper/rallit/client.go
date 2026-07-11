@@ -17,7 +17,7 @@ const (
 	defaultBaseURL = "https://www.rallit.com"
 
 	// userAgent matches the etiquette used by the 점핏 / 워크넷 clients.
-	userAgent = "job-scraper/0.1 (+github.com/ohchanwu/job-scraper)"
+	userAgent = "job-scraper/0.1 (+github.com/ohchanwu/jobcron)"
 
 	// robotsTTL caches the robots.txt verdict for one day.
 	robotsTTL = 24 * time.Hour

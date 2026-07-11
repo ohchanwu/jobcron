@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/scoring"
-	"github.com/ohchanwu/job-scraper/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/scoring"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 // archiveDay is one calendar day's worth of postings on the archive page,

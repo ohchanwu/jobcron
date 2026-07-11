@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ohchanwu/job-scraper/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/ai"
 )
 
 // UpsertAIScore caches one Stage-2 delta, keyed by (posting_id, ai_input_hash,
