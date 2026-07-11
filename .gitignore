@@ -43,4 +43,5 @@ screenshots/
 /docs/research/resources.md
 
 # Local production handoff with human review notes and secrets.
-/docs/reports/production-local-build-report.md
+/docs/reports/*
+/docs/superpowers/specs/*

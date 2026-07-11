@@ -1,7 +1,7 @@
 # Jobcron Hard Rename Design
 
 Date: 2026-07-11
-Status: Approved direction; implementation pending written-spec review
+Status: Approved direction; human feedback incorporated; implementation planning pending
 
 ## Summary
 
@@ -35,13 +35,14 @@ The hard rename has three deliberate compatibility exceptions:
   and AI key file through a one-time directory migration.
 - Preserve PostgreSQL data and migration history.
 - Keep secrets out of Git.
-- Keep all commits local; do not push or rename the GitHub repository from the
-  agent session.
+- Keep all commits local and do not push. The human has completed the GitHub
+  repository rename.
 
 ## Non-Goals
 
 - Renaming the Gas Town rig, bead prefix, polecats, recovery sandboxes, or
-  `/Users/chanbla11mit/gt/jobscraper` workspace path.
+  `/Users/chanbla11mit/gt/jobscraper` workspace path during this implementation
+  phase. A separate Gas Town migration phase remains required.
 - Providing long-term compatibility for old command names or `JOBSCRAPER_*`
   variables.
 - Rewriting historical command output in reports as if it had originally used
@@ -52,22 +53,22 @@ The hard rename has three deliberate compatibility exceptions:
 
 ## Canonical Naming
 
-| Surface | Current | Canonical |
-| --- | --- | --- |
-| Product | `job-scraper` | `jobcron` |
-| Go module | `github.com/ohchanwu/job-scraper` | `github.com/ohchanwu/jobcron` |
-| Main command path | `./cmd/job-scraper` | `./cmd/jobcron` |
-| User command path | `./cmd/job-scraper-user` | `./cmd/jobcron-user` |
-| Import command path | `./cmd/job-scraper-import` | `./cmd/jobcron-import` |
-| Binary | `job-scraper` | `jobcron` |
-| Image variable | `JOBSCRAPER_IMAGE` | `JOBCRON_IMAGE` |
-| Docker image | registry-dependent | `ohchanwu/jobcron:0.2-linuxarm64` |
-| EC2 app directory | `/srv/job-scraper` | `/srv/jobcron` |
-| macOS app directory | `job-scraper` | `jobcron` |
-| Runtime prefix | `JOBSCRAPER_*` | `JOBCRON_*` |
-| Session cookie | `job_scraper_session` | `jobcron_session` |
-| CSRF cookie | `job_scraper_csrf` | `jobcron_csrf` |
-| Demo storage prefix | `jobScraperDemo*` | `jobcronDemo*` |
+| Surface             | Current                           | Canonical                         |
+| ------------------- | --------------------------------- | --------------------------------- |
+| Product             | `job-scraper`                     | `jobcron`                         |
+| Go module           | `github.com/ohchanwu/job-scraper` | `github.com/ohchanwu/jobcron`     |
+| Main command path   | `./cmd/job-scraper`               | `./cmd/jobcron`                   |
+| User command path   | `./cmd/job-scraper-user`          | `./cmd/jobcron-user`              |
+| Import command path | `./cmd/job-scraper-import`        | `./cmd/jobcron-import`            |
+| Binary              | `job-scraper`                     | `jobcron`                         |
+| Image variable      | `JOBSCRAPER_IMAGE`                | `JOBCRON_IMAGE`                   |
+| Docker image        | registry-dependent                | `ohchanwu/jobcron:0.2-linuxarm64` |
+| EC2 app directory   | `/srv/job-scraper`                | `/srv/jobcron`                    |
+| macOS app directory | `job-scraper`                     | `jobcron`                         |
+| Runtime prefix      | `JOBSCRAPER_*`                    | `JOBCRON_*`                       |
+| Session cookie      | `job_scraper_session`             | `jobcron_session`                 |
+| CSRF cookie         | `job_scraper_csrf`                | `jobcron_csrf`                    |
+| Demo storage prefix | `jobScraperDemo*`                 | `jobcronDemo*`                    |
 
 The public domain, PostgreSQL database, and PostgreSQL owner already use
 `jobcron.app`, `jobcron`, and `jobcron_admin` and do not need renaming.
@@ -191,14 +192,29 @@ the renamed runtime variables. Worknet and proxy-secret behavior remain
 unchanged: both stay disabled for the first production pass, and Caddy remains
 the only public entry point.
 
-The human will:
+Human-owned deployment actions:
 
-- rename the GitHub repository,
-- update the shared Git remote URL,
-- rename or recreate the EC2 app directory as `/srv/jobcron`,
-- move the existing server-only `.env` without exposing its values,
-- rename all application-prefixed variables in that `.env`, and
-- pull the canonical image.
+- [x] Rename the GitHub repository to `ohchanwu/jobcron`.
+  - **overseer feedback - settled:** The repository rename is complete. The
+    canonical URLs are `git@github.com:ohchanwu/jobcron.git` for SSH and
+    `https://github.com/ohchanwu/jobcron.git` for HTTPS.
+- [ ] Update each independent local clone's configured `origin` URL, beginning
+  with this checkout.
+  - **overseer feedback - response:** GitHub redirects the old repository URL,
+    so fetch and push may continue to work temporarily, but GitHub cannot
+    rewrite local `.git/config` files. This checkout still reports
+    `git@github.com:ohchanwu/job-scraper.git` for both fetch and push. Linked
+    worktrees sharing the same Git common directory need one update; independent
+    clones need their own update.
+- [ ] Rename or recreate the EC2 app directory as `/srv/jobcron` and move the
+  existing server-only `.env` without exposing its values.
+- [x] Rename all application-prefixed variables in the EC2 `.env`.
+  - **overseer feedback - settled:** The EC2 environment-variable rename is
+    complete.
+- [x] Set the EC2 scrape schedule to `05:00` Korea Standard Time.
+  - **overseer feedback - settled:** The production schedule is updated on the
+    EC2 instance.
+- [ ] Pull the canonical image after it is built and pushed.
 
 No secret value is added to repository files or reports.
 
@@ -229,13 +245,20 @@ including secrets.
 
 ## Gas Town Boundary
 
-Keep the rig name and path as `jobscraper`. Do not rename beads, branches,
-polecats, recovery sandboxes, or the workspace directory.
+Keep the rig name and path as `jobscraper` during the application hard-rename
+implementation. Do not rename beads, branches, polecats, recovery sandboxes, or
+the workspace directory as part of the code and deployment change.
 
-After the human renames the GitHub repository, changing the shared Git `origin`
-URL is sufficient for linked worktrees. The rig identity remains independent of
-the product and repository name. Recovery sandboxes remain intact unless live
-recovery checks later authorize cleanup.
+**overseer feedback - deferred:** The Gas Town rig, workspace path, bead-facing
+identity, and related operational names should eventually become `jobcron` too.
+That work is intentionally deferred, not rejected. It needs its own live-state
+inventory, recovery plan, and migration procedure after the application rename
+is verified. Recovery sandboxes remain intact unless live recovery checks later
+authorize cleanup.
+
+The GitHub repository rename and local Git `origin` update do not require the Gas
+Town rig to be renamed at the same time. Linked worktrees sharing one Git common
+directory inherit a single `origin` update; independent clones do not.
 
 ## Verification
 
@@ -267,12 +290,11 @@ performs the remote and EC2 changes.
 
 ## Rollback
 
-Before the remote is renamed, rollback is a normal Git revert plus renaming the
-MacBook application directory back after stopping the app.
-
-After the remote is renamed, GitHub's repository redirect can temporarily serve
-old clone URLs, but the human should restore the old repository name if a full
-rollback is required. The old Docker volume and historical application-data
+The GitHub repository is already renamed. GitHub's repository redirect can
+temporarily serve old clone URLs, but the human would need to restore the old
+repository name if a full naming rollback were required. Application rollback
+is a normal Git revert plus renaming the MacBook application directory back
+after stopping the app. The old Docker volume and historical application-data
 backups remain untouched, providing data-level rollback without destructive
 cleanup.
 
@@ -288,4 +310,5 @@ cleanup.
   `ohchanwu/jobcron:0.2-linuxarm64`.
 - No secrets enter Git.
 - Gas Town continues operating under the `jobscraper` rig without recovery or
-  bead disruption.
+  bead disruption during this phase, with its eventual rename recorded as a
+  separate migration project.

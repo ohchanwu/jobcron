@@ -39,7 +39,7 @@
 
 1. Implement tasks locally in order.
 2. Commit each task locally.
-3. After Task 12, write `docs/reports/production-local-build-report.md` with:
+3. After Task 12, write `docs/superpowers/specs/2026-07-10-production-local-build-report.md` with:
    - what was built locally,
    - test evidence,
    - exact RDS/secrets/DNS/backup actions needed from the human,
@@ -76,7 +76,7 @@
 - Modify `web/*.html`, `web/*.js`, `web/styles.css`: login, server-backed state, status/tips.
 - Create `deploy/production/Caddyfile`, `deploy/production/compose.yaml`, `deploy/production/README.md`, `deploy/production/HUMAN_DEPLOY_GUIDE.md`: production hostnames, RDS, env, backup docs.
 - Create `deploy/production/backup-pull-macbook.md`: MacBook pull-based backup runbook.
-- Create `docs/reports/production-local-build-report.md`: handoff report after local work.
+- Create `docs/superpowers/specs/2026-07-10-production-local-build-report.md`: handoff report after local work.
 
 ---
 
@@ -950,7 +950,7 @@ git commit -m "feat: add manual and opt-in scheduled ai controls"
 
 **Files:**
 
-- Create: `docs/reports/production-local-build-report.md`
+- Create: `docs/superpowers/specs/2026-07-10-production-local-build-report.md`
 
 **Interfaces:**
 
@@ -983,7 +983,7 @@ Report must include:
 - [ ] **Step 3: Commit locally**
 
 ```bash
-git add docs/reports/production-local-build-report.md
+git add docs/superpowers/specs/2026-07-10-production-local-build-report.md
 git commit -m "docs: add production local build handoff"
 ```
 
@@ -1124,12 +1124,12 @@ Walk:
 
 - [ ] **Step 5: Write final report**
 
-Update `docs/reports/production-local-build-report.md` with final verification.
+Update `docs/superpowers/specs/2026-07-10-production-local-build-report.md` with final verification.
 
 - [ ] **Step 6: Commit locally**
 
 ```bash
-git add docs/reports/production-local-build-report.md
+git add docs/superpowers/specs/2026-07-10-production-local-build-report.md
 git commit -m "docs: update production verification report"
 ```
 
