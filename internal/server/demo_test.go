@@ -134,7 +134,7 @@ func TestDemoPagesRenderDemoState(t *testing.T) {
 	id := mustUpsert(t, st, p)
 	scoreEach(t, st, map[int64]int{id: 50})
 
-	for _, path := range []string{"/", "/archive", "/bookmarks", "/hidden", "/profile"} {
+	for _, path := range []string{"/", "/briefing", "/bookmarks", "/hidden", "/profile"} {
 		t.Run(path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
@@ -145,7 +145,7 @@ func TestDemoPagesRenderDemoState(t *testing.T) {
 			if !strings.Contains(body, `data-demo="true"`) {
 				t.Fatalf("%s missing demo data flag", path)
 			}
-			if path == "/" && strings.Contains(body, `id="scrape"`) {
+			if path == "/briefing" && strings.Contains(body, `id="scrape"`) {
 				t.Fatal("dashboard still renders scrape button")
 			}
 			if path == "/profile" && !strings.Contains(body, "데모 모드에서는 설정을 볼 수만 있어요") {

@@ -99,7 +99,7 @@ func resolveArchiveSort(w http.ResponseWriter, r *http.Request) string {
 		http.SetCookie(w, &http.Cookie{
 			Name:     archiveSortCookie,
 			Value:    mode,
-			Path:     "/archive",
+			Path:     "/",
 			MaxAge:   60 * 60 * 24 * 365, // a year
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,

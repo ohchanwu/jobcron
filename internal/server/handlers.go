@@ -23,8 +23,9 @@ import (
 // Handler builds the HTTP routing for the server.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.handleDashboard)
-	mux.HandleFunc("GET /archive", s.handleArchive)
+	mux.HandleFunc("GET /{$}", s.handleArchive)
+	mux.HandleFunc("GET /briefing", s.handleDashboard)
+	mux.Handle("GET /archive", http.RedirectHandler("/", http.StatusMovedPermanently))
 	mux.HandleFunc("GET /bookmarks", s.handleBookmarks)
 	mux.HandleFunc("GET /hidden", s.handleHidden)
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
@@ -169,7 +170,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !hasProfile {
-		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		http.Redirect(w, r, "/profile?reason=profile-required", http.StatusSeeOther)
 		return
 	}
 	b, err := s.buildBriefing(ctx, time.Now(), userID)
@@ -340,6 +341,7 @@ func deadlineBadge(closedAt *time.Time, alwaysOpen bool, now time.Time) deadline
 // matching the HTML inputs.
 type profileForm struct {
 	CSRFToken        string
+	ProfileRequired  bool
 	CareerYears      int
 	CareerWeight     int
 	CareerNearMiss   int // derived: round(CareerWeight × 2/5), shown as a hint
@@ -402,6 +404,7 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	form := toProfileForm(p)
+	form.ProfileRequired = r.URL.Query().Get("reason") == "profile-required"
 	form.Sources = s.sourceOptions(p.DisabledSources)
 	s.fillAIFormState(r.Context(), &form, p)
 	s.renderWithRequest(w, r, "profile.html", form)
@@ -544,7 +547,7 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/briefing", http.StatusSeeOther)
 }
 
 // aiProviderValue normalizes the provider select value: only the known provider

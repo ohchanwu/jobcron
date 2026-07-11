@@ -43,7 +43,7 @@ func TestBookmarksPageUsesAllPostingsArchiveNav(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<a href="/archive">전체 공고</a>`) {
+	if !strings.Contains(body, `<a href="/">전체 공고</a>`) {
 		t.Error("/bookmarks nav missing 전체 공고 archive link")
 	}
 	if !strings.Contains(body, `<a href="/bookmarks" class="active">북마크</a>`) {

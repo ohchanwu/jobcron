@@ -43,7 +43,7 @@ func TestTemplatesReferenceFavicon(t *testing.T) {
 	if _, _, err := st.SaveProfile(context.Background(), profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
-	for _, path := range []string{"/", "/archive", "/bookmarks", "/hidden", "/profile"} {
+	for _, path := range []string{"/", "/briefing", "/bookmarks", "/hidden", "/profile"} {
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		body := rec.Body.String()

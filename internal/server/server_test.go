@@ -65,6 +65,75 @@ func newTestServer(t *testing.T, f *fakeScraper) (*Server, *storage.Store) {
 	return New(st, f), st
 }
 
+func TestPrimaryRoutesMatchNavigationMeanings(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	profJSON, _ := profile.Marshal(profile.Profile{CareerYears: 0})
+	if _, _, err := st.SaveProfile(context.Background(), profJSON); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	for _, tc := range []struct {
+		path  string
+		wants []string
+	}{
+		{path: "/", wants: []string{"<title>전체 공고 — 오늘의 채용 브리핑</title>", `<link rel="canonical" href="/">`, "<h1>전체 공고</h1>"}},
+		{path: "/briefing", wants: []string{"<title>오늘의 채용 브리핑</title>", `<link rel="canonical" href="/briefing">`, "<h1>채용 브리핑</h1>"}},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s status = %d, want 200", tc.path, rec.Code)
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Errorf("GET %s missing %q", tc.path, want)
+				}
+			}
+		})
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	if rec.Code < 300 || rec.Code >= 400 || rec.Header().Get("Location") != "/" {
+		t.Errorf("GET /archive = status %d location %q, want redirect to /", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestBriefingWithoutProfileRedirectsWithReason(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/briefing", nil))
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/profile?reason=profile-required" {
+		t.Errorf("GET /briefing = status %d location %q, want 303 profile-required redirect", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestProfileRequiredGuidanceOnlyAppearsForReason(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	const guidance = "데일리 브리핑에서 새 공고를 스크랩하려면 먼저 프로필을 저장해 주세요."
+
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{{
+		path: "/profile?reason=profile-required", want: true,
+	}, {
+		path: "/profile", want: false,
+	}} {
+		t.Run(tc.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if got := strings.Contains(rec.Body.String(), guidance); got != tc.want {
+				t.Errorf("GET %s guidance present = %v, want %v", tc.path, got, tc.want)
+			}
+			if !strings.Contains(rec.Body.String(), `<link rel="canonical" href="/profile">`) {
+				t.Errorf("GET %s missing profile canonical link", tc.path)
+			}
+		})
+	}
+}
+
 func TestRunScrapeStoresAndScoresPostings(t *testing.T) {
 	f := &fakeScraper{
 		listing: []scraper.Posting{listingPosting("1", "백엔드 신입"), listingPosting("2", "AI 신입")},
@@ -382,6 +451,9 @@ func TestHandleProfileSaveThenLoad(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("save status = %d, want 303; body=%s", rec.Code, rec.Body)
 	}
+	if rec.Header().Get("Location") != "/briefing" {
+		t.Fatalf("save location = %q, want /briefing", rec.Header().Get("Location"))
+	}
 
 	jsonStr, _, ok, err := st.Profile(context.Background())
 	if err != nil || !ok {
@@ -421,9 +493,9 @@ func TestHandleProfileSaveThenLoad(t *testing.T) {
 func TestFirstRunRedirectsToProfile(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/profile" {
-		t.Errorf("first run: code=%d loc=%q, want 303 -> /profile",
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/briefing", nil))
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/profile?reason=profile-required" {
+		t.Errorf("first run: code=%d loc=%q, want 303 -> profile-required guidance",
 			rec.Code, rec.Header().Get("Location"))
 	}
 }
@@ -538,7 +610,7 @@ func TestDashboardShowsOnlyTodaysPostings(t *testing.T) {
 	scoreEach(t, st, map[int64]int{todayID: 50, oldID: 50})
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/briefing", nil))
 	body := rec.Body.String()
 	if !strings.Contains(body, "오늘 본 공고") {
 		t.Error("dashboard is missing today's posting")
@@ -575,7 +647,7 @@ func TestDashboardHidesPostingsBelowMinScore(t *testing.T) {
 			t.Fatalf("scoreAll: %v", err)
 		}
 		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/briefing", nil))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
 		}
@@ -617,7 +689,7 @@ func TestDashboardShowsScoredPostings(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/briefing", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("dashboard status = %d, want 200", rec.Code)
 	}

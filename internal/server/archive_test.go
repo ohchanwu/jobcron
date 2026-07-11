@@ -32,7 +32,7 @@ func TestArchivePageListsEveryPosting(t *testing.T) {
 	mustUpsert(t, st, old)
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -50,7 +50,7 @@ func TestArchivePageListsEveryPosting(t *testing.T) {
 func TestArchivePageUsesAllPostingsTerminology(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -58,7 +58,8 @@ func TestArchivePageUsesAllPostingsTerminology(t *testing.T) {
 	for _, want := range []string{
 		"<title>전체 공고 — 오늘의 채용 브리핑</title>",
 		"<h1>전체 공고</h1>",
-		`<a href="/archive" class="active">전체 공고</a>`,
+		`<link rel="canonical" href="/">`,
+		`<a href="/" class="active">전체 공고</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/archive missing %q", want)
@@ -156,9 +157,9 @@ func TestArchiveSortToggle(t *testing.T) {
 
 	// Date mode (default): toggle present, 날짜순 active, two day headers.
 	recDate := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(recDate, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	srv.Handler().ServeHTTP(recDate, httptest.NewRequest(http.MethodGet, "/", nil))
 	dateBody := recDate.Body.String()
-	if !strings.Contains(dateBody, `href="/archive?sort=score"`) {
+	if !strings.Contains(dateBody, `href="/?sort=score"`) {
 		t.Error("date mode missing the 점수순 toggle link")
 	}
 	if dateHeaders := strings.Count(dateBody, "day-header"); dateHeaders != 2 {
@@ -167,7 +168,7 @@ func TestArchiveSortToggle(t *testing.T) {
 
 	// Score mode: 점수순 active, NO day headers (one flat group).
 	recScore := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(recScore, httptest.NewRequest(http.MethodGet, "/archive?sort=score", nil))
+	srv.Handler().ServeHTTP(recScore, httptest.NewRequest(http.MethodGet, "/?sort=score", nil))
 	scoreBody := recScore.Body.String()
 	if !strings.Contains(scoreBody, `공고 A`) || !strings.Contains(scoreBody, `공고 B`) {
 		t.Error("score mode dropped a posting")
@@ -183,7 +184,7 @@ func TestArchiveSortToggle(t *testing.T) {
 func TestArchiveEmptyState(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -427,7 +428,7 @@ func TestArchiveMarksBookmarkedRows(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/archive", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(rec.Body.String(), `class="bookmark on"`) {
 		t.Error("/archive does not mark the bookmarked row as on")
 	}

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>프로필 — 오늘의 채용 브리핑</title>
+  <link rel="canonical" href="/profile">
   <script>
     (function () {
       try {
@@ -30,13 +31,17 @@
     </header>
 
     <nav class="primary">
-      <a href="/">데일리 브리핑</a>
-      <a href="/archive">전체 공고</a>
+      <a href="/briefing">데일리 브리핑</a>
+      <a href="/">전체 공고</a>
       <a href="/bookmarks">북마크</a>
       <a href="/hidden">숨긴 공고</a>
       <a href="/profile" class="active">프로필 설정</a>
       {{if productionMode}}<form method="post" action="/logout" class="nav-logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">로그아웃</button></form>{{end}}
     </nav>
+
+    {{if .ProfileRequired}}
+    <p class="form-intro">데일리 브리핑에서 새 공고를 스크랩하려면 먼저 프로필을 저장해 주세요.</p>
+    {{end}}
 
     {{if demoMode}}
     <p class="demo-banner">데모 모드에서는 설정을 볼 수만 있어요. 방문자가 바꾼 내용은 서버에 저장되지 않아요.</p>
