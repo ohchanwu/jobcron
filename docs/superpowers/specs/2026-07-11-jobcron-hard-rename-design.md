@@ -237,6 +237,28 @@ Historical plans and verification reports should retain commands and paths that
 were actually used. Add a short note that the application was later renamed to
 `jobcron` instead of rewriting historical evidence.
 
+## Old-Name Allowlist
+
+An old name is permitted only in the following contexts. These exceptions do
+not create a legacy runtime interface: active commands, URLs, environment
+variables, headers, cookies, and product-facing prose remain canonical.
+
+1. Rename mapping and reference tables where the old name appears only as the
+   source side of an old-to-canonical mapping.
+2. Existing pre-rename SQL migrations left byte-unchanged under the append-only
+   migration rule, including the `0001` headers and
+   `0006_user_scoped_state.sql`.
+3. `0013_rename_import_owner_email.sql`'s old sentinel predicate, plus
+   migration tests and fixtures that must contain old values to prove the
+   rename.
+4. Explicit rejection tests for old environment, header, or cookie identities.
+5. `legacyDirName = "job-scraper"` in `internal/appdata/paths.go`, which is
+   required to locate existing MacBook application data for one-time migration.
+6. The exact legacy Docker volume name `jobscraper-postgres18-cluster` in
+   rollback documentation.
+7. Dated historical evidence that carries the exact rename note.
+8. The deferred Gas Town rig and workspace identity.
+
 Mark the human's completed EC2 `.env` feedback as settled in the production
 deployment report. Consolidate duplicate naming feedback, set the schedule to
 `05:00`, and record `JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64` without
@@ -273,7 +295,7 @@ Implementation is complete only after all of the following pass:
 - Demo and production Compose configurations render with only `JOBCRON_*`
   application variables.
 - Repository scanning finds no active-interface `JOBSCRAPER_*`, `job-scraper`,
-  or `job_scraper` references outside approved historical and Gas Town contexts.
+  or `job_scraper` references outside the Old-Name Allowlist above.
 - MacBook data migration tests pass for empty, legacy-only, canonical-only, and
   collision states.
 - A temporary-directory migration test proves database sidecars, backups, and

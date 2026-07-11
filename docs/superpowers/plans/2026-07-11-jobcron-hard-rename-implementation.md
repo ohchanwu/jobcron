@@ -17,6 +17,8 @@
 - Keep `DATABASE_URL` and `SESSION_SECRET` unchanged.
 - Do not delete legacy application directories, Docker volumes, backups, or recovery state.
 - Preserve historical commands in completed reports; add a rename note instead of rewriting evidence.
+- Permit old-name references only under the design's Old-Name Allowlist; they do
+  not add a legacy runtime interface.
 - Keep Worknet and `JOBCRON_PROXY_SECRET` disabled for the first production pass.
 - Production schedule is `05:00` Korea Standard Time.
 - Production image is `ohchanwu/jobcron:0.2-linuxarm64`.
@@ -519,8 +521,11 @@ git commit -m "build: rename release and deployment contract to jobcron"
 
 - [ ] **Step 1: Inventory remaining old-name references by category**
 
-Run a repository scan that prints each old-name occurrence grouped as runtime,
-active documentation, historical evidence, or Gas Town context. Do not globally
+Run a repository scan that confirms every old-name occurrence belongs to one of
+the design's eight allowed categories: source-side rename mappings; immutable
+pre-rename migrations; the migration 0013 sentinel predicate and migration
+fixtures; explicit rejection tests; `legacyDirName`; the legacy Docker volume;
+dated rename-noted evidence; or deferred Gas Town context. Do not globally
 replace historical evidence.
 
 - [ ] **Step 2: Update active documentation**
@@ -609,11 +614,17 @@ responsive regression. Include the local preview URL in the final report.
 - [ ] **Step 5: Re-run Docker, Compose, GoReleaser, and repository scans**
 
 Confirm both images build locally, both Compose files render, GoReleaser checks,
-and active interfaces contain no old names. Approved old-name occurrences are:
+and active interfaces contain no old names. Every remaining old-name occurrence
+must belong to the design's Old-Name Allowlist:
 
-- immutable migration `0006_user_scoped_state.sql`,
-- historical command evidence under an explicit rename note,
-- Gas Town rig/workspace references explicitly deferred by the design.
+- source-side rename mappings,
+- immutable pre-rename migrations, including `0001` and `0006`,
+- the migration 0013 old sentinel predicate and migration tests/fixtures,
+- explicit rejection tests for old environment/header/cookie identities,
+- `legacyDirName` for existing app-data migration,
+- the exact legacy Docker rollback volume,
+- dated historical evidence under the rename note, or
+- deferred Gas Town rig/workspace identity.
 
 - [ ] **Step 6: Re-read the cumulative diff against the pre-rename commit**
 
