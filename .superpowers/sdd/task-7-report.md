@@ -367,11 +367,13 @@ prebuilt image.
    test "$(git rev-parse "$REVIEWED_COMMIT")" = "$REVIEWED_COMMIT"
    ```
 
-2. After human approval, the human pushes the reviewed branch. This command is
-   intentionally not run by the autonomous agent:
+2. After human approval, the human verifies local `main` still equals the exact
+   reviewed commit, then pushes that SHA explicitly to remote `main`. These
+   commands are intentionally not run by the autonomous agent:
 
    ```sh
-   git push origin main
+   test "$(git rev-parse refs/heads/main)" = "$REVIEWED_COMMIT"
+   git push origin "$REVIEWED_COMMIT":refs/heads/main
    ```
 
 3. Verify that GitHub/origin contains the exact reviewed commit and its
