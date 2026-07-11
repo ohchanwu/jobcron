@@ -198,14 +198,13 @@ Human-owned deployment actions:
   - **overseer feedback - settled:** The repository rename is complete. The
     canonical URLs are `git@github.com:ohchanwu/jobcron.git` for SSH and
     `https://github.com/ohchanwu/jobcron.git` for HTTPS.
-- [ ] Update each independent local clone's configured `origin` URL, beginning
+- [x] Update each independent local clone's configured `origin` URL, beginning
   with this checkout.
-  - **overseer feedback - response:** GitHub redirects the old repository URL,
-    so fetch and push may continue to work temporarily, but GitHub cannot
-    rewrite local `.git/config` files. This checkout still reports
-    `git@github.com:ohchanwu/job-scraper.git` for both fetch and push. Linked
-    worktrees sharing the same Git common directory need one update; independent
-    clones need their own update.
+  - **overseer feedback - settled:** GitHub redirects the old repository URL but
+    cannot rewrite local `.git/config` files. This checkout now uses
+    `git@github.com:ohchanwu/jobcron.git` for both fetch and push. Linked
+    worktrees sharing its Git common directory inherit that update; independent
+    clones still need their own update.
 - [ ] Rename or recreate the EC2 app directory as `/srv/jobcron` and move the
   existing server-only `.env` without exposing its values.
 - [x] Rename all application-prefixed variables in the EC2 `.env`.
