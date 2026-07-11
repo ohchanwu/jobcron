@@ -22,6 +22,16 @@ The `--no-open` flag is defined at `cmd/jobcron/main.go:36` and gates the `brows
 
 Korean UI strings are inlined in Go and templates by design; do not introduce i18n machinery in v1.
 
+## Implementation-document context
+
+Start implementation-document discovery at `docs/superpowers/README.md`.
+Read only the active plan/spec and the concise decision records linked there.
+Do not recursively scan `docs/superpowers/archive/` or
+`.superpowers/archive/`; those contain completed evidence and local SDD output.
+Open an archived file only when the active task or the human explicitly names
+that file. `.superpowers/sdd/` is ephemeral and should contain only the current
+execution's ignored artifacts.
+
 ## Design docs — peers, newest wins on conflict
 
 Design docs live in `~/.gstack/projects/jobcron/`. They are **peers, not a hierarchy** — no single doc is "the source of truth." On a _minor_ contradiction between docs, prefer the **newest** one (older docs may be outdated), use your judgement, and log the choice for review; on a _significant_ contradiction, surface it for review before proceeding.
