@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/job-scraper/internal/ai"
+	"github.com/ohchanwu/job-scraper/internal/appdata"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 )
 
@@ -141,6 +142,18 @@ func TestOpenAtUsesSQLiteDialect(t *testing.T) {
 	st := newTestStore(t)
 	if st.Dialect() != DialectSQLite {
 		t.Fatalf("Dialect = %v, want sqlite", st.Dialect())
+	}
+}
+
+func TestDefaultDBPathUsesCanonicalApplicationDirectory(t *testing.T) {
+	root := t.TempDir()
+	got, err := defaultDBPath(func() (string, error) { return root, nil })
+	if err != nil {
+		t.Fatalf("defaultDBPath: %v", err)
+	}
+	want := filepath.Join(appdata.Dir(root), "jobs.db")
+	if got != want {
+		t.Fatalf("defaultDBPath = %q, want %q", got, want)
 	}
 }
 

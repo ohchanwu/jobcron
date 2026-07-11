@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/ohchanwu/job-scraper/internal/appdata"
 )
 
 func TestKeyStoreRoundTrip(t *testing.T) {
@@ -81,5 +83,17 @@ func TestLoadKeysEmptyFileIsEmptyMap(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("empty file should yield empty map, got %v", got)
+	}
+}
+
+func TestDefaultKeysPathUsesCanonicalApplicationDirectory(t *testing.T) {
+	root := t.TempDir()
+	got, err := defaultKeysPath(func() (string, error) { return root, nil })
+	if err != nil {
+		t.Fatalf("defaultKeysPath: %v", err)
+	}
+	want := filepath.Join(appdata.Dir(root), "ai_keys.json")
+	if got != want {
+		t.Fatalf("defaultKeysPath = %q, want %q", got, want)
 	}
 }

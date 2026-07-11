@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/ohchanwu/job-scraper/internal/appdata"
 )
 
 // keysFileMode is the permission the BYOK key file is held at. 0600 keeps the
@@ -14,11 +16,15 @@ const keysFileMode = 0o600
 // DefaultKeysPath is the BYOK key store path under the user's OS config
 // directory — the same directory as jobs.db (see storage.DefaultDBPath).
 func DefaultKeysPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	return defaultKeysPath(os.UserConfigDir)
+}
+
+func defaultKeysPath(userConfigDir func() (string, error)) (string, error) {
+	root, err := userConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("ai: locate user config dir: %w", err)
 	}
-	return filepath.Join(dir, "job-scraper", "ai_keys.json"), nil
+	return filepath.Join(appdata.Dir(root), "ai_keys.json"), nil
 }
 
 // LoadKeys reads the provider->key map from path. A MISSING file is not an

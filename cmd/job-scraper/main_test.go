@@ -2,8 +2,11 @@ package main
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/ohchanwu/job-scraper/internal/appdata"
 	"github.com/ohchanwu/job-scraper/internal/config"
 )
 
@@ -62,5 +65,24 @@ func TestOpenConfiguredStoreDatabaseURLUsesPostgresOutsideProduction(t *testing.
 	}
 	if got, want := err.Error(), "storage: open postgres"; len(got) < len(want) || got[:len(want)] != want {
 		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
+	}
+}
+
+func TestPrepareApplicationDataMigratesLegacyDirectory(t *testing.T) {
+	root := t.TempDir()
+	legacyFile := filepath.Join(appdata.LegacyDir(root), "jobs.db")
+	if err := os.MkdirAll(filepath.Dir(legacyFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyFile, []byte("database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := prepareApplicationData(root); err != nil {
+		t.Fatalf("prepareApplicationData: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(appdata.Dir(root), "jobs.db"))
+	if err != nil || string(got) != "database" {
+		t.Fatalf("migrated database = %q, err = %v", got, err)
 	}
 }

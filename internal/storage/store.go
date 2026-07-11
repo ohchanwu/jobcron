@@ -10,7 +10,8 @@ import (
 	"strconv"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // pure-Go PostgreSQL driver, registered as "pgx"
-	_ "modernc.org/sqlite"             // pure-Go SQLite driver, registered as "sqlite"
+	"github.com/ohchanwu/job-scraper/internal/appdata"
+	_ "modernc.org/sqlite" // pure-Go SQLite driver, registered as "sqlite"
 )
 
 //go:embed migrations/*.sql
@@ -89,13 +90,17 @@ func (s *Store) Dialect() Dialect { return s.dialect }
 func (s *Store) SQLDB() *sql.DB { return s.db }
 
 // DefaultDBPath is the database path under the user's OS config directory,
-// e.g. ~/Library/Application Support/job-scraper/jobs.db on macOS.
+// e.g. ~/Library/Application Support/jobcron/jobs.db on macOS.
 func DefaultDBPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	return defaultDBPath(os.UserConfigDir)
+}
+
+func defaultDBPath(userConfigDir func() (string, error)) (string, error) {
+	root, err := userConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("storage: locate user config dir: %w", err)
 	}
-	return filepath.Join(dir, "job-scraper", "jobs.db"), nil
+	return filepath.Join(appdata.Dir(root), "jobs.db"), nil
 }
 
 // migrate applies every embedded migration whose version is newer than the

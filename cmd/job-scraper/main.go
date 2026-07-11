@@ -20,6 +20,7 @@ import (
 
 	"github.com/pkg/browser"
 
+	"github.com/ohchanwu/job-scraper/internal/appdata"
 	"github.com/ohchanwu/job-scraper/internal/config"
 	"github.com/ohchanwu/job-scraper/internal/scraper"
 	"github.com/ohchanwu/job-scraper/internal/scraper/demoday"
@@ -38,6 +39,13 @@ var version = "dev"
 func main() {
 	cfg, err := config.Load(os.Args[1:], environMap(os.Environ()))
 	if err != nil {
+		log.Fatalf("job-scraper: %v", err)
+	}
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		log.Fatalf("job-scraper: locate user config dir: %v", err)
+	}
+	if err := prepareApplicationData(configRoot); err != nil {
 		log.Fatalf("job-scraper: %v", err)
 	}
 	if cfg.ShowVersion {
@@ -143,6 +151,10 @@ func openConfiguredStore(cfg config.Config) (*storage.Store, error) {
 		return storage.OpenAt(cfg.DBPath)
 	}
 	return storage.Open()
+}
+
+func prepareApplicationData(configRoot string) error {
+	return appdata.Prepare(configRoot)
 }
 
 // listen binds host on the preferred port, falling back to the next ten
