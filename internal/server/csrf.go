@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	csrfCookieName = "job_scraper_csrf"
+	csrfCookieName = "jobcron_csrf"
 	csrfHeaderName = "X-CSRF-Token"
 	csrfFieldName  = "csrf_token"
 	csrfCookieTTL  = 30 * 24 * time.Hour

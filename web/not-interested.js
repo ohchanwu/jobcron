@@ -10,7 +10,7 @@
    - On the 숨긴 공고 page (/hidden), every card is muted; un-muting one means
      it no longer belongs there, so fade the .posting card out. */
 (function () {
-  var KEY = 'jobScraperDemoHidden';
+  var KEY = 'jobcronDemoHidden';
 
   function demoMode() {
     return document.body && document.body.dataset.demo === 'true';

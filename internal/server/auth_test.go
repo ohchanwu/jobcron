@@ -12,6 +12,15 @@ import (
 	"github.com/ohchanwu/jobcron/internal/auth"
 )
 
+func TestProductionCookieNamesUseJobcronPrefix(t *testing.T) {
+	if sessionCookieName != "jobcron_session" {
+		t.Fatalf("session cookie = %q, want jobcron_session", sessionCookieName)
+	}
+	if csrfCookieName != "jobcron_csrf" {
+		t.Fatalf("csrf cookie = %q, want jobcron_csrf", csrfCookieName)
+	}
+}
+
 func TestProductionAuthRedirectsAnonymousPageToLogin(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	srv.SetProductionMode(true)

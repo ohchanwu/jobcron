@@ -2,7 +2,7 @@
    click handler covers every .bookmark button on the page, including any
    that show up later (the dashboard re-renders on scrape completion). */
 (function () {
-  var KEY = 'jobScraperDemoBookmarks';
+  var KEY = 'jobcronDemoBookmarks';
 
   function demoMode() {
     return document.body && document.body.dataset.demo === 'true';

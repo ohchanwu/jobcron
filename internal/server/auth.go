@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	sessionCookieName = "job_scraper_session"
+	sessionCookieName = "jobcron_session"
 	sessionTTL        = 30 * 24 * time.Hour
 	loginErrorCopy    = "이메일 또는 비밀번호를 확인해주세요."
 )

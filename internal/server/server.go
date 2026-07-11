@@ -179,7 +179,7 @@ func (s *Server) validAdminToken(r *http.Request) bool {
 	}
 	got := r.URL.Query().Get("token")
 	if got == "" {
-		got = r.Header.Get("X-JobScraper-Admin-Token")
+		got = r.Header.Get("X-Jobcron-Admin-Token")
 	}
 	wantHash := sha256.Sum256([]byte(s.adminToken))
 	gotHash := sha256.Sum256([]byte(got))

@@ -79,6 +79,32 @@ func TestDemoModeScrapeRequiresAdminToken(t *testing.T) {
 	}
 }
 
+func TestDemoModeScrapeAcceptsJobcronAdminTokenHeader(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+	srv.SetDemoMode(true)
+	srv.SetAdminToken("secret-token")
+
+	t.Run("canonical header", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/scrape", nil)
+		req.Header.Set("X-Jobcron-Admin-Token", "secret-token")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body=%q", rec.Code, http.StatusOK, rec.Body.String())
+		}
+	})
+
+	t.Run("legacy header is not accepted", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/scrape", nil)
+		req.Header.Set("X-JobScraper-Admin-Token", "secret-token")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d; body=%q", rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+	})
+}
+
 func TestDemoModeRerateAlwaysRefused(t *testing.T) {
 	srv, _ := seedRerate(t)
 	srv.SetDemoMode(true)
