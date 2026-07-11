@@ -14,6 +14,13 @@ git@github.com:ohchanwu/jobcron.git
 
 No push or other remote write was performed.
 
+The ignored local production build report remains part of the handoff at this
+exact path:
+
+```text
+docs/superpowers/specs/2026-07-10-production-local-build-report.md
+```
+
 ## Go Verification
 
 All required commands passed from a clean tracked worktree:
@@ -171,6 +178,127 @@ test string in `internal/ai/injection_test.go`; the cumulative rename diff added
 zero secret-like values. Thirteen local Markdown links were checked and none
 were broken.
 
+### Exact Reproducible Scan Script
+
+The old-name categorization, secret scan, cumulative-diff secret scan, and local
+Markdown-link validation were rerun from the repository root with context-mode
+`ctx_execute`, `language: "javascript"`, using this exact script:
+
+```javascript
+const fs = require("fs");
+const path = require("path");
+const cp = require("child_process");
+
+const files = cp.execSync("git ls-files", { encoding: "utf8" })
+  .trim().split("\n").filter(Boolean);
+
+const oldName = /(job-scraper|jobscraper|job_scraper|JOBSCRAPER|JobScraper|jobScraper)/g;
+const historical = new Set([
+  "docs/superpowers/plans/2026-07-09-jobcron-production-app.md",
+  "docs/superpowers/specs/2026-07-10-production-deploy-prep-report.md",
+  "internal/scraper/greeting/API_NOTES.md",
+]);
+const mapping = new Set([
+  "docs/superpowers/plans/2026-07-11-jobcron-hard-rename-implementation.md",
+  "docs/superpowers/specs/2026-07-11-jobcron-hard-rename-design.md",
+]);
+const rejection = new Set([
+  "internal/config/config_test.go",
+  "internal/server/demo_test.go",
+  "internal/storage/postgres_integration_test.go",
+]);
+const migrations = /^internal\/storage\/(?:postgres_)?migrations\/(?:0001|0006|0013)/;
+const counts = {}, uncategorized = [], missingNotes = [];
+let oldTotal = 0;
+
+for (const file of files) {
+  if (file.startsWith(".superpowers/sdd/")) continue;
+  let text;
+  try { text = fs.readFileSync(file, "utf8"); } catch { continue; }
+  const hits = [...text.matchAll(oldName)];
+  if (!hits.length) continue;
+  oldTotal += hits.length;
+  let category = "";
+  if (historical.has(file)) {
+    category = "historical";
+    if (!/Rename note \(2026-07-11\)/.test(text.slice(0, 1200))) missingNotes.push(file);
+  } else if (mapping.has(file)) category = "mapping_or_gastown";
+  else if (migrations.test(file)) category = "migration";
+  else if (rejection.has(file)) category = "rejection_or_fixture";
+  else if (file === "internal/appdata/paths.go") category = "legacy_appdata";
+  else if (file === "deploy/local/README.md") category = "rollback_volume";
+  else uncategorized.push(file);
+  counts[category] = (counts[category] || 0) + hits.length;
+}
+
+const secretPatterns = [
+  ["aws", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g],
+  ["private", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g],
+  ["anthropic", /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g],
+  ["openai", /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g],
+  ["github", /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g],
+  ["jwt", /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g],
+];
+const secretHits = [];
+for (const file of files) {
+  let text;
+  try { text = fs.readFileSync(file, "utf8"); } catch { continue; }
+  for (const [kind, re] of secretPatterns) {
+    for (const match of text.matchAll(re)) {
+      if (file === "internal/ai/injection_test.go" &&
+          match[0] === ["sk-ant", "super-secret-key"].join("-")) continue;
+      secretHits.push(kind + ":" + file);
+    }
+  }
+}
+const diff = cp.execSync("git diff 01cdb02..HEAD", {
+  encoding: "utf8", maxBuffer: 50 * 1024 * 1024,
+});
+const diffSecretHits = secretPatterns.flatMap(([kind, re]) =>
+  [...diff.matchAll(re)].map(() => kind)
+);
+
+let checkedLinks = 0;
+const brokenLinks = [];
+for (const file of files.filter(file => file.endsWith(".md"))) {
+  const text = fs.readFileSync(file, "utf8");
+  for (const match of text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    let target = match[1].trim().replace(/^<|>$/g, "").split(/\s+["']/)[0];
+    if (!target || target.startsWith("#") || /^[a-z]+:/i.test(target) ||
+        target.includes("{{") || target.includes("<") ||
+        target.includes(">") || target.includes("*")) continue;
+    target = decodeURIComponent(target.split("#")[0].split("?")[0]);
+    if (!target) continue;
+    checkedLinks++;
+    const resolved = target.startsWith("/")
+      ? target : path.resolve(path.dirname(file), target);
+    if (!fs.existsSync(resolved)) brokenLinks.push(file + " -> " + target);
+  }
+}
+
+console.log("old_name_total=" + oldTotal);
+console.log("old_name_categories=" + JSON.stringify(counts));
+console.log("old_name_uncategorized=" + uncategorized.length);
+console.log("historical_missing_rename_note=" + missingNotes.length);
+console.log("tracked_secret_findings=" + secretHits.length);
+console.log("cumulative_diff_secret_findings=" + diffSecretHits.length);
+console.log("local_markdown_links_checked=" + checkedLinks);
+console.log("broken_local_markdown_links=" + brokenLinks.length);
+```
+
+The exact output was:
+
+```text
+old_name_total=170
+old_name_categories={"rollback_volume":1,"historical":72,"mapping_or_gastown":84,"legacy_appdata":1,"rejection_or_fixture":8,"migration":4}
+old_name_uncategorized=0
+historical_missing_rename_note=0
+tracked_secret_findings=0
+cumulative_diff_secret_findings=0
+local_markdown_links_checked=13
+broken_local_markdown_links=0
+```
+
 ## Cumulative Review
 
 The cumulative diff from `01cdb02` through `0a1a8d0` was reread with rename
@@ -191,6 +319,117 @@ Town identity remain unchanged only where explicitly allowed. No user edit was
 discarded, no unrelated refactor entered the diff, and `git diff --check`
 reported no whitespace error.
 
+## Final Mayor Inbox Evidence
+
+The controller ran this exact command from `/Users/chanbla11mit/gt/mayor`:
+
+```sh
+gt mail inbox --unread
+```
+
+Final output:
+
+```text
+Inbox: mayor/ (59 messages, 0 unread)
+(no messages)
+```
+
+High escalation `hq-wisp-2tu5mv` was read. Live verification showed the shared
+Dolt server healthy on port `33327`; the escalation was acknowledged without a
+restart or broad repair command.
+
+## Exact Human Deployment Handoff
+
+Run these steps in order. The image is built on the local MacBook and pushed to
+the registry; EC2 only pulls the prebuilt image.
+
+1. On the MacBook, build and push the canonical Linux arm64 image:
+
+   ```sh
+   cd /path/to/jobcron
+   IMAGE=ohchanwu/jobcron:0.2-linuxarm64
+   docker buildx build --platform linux/arm64 \
+     -f deploy/production/Dockerfile \
+     -t "$IMAGE" \
+     --push .
+   ```
+
+2. On EC2, stop the old production stack before moving its checkout and
+   server-only `.env` together:
+
+   ```sh
+   test -d /srv/job-scraper
+   test ! -e /srv/jobcron
+   cd /srv/job-scraper/deploy/production
+   docker compose --env-file .env down
+   cd /srv
+   sudo mv job-scraper jobcron
+   sudo chown -R ec2-user:ec2-user /srv/jobcron
+   ```
+
+3. Update the moved checkout from the canonical repository:
+
+   ```sh
+   cd /srv/jobcron
+   git remote set-url origin git@github.com:ohchanwu/jobcron.git
+   git pull --ff-only
+   ```
+
+4. Validate the server-only production environment without printing secrets:
+
+   ```sh
+   cd /srv/jobcron/deploy/production
+   test -f .env
+   chmod 600 .env
+   grep -Fx 'JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64' .env
+   grep -q '^DATABASE_URL=' .env
+   grep -q '^SESSION_SECRET=' .env
+   ! grep -Eq '^(JOBSCRAPER_|JOBCRON_DEMO=|JOBCRON_ADMIN_TOKEN=|JOBCRON_PROXY_SECRET=|JOBCRON_WORKNET_KEY=)' .env
+   ```
+
+   Keep real database, session, owner-password, and API-key values only in the
+   server `.env` or interactive owner command. Never add them to Git. Worknet
+   remains off. Neither `JOBCRON_PROXY_SECRET` nor
+   `JOBSCRAPER_PROXY_SECRET` is present.
+
+5. Authenticate to the registry if required, then pull and start the prebuilt
+   image. Do not build on EC2:
+
+   ```sh
+   docker login <registry>  # only when the registry requires it
+   cd /srv/jobcron/deploy/production
+   docker compose --env-file .env pull
+   docker compose --env-file .env up -d
+   docker compose ps
+   docker compose logs --tail=200 app caddy
+   ```
+
+   Do not run `docker compose build` or `docker compose up --build` on EC2.
+
+6. Create the owner account from a source checkout with Go and RDS network
+   access, entering the temporary password outside Git:
+
+   ```sh
+   export DATABASE_URL='postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require'
+   export JOBCRON_OWNER_PASSWORD='<temporary-owner-password>'
+   go run ./cmd/jobcron-user create-owner \
+     --database-url "$DATABASE_URL" \
+     --email 'ohchanwu@gmail.com'
+   unset JOBCRON_OWNER_PASSWORD
+   ```
+
+7. In a real browser, verify HTTPS, redirects, owner login, PostgreSQL-backed
+   data, and the `05:00` Korea Standard Time schedule:
+
+   ```text
+   https://jobcron.app/
+   https://www.jobcron.app/
+   ```
+
+   Caddy must be the only public entry point on ports `80` and `443`. The app
+   remains private inside the Compose network as `app:7777`; no app port is
+   published directly and no shared proxy secret is used.
+
 ## Limitations And Human Handoff
 
 - The browser-storage interaction used the production PostgreSQL UI with the
@@ -202,7 +441,7 @@ reported no whitespace error.
   data.
 - The Gas Town rig and workspace still use `jobscraper`. Their rename remains a
   separate migration project.
-- The EC2 application directory move to `/srv/jobcron` and pulling the canonical
-  image remain human-owned deployment actions. No EC2 state or secret was
-  changed during Task 7.
+- The ordered `/srv/jobcron` migration and image-pull procedure above remains a
+  human-owned deployment action. No EC2 state or secret was changed during Task
+  7.
 - No remote branch was changed and nothing was pushed.
