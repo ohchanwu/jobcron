@@ -41,7 +41,7 @@ The hard rename has three deliberate compatibility exceptions:
 ## Non-Goals
 
 - Renaming the Gas Town rig, bead prefix, polecats, recovery sandboxes, or
-  `/Users/chanbla11mit/gt/jobscraper` workspace path during this implementation
+  the Gas Town jobscraper workspace path during this implementation
   phase. A separate Gas Town migration phase remains required.
 - Providing long-term compatibility for old command names or `JOBSCRAPER_*`
   variables.

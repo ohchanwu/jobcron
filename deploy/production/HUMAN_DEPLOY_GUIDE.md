@@ -178,7 +178,7 @@ export DATABASE_URL='postgres://jobcron_admin:<database-password>@<rds-endpoint>
 export JOBCRON_OWNER_PASSWORD='<temporary-owner-password>'
 go run ./cmd/jobcron-user create-owner \
   --database-url "$DATABASE_URL" \
-  --email 'ohchanwu@gmail.com'
+  --email 'owner@example.com'
 unset JOBCRON_OWNER_PASSWORD
 ```
 

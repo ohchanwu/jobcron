@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Keep all commits local. Never push, create a pull request, or run a deploy command that pushes an image.
-- Do not rename the Gas Town rig, bead prefix, worktrees, recovery sandboxes, or `/Users/chanbla11mit/gt/jobscraper` workspace path in this plan.
+- Do not rename the Gas Town rig, bead prefix, worktrees, recovery sandboxes, or jobscraper workspace path in this plan.
 - Do not edit existing SQL migration contents; migration history is append-only.
 - Do not add compatibility aliases for `JOBSCRAPER_*`; `JOBCRON_*` is the only supported application prefix after this change.
 - Keep `DATABASE_URL` and `SESSION_SECRET` unchanged.
@@ -324,7 +324,7 @@ UPDATE users
 ```
 
 Do not edit migration 0006. Change the importer's default owner email to the
-canonical value. An explicit `--owner-email ohchanwu@gmail.com` continues to
+canonical value. An explicit `--owner-email owner@example.com` continues to
 attach imported data directly to the real owner account.
 
 - [ ] **Step 4: Run importer and PostgreSQL tests**

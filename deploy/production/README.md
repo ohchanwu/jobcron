@@ -31,7 +31,7 @@ Use dummy values only:
 ```sh
 cd deploy/production
 JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64 \
-DATABASE_URL='postgres://jobcron_admin:dummy@example-rds.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require' \
+DATABASE_URL='postgres://jobcron_admin:<database-password>@db.example.invalid:5432/jobcron?sslmode=require' \
 SESSION_SECRET=dummy-session-secret \
 docker compose config
 ```
