@@ -44,4 +44,4 @@ screenshots/
 
 # Local production handoff with human review notes and secrets.
 /docs/reports/*
-/docs/superpowers/specs/*
+/.superpowers/archive/
