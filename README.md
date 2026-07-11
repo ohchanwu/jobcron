@@ -110,6 +110,16 @@ Your data lives in one SQLite file under the OS config directory
 (`~/Library/Application Support/jobcron/` on macOS, `~/.config/jobcron/`
 on Linux, `%APPDATA%\jobcron\` on Windows).
 
+### Interactive localhost preview
+
+Run `scripts/preview-interactive.sh [port]` (default `17778`) to try the normal,
+writable app at `http://127.0.0.1:17778` without touching your usual app data.
+The preview uses a temporary home directory and SQLite database, so you can edit
+a profile, run real scrapes, and test an Anthropic API key. The key is written
+only inside that temporary preview directory, which is removed when the launcher
+exits. Set `JOBCRON_PREVIEW_KEEP=1` to keep the printed state directory for
+inspection.
+
 ## Known limitations
 
 - **Keyword matching is token-exact.** "개발" does not match "개발자", and the

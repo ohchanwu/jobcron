@@ -111,6 +111,15 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 (macOS는 `~/Library/Application Support/jobcron/`, Linux는 `~/.config/jobcron/`,
 Windows는 `%APPDATA%\jobcron\`).
 
+### 로컬 대화형 미리보기 (Interactive localhost preview)
+
+`scripts/preview-interactive.sh [포트]`를 실행하면(기본값 `17778`) 평소 앱 데이터를
+건드리지 않고 `http://127.0.0.1:17778`에서 쓰기 가능한 일반 모드를 시험할 수
+있습니다. 미리보기는 임시 홈 디렉터리와 SQLite 데이터베이스를 사용하므로 프로필
+수정, 실제 스크랩, Anthropic API 키 설정을 안전하게 시험할 수 있습니다. 키는 임시
+미리보기 디렉터리에만 저장되며 실행기가 끝나면 함께 삭제됩니다. 출력된 상태
+디렉터리를 점검하려면 `JOBCRON_PREVIEW_KEEP=1`로 실행하세요.
+
 ## 알려진 한계 (Known limitations)
 
 - **키워드 매칭은 토큰 단위로 정확히 일치해야 합니다.** "개발"은 "개발자"와 매칭되지 않으며,
