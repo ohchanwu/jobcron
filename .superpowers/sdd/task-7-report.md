@@ -109,8 +109,18 @@ responsive regression.
 Screenshots:
 
 - `/tmp/jobcron-task7-desktop-bookmarked.png`
-- `/tmp/jobcron-task7-desktop-hidden.png`
+- `/tmp/jobcron-task7-desktop-hidden-recapture.png`
 - `/tmp/jobcron-task7-mobile-bookmarked.png`
+
+Controller follow-up recaptured the hidden-post state after a two-second settle.
+The page had no active animations, the posting card was hidden, the body
+background remained `rgb(251, 247, 239)`, and the recapture visually contained
+no black rectangle. The original and recaptured PNGs were byte-for-byte
+identical (SHA-256
+`d460fcd974473b646dd5ec3c2e78b42f986959d75347abbc03f16738cf548454`,
+zero differing pixels). Both are opaque 1440x900 PNGs. The reported black region
+was therefore a downstream image display/decode artifact, not a product render
+or screenshot-timing defect.
 
 ## Container, Compose, And Release Checks
 
