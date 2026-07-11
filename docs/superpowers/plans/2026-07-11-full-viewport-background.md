@@ -26,28 +26,27 @@
 - Consumes: `web.FS` and the existing `--bg` theme variable.
 - Produces: a shared root/body background and viewport-height contract.
 
-- [ ] **Step 1: Write the failing stylesheet contract test**
+- [x] **Step 1: Write the failing stylesheet contract test**
 
 Assert that embedded `styles.css` gives `html` the application background and
 gives `body` both `100vh` and `100dvh` minimum-height declarations.
 
-- [ ] **Step 2: Run the test and confirm the expected failure**
+- [x] **Step 2: Run the test and confirm the expected failure**
 
 Run: `go test ./web -run TestStylesFillViewport -count=1`
 
 Expected: FAIL because the declarations are absent.
 
-- [ ] **Step 3: Add the minimal global CSS declarations**
+- [x] **Step 3: Add the minimal global CSS declarations**
 
 Set `html { background: var(--bg); }`, then add `min-height: 100vh` and
 `min-height: 100dvh` to `body`.
 
-- [ ] **Step 4: Verify code and browser behavior**
+- [x] **Step 4: Verify code and browser behavior**
 
 Run the focused test, `go test ./... -count=1`, `go vet ./...`, and browser QA
 at `1440x900`, `1024x1366`, and `390x844` on short and long routes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit message: `fix: fill viewport background on short pages`
-
