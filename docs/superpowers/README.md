@@ -6,7 +6,7 @@ decision records needed for the current task.
 
 ## Active Work
 
-None.
+- [README deployment status refresh](specs/260713-readme-deployment-status-refresh.md)
 
 ## Recently Archived
 
