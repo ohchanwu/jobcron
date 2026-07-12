@@ -29,7 +29,7 @@
 - Consumes: the approved deployment facts in the design specification
 - Produces: matching English and Korean public status messages
 
-- [ ] **Step 1: Add the English deployment callout**
+- [x] **Step 1: Add the English deployment callout**
 
 Insert this block after the introductory product paragraph and before `<picture>`:
 
@@ -40,7 +40,7 @@ Insert this block after the introductory product paragraph and before `<picture>
 > ready, and launch is coming soon. Until then, run the full app locally.
 ```
 
-- [ ] **Step 2: Add the Korean deployment callout**
+- [x] **Step 2: Add the Korean deployment callout**
 
 Insert the equivalent block in `README.ko.md`:
 
@@ -51,7 +51,7 @@ Insert the equivalent block in `README.ko.md`:
 > 곧 출시할 예정입니다. 그전까지는 전체 앱을 로컬에서 실행할 수 있습니다.
 ```
 
-- [ ] **Step 3: Correct local-only and source-list copy**
+- [x] **Step 3: Correct local-only and source-list copy**
 
 Replace the English absolute local-only bullet with:
 
@@ -65,7 +65,7 @@ source set: 점핏, 랠릿, 데모데이, 그리팅, 당근, 크래프톤, 몰�
 optional 워크넷. Replace its local-only bullet with the Korean equivalent of the
 new English statement.
 
-- [ ] **Step 4: Verify README structure and links**
+- [x] **Step 4: Verify README structure and links**
 
 Run:
 
@@ -76,7 +76,7 @@ rg -n 'demo\.jobcron\.app|jobcron\.app|coming soon|곧 출시' README.md README.
 
 Expected: no whitespace errors; each README states both deployment facts.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md README.ko.md
@@ -97,14 +97,14 @@ git commit -m "docs: clarify current deployment status"
 - Consumes: the current committed app served on loopback with public-safe postings
 - Produces: the existing theme-aware README screenshot pair
 
-- [ ] **Step 1: Confirm the screenshot target**
+- [x] **Step 1: Confirm the screenshot target**
 
 Use the current app at `http://127.0.0.1:17778/`. Confirm the page is current,
 contains no credential or private profile form, and shows the current AI-analysis
 chip presentation. Keep AI evidence panels collapsed so private goal text is not
 published.
 
-- [ ] **Step 2: Capture the light screenshot**
+- [x] **Step 2: Capture the light screenshot**
 
 With `/browse`, set a `1440x900` viewport, select light theme, reload, and capture
 the viewport to:
@@ -113,7 +113,7 @@ the viewport to:
 docs/assets/screenshots/dashboard.png
 ```
 
-- [ ] **Step 3: Capture the dark screenshot**
+- [x] **Step 3: Capture the dark screenshot**
 
 Select dark theme without changing route or state, reload, and capture the same
 viewport to:
@@ -122,7 +122,7 @@ viewport to:
 docs/assets/screenshots/dashboard-dark.png
 ```
 
-- [ ] **Step 4: Inspect and verify**
+- [x] **Step 4: Inspect and verify**
 
 Inspect both PNGs at full resolution. Verify readable text, no overlap or crop,
 no expanded private evidence, no horizontal overflow, no console errors, and no
@@ -130,7 +130,7 @@ failed first-party asset requests. Click one representative source filter and
 confirm the listing changes, then restore the all-sources view before the final
 capture.
 
-- [ ] **Step 5: Update alt text and commit**
+- [x] **Step 5: Update alt text and commit**
 
 Use matching English alt text in both READMEs that names the all-postings page,
 source filters, AI analysis chips, and light/dark themes. Then run:
@@ -151,14 +151,14 @@ git commit -m "docs: refresh current application screenshots"
 - Consumes: `.env` variables `JOBCRON_ADMIN_TOKEN` or legacy `JOBSCRAPER_ADMIN_TOKEN`
 - Produces: one authenticated streaming request to `https://demo.jobcron.app/api/scrape`
 
-- [ ] **Step 1: Preserve one-line behavior while removing token argv exposure**
+- [x] **Step 1: Preserve one-line behavior while removing token argv exposure**
 
 Keep the file as exactly one shell line. Source `.env`, resolve the compatible
 token variable, and pipe the two header lines to `curl -H @-` instead of expanding
 the token inside `curl -H "..."` process arguments. Keep the existing missing-token
 message and public endpoint.
 
-- [ ] **Step 2: Verify syntax without making a network request**
+- [x] **Step 2: Verify syntax without making a network request**
 
 Run:
 
@@ -170,7 +170,7 @@ sh -n deploy/demo/SCRAPE_CMD.sh
 
 Expected: every command exits 0 and the file remains one line.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add deploy/demo/SCRAPE_CMD.sh
@@ -190,19 +190,19 @@ git commit -m "chore: track demo scrape helper"
 - Consumes: Tasks 1-3
 - Produces: public-safe committed documentation and synchronized `origin/main`
 
-- [ ] **Step 1: Run project and publication gates**
+- [x] **Step 1: Run project and publication gates**
 
 Run formatting, vet, focused tests, Node lifecycle tests, the exact race selector,
 the full Go suite, build, Markdown diff checks, `sh -n`, and Gitleaks across the
 unpublished range. Every command must exit 0.
 
-- [ ] **Step 2: Review public artifacts manually**
+- [x] **Step 2: Review public artifacts manually**
 
 Review both README diffs, both full-resolution PNGs, and the helper. Confirm there
 are no credentials, private profile details, private infrastructure identifiers,
 machine paths, databases, generated QA screenshots, or unrelated files.
 
-- [ ] **Step 3: Archive the completed design and plan**
+- [x] **Step 3: Archive the completed design and plan**
 
 Move both records into:
 
@@ -213,14 +213,14 @@ docs/superpowers/archive/2026-07-13-readme-deployment-status-refresh/
 Set `docs/superpowers/README.md` Active Work to `None.` and add both records under
 Recently Archived.
 
-- [ ] **Step 4: Commit lifecycle documentation**
+- [x] **Step 4: Commit lifecycle documentation**
 
 ```bash
 git add docs/superpowers
 git commit -m "docs: archive README deployment refresh"
 ```
 
-- [ ] **Step 5: Push and verify**
+- [x] **Step 5: Push and verify**
 
 Fetch `origin`, confirm `0` remote-only commits, push `main`, fetch again, and
 verify local `HEAD` equals `origin/main`. Do not create a PR or deploy the app.

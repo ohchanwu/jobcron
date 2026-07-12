@@ -6,11 +6,12 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [README deployment status refresh](specs/260713-readme-deployment-status-refresh.md)
-- [README deployment status refresh implementation plan](plans/260713-readme-deployment-status-refresh-implementation-plan.md)
+None.
 
 ## Recently Archived
 
+- [README deployment status refresh design](archive/2026-07-13-readme-deployment-status-refresh/260713-readme-deployment-status-refresh.md)
+- [README deployment status refresh implementation plan](archive/2026-07-13-readme-deployment-status-refresh/260713-readme-deployment-status-refresh-implementation-plan.md)
 - [Alpha milestone A polishes specification](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes.md)
 - [Alpha milestone A polishes implementation plan](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-implementation-plan.md)
 - [Alpha milestone A polishes verification](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-verification.md)
