@@ -35,6 +35,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
 	mux.HandleFunc("GET /api/rerate", s.handleRerateSSE)
+	mux.HandleFunc("GET /api/rerate/status", s.handleRerateStatus)
 	mux.HandleFunc("GET /api/briefing-status", s.handleBriefingStatus)
 	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
 	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)

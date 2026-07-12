@@ -107,6 +107,7 @@ type Server struct {
 	sources      []scraper.Scraper
 	tmpl         *template.Template
 	flight       *singleFlight
+	rerates      *rerateTracker
 	csrfSecret   []byte
 	loginLimiter *loginRateLimiter
 
@@ -303,6 +304,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		store:             store,
 		sources:           sources,
 		flight:            newSingleFlight(),
+		rerates:           newRerateTracker(),
 		csrfSecret:        newCSRFSecret(),
 		loginLimiter:      newLoginRateLimiter(),
 		aiRunTokenCap:     defaultRunTokenCap,

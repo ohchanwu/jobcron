@@ -49,6 +49,7 @@ func TestProductionAuthRejectsAnonymousAPIWithUnauthorizedJSON(t *testing.T) {
 		{name: "bookmark mutation", method: http.MethodPut, target: "/api/bookmark/1"},
 		{name: "not interested mutation", method: http.MethodDelete, target: "/api/not-interested/1"},
 		{name: "rerate stream", method: http.MethodGet, target: "/api/rerate?surface=today"},
+		{name: "rerate status", method: http.MethodGet, target: "/api/rerate/status?surface=today"},
 	}
 
 	for _, tt := range tests {
