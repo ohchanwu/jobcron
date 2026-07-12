@@ -1,0 +1,1 @@
+. ./.env && ADMIN_TOKEN="${JOBSCRAPER_ADMIN_TOKEN:-${JOBCRON_ADMIN_TOKEN:-}}" && if [ -z "$ADMIN_TOKEN" ]; then echo "No admin-token variable found in .env"; else printf 'X-JobScraper-Admin-Token: %s\nX-Jobcron-Admin-Token: %s\n' "$ADMIN_TOKEN" "$ADMIN_TOKEN" | curl -N -H @- https://demo.jobcron.app/api/scrape; fi; unset ADMIN_TOKEN
