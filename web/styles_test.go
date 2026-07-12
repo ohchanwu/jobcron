@@ -26,3 +26,22 @@ func TestAIAnalysisUsesApprovedIndigoTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestAIAnalysisUsesIndigoEvidenceTextAndReducedMotion(t *testing.T) {
+	b, err := FS.ReadFile("styles.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(b)
+	if strings.Contains(css, ".ai-evidence-text { color: var(--ink); }") {
+		t.Error("AI evidence text must not override the panel's approved indigo text token")
+	}
+	for _, want := range []string{
+		".ai-evidence-text { color: var(--ai-text); }",
+		"@media (prefers-reduced-motion: reduce) {\n  .chip-ai .chip-caret { transition: none; }\n}",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("styles.css missing %q", want)
+		}
+	}
+}
