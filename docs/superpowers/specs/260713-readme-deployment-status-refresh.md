@@ -1,6 +1,6 @@
 # README Deployment Status Refresh
 
-**Status:** Approved design, awaiting implementation
+**Status:** Approved for implementation
 
 ## Goal
 
