@@ -234,7 +234,7 @@ func TestRerateMutuallyExclusiveWithScrape(t *testing.T) {
 		}
 		defer srv.flight.release(scrapeAllKey)
 		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
 		if rec.Code != http.StatusConflict {
 			t.Fatalf("status = %d, want 409 (scrape in progress)", rec.Code)
 		}
@@ -257,7 +257,7 @@ func TestRerateRejectedWhenAIOff(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{}) // no SetAIProvider
 	saveSinipProfile(t, srv)
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 (AI not configured)", rec.Code)
 	}
@@ -275,7 +275,7 @@ func TestRerateRejectsUnknownSurface(t *testing.T) {
 func TestRerateSSEEmitsDone(t *testing.T) {
 	srv, _ := seedRerate(t)
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -487,7 +487,7 @@ func TestRerateDoneMessage(t *testing.T) {
 func TestRerateSSEPublishesTerminalStatus(t *testing.T) {
 	srv, _ := seedRerate(t)
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("rerate status = %d", rec.Code)
 	}

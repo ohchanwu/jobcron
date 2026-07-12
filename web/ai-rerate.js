@@ -11,7 +11,7 @@
   var pollTimer = null;
   var statusController = null;
   var lifecycleGeneration = 0;
-  var activeRunID = 0;
+  var activeRunToken = '';
   var noticeKey = 'jobcron:rerate-notice:' + surface;
   var handledKey = 'jobcron:rerate-handled:' + surface;
   var activeCopy = 'AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕';
@@ -38,17 +38,27 @@
 
   var entryToken = ensureEntryToken();
 
-  function runOwnerKey(runID) {
-    return 'jobcron:rerate-owner:' + surface + ':' + String(runID);
+  function clearLegacyOwnerKeys() {
+    var prefix = 'jobcron:rerate-owner:' + surface + ':';
+    for (var i = sessionStorage.length - 1; i >= 0; i--) {
+      var key = sessionStorage.key(i);
+      if (key && key.indexOf(prefix) === 0) sessionStorage.removeItem(key);
+    }
   }
 
-  function rememberRunOwner(runID) {
-    if (runID) sessionStorage.setItem(runOwnerKey(runID), entryToken);
+  function ownsStatus(status) {
+    return Boolean(status && status.run_token && status.owner_entry === entryToken);
   }
 
-  function ownsRun(runID) {
-    return Boolean(runID) && sessionStorage.getItem(runOwnerKey(runID)) === entryToken;
+  function isHandled(runToken) {
+    return Boolean(runToken) && sessionStorage.getItem(handledKey) === String(runToken);
   }
+
+  function markHandled(runToken) {
+    if (runToken) sessionStorage.setItem(handledKey, String(runToken));
+  }
+
+  clearLegacyOwnerKeys();
 
   function messageElement(id) {
     var node = document.getElementById(id);
@@ -124,12 +134,12 @@
     return lifecycleGeneration;
   }
 
-  function rememberAndReload(message, runID) {
-    if (!ownsRun(runID)) return;
-    sessionStorage.setItem(handledKey, String(runID));
+  function rememberAndReload(message, runToken, ownerEntry) {
+    if (!runToken || ownerEntry !== entryToken) return;
+    markHandled(runToken);
     sessionStorage.setItem(noticeKey, JSON.stringify({
       entry_token: entryToken,
-      run_id: String(runID),
+      run_token: String(runToken),
       message: message
     }));
     location.reload();
@@ -145,7 +155,15 @@
       sessionStorage.removeItem(noticeKey);
       return;
     }
-    if (!notice || notice.entry_token !== entryToken || !ownsRun(notice.run_id)) return;
+    if (!notice || !notice.run_token) {
+      sessionStorage.removeItem(noticeKey);
+      return;
+    }
+    if (notice.entry_token !== entryToken) return;
+    if (!isHandled(notice.run_token)) {
+      sessionStorage.removeItem(noticeKey);
+      return;
+    }
     sessionStorage.removeItem(noticeKey);
     showStatus(notice.message);
   }
@@ -167,9 +185,9 @@
       if (statusController === controller) statusController = null;
       if (!status) return;
 
-      var handled = status.run_id && sessionStorage.getItem(handledKey) === String(status.run_id);
+      var handled = isHandled(status.run_token);
       if (status.state === 'running') {
-        if (!ownsRun(status.run_id)) {
+        if (!ownsStatus(status)) {
           setRunning(false);
           clearStatus();
           clearProgress();
@@ -192,13 +210,13 @@
         clearStatus();
         return;
       }
-      if (!ownsRun(status.run_id)) {
+      if (!ownsStatus(status)) {
         clearStatus();
         return;
       }
       if (status.state === 'done') {
         if (!handled) {
-          rememberAndReload(completedAwayCopy, status.run_id);
+          rememberAndReload(completedAwayCopy, status.run_token, status.owner_entry);
           return;
         }
         if (handled) clearStatus();
@@ -209,7 +227,7 @@
           clearStatus();
           return;
         }
-        sessionStorage.setItem(handledKey, String(status.run_id));
+        markHandled(status.run_token);
         showStatus(status.message || 'AI 평가에 실패했어요.');
         return;
       }
@@ -232,16 +250,16 @@
 
   btn.addEventListener('click', function () {
     var generation = stopTransport();
-    activeRunID = 0;
+    activeRunToken = '';
     log.textContent = '';
     setRunning(true);
     showStatus(activeCopy);
-    var source = new EventSource('/api/rerate?surface=' + encodeURIComponent(surface));
+    var source = new EventSource('/api/rerate?surface=' + encodeURIComponent(surface) +
+      '&entry=' + encodeURIComponent(entryToken));
     eventSource = source;
-    source.addEventListener('run', function (event) {
+    source.addEventListener('run-token', function (event) {
       if (!isCurrent(generation)) return;
-      activeRunID = Number(event.data) || 0;
-      rememberRunOwner(activeRunID);
+      activeRunToken = event.data || '';
     });
     source.addEventListener('status', function (event) {
       if (!isCurrent(generation)) return;
@@ -253,19 +271,19 @@
     });
     source.addEventListener('done', function (event) {
       if (!isCurrent(generation)) return;
-      var runID = activeRunID;
+      var runToken = activeRunToken;
       stopTransport();
       setRunning(false);
       clearProgress();
-      rememberAndReload(event.data, runID);
+      rememberAndReload(event.data, runToken, entryToken);
     });
     source.addEventListener('failed', function (event) {
       if (!isCurrent(generation)) return;
-      var runID = activeRunID;
+      var runToken = activeRunToken;
       stopTransport();
       setRunning(false);
       clearProgress();
-      if (runID && ownsRun(runID)) sessionStorage.setItem(handledKey, String(runID));
+      markHandled(runToken);
       showStatus(event.data || 'AI 평가에 실패했어요.');
     });
     source.addEventListener('error', function () {

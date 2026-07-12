@@ -111,7 +111,7 @@ func TestDemoModeRerateAlwaysRefused(t *testing.T) {
 	srv.SetAdminToken("secret-token")
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&token=secret-token", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&token=secret-token&entry=entry-token-00000001", nil))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
 	}

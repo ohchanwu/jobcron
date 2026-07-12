@@ -9,7 +9,7 @@ import (
 
 func TestRerateTrackerRecordsLifecycle(t *testing.T) {
 	tracker := newRerateTracker()
-	started := tracker.start(7, "today")
+	started := tracker.start(7, "today", "entry-token-00000001")
 	tracker.record(7, "today", started.RunID, "status", "AI로 다시 분석하는 중이에요")
 	tracker.record(7, "today", started.RunID, "progress", "공고 3/9 분석 중...")
 
@@ -30,8 +30,8 @@ func TestRerateTrackerRecordsLifecycle(t *testing.T) {
 
 func TestRerateTrackerIgnoresStaleRunUpdates(t *testing.T) {
 	tracker := newRerateTracker()
-	old := tracker.start(7, "today")
-	current := tracker.start(7, "today")
+	old := tracker.start(7, "today", "entry-token-00000001")
+	current := tracker.start(7, "today", "entry-token-00000002")
 	tracker.record(7, "today", old.RunID, "done", "stale")
 
 	got, _ := tracker.snapshot(7, "today")
@@ -40,9 +40,17 @@ func TestRerateTrackerIgnoresStaleRunUpdates(t *testing.T) {
 	}
 }
 
+func TestRerateTrackerRunTokensDoNotRepeatAcrossProcesses(t *testing.T) {
+	first := newRerateTracker().start(7, "today", "entry-token-00000001")
+	second := newRerateTracker().start(7, "today", "entry-token-00000001")
+	if first.RunToken == "" || second.RunToken == "" || first.RunToken == second.RunToken {
+		t.Fatalf("process run tokens = %q, %q; want distinct non-empty values", first.RunToken, second.RunToken)
+	}
+}
+
 func TestRerateStatusEndpoint(t *testing.T) {
 	srv, _ := seedRerate(t)
-	started := srv.rerates.start(0, "today")
+	started := srv.rerates.start(0, "today", "entry-token-00000001")
 	srv.rerates.record(0, "today", started.RunID, "progress", "공고 2/7 분석 중...")
 
 	rec := httptest.NewRecorder()
@@ -68,5 +76,45 @@ func TestRerateStatusEndpointRejectsUnknownSurface(t *testing.T) {
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate/status?surface=hidden", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestRerateStreamRequiresValidatedHistoryEntry(t *testing.T) {
+	for _, target := range []string{
+		"/api/rerate?surface=today",
+		"/api/rerate?surface=today&entry=bad!",
+	} {
+		srv, _ := seedRerate(t)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("GET %s = %d, want 400", target, rec.Code)
+		}
+	}
+}
+
+func TestRerateStatusPublishesServerAuthoritativeHistoryOwner(t *testing.T) {
+	srv, _ := seedRerate(t)
+	const entry = "entry-token-1234567890"
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+		"/api/rerate?surface=today&entry="+entry, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rerate = %d, body = %q", rec.Code, rec.Body.String())
+	}
+
+	statusRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(statusRec, httptest.NewRequest(http.MethodGet,
+		"/api/rerate/status?surface=today", nil))
+	var got struct {
+		RunID      uint64 `json:"run_id"`
+		RunToken   string `json:"run_token"`
+		OwnerEntry string `json:"owner_entry"`
+	}
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.RunID == 0 || got.RunToken == "" || got.OwnerEntry != entry {
+		t.Fatalf("server lifecycle identity = %+v", got)
 	}
 }

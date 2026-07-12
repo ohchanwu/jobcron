@@ -49,7 +49,7 @@ func TestRerateSurfacesProviderError(t *testing.T) {
 			srv.SetAIProvider(failingScoreDeltaStub(tc.status, tc.body), "test-model")
 
 			rec := httptest.NewRecorder()
-			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
+			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200", rec.Code)
 			}

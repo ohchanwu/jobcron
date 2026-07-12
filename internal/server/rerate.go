@@ -160,6 +160,11 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		writeAuthUnauthorized(w)
 		return
 	}
+	ownerEntry := r.URL.Query().Get("entry")
+	if !validRerateEntryToken(ownerEntry) {
+		http.Error(w, "올바르지 않은 화면 기록이에요.", http.StatusBadRequest)
+		return
+	}
 	if s.ai == nil {
 		// No provider configured — there is nothing to re-rate. The button is
 		// hidden in this state; this guards a direct request. 503 (not 409): the
@@ -181,12 +186,13 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	run := s.rerates.start(userID, surface)
+	run := s.rerates.start(userID, surface, ownerEntry)
 	emit := func(event, data string) {
 		s.rerates.record(userID, surface, run.RunID, event, data)
 		sw.event(event, data)
 	}
 	emit("run", fmt.Sprintf("%d", run.RunID))
+	emit("run-token", run.RunToken)
 	// S8: emit a terminal event on every exit. done is set only on the success
 	// path; any early return (error, panic recovery by the http server) leaves
 	// done false, so the client always sees a terminal event and the htmx

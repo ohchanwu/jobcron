@@ -1,65 +1,21 @@
 package web
 
 import (
-	"strings"
+	"os/exec"
 	"testing"
 )
 
-func rerateScript(t *testing.T) string {
-	t.Helper()
-	b, err := FS.ReadFile("ai-rerate.js")
+// TestAIRerateLifecycleBehavior executes the shipped browser client against a
+// zero-package Node harness. The production binary stays pure Go; Node is only
+// the test runner for real JavaScript lifecycle behavior.
+func TestAIRerateLifecycleBehavior(t *testing.T) {
+	node, err := exec.LookPath("node")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("node is required for the zero-package ai-rerate lifecycle test")
 	}
-	return string(b)
-}
-
-func requireRerateScriptContains(t *testing.T, script string, wants ...string) {
-	t.Helper()
-	for _, want := range wants {
-		if !strings.Contains(script, want) {
-			t.Errorf("ai-rerate.js missing lifecycle contract %q", want)
-		}
+	cmd := exec.Command(node, "testdata/ai-rerate-lifecycle.test.js")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("ai-rerate lifecycle harness: %v\n%s", err, out)
 	}
-}
-
-func TestAIRerateLifecycleScopesRunToHistoryEntry(t *testing.T) {
-	script := rerateScript(t)
-	requireRerateScriptContains(t, script,
-		"jobcronRerateEntry",
-		"history.replaceState",
-		"function runOwnerKey(runID)",
-		"sessionStorage.setItem(runOwnerKey(runID), entryToken)",
-		"function ownsRun(runID)",
-		"if (!ownsRun(runID)) return",
-		"entry_token: entryToken",
-		"notice.entry_token !== entryToken",
-	)
-}
-
-func TestAIRerateLifecycleAbortsAndInvalidatesStatusPolls(t *testing.T) {
-	script := rerateScript(t)
-	requireRerateScriptContains(t, script,
-		"lifecycleGeneration++",
-		"statusController.abort()",
-		"new AbortController()",
-		"signal: controller.signal",
-		"function isCurrent(generation)",
-		"if (!isCurrent(generation)) return",
-	)
-	if got := strings.Count(script, "if (!isCurrent(generation)) return"); got < 5 {
-		t.Errorf("generation guard count = %d, want at least 5 continuations guarded", got)
-	}
-}
-
-func TestAIRerateLifecycleClearsRestoredTerminalState(t *testing.T) {
-	script := rerateScript(t)
-	requireRerateScriptContains(t, script,
-		"function clearStatus()",
-		"function clearProgress()",
-		"clearProgress();",
-		"if (status.state === 'idle')",
-		"if (!ownsRun(status.run_id))",
-		"if (handled) clearStatus();",
-	)
 }

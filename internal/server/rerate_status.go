@@ -1,9 +1,13 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type rerateState string
@@ -21,30 +25,60 @@ type rerateKey struct {
 }
 
 type rerateStatus struct {
-	RunID    uint64      `json:"run_id"`
-	State    rerateState `json:"state"`
-	Status   string      `json:"status,omitempty"`
-	Progress string      `json:"progress,omitempty"`
-	Message  string      `json:"message,omitempty"`
+	RunID      uint64      `json:"run_id"`
+	RunToken   string      `json:"run_token,omitempty"`
+	OwnerEntry string      `json:"owner_entry,omitempty"`
+	State      rerateState `json:"state"`
+	Status     string      `json:"status,omitempty"`
+	Progress   string      `json:"progress,omitempty"`
+	Message    string      `json:"message,omitempty"`
 }
 
 type rerateTracker struct {
 	mu     sync.RWMutex
 	nextID uint64
+	epoch  string
 	runs   map[rerateKey]rerateStatus
 }
 
 func newRerateTracker() *rerateTracker {
-	return &rerateTracker{runs: make(map[rerateKey]rerateStatus)}
+	return &rerateTracker{epoch: newRerateEpoch(), runs: make(map[rerateKey]rerateStatus)}
 }
 
-func (t *rerateTracker) start(userID int64, surface string) rerateStatus {
+func newRerateEpoch() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return hex.EncodeToString(b[:])
+	}
+	return fmt.Sprintf("fallback-%x", time.Now().UnixNano())
+}
+
+func (t *rerateTracker) start(userID int64, surface, ownerEntry string) rerateStatus {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.nextID++
-	status := rerateStatus{RunID: t.nextID, State: rerateStateRunning}
+	status := rerateStatus{
+		RunID:      t.nextID,
+		RunToken:   fmt.Sprintf("%s-%d", t.epoch, t.nextID),
+		OwnerEntry: ownerEntry,
+		State:      rerateStateRunning,
+	}
 	t.runs[rerateKey{userID: userID, surface: surface}] = status
 	return status
+}
+
+func validRerateEntryToken(value string) bool {
+	if len(value) < 16 || len(value) > 128 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (t *rerateTracker) record(userID int64, surface string, runID uint64, event, data string) {
