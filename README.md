@@ -20,7 +20,7 @@ local use. (워크넷 also turns on with a free government API key — see *Usag
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/dashboard-dark.png">
-  <img src="docs/assets/screenshots/dashboard.png" alt="The daily briefing — warm cream in light mode, warm charcoal in dark mode, with gold score numerals and chip-style breakdowns">
+  <img src="docs/assets/screenshots/dashboard.png" alt="The current all-postings page with source filters, AI evaluation progress, and indigo AI analysis chips in light and dark themes">
 </picture>
 
 ## Why
