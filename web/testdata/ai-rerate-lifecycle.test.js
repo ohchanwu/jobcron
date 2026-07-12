@@ -314,7 +314,12 @@ async function main() {
 
   // A terminal snapshot cannot reload or create a notice on a non-owner entry.
   storage.removeItem('jobcron:rerate-handled:archive');
-  const doneStatus = { ...running, state: 'done', message: '공고 2개를 모두 AI로 분석했어요.' };
+  const doneStatus = {
+    ...running,
+    state: 'done',
+    outcome: 'changed',
+    message: '공고 2개를 모두 AI로 분석했어요.'
+  };
   const doneNonOwner = makePage({ storage, navigationType: 'back_forward' });
   doneNonOwner.queueStatus(doneStatus);
   doneNonOwner.dispatchWindow('pageshow');
@@ -337,6 +342,53 @@ async function main() {
   assert.equal(storage.getItem('jobcron:rerate-notice:archive'), null);
   const manualReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
   assert.equal(manualReload.has('rerate-status'), false);
+
+  // Cached and partial terminal snapshots keep their server-specific outcome
+  // copy when completion is discovered after navigating away.
+  const cachedCopy = '이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요.';
+  const cachedStatus = {
+    ...doneStatus,
+    run_token: 'process-a-run-cached',
+    outcome: 'cached',
+    message: cachedCopy
+  };
+  const cachedOwner = makePage({ storage, state: initiating.history.state, navigationType: 'back_forward' });
+  cachedOwner.queueStatus(cachedStatus);
+  cachedOwner.dispatchWindow('pageshow');
+  await flush();
+  assert.equal(cachedOwner.location.reloads, 1);
+  const cachedReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
+  assert.equal(cachedReload.text('rerate-status'), cachedCopy);
+
+  const partialCopy = '공고 2/7개를 AI로 분석했어요 — 토큰을 아끼려고 한 번에 일정 개수만 분석해요. 더 보려면 다시 눌러주세요.';
+  const partialStatus = {
+    ...doneStatus,
+    run_token: 'process-a-run-partial',
+    outcome: 'partial',
+    message: partialCopy
+  };
+  const partialOwner = makePage({ storage, state: initiating.history.state, navigationType: 'back_forward' });
+  partialOwner.queueStatus(partialStatus);
+  partialOwner.dispatchWindow('pageshow');
+  await flush();
+  assert.equal(partialOwner.location.reloads, 1);
+  const partialReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
+  assert.equal(partialReload.text('rerate-status'), partialCopy);
+
+  const emptyCopy = '지금 화면에 분석할 공고가 없어요.';
+  const emptyStatus = {
+    ...doneStatus,
+    run_token: 'process-a-run-empty',
+    outcome: 'empty',
+    message: emptyCopy
+  };
+  const emptyOwner = makePage({ storage, state: initiating.history.state, navigationType: 'back_forward' });
+  emptyOwner.queueStatus(emptyStatus);
+  emptyOwner.dispatchWindow('pageshow');
+  await flush();
+  assert.equal(emptyOwner.location.reloads, 1);
+  const emptyReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
+  assert.equal(emptyReload.text('rerate-status'), emptyCopy);
 
   // The additive run-token event preserves the visible-page SSE flow.
   const visibleStorage = new Storage();

@@ -142,7 +142,7 @@ after you save it.
 
 With AI on, a scrape automatically rates the briefing's new postings, and each can
 carry an **AI 분석** chip you click to see the exact quote from the posting that
-justifies the adjustment — no quote, no adjustment. A per-page **재평가** button
+justifies the adjustment — no quote, no adjustment. A per-page **AI 평가** button
 re-rates the postings you're looking at (for example after you change your goals,
 or to analyze more than one scrape covered), and a daily token budget (which you
 set) keeps spend bounded.
@@ -159,7 +159,9 @@ cd jobcron
 go build ./cmd/jobcron
 ```
 
-Requires Go 1.26+. Pure Go — no CGO.
+Requires Go 1.26+. Running the JavaScript lifecycle tests also requires the
+pinned CI version, Node.js 22.15.1 LTS. The shipped application remains pure Go
+with no CGO or Node.js runtime dependency.
 
 For production-app development, run the app against local PostgreSQL 18:
 

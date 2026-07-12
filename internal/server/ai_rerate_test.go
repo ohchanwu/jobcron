@@ -504,6 +504,71 @@ func TestRerateSSEPublishesTerminalStatus(t *testing.T) {
 	if status.State != rerateStateDone || status.RunID == 0 || status.Message == "" {
 		t.Fatalf("terminal status = %+v", status)
 	}
+	if status.Outcome != "changed" {
+		t.Fatalf("terminal outcome = %q, want changed", status.Outcome)
+	}
+}
+
+func TestRerateSSEPublishesCachedAndPartialOutcomes(t *testing.T) {
+	t.Run("cached", func(t *testing.T) {
+		srv, _ := seedRerate(t)
+		if _, err := srv.runRerate(context.Background(), "today", noopEmit); err != nil {
+			t.Fatalf("prime cache: %v", err)
+		}
+
+		status := runRerateAndReadStatus(t, srv)
+		if status.Outcome != "cached" {
+			t.Fatalf("terminal outcome = %q, want cached", status.Outcome)
+		}
+		if status.Message != "이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요." {
+			t.Fatalf("cached message = %q", status.Message)
+		}
+	})
+
+	t.Run("partial", func(t *testing.T) {
+		srv, _ := seedRerate(t)
+		srv.aiPerCallCap = 1
+
+		status := runRerateAndReadStatus(t, srv)
+		if status.Outcome != "partial" {
+			t.Fatalf("terminal outcome = %q, want partial", status.Outcome)
+		}
+		if !strings.Contains(status.Message, "1/2") {
+			t.Fatalf("partial message = %q, want 1/2 progress", status.Message)
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		srv, _ := newTestServer(t, &fakeScraper{})
+		srv.SetAIProvider(rerateStub(), "test-model")
+
+		status := runRerateAndReadStatus(t, srv)
+		if status.Outcome != "empty" {
+			t.Fatalf("terminal outcome = %q, want empty", status.Outcome)
+		}
+		if status.Message != "지금 화면에 분석할 공고가 없어요." {
+			t.Fatalf("empty message = %q", status.Message)
+		}
+	})
+}
+
+func runRerateAndReadStatus(t *testing.T, srv *Server) rerateStatus {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+		"/api/rerate?surface=today&entry=entry-token-00000001", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rerate status = %d", rec.Code)
+	}
+
+	statusRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(statusRec, httptest.NewRequest(http.MethodGet,
+		"/api/rerate/status?surface=today", nil))
+	var status rerateStatus
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	return status
 }
 
 func currentProfile(t *testing.T, srv *Server) profile.Profile {

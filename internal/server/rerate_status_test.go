@@ -21,9 +21,9 @@ func TestRerateTrackerRecordsLifecycle(t *testing.T) {
 		t.Fatalf("running copy = %+v", running)
 	}
 
-	tracker.record(7, "today", started.RunID, "done", "완료")
+	tracker.complete(7, "today", started.RunID, rerateOutcomeChanged, "완료")
 	done, _ := tracker.snapshot(7, "today")
-	if done.State != rerateStateDone || done.Message != "완료" {
+	if done.State != rerateStateDone || done.Outcome != rerateOutcomeChanged || done.Message != "완료" {
 		t.Fatalf("done snapshot = %+v", done)
 	}
 }
@@ -32,7 +32,7 @@ func TestRerateTrackerIgnoresStaleRunUpdates(t *testing.T) {
 	tracker := newRerateTracker()
 	old := tracker.start(7, "today", "entry-token-00000001")
 	current := tracker.start(7, "today", "entry-token-00000002")
-	tracker.record(7, "today", old.RunID, "done", "stale")
+	tracker.complete(7, "today", old.RunID, rerateOutcomeChanged, "stale")
 
 	got, _ := tracker.snapshot(7, "today")
 	if got.RunID != current.RunID || got.State != rerateStateRunning || got.Message != "" {

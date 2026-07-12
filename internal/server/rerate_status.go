@@ -11,6 +11,7 @@ import (
 )
 
 type rerateState string
+type rerateOutcome string
 
 const (
 	rerateStateIdle    rerateState = "idle"
@@ -19,19 +20,27 @@ const (
 	rerateStateFailed  rerateState = "failed"
 )
 
+const (
+	rerateOutcomeChanged rerateOutcome = "changed"
+	rerateOutcomeCached  rerateOutcome = "cached"
+	rerateOutcomePartial rerateOutcome = "partial"
+	rerateOutcomeEmpty   rerateOutcome = "empty"
+)
+
 type rerateKey struct {
 	userID  int64
 	surface string
 }
 
 type rerateStatus struct {
-	RunID      uint64      `json:"run_id"`
-	RunToken   string      `json:"run_token,omitempty"`
-	OwnerEntry string      `json:"owner_entry,omitempty"`
-	State      rerateState `json:"state"`
-	Status     string      `json:"status,omitempty"`
-	Progress   string      `json:"progress,omitempty"`
-	Message    string      `json:"message,omitempty"`
+	RunID      uint64        `json:"run_id"`
+	RunToken   string        `json:"run_token,omitempty"`
+	OwnerEntry string        `json:"owner_entry,omitempty"`
+	State      rerateState   `json:"state"`
+	Status     string        `json:"status,omitempty"`
+	Progress   string        `json:"progress,omitempty"`
+	Message    string        `json:"message,omitempty"`
+	Outcome    rerateOutcome `json:"outcome,omitempty"`
 }
 
 type rerateTracker struct {
@@ -94,15 +103,26 @@ func (t *rerateTracker) record(userID int64, surface string, runID uint64, event
 		status.Status = data
 	case "progress":
 		status.Progress = data
-	case "done":
-		status.State = rerateStateDone
-		status.Message = data
 	case "failed":
 		status.State = rerateStateFailed
 		status.Message = data
 	default:
 		return
 	}
+	t.runs[key] = status
+}
+
+func (t *rerateTracker) complete(userID int64, surface string, runID uint64, outcome rerateOutcome, message string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key := rerateKey{userID: userID, surface: surface}
+	status, ok := t.runs[key]
+	if !ok || status.RunID != runID {
+		return
+	}
+	status.State = rerateStateDone
+	status.Message = message
+	status.Outcome = outcome
 	t.runs[key] = status
 }
 

@@ -216,7 +216,8 @@
       }
       if (status.state === 'done') {
         if (!handled) {
-          rememberAndReload(completedAwayCopy, status.run_token, status.owner_entry);
+          var message = status.outcome === 'changed' ? completedAwayCopy : status.message;
+          rememberAndReload(message || completedAwayCopy, status.run_token, status.owner_entry);
           return;
         }
         if (handled) clearStatus();

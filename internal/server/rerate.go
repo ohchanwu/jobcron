@@ -227,7 +227,22 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	done = true
-	emit("done", rerateDoneMessage(summary))
+	message := rerateDoneMessage(summary)
+	s.rerates.complete(userID, surface, run.RunID, rerateDoneOutcome(summary), message)
+	sw.event("done", message)
+}
+
+func rerateDoneOutcome(summary rerateSummary) rerateOutcome {
+	switch {
+	case summary.Visible == 0:
+		return rerateOutcomeEmpty
+	case summary.ProviderCalls == 0 && summary.Analyzed >= summary.Visible:
+		return rerateOutcomeCached
+	case summary.Analyzed < summary.Visible:
+		return rerateOutcomePartial
+	default:
+		return rerateOutcomeChanged
+	}
 }
 
 // rerateDoneMessage is the terminal copy after a re-rate press. It states the
