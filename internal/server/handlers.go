@@ -457,7 +457,7 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 	}
 	form := toProfileForm(p)
 	form.ProfileRequired = r.URL.Query().Get("reason") == "profile-required"
-	form.Sources = s.sourceOptions(p.DisabledSources)
+	form.Sources = s.sourceOptions(p.DisabledSources, !ok)
 	s.fillAIFormState(r.Context(), &form, p)
 	s.renderWithRequest(w, r, "profile.html", form)
 }

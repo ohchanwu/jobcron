@@ -21,6 +21,7 @@ import (
 // fakeScraper is a test double for scraper.Scraper — it returns canned data
 // instead of hitting the live 점핏 API.
 type fakeScraper struct {
+	source       string
 	listing      []scraper.Posting
 	details      map[string]scraper.Posting
 	accessErr    error
@@ -28,7 +29,12 @@ type fakeScraper struct {
 	detailCalls  []string // SourcePostingIDs FetchDetail was called for
 }
 
-func (f *fakeScraper) Source() string                        { return "jumpit" }
+func (f *fakeScraper) Source() string {
+	if f.source != "" {
+		return f.source
+	}
+	return "jumpit"
+}
 func (f *fakeScraper) Kind() scraper.SourceKind              { return scraper.SourceKindAggregator }
 func (f *fakeScraper) CheckAccess(ctx context.Context) error { return f.accessErr }
 
@@ -230,6 +236,38 @@ func saveTestProfile(t *testing.T, st *storage.Store, p profile.Profile) {
 	}
 	if _, _, err := st.SaveProfile(context.Background(), profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
+	}
+}
+
+func TestProfileFormDefaultsDemodayOffOnlyBeforeFirstSave(t *testing.T) {
+	st, err := storage.OpenAt(filepath.Join(t.TempDir(), "jobs.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv := New(st, &fakeScraper{}, &fakeScraper{source: "demoday"})
+
+	render := func() string {
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /profile = %d", rec.Code)
+		}
+		return rec.Body.String()
+	}
+
+	newBody := render()
+	if !strings.Contains(newBody, `name="source_jumpit" checked`) {
+		t.Fatal("Jumpit should default on")
+	}
+	if strings.Contains(newBody, `name="source_demoday" checked`) {
+		t.Fatal("Demoday should default off before the first profile save")
+	}
+
+	saveTestProfile(t, st, profile.Profile{})
+	savedBody := render()
+	if !strings.Contains(savedBody, `name="source_demoday" checked`) {
+		t.Fatal("an explicitly saved all-enabled profile must keep Demoday enabled")
 	}
 }
 

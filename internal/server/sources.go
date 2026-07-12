@@ -2,6 +2,12 @@ package server
 
 import "github.com/ohchanwu/jobcron/internal/scraper"
 
+const demodaySourceID = "demoday"
+
+func defaultDisabledSources() []string {
+	return []string{demodaySourceID}
+}
+
 // sourceLabels maps source identifiers to the short Korean display label
 // rendered in the UI ("점핏" inline after the company name). When a new
 // source is added, give it an entry here; unknown sources fall back to the
@@ -46,10 +52,15 @@ func (o sourceOption) IsCompany() bool { return o.Kind == scraper.SourceKindComp
 // sourceOptions returns one option per registered scraper, with each option
 // flagged enabled when the given profile permits it. Order follows the
 // scraper-registration order so the user sees a stable list.
-func (s *Server) sourceOptions(disabled []string) []sourceOption {
-	disabledSet := make(map[string]bool, len(disabled))
-	for _, d := range disabled {
-		disabledSet[d] = true
+func (s *Server) sourceOptions(disabled []string, applyDefaults bool) []sourceOption {
+	disabledSet := make(map[string]bool, len(disabled)+1)
+	for _, id := range disabled {
+		disabledSet[id] = true
+	}
+	if applyDefaults {
+		for _, id := range defaultDisabledSources() {
+			disabledSet[id] = true
+		}
 	}
 	opts := make([]sourceOption, 0, len(s.sources))
 	for _, src := range s.sources {
