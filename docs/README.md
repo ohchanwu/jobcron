@@ -21,7 +21,7 @@ Use this index instead of recursively loading the entire documentation tree.
 ## Implementation Work
 
 - [Active Superpowers work and context policy](superpowers/README.md)
-- [Alpha milestone A polishes implementation plan](superpowers/plans/260712-alpha-milestone-a-polishes-implementation-plan.md)
+- [Alpha milestone A polishes verification](superpowers/archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-verification.md)
 - [No browser-driven scraping for v1.x](superpowers/decisions/260606-no-browser-driven-scraping.md)
 - [RDS production settings](superpowers/decisions/260710-rds-production-settings.md)
 - [Jobcron production and rename decisions](superpowers/decisions/260711-jobcron-production.md)

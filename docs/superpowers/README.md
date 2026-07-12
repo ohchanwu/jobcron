@@ -6,11 +6,13 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Alpha milestone A polishes](specs/260712-alpha-milestone-a-polishes.md)
-- [Alpha milestone A polishes implementation plan](plans/260712-alpha-milestone-a-polishes-implementation-plan.md)
+None.
 
 ## Recently Archived
 
+- [Alpha milestone A polishes specification](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes.md)
+- [Alpha milestone A polishes implementation plan](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-implementation-plan.md)
+- [Alpha milestone A polishes verification](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-verification.md)
 - [Interactive local preview, first-run guidance, and navigation](archive/2026-07-11-interactive-preview-navigation/260711-interactive-preview-navigation.md)
 - [Integrated verification report](archive/2026-07-11-interactive-preview-navigation/260711-interactive-preview-navigation-verification.md)
 
