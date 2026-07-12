@@ -1,7 +1,7 @@
 # Plan: turn jobcron.app from demo into production app
 
-**Status:** planning document, no implementation started  
-**Date:** 2026-07-09  
+**Status:** planning document, no implementation started
+**Date:** 2026-07-09
 **Decision:** build Option A first: a single-user production app. Keep Option B, multi-user accounts, as the next product milestone.
 
 ## Goal

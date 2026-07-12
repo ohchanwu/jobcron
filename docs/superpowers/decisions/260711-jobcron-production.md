@@ -17,4 +17,3 @@
 - Secrets stay outside Git. The production Compose example intentionally leaves
   `SESSION_SECRET` empty so configuration fails until a real secret is supplied.
 - Autonomous agents may commit locally but must not push.
-

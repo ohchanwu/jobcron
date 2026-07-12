@@ -22,4 +22,3 @@ background, producing a visible band below the application.
   desktop, tablet, and mobile dimensions.
 - Simulate different extension colors on the root and verify no exposed band,
   horizontal overflow, console error, or failed local asset.
-
