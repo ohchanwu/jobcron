@@ -138,6 +138,12 @@ func validRerateSurface(surface string) bool {
 	return false
 }
 
+type rerateSummary struct {
+	Analyzed      int
+	Visible       int
+	ProviderCalls int
+}
+
 // handleRerateSSE re-rates the VISIBLE rows of one surface with the Stage-2 AI
 // delta, streaming progress as Server-Sent Events. It is mutually exclusive with
 // a scrape and with another re-rate (it shares the scrape singleflight key — S7),
@@ -175,15 +181,21 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	run := s.rerates.start(userID, surface)
+	emit := func(event, data string) {
+		s.rerates.record(userID, surface, run.RunID, event, data)
+		sw.event(event, data)
+	}
+	emit("run", fmt.Sprintf("%d", run.RunID))
 	// S8: emit a terminal event on every exit. done is set only on the success
 	// path; any early return (error, panic recovery by the http server) leaves
 	// done false, so the client always sees a terminal event and the htmx
 	// sse-connect is torn down (no auto-reconnect into a second re-rate).
 	done := false
-	failMsg := "재평가에 실패했어요. 잠시 후 다시 시도해 주세요."
+	failMsg := "AI 평가에 실패했어요. 잠시 후 다시 시도해 주세요."
 	defer func() {
 		if !done {
-			sw.event("failed", failMsg)
+			emit("failed", failMsg)
 		}
 	}()
 
@@ -197,7 +209,7 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 	// SSE writes after disconnect are no-ops.
 	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
 	defer cancel()
-	analyzed, visible, err := s.runRerate(ctx, surface, sw.event, userID)
+	summary, err := s.runRerate(ctx, surface, emit, userID)
 	if err != nil {
 		// A provider failure (every attempted row errored) carries a calm,
 		// specific message; a storage/profile failure keeps the generic one. The
@@ -209,23 +221,25 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	done = true
-	sw.event("done", rerateDoneMessage(analyzed, visible))
+	emit("done", rerateDoneMessage(summary))
 }
 
 // rerateDoneMessage is the terminal copy after a re-rate press. It states the
 // honest N/M progress and, when the press did not finish the list (the per-call
 // cap or token budget stopped it), why and what to do — so a counter that did
 // not reach M reads as "intentional, press again," not "broken."
-func rerateDoneMessage(analyzed, visible int) string {
+func rerateDoneMessage(summary rerateSummary) string {
 	switch {
-	case visible == 0:
+	case summary.Visible == 0:
 		return "지금 화면에 분석할 공고가 없어요."
-	case analyzed >= visible:
-		return fmt.Sprintf("공고 %d개를 모두 AI로 분석했어요.", visible)
+	case summary.ProviderCalls == 0 && summary.Analyzed >= summary.Visible:
+		return "이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요."
+	case summary.Analyzed >= summary.Visible:
+		return fmt.Sprintf("공고 %d개를 모두 AI로 분석했어요.", summary.Visible)
 	default:
 		return fmt.Sprintf(
 			"공고 %d/%d개를 AI로 분석했어요 — 토큰을 아끼려고 한 번에 일정 개수만 분석해요. 더 보려면 다시 눌러주세요.",
-			analyzed, visible)
+			summary.Analyzed, summary.Visible)
 	}
 }
 
@@ -246,46 +260,43 @@ func rerateDoneMessage(analyzed, visible int) string {
 // cap, so a later press resumes on the still-uncached rows. It returns the
 // cumulative analyzed count (N — visible rows now cached against the current
 // goal) and the total visible rows (M) for the progress copy.
-func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userIDOpt ...int64) (analyzed, visible int, err error) {
+func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userIDOpt ...int64) (summary rerateSummary, err error) {
 	userID := optionalUserID(userIDOpt)
 	prof, ok, err := s.loadProfile(ctx, userID)
-	if err != nil {
-		return 0, 0, err
-	}
-	if !ok {
-		return 0, 0, nil
+	if err != nil || !ok {
+		return summary, err
 	}
 	postings, err := s.visibleForRerate(ctx, surface, time.Now(), userID)
 	if err != nil {
-		return 0, 0, err
+		return summary, err
 	}
-	visible = len(postings)
-	if visible == 0 {
-		return 0, 0, nil
+	summary.Visible = len(postings)
+	if summary.Visible == 0 {
+		return summary, nil
 	}
 	emit("status", "AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕")
 
 	budget := s.newAIBudget(ctx)
 	var provErr error
-	analyzed, provErr = s.rateStage2(ctx, postings, prof, budget, emit)
+	summary.Analyzed, summary.ProviderCalls, provErr = s.rateStage2(ctx, postings, prof, budget, emit)
 	if budget != nil && budget.isDegraded() {
 		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 	}
-	if provErr != nil && analyzed > 0 {
+	if provErr != nil && summary.Analyzed > 0 {
 		// Partial: some rows rated, some hit a provider error. Note it before the
 		// done path reloads (the rows that succeeded still render their chips).
 		emit("status", providerFailureMessage(provErr))
 	}
 	emit("status", "점수를 다시 매기는 중...")
 	if _, err := s.scoreAll(ctx, userID); err != nil {
-		return analyzed, visible, err
+		return summary, err
 	}
-	if analyzed == 0 && provErr != nil {
+	if summary.Analyzed == 0 && provErr != nil {
 		// Every attempted row failed against the provider — surface it so the SSE
 		// terminal is a calm, specific "failed" instead of a hollow "0/N done."
-		return analyzed, visible, &providerCallError{err: provErr}
+		return summary, &providerCallError{err: provErr}
 	}
-	return analyzed, visible, nil
+	return summary, nil
 }
 
 // rateStage2 runs the Stage-2 ScoreDelta over `postings` through the bounded
@@ -302,9 +313,9 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 // limiter still spaces request starts. SSE progress writes stay on this
 // goroutine (a ResponseWriter is not safe for concurrent writes); workers send
 // results to a fully-buffered channel that a closer goroutine ends.
-func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, budget *aiBudget, emit func(event, data string)) (analyzed int, provErr error) {
+func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, budget *aiBudget, emit func(event, data string)) (analyzed int, providerCalls int, provErr error) {
 	if s.ai == nil || budget == nil || len(postings) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
 	aiInputHash := profile.AIInputHash(prof)
 	profileText := profile.BuildStage2ProfileText(prof)
@@ -313,8 +324,9 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 	total := len(postings)
 
 	type rerateResult struct {
-		cached bool
-		err    error
+		cached         bool
+		providerCalled bool
+		err            error
 	}
 	results := make(chan rerateResult, total)
 	sem := make(chan struct{}, rerateWorkers)
@@ -325,8 +337,8 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			cached, err := s.rerateOne(ctx, p, aiInputHash, profileText, now, budget, calls)
-			results <- rerateResult{cached: cached, err: err}
+			cached, providerCalled, err := s.rerateOne(ctx, p, aiInputHash, profileText, now, budget, calls)
+			results <- rerateResult{cached: cached, providerCalled: providerCalled, err: err}
 		}(p)
 	}
 	go func() { wg.Wait(); close(results) }()
@@ -337,6 +349,9 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 		if r.cached {
 			analyzed++
 		}
+		if r.providerCalled {
+			providerCalls++
+		}
 		// Keep the FIRST provider error as representative — a bad key or mismatched
 		// model fails every row identically, so one classified message is enough.
 		if r.err != nil && provErr == nil {
@@ -344,7 +359,7 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 		}
 		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", completed, total))
 	}
-	return analyzed, provErr
+	return analyzed, providerCalls, provErr
 }
 
 // rerateOne re-rates a single posting and reports whether it now has a delta
@@ -363,21 +378,21 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 // failing calls can't ignore the cap.
 func (s *Server) rerateOne(
 	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, budget *aiBudget, calls *callCap,
-) (cached bool, err error) {
+) (cached bool, providerCalled bool, err error) {
 	// Already rated against the current goal text → reuse (reconnect-safe, no
 	// re-spend, free). An empty cached delta still counts as analyzed.
 	if _, ok, e := s.store.AIScore(ctx, p.ID, aiInputHash, s.aiVersion); e == nil && ok {
-		return true, nil
+		return true, false, nil
 	}
 	// Uncached: spend only if the token budget has headroom AND the per-call cap
 	// has a free slot. canSpend is checked first so a cap-only miss doesn't mark
 	// the budget degraded. Either miss leaves the row uncached for a later press —
 	// not an error (no provider call was attempted).
 	if budget == nil || !budget.canSpend() {
-		return false, nil
+		return false, false, nil
 	}
 	if !calls.tryReserve() {
-		return false, nil
+		return false, false, nil
 	}
 	// Backfill Stage 1 so career/education facts are AI-grounded too (e.g. rows
 	// scraped before AI was enabled). Best-effort, budget-bounded.
@@ -389,16 +404,16 @@ func (s *Server) rerateOne(
 		// Provider error (bad key, mismatched model, transport) → no delta. Return
 		// it so rateStage2 can surface a calm, specific message instead of letting
 		// the failure read as a silent "not analyzed." The reserved slot is spent.
-		return false, err
+		return false, true, err
 	}
 	budget.debit(ctx, usage)
 	// Gate: presence against the SENT (truncated) text, absence against the FULL
 	// Description (S5). Survivors net into the stored delta.
 	delta := ai.GateDelta(raw, sent, p.Description)
 	if err := s.store.UpsertAIScore(ctx, p.ID, aiInputHash, s.aiVersion, delta, now); err != nil {
-		return false, err
+		return false, true, err
 	}
-	return true, nil
+	return true, true, nil
 }
 
 // visibleForRerate returns the non-dealbreaker postings currently shown on a

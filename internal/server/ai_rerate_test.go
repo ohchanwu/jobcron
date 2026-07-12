@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,12 +59,12 @@ func TestRunRerateRatesVisibleRows(t *testing.T) {
 	srv, stub := seedRerate(t)
 	ctx := context.Background()
 
-	n, _, err := srv.runRerate(ctx, "today", noopEmit)
+	summary, err := srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
-	if n != 2 {
-		t.Errorf("rated %d rows, want 2", n)
+	if summary.Analyzed != 2 {
+		t.Errorf("rated %d rows, want 2", summary.Analyzed)
 	}
 	if stub.ScoreDeltaCalls != 2 {
 		t.Errorf("ScoreDelta calls = %d, want 2 (one per visible uncached row)", stub.ScoreDeltaCalls)
@@ -89,23 +90,27 @@ func TestRunRerateReconnectReusesCache(t *testing.T) {
 	srv, stub := seedRerate(t)
 	ctx := context.Background()
 
-	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	first, err := srv.runRerate(ctx, "today", noopEmit)
+	if err != nil {
 		t.Fatalf("first runRerate: %v", err)
+	}
+	if first.ProviderCalls != 2 {
+		t.Fatalf("first ProviderCalls = %d, want 2", first.ProviderCalls)
 	}
 	callsAfterFirst := stub.ScoreDeltaCalls
 
-	// A reconnect (second run, same profile) must resume entirely from cache —
-	// no provider call, no double-spend (S8).
-	n, _, err := srv.runRerate(ctx, "today", noopEmit)
+	second, err := srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("second runRerate: %v", err)
 	}
-	if n != 2 {
-		t.Errorf("second run rated %d, want 2 (from cache)", n)
+	if second.Analyzed != 2 || second.ProviderCalls != 0 {
+		t.Fatalf("second summary = %+v, want analyzed cache hits and zero calls", second)
 	}
 	if stub.ScoreDeltaCalls != callsAfterFirst {
-		t.Errorf("ScoreDelta called again on reconnect (%d → %d); cache must be reused",
-			callsAfterFirst, stub.ScoreDeltaCalls)
+		t.Fatalf("provider calls changed %d -> %d", callsAfterFirst, stub.ScoreDeltaCalls)
+	}
+	if got := rerateDoneMessage(second); got != "이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요." {
+		t.Fatalf("no-op copy = %q", got)
 	}
 }
 
@@ -120,7 +125,7 @@ func TestRunRerateBudgetMessagePointsToProfileSettings(t *testing.T) {
 		}
 	}
 
-	if _, _, err := srv.runRerate(ctx, "today", emit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", emit); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 	body := strings.Join(messages, "\n")
@@ -169,7 +174,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 	}
 
 	// Press 1 halts partway: the run budget stops it before the whole list.
-	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("press 1: %v", err)
 	}
 	rated1 := countAIScores(t, srv)
@@ -187,7 +192,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 		if press > 20 {
 			t.Fatalf("re-rate did not finish the list within 20 presses (rated %d/%d)", countAIScores(t, srv), total)
 		}
-		if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+		if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 			t.Fatalf("press %d: %v", press, err)
 		}
 	}
@@ -199,7 +204,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 	}
 
 	// A press over a fully-rated list spends nothing.
-	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("final press: %v", err)
 	}
 	if stub.ScoreDeltaCalls != total {
@@ -371,31 +376,31 @@ func TestRerateRespectsPerCallCap(t *testing.T) {
 	}
 
 	// Press 1: 2 fresh rows analyzed, 3 left.
-	analyzed, visible, err := srv.runRerate(ctx, "today", noopEmit)
+	summary, err := srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("press 1: %v", err)
 	}
-	if visible != total {
-		t.Fatalf("press 1 visible = %d, want %d", visible, total)
+	if summary.Visible != total {
+		t.Fatalf("press 1 visible = %d, want %d", summary.Visible, total)
 	}
-	if analyzed != 2 || stub.ScoreDeltaCalls != 2 {
-		t.Fatalf("press 1: analyzed=%d ScoreDelta=%d, want 2 and 2 (per-call cap)", analyzed, stub.ScoreDeltaCalls)
+	if summary.Analyzed != 2 || stub.ScoreDeltaCalls != 2 {
+		t.Fatalf("press 1: analyzed=%d ScoreDelta=%d, want 2 and 2 (per-call cap)", summary.Analyzed, stub.ScoreDeltaCalls)
 	}
 	// Press 2: 2 cache hits (free) + 2 new = 4 analyzed cumulatively, 4 calls total.
-	analyzed, _, err = srv.runRerate(ctx, "today", noopEmit)
+	summary, err = srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("press 2: %v", err)
 	}
-	if analyzed != 4 || stub.ScoreDeltaCalls != 4 {
-		t.Fatalf("press 2: analyzed=%d ScoreDelta=%d, want 4 and 4", analyzed, stub.ScoreDeltaCalls)
+	if summary.Analyzed != 4 || stub.ScoreDeltaCalls != 4 {
+		t.Fatalf("press 2: analyzed=%d ScoreDelta=%d, want 4 and 4", summary.Analyzed, stub.ScoreDeltaCalls)
 	}
 	// Press 3: the last row. All analyzed, no further presses needed.
-	analyzed, _, err = srv.runRerate(ctx, "today", noopEmit)
+	summary, err = srv.runRerate(ctx, "today", noopEmit)
 	if err != nil {
 		t.Fatalf("press 3: %v", err)
 	}
-	if analyzed != total || stub.ScoreDeltaCalls != total {
-		t.Fatalf("press 3: analyzed=%d ScoreDelta=%d, want %d and %d", analyzed, stub.ScoreDeltaCalls, total, total)
+	if summary.Analyzed != total || stub.ScoreDeltaCalls != total {
+		t.Fatalf("press 3: analyzed=%d ScoreDelta=%d, want %d and %d", summary.Analyzed, stub.ScoreDeltaCalls, total, total)
 	}
 }
 
@@ -456,15 +461,37 @@ func TestRerateInfoCountsCacheNotChips(t *testing.T) {
 }
 
 func TestRerateDoneMessage(t *testing.T) {
-	if got := rerateDoneMessage(0, 0); got != "지금 화면에 분석할 공고가 없어요." {
+	if got := rerateDoneMessage(rerateSummary{}); got != "지금 화면에 분석할 공고가 없어요." {
 		t.Errorf("empty: %q", got)
 	}
-	if got := rerateDoneMessage(5, 5); got != "공고 5개를 모두 AI로 분석했어요." {
+	if got := rerateDoneMessage(rerateSummary{Analyzed: 5, Visible: 5, ProviderCalls: 5}); got != "공고 5개를 모두 AI로 분석했어요." {
 		t.Errorf("complete: %q", got)
 	}
-	got := rerateDoneMessage(3, 7)
+	got := rerateDoneMessage(rerateSummary{Analyzed: 3, Visible: 7, ProviderCalls: 3})
 	if !strings.Contains(got, "3/7") || !strings.Contains(got, "다시 눌러") {
 		t.Errorf("partial copy missing N/M or the press-again cue: %q", got)
+	}
+}
+
+func TestRerateSSEPublishesTerminalStatus(t *testing.T) {
+	srv, _ := seedRerate(t)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rerate status = %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "event: run") || !strings.Contains(body, "event: done") {
+		t.Fatalf("SSE lifecycle events missing:\n%s", body)
+	}
+
+	statusRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(statusRec, httptest.NewRequest(http.MethodGet, "/api/rerate/status?surface=today", nil))
+	var status rerateStatus
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.State != rerateStateDone || status.RunID == 0 || status.Message == "" {
+		t.Fatalf("terminal status = %+v", status)
 	}
 }
 

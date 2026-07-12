@@ -243,7 +243,7 @@ func TestDailyUSDCapHaltsManualRerate(t *testing.T) {
 		t.Fatalf("seed daily usage: %v", err)
 	}
 
-	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 	if stub.ScoreDeltaCalls != 0 {
@@ -270,7 +270,7 @@ func TestMonthlyUSDCapHaltsManualRerate(t *testing.T) {
 		t.Fatalf("seed monthly usage: %v", err)
 	}
 
-	if _, _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 	if stub.ScoreDeltaCalls != 0 {

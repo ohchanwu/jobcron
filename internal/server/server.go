@@ -478,7 +478,7 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 		if vis, verr := s.visibleForRerate(ctx, "today", now, userID); verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
 			rateBudget := s.newAIBudget(ctx)
-			rated, provErr := s.rateStage2(ctx, vis, prof, rateBudget, emit)
+			rated, _, provErr := s.rateStage2(ctx, vis, prof, rateBudget, emit)
 			if rated > 0 {
 				// Merge the fresh Stage-2 deltas into the rendered scores.
 				if rescored, rerr := s.scoreAll(ctx, userID); rerr == nil {
