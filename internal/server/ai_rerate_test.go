@@ -299,14 +299,25 @@ func TestRerateButtonHiddenWithoutKey(t *testing.T) {
 	srv2, _ := seedRerate(t)
 	rec2 := httptest.NewRecorder()
 	srv2.Handler().ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/", nil))
-	if !strings.Contains(rec2.Body.String(), `id="rerate"`) {
-		t.Fatal("the re-rate button must be present when AI is configured")
+	body := rec2.Body.String()
+	for _, want := range []string{
+		`id="rerate"`,
+		`>AI 평가<`,
+		`id="rerate-activity"`,
+		`aria-hidden="true"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("rendered rerate control missing %q", want)
+		}
+	}
+	if strings.Contains(body, `>재평가<`) {
+		t.Fatal("legacy 재평가 button copy is still rendered")
 	}
 }
 
 // TestRerateButtonShowsStaleCount: a visible row whose delta was computed
 // against a prior profile gives the button the gold attention treatment with a
-// count ("재평가 ·1" + has-stale).
+// count ("AI 평가 ·1" + has-stale).
 func TestRerateButtonShowsStaleCount(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
@@ -336,8 +347,8 @@ func TestRerateButtonShowsStaleCount(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	body := rec.Body.String()
-	if !strings.Contains(body, "재평가 ·1") {
-		t.Fatalf("expected the stale-count badge '재평가 ·1' on the button")
+	if !strings.Contains(body, "AI 평가 ·1") {
+		t.Fatalf("expected the stale-count badge 'AI 평가 ·1' on the button")
 	}
 	if !strings.Contains(body, "has-stale") {
 		t.Fatalf("expected the has-stale attention class on the button")

@@ -1,17 +1,20 @@
 {{/*
-  rerateButton renders the 재평가 control for a surface. Dot is the .Rerate field
+  rerateButton renders the AI 평가 control for a surface. Dot is the .Rerate field
   (*rerateInfo) — nil when no AI key is configured, so the button is HIDDEN
   entirely (design §4: no dead control). It is a ghost/secondary button, never a
   second primary. When visible rows are stale (computed against a prior profile),
-  it takes a gold attention treatment with a count: "재평가 ·N".
+  it takes a gold attention treatment with a count: "AI 평가 ·N".
   Shared by /, /archive, /bookmarks (an a11y/SSE control that must stay
   identical, like the AI chip — a deliberate exception to "duplicate templates").
 */}}
 {{define "rerateButton"}}{{with .}}
 <div class="rerate-row">
-  <button id="rerate" type="button" class="btn-ghost{{if .StaleCount}} has-stale{{end}}" data-surface="{{.Surface}}">재평가{{if .StaleCount}} ·{{.StaleCount}}{{end}}</button>
-  <span class="rerate-hint">AI로 화면에 보이는 공고를 다시 분석해요{{if .StaleCount}} · 프로필이 바뀐 공고 {{.StaleCount}}개{{end}}</span>
-  {{if .Visible}}<span class="rerate-count{{if ge .Analyzed .Visible}} complete{{end}}" title="화면에 보이는 공고 {{.Visible}}개 중 {{.Analyzed}}개를 AI로 분석했어요. 토큰을 아끼려고 한 번에 일정 개수만 분석하고, 더 보려면 재평가를 다시 누르면 돼요.">AI 분석 {{.Analyzed}}/{{.Visible}}</span>{{end}}
+  <button id="rerate" type="button" class="btn-ghost{{if .StaleCount}} has-stale{{end}}" data-surface="{{.Surface}}">AI 평가{{if .StaleCount}} ·{{.StaleCount}}{{end}}</button>
+  <span class="rerate-hint">AI로 화면에 보이는 공고를 분석해요{{if .StaleCount}} · 프로필이 바뀐 공고 {{.StaleCount}}개{{end}}</span>
+  {{if .Visible}}<span class="rerate-count{{if ge .Analyzed .Visible}} complete{{end}}" title="화면에 보이는 공고 {{.Visible}}개 중 {{.Analyzed}}개를 AI로 분석했어요. 토큰을 아끼려고 한 번에 일정 개수만 분석하고, 더 보려면 AI 평가를 다시 누르면 돼요.">AI 분석 {{.Analyzed}}/{{.Visible}}</span>{{end}}
 </div>
-<div id="rerate-log" class="scrape-log" aria-live="polite"></div>
+<div class="rerate-feedback">
+  <span id="rerate-activity" class="rerate-activity" aria-hidden="true" hidden><i></i><i></i><i></i></span>
+  <div id="rerate-log" class="scrape-log" aria-live="polite"></div>
+</div>
 {{end}}{{end}}

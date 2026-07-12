@@ -306,6 +306,41 @@ nav.primary a.active {
 }
 .rerate-count.complete { color: var(--accent); }
 
+.rerate-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+.rerate-activity {
+  flex: 0 0 1.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+  padding-top: 0.15rem;
+}
+.rerate-activity[hidden] { display: none; }
+.rerate-activity i {
+  width: 0.22rem;
+  height: 0.22rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: rerate-pulse 0.9s ease-in-out infinite alternate;
+}
+.rerate-activity i:nth-child(2) { animation-delay: 0.15s; }
+.rerate-activity i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes rerate-pulse {
+  from { opacity: 0.3; transform: translateY(0); }
+  to { opacity: 1; transform: translateY(-0.16rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rerate-activity i {
+    animation: none;
+    opacity: 0.75;
+    transform: none;
+  }
+}
+
 .ai-schedule-tip {
   display: flex;
   align-items: center;
