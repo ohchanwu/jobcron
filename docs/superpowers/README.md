@@ -7,6 +7,7 @@ decision records needed for the current task.
 ## Active Work
 
 - [Alpha milestone A polishes](specs/260712-alpha-milestone-a-polishes.md)
+- [Alpha milestone A polishes implementation plan](plans/260712-alpha-milestone-a-polishes-implementation-plan.md)
 
 ## Recently Archived
 
