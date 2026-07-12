@@ -10,8 +10,13 @@ and it scrapes Korean job boards — the aggregators [점핏 (Jumpit)](https://j
 [그리팅 (Greeting)](https://greetinghr.com), plus the company career boards
 [당근 (Daangn)](https://team.daangn.com), 크래프톤, 몰로코, and 센드버드 (via Greenhouse) —
 scores every new-grad IT posting against your profile, and shows a one-page daily
-briefing — each match explained, no notifications, no setup, no account. (워크넷 also
-turns on with a free government API key — see *Usage*.)
+briefing — each match explained, with no notifications or account required for
+local use. (워크넷 also turns on with a free government API key — see *Usage*.)
+
+> **Deployment status:** The read-only demo is live at
+> [demo.jobcron.app](https://demo.jobcron.app). The full production app at
+> `jobcron.app` is not publicly available yet; its deployment configuration is
+> ready, and launch is coming soon. Until then, run the full app locally.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/dashboard-dark.png">
@@ -50,7 +55,8 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
   the briefing gains evidence-cited adjustments — each one backed by a real quote
   from the posting, with a daily token budget you control. Entirely optional; with
   no key the app scores exactly as before. See *AI scoring* below.
-- Runs entirely on your machine. No server, no account, no telemetry.
+- The full app currently runs locally with no account or telemetry. A read-only
+  web demo is live now, and the production web app is coming soon.
 
 ## Install
 
