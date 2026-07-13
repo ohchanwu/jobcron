@@ -108,6 +108,12 @@
         <p class="empty-sub">마음에 드는 공고 옆의 북마크 아이콘을 눌러보세요.<br>이 브라우저에서만 저장돼요.</p>
       </div>
       {{end}}
+      {{if not demoMode}}
+      <div class="empty" data-bookmarks-empty hidden>
+        <p class="empty-title">아직 저장한 공고가 없어요.</p>
+        <p class="empty-sub">마음에 드는 공고 옆의 북마크 아이콘을 눌러보세요.<br>여기서 다시 모아 볼 수 있어요.</p>
+      </div>
+      {{end}}
       {{else}}
       <div class="empty">
         <p class="empty-title">아직 저장한 공고가 없어요.</p>

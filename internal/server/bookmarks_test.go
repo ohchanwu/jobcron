@@ -101,6 +101,46 @@ func TestBookmarksPageEmptyState(t *testing.T) {
 	}
 }
 
+func TestBookmarksPageIncludesHiddenLiveEmptyState(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	id := mustUpsert(t, st, listingPosting("saved-live-empty", "저장한 공고"))
+	if err := st.SetBookmark(context.Background(), id, time.Now()); err != nil {
+		t.Fatalf("SetBookmark: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/bookmarks", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "data-bookmarks-empty hidden") {
+		t.Error("non-empty signed-in bookmarks page lacks hidden live empty state")
+	}
+	if !strings.Contains(body, "여기서 다시 모아 볼 수 있어요.") {
+		t.Error("signed-in live empty-state copy missing")
+	}
+}
+
+func TestDemoBookmarksPageDoesNotRenderSignedInLiveEmptyState(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	mustUpsert(t, st, listingPosting("demo-candidate", "방문자 저장 후보"))
+	srv.SetDemoMode(true)
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/bookmarks", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "data-demo-empty hidden") {
+		t.Error("demo bookmarks page lost its existing demo empty-state target")
+	}
+	if strings.Contains(body, "data-bookmarks-empty") {
+		t.Error("demo bookmarks page contains signed-in live empty-state markup")
+	}
+}
+
 func TestDashboardMarksBookmarkedRows(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
