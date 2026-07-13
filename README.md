@@ -3,24 +3,25 @@
 _[한국어로 보기 🇰🇷](README.ko.md)_
 
 A calm daily job-posting briefing for Korean new-grad (신입) IT job seekers.
+The primary full app will be available at `jobcron.app`: set your profile once,
+then let Jobcron gather and rank the day's openings into one calm page.
 
-`jobcron` is a single binary that opens a local web app. Click **스크랩 시작**
-and it scrapes Korean job boards — the aggregators [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
+Jobcron scrapes Korean job boards — the aggregators [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
 [랠릿 (Rallit)](https://www.rallit.com), [데모데이](https://demoday.co.kr), and
 [그리팅 (Greeting)](https://greetinghr.com), plus the company career boards
 [당근 (Daangn)](https://team.daangn.com), 크래프톤, 몰로코, and 센드버드 (via Greenhouse) —
 scores every new-grad IT posting against your profile, and shows a one-page daily
-briefing — each match explained, with no notifications or account required for
-local use. (워크넷 also turns on with a free government API key — see *Usage*.)
+briefing with every match explained. (워크넷 also turns on with a free government
+API key — see *Usage*.)
 
 > **Deployment status:** The read-only demo is live at
 > [demo.jobcron.app](https://demo.jobcron.app). The full production app at
 > `jobcron.app` is not publicly available yet; its deployment configuration is
-> ready, and launch is coming soon. Until then, run the full app locally.
+> ready, and launch is coming soon.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/dashboard-dark.png">
-  <img src="docs/assets/screenshots/dashboard.png" alt="The current all-postings page with source filters, AI evaluation progress, and indigo AI analysis chips in light and dark themes">
+  <img src="docs/assets/screenshots/dashboard.png" alt="Score-sorted all-postings page with source filters and AI evaluation chips">
 </picture>
 
 ## Why
@@ -55,10 +56,59 @@ say "천천히 가도 괜찮아요" instead of showing empty-state shame.
   the briefing gains evidence-cited adjustments — each one backed by a real quote
   from the posting, with a daily token budget you control. Entirely optional; with
   no key the app scores exactly as before. See *AI scoring* below.
-- The full app currently runs locally with no account or telemetry. A read-only
-  web demo is live now, and the production web app is coming soon.
+- A read-only web demo is live now, and the full `jobcron.app` experience is
+  coming soon. Local operation remains available for contributors and self-hosters.
 
-## Install
+## Usage
+
+1. On first run you land on the profile form. Fill in your stacks, location, and
+   any dealbreaker keywords, then save.
+2. Click **스크랩 시작** and watch the scrape stream in.
+3. Read your briefing — postings sorted by fit, each score broken down.
+
+Run it once a day. That is the whole ritual.
+
+## Known limitations
+
+- **Matching is AI-assisted when AI is configured.** The first AI layer reads
+  career and education requirements from the posting text before scoring,
+  rather than relying only on exact tokens; if AI is unavailable, deterministic
+  rules take over. Explicit dealbreaker keywords remain literal filters:
+  "개발" does not match "개발자", while "야근" also catches "야근 없음".
+- **The briefing is today's postings.** The front page shows what was first seen
+  today — the daily ritual. Everything ever scraped stays in 전체 공고 (sortable by
+  date or by fit), so nothing is lost; it just isn't shouting at you each morning.
+- **New-grad IT only.** Sources are queried with their 신입 / entry filters; this
+  is not a general job search.
+- No notifications, no background scheduling, no résumé parsing — by design.
+
+## AI scoring (optional, v2.0, bring your own key)
+
+Off by default. On the profile form, open **AI 분석 (선택)**, select **Anthropic**
+as the provider, paste your own API key, and fill in a few free-text goals
+(what work you like, what you want to avoid). Your key is stored only in a local
+0600-permission file next to the database — never uploaded, never shown again
+after you save it.
+
+With AI on, a first layer reads each posting's career range, new-grad eligibility,
+and education requirements before the regular score is calculated. A second layer
+compares the posting with your free-text goals, so each posting can carry an
+**AI 분석** chip you click to see the exact quote that justifies the adjustment —
+no quote, no adjustment. A per-page **AI 평가** button re-rates the postings you're
+looking at (for example after you change your goals, or to analyze more than one
+scrape covered), and a daily token budget (which you set) keeps spend bounded.
+
+This is the **v2.0** line and ships as a `-alpha` prerelease while the live AI
+path gets more real-world mileage. Everything else in the app works identically
+whether or not AI is configured.
+
+## Advanced local use
+
+Most users should use `jobcron.app` once it launches. Local binaries and source
+builds remain available for contributors and self-hosters who want to run the
+writable app themselves.
+
+### Install a release binary
 
 Download the binary for your platform from the
 [latest release](https://github.com/ohchanwu/jobcron/releases/latest), unpack
@@ -98,15 +148,6 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
   no process has the database open, rename the `jobcron` directory back to
   `job-scraper`, and then start the old binary.
 
-## Usage
-
-1. On first run you land on the profile form. Fill in your stacks, location, and
-   any dealbreaker keywords, then save.
-2. Click **스크랩 시작** and watch the scrape stream in.
-3. Read your briefing — postings sorted by fit, each score broken down.
-
-Run it once a day. That is the whole ritual.
-
 Flags: `--port` (default `7777`), `--no-open` (do not open a browser),
 `--db` (override the database path), `--worknet-api-key` (enable the 워크넷
 source — a free key from [data.go.kr](https://www.data.go.kr); also read from
@@ -126,41 +167,7 @@ only inside that temporary preview directory, which is removed when the launcher
 exits. Set `JOBCRON_PREVIEW_KEEP=1` to keep the printed state directory for
 inspection.
 
-## Known limitations
-
-- **Matching is AI-assisted when AI is configured.** The first AI layer reads
-  career and education requirements from the posting text before scoring,
-  rather than relying only on exact tokens; if AI is unavailable, deterministic
-  rules take over. Explicit dealbreaker keywords remain literal filters:
-  "개발" does not match "개발자", while "야근" also catches "야근 없음".
-- **The briefing is today's postings.** The front page shows what was first seen
-  today — the daily ritual. Everything ever scraped stays in 전체 공고 (sortable by
-  date or by fit), so nothing is lost; it just isn't shouting at you each morning.
-- **New-grad IT only.** Sources are queried with their 신입 / entry filters; this
-  is not a general job search.
-- No notifications, no background scheduling, no résumé parsing — by design.
-
-## AI scoring (optional, v2.0, bring your own key)
-
-Off by default. On the profile form, open **AI 분석 (선택)**, select **Anthropic**
-as the provider, paste your own API key, and fill in a few free-text goals
-(what work you like, what you want to avoid). Your key is stored only in a local
-0600-permission file next to the database — never uploaded, never shown again
-after you save it.
-
-With AI on, a first layer reads each posting's career range, new-grad eligibility,
-and education requirements before the regular score is calculated. A second layer
-compares the posting with your free-text goals, so each posting can carry an
-**AI 분석** chip you click to see the exact quote that justifies the adjustment —
-no quote, no adjustment. A per-page **AI 평가** button re-rates the postings you're
-looking at (for example after you change your goals, or to analyze more than one
-scrape covered), and a daily token budget (which you set) keeps spend bounded.
-
-This is the **v2.0** line and ships as a `-alpha` prerelease while the live AI
-path gets more real-world mileage. Everything else in the app works identically
-whether or not AI is configured.
-
-## Build from source
+### Build from source
 
 ```sh
 git clone https://github.com/ohchanwu/jobcron
@@ -171,6 +178,8 @@ go build ./cmd/jobcron
 Requires Go 1.26+. Running the JavaScript lifecycle tests also requires the
 pinned CI version, Node.js 22.15.1 LTS. The shipped application remains pure Go
 with no CGO or Node.js runtime dependency.
+
+### Local PostgreSQL development
 
 For production-app development, run the app against local PostgreSQL 18:
 
