@@ -6,7 +6,7 @@ decision records needed for the current task.
 
 ## Active Work
 
-None.
+- [Alpha pre-launch fixes](specs/260713-alpha-pre-launch-fixes.md)
 
 ## Recently Archived
 
