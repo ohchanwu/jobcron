@@ -7,6 +7,7 @@ decision records needed for the current task.
 ## Active Work
 
 - [Alpha pre-launch fixes](specs/260713-alpha-pre-launch-fixes.md)
+- [Alpha pre-launch fixes implementation plan](plans/260713-alpha-pre-launch-fixes-implementation-plan.md)
 - [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
 
 ## Recently Archived

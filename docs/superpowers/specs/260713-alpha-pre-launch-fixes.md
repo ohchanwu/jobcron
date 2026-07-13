@@ -48,20 +48,20 @@ into the human handoff linked above.
 
 ## Current State
 
-| Surface | Verified behavior | Gap |
-|---|---|---|
-| `deploy/production/compose.yaml:8-46` | Runs the app and Caddy; only Caddy has named volumes. | The app's `/root/.config/jobcron` directory is ephemeral. |
-| `internal/ai/keys.go:12-86` | Saves `ai_keys.json` under `os.UserConfigDir()` with mode `0600` and atomic replacement. | Inside the root-run Alpine container, the file resolves below `/root/.config/jobcron`, which is not mounted. |
-| `deploy/production/Dockerfile:5-19` | Builds and copies only `/usr/local/bin/jobcron`. | Operator commands are unavailable inside the production image. This is intentional, but the guide does not provide a working alternative. |
-| `deploy/production/HUMAN_DEPLOY_GUIDE.md:172-183` | Tells the operator to run `jobcron-user` from a source checkout with network access to RDS. | A laptop cannot directly reach private RDS, and no SSH tunnel workflow is documented. |
-| `cmd/jobcron-user/main.go:32-89` | Creates an owner from a PostgreSQL URL and securely prompted or environment-provided password. | The command needs a reachable database endpoint and must run after migrations. |
-| `cmd/jobcron-import/main.go:36-125` | Imports profile, postings, scores, bookmarks, hidden state, AI caches, and AI usage in one transaction. | The production guide omits import sequencing, dry-run verification, and the requirement to use the same owner email. It does not import `ai_keys.json`. |
-| `web/bookmark.js:59-100` | Optimistically flips the bookmark icon, calls `/api/bookmark/{id}`, reconciles to the JSON response, and rolls back on failure. | A successful `bookmarked: false` response does not remove the card on signed-in `/bookmarks`. |
-| `web/not-interested.js:70-83` and `web/styles.css:765-770` | Adds `.posting.removing`, waits for the 0.22-second opacity transition, and removes after a 260 ms fallback. | The signed-in bookmark flow does not reuse this behavior. |
-| `web/bookmarks.html:71-116` | Renders a live empty state only when the initial server response has no postings. | The signed-in page cannot reveal its empty state after JavaScript removes the last card. |
-| `web/source-filter.js:43-53` | Caches initial card nodes for source and text filtering. | Removed nodes can produce a false non-empty filter result unless disconnected nodes are ignored. |
-| `README.md:21-24` and `README.ko.md:21-24` | Use `dashboard.png` and `dashboard-dark.png` for theme-aware screenshots. | The captured page has 날짜순 active, and the alternative text does not name the sort. |
-| `web/archive.html:55-57` | Provides working 날짜순 and 점수순 links. `/?sort=score` activates the flat descending-score view. | No application behavior change is needed. |
+| Surface                                                    | Verified behavior                                                                                                               | Gap                                                                                                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy/production/compose.yaml:8-46`                      | Runs the app and Caddy; only Caddy has named volumes.                                                                           | The app's `/root/.config/jobcron` directory is ephemeral.                                                                                               |
+| `internal/ai/keys.go:12-86`                                | Saves `ai_keys.json` under `os.UserConfigDir()` with mode `0600` and atomic replacement.                                        | Inside the root-run Alpine container, the file resolves below `/root/.config/jobcron`, which is not mounted.                                            |
+| `deploy/production/Dockerfile:5-19`                        | Builds and copies only `/usr/local/bin/jobcron`.                                                                                | Operator commands are unavailable inside the production image. This is intentional, but the guide does not provide a working alternative.               |
+| `deploy/production/HUMAN_DEPLOY_GUIDE.md:172-183`          | Tells the operator to run `jobcron-user` from a source checkout with network access to RDS.                                     | A laptop cannot directly reach private RDS, and no SSH tunnel workflow is documented.                                                                   |
+| `cmd/jobcron-user/main.go:32-89`                           | Creates an owner from a PostgreSQL URL and securely prompted or environment-provided password.                                  | The command needs a reachable database endpoint and must run after migrations.                                                                          |
+| `cmd/jobcron-import/main.go:36-125`                        | Imports profile, postings, scores, bookmarks, hidden state, AI caches, and AI usage in one transaction.                         | The production guide omits import sequencing, dry-run verification, and the requirement to use the same owner email. It does not import `ai_keys.json`. |
+| `web/bookmark.js:59-100`                                   | Optimistically flips the bookmark icon, calls `/api/bookmark/{id}`, reconciles to the JSON response, and rolls back on failure. | A successful `bookmarked: false` response does not remove the card on signed-in `/bookmarks`.                                                           |
+| `web/not-interested.js:70-83` and `web/styles.css:765-770` | Adds `.posting.removing`, waits for the 0.22-second opacity transition, and removes after a 260 ms fallback.                    | The signed-in bookmark flow does not reuse this behavior.                                                                                               |
+| `web/bookmarks.html:71-116`                                | Renders a live empty state only when the initial server response has no postings.                                               | The signed-in page cannot reveal its empty state after JavaScript removes the last card.                                                                |
+| `web/source-filter.js:43-53`                               | Caches initial card nodes for source and text filtering.                                                                        | Removed nodes can produce a false non-empty filter result unless disconnected nodes are ignored.                                                        |
+| `README.md:21-24` and `README.ko.md:21-24`                 | Use `dashboard.png` and `dashboard-dark.png` for theme-aware screenshots.                                                       | The captured page has 날짜순 active, and the alternative text does not name the sort.                                                                   |
+| `web/archive.html:55-57`                                   | Provides working 날짜순 and 점수순 links. `/?sort=score` activates the flat descending-score view.                              | No application behavior change is needed.                                                                                                               |
 
 ## Root Causes
 
@@ -91,8 +91,8 @@ The screenshots were captured while the archive's default 날짜순 mode was act
 
 ## Execution Boundary
 
-| Agent-owned in this spec | Human-owned in the handoff spec |
-|---|---|
+| Agent-owned in this spec                                                                    | Human-owned in the handoff spec                                                                                                                                         |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Compose volume, deploy documentation, signed-in bookmark behavior, tests, and README assets | AWS state, security groups, DNS, Docker Hub push, real `.env`, secrets, owner identity, import approval, API-key entry, production verification, and rollback execution |
 
 The implementation agent must stop before mutating AWS, Docker Hub, DNS, RDS, or
@@ -346,20 +346,20 @@ last so the documentation represents the verified release candidate.
 
 ## Testing Plan
 
-| Layer | What | Minimum cases |
-|---|---|---:|
-| Compose static | Render with non-secret dummy environment values; assert one app config mount, explicit volume name, unchanged Caddy volumes, and no forbidden demo/admin/proxy/worknet variables. | 5 |
-| Compose lifecycle | Build/load the production image, create a non-secret sentinel in `jobcron_config`, force-recreate app, and assert the sentinel remains. | 1 |
-| Operator commands | Run existing `jobcron-user` and `jobcron-import` tests, including owner-password preservation, dry-run counts, transaction rollback, and imported state. | Existing suite |
-| Runbook review | Execute every non-secret command form against local test infrastructure or `--dry-run`; validate exact flags and ordering. | 6 |
-| JavaScript lifecycle | Add `web/testdata/bookmark-lifecycle.test.js` covering signed-in success, HTTP failure rollback, contradictory final state, non-bookmarks routes, count, last-card empty state, active-filter recomputation, and timeout fallback. | 8 |
-| Go wrapper | Add `web/bookmark_test.go` following `web/ai_rerate_test.go` so the lifecycle harness runs under `go test ./...`. | 1 |
-| Server/template | Extend `internal/server/bookmarks_test.go` to prove a non-empty signed-in page includes a hidden live empty-state target without changing demo markup. | 2 |
-| Browser user path | With `/browse`, unbookmark the first and last signed-in cards, verify count and empty states without reload, refresh to confirm persistence, and exercise source and text filters. | 5 flows |
-| Demo regression | Walk `demo.jobcron.app` bookmark behavior without editing it and run the existing demo tests. | Existing behavior |
-| Visual QA | Walk every signed-in app page on desktop and mobile in light and dark themes with no console errors, then inspect both README images. | 2 viewports x 2 themes |
-| Project regression | Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go build ./cmd/jobcron ./cmd/jobcron-user ./cmd/jobcron-import`, direct Node lifecycle tests, and production Compose validation. | All |
-| Publication safety | Inspect the complete staged diff, run Gitleaks and the public-repo redaction scan, and manually inspect both PNGs. | 4 checks |
+| Layer                | What                                                                                                                                                                                                                               |          Minimum cases |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------: |
+| Compose static       | Render with non-secret dummy environment values; assert one app config mount, explicit volume name, unchanged Caddy volumes, and no forbidden demo/admin/proxy/worknet variables.                                                  |                      5 |
+| Compose lifecycle    | Build/load the production image, create a non-secret sentinel in `jobcron_config`, force-recreate app, and assert the sentinel remains.                                                                                            |                      1 |
+| Operator commands    | Run existing `jobcron-user` and `jobcron-import` tests, including owner-password preservation, dry-run counts, transaction rollback, and imported state.                                                                           |         Existing suite |
+| Runbook review       | Execute every non-secret command form against local test infrastructure or `--dry-run`; validate exact flags and ordering.                                                                                                         |                      6 |
+| JavaScript lifecycle | Add `web/testdata/bookmark-lifecycle.test.js` covering signed-in success, HTTP failure rollback, contradictory final state, non-bookmarks routes, count, last-card empty state, active-filter recomputation, and timeout fallback. |                      8 |
+| Go wrapper           | Add `web/bookmark_test.go` following `web/ai_rerate_test.go` so the lifecycle harness runs under `go test ./...`.                                                                                                                  |                      1 |
+| Server/template      | Extend `internal/server/bookmarks_test.go` to prove a non-empty signed-in page includes a hidden live empty-state target without changing demo markup.                                                                             |                      2 |
+| Browser user path    | With `/browse`, unbookmark the first and last signed-in cards, verify count and empty states without reload, refresh to confirm persistence, and exercise source and text filters.                                                 |                5 flows |
+| Demo regression      | Walk `demo.jobcron.app` bookmark behavior without editing it and run the existing demo tests.                                                                                                                                      |      Existing behavior |
+| Visual QA            | Walk every signed-in app page on desktop and mobile in light and dark themes with no console errors, then inspect both README images.                                                                                              | 2 viewports x 2 themes |
+| Project regression   | Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `go build ./cmd/jobcron ./cmd/jobcron-user ./cmd/jobcron-import`, direct Node lifecycle tests, and production Compose validation.                                               |                    All |
+| Publication safety   | Inspect the complete staged diff, run Gitleaks and the public-repo redaction scan, and manually inspect both PNGs.                                                                                                                 |               4 checks |
 
 Browser verification must follow the real user path. HTTP-only checks cannot prove
 animation, count/empty-state behavior, private-RDS operator usability, or image
@@ -378,40 +378,40 @@ content.
 
 ## Effort Estimate
 
-| Work | Human estimate | Codex + gstack estimate |
-|---|---:|---:|
-| Durable app volume and Compose verification | 1-1.5 hours | 20-30 minutes |
-| Private-RDS owner/import runbook | 1.5-2 hours | 25-40 minutes |
-| Signed-in bookmark lifecycle and tests | 3-4 hours | 50-75 minutes |
-| Browser QA and README captures | 1.5-2 hours | 30-45 minutes |
-| Final regression and publication review | 1-1.5 hours | 20-30 minutes |
-| **Total** | **8-11 hours** | **145-220 minutes** |
+| Work                                        | Human estimate | Codex + gstack estimate |
+| ------------------------------------------- | -------------: | ----------------------: |
+| Durable app volume and Compose verification |    1-1.5 hours |           20-30 minutes |
+| Private-RDS owner/import runbook            |    1.5-2 hours |           25-40 minutes |
+| Signed-in bookmark lifecycle and tests      |      3-4 hours |           50-75 minutes |
+| Browser QA and README captures              |    1.5-2 hours |           30-45 minutes |
+| Final regression and publication review     |    1-1.5 hours |           20-30 minutes |
+| **Total**                                   | **8-11 hours** |     **145-220 minutes** |
 
 ## Files Reference
 
-| File | Change |
-|---|---|
-| `deploy/production/compose.yaml:8-46` | Add the explicit `jobcron_config` named volume and app mount. |
-| `deploy/production/HUMAN_DEPLOY_GUIDE.md:16-205` | Document immutable tag input, volume lifecycle, private-RDS tunnel, owner-first bootstrap, optional import, key re-entry, and safe handoff. |
-| `deploy/production/README.md:1-42` | Summarize the durable config and operator path; keep validation expectations aligned. |
-| `deploy/production/.env.example:1-15` | Replace stale concrete tag assumptions with a safe immutable-tag placeholder if needed. |
-| `internal/ai/keys.go:12-86` | Reference only. Preserve the existing path, atomic write, and `0600` behavior. |
-| `cmd/jobcron-user/main.go:32-89` | Reference only. Preserve secure prompt and owner semantics. |
-| `cmd/jobcron-import/main.go:36-177` | Reference only. Preserve transactional import and password-hash behavior. |
-| `deploy/production/Dockerfile:5-19` | Do not add operator binaries; verify the image remains server-only. |
-| `web/bookmark.js:59-107` | Add signed-in `/bookmarks` removal and live page-state updates without changing the demo branch. |
-| `web/bookmarks.html:71-116` | Keep a revealable signed-in empty-state target without changing demo copy or behavior. |
-| `web/source-filter.js:43-53,89-121` | Reapply filters after live list changes and ignore disconnected cards. |
-| `web/styles.css:765-770` | Reuse the existing transition; change only if verification exposes a shared bug. |
-| `web/not-interested.js:70-83` | Reference only. Do not change 관심 없음 behavior. |
-| `web/testdata/bookmark-lifecycle.test.js` | Add signed-in JavaScript lifecycle coverage. |
-| `web/bookmark_test.go` | Run the JavaScript harness from the Go suite. |
-| `internal/server/bookmarks_test.go` | Verify the live empty-state target and preserve existing API/page coverage. |
-| `docs/assets/screenshots/dashboard.png` | Replace with the light score-sorted capture. |
-| `docs/assets/screenshots/dashboard-dark.png` | Replace with the dark score-sorted capture. |
-| `README.md:21-24` | Update English alternative text. |
-| `README.ko.md:21-24` | Update Korean alternative text. |
-| `docs/superpowers/specs/260713-alpha-launch-human-blocked-steps.md` | Hand off credentials and external-state actions without embedding their values. |
+| File                                                                | Change                                                                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy/production/compose.yaml:8-46`                               | Add the explicit `jobcron_config` named volume and app mount.                                                                               |
+| `deploy/production/HUMAN_DEPLOY_GUIDE.md:16-205`                    | Document immutable tag input, volume lifecycle, private-RDS tunnel, owner-first bootstrap, optional import, key re-entry, and safe handoff. |
+| `deploy/production/README.md:1-42`                                  | Summarize the durable config and operator path; keep validation expectations aligned.                                                       |
+| `deploy/production/.env.example:1-15`                               | Replace stale concrete tag assumptions with a safe immutable-tag placeholder if needed.                                                     |
+| `internal/ai/keys.go:12-86`                                         | Reference only. Preserve the existing path, atomic write, and `0600` behavior.                                                              |
+| `cmd/jobcron-user/main.go:32-89`                                    | Reference only. Preserve secure prompt and owner semantics.                                                                                 |
+| `cmd/jobcron-import/main.go:36-177`                                 | Reference only. Preserve transactional import and password-hash behavior.                                                                   |
+| `deploy/production/Dockerfile:5-19`                                 | Do not add operator binaries; verify the image remains server-only.                                                                         |
+| `web/bookmark.js:59-107`                                            | Add signed-in `/bookmarks` removal and live page-state updates without changing the demo branch.                                            |
+| `web/bookmarks.html:71-116`                                         | Keep a revealable signed-in empty-state target without changing demo copy or behavior.                                                      |
+| `web/source-filter.js:43-53,89-121`                                 | Reapply filters after live list changes and ignore disconnected cards.                                                                      |
+| `web/styles.css:765-770`                                            | Reuse the existing transition; change only if verification exposes a shared bug.                                                            |
+| `web/not-interested.js:70-83`                                       | Reference only. Do not change 관심 없음 behavior.                                                                                           |
+| `web/testdata/bookmark-lifecycle.test.js`                           | Add signed-in JavaScript lifecycle coverage.                                                                                                |
+| `web/bookmark_test.go`                                              | Run the JavaScript harness from the Go suite.                                                                                               |
+| `internal/server/bookmarks_test.go`                                 | Verify the live empty-state target and preserve existing API/page coverage.                                                                 |
+| `docs/assets/screenshots/dashboard.png`                             | Replace with the light score-sorted capture.                                                                                                |
+| `docs/assets/screenshots/dashboard-dark.png`                        | Replace with the dark score-sorted capture.                                                                                                 |
+| `README.md:21-24`                                                   | Update English alternative text.                                                                                                            |
+| `README.ko.md:21-24`                                                | Update Korean alternative text.                                                                                                             |
+| `docs/superpowers/specs/260713-alpha-launch-human-blocked-steps.md` | Hand off credentials and external-state actions without embedding their values.                                                             |
 
 ## What's Working Well: Do Not Touch
 
