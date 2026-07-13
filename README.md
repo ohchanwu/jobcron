@@ -128,9 +128,11 @@ inspection.
 
 ## Known limitations
 
-- **Keyword matching is token-exact.** "개발" does not match "개발자", and the
-  matcher cannot distinguish "야근 없음" from "야근" — enter short, plain
-  root-form keywords for your dealbreaker list.
+- **Matching is AI-assisted when AI is configured.** The first AI layer reads
+  career and education requirements from the posting text before scoring,
+  rather than relying only on exact tokens; if AI is unavailable, deterministic
+  rules take over. Explicit dealbreaker keywords remain literal filters:
+  "개발" does not match "개발자", while "야근" also catches "야근 없음".
 - **The briefing is today's postings.** The front page shows what was first seen
   today — the daily ritual. Everything ever scraped stays in 전체 공고 (sortable by
   date or by fit), so nothing is lost; it just isn't shouting at you each morning.
@@ -146,12 +148,13 @@ as the provider, paste your own API key, and fill in a few free-text goals
 0600-permission file next to the database — never uploaded, never shown again
 after you save it.
 
-With AI on, a scrape automatically rates the briefing's new postings, and each can
-carry an **AI 분석** chip you click to see the exact quote from the posting that
-justifies the adjustment — no quote, no adjustment. A per-page **AI 평가** button
-re-rates the postings you're looking at (for example after you change your goals,
-or to analyze more than one scrape covered), and a daily token budget (which you
-set) keeps spend bounded.
+With AI on, a first layer reads each posting's career range, new-grad eligibility,
+and education requirements before the regular score is calculated. A second layer
+compares the posting with your free-text goals, so each posting can carry an
+**AI 분석** chip you click to see the exact quote that justifies the adjustment —
+no quote, no adjustment. A per-page **AI 평가** button re-rates the postings you're
+looking at (for example after you change your goals, or to analyze more than one
+scrape covered), and a daily token budget (which you set) keeps spend bounded.
 
 This is the **v2.0** line and ships as a `-alpha` prerelease while the live AI
 path gets more real-world mileage. Everything else in the app works identically
