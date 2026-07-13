@@ -10,21 +10,32 @@ The production deploy files are configured for:
 - Database: AWS RDS PostgreSQL 18 through `DATABASE_URL`
 - App port inside Docker: `7777`
 
-Do not put real secrets in Git. The real `DATABASE_URL` password,
-`SESSION_SECRET`, and owner password are entered by a human on EC2.
+Do not put real secrets in Git. The real `DATABASE_URL` password and
+`SESSION_SECRET` are entered by a human on EC2.
 
-## 1. Build and push the app image from your Mac
+## 1. Build and publish the approved immutable image
 
-Do not build the app image on the EC2 instance. Build an arm64 Linux image on
-your Mac and push it to your registry:
+From the approved release checkout on the operator's Mac:
 
 ```sh
-cd /path/to/jobcron
-IMAGE=ohchanwu/jobcron:0.2-linuxarm64
-docker buildx build --platform linux/arm64 -f deploy/production/Dockerfile -t "$IMAGE" --push .
+git status --short
+git rev-parse HEAD
+
+RELEASE_TAG="sha-$(git rev-parse --short=12 HEAD)"
+IMAGE="<dockerhub-user>/jobcron:$RELEASE_TAG"
+
+docker login
+docker buildx build \
+  --platform linux/arm64 \
+  -f deploy/production/Dockerfile \
+  -t "$IMAGE" \
+  --push .
+docker buildx imagetools inspect "$IMAGE"
 ```
 
-Use the same image name later as `JOBCRON_IMAGE`.
+Stop if `git status` is not clean or the inspected image does not match the
+approved release architecture and tag. Set `JOBCRON_IMAGE` in the EC2 `.env`
+file to this exact immutable image.
 
 ## 2. Confirm AWS RDS PostgreSQL 18
 
@@ -123,7 +134,7 @@ nano .env
 Fill in:
 
 ```sh
-JOBCRON_IMAGE=ohchanwu/jobcron:0.2-linuxarm64
+JOBCRON_IMAGE=<dockerhub-user>/jobcron:sha-<12-character-commit>
 DATABASE_URL=postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require
 SESSION_SECRET=<paste-random-session-secret-here>
 ```
@@ -169,20 +180,85 @@ Expected behavior:
 - Caddy requests and stores HTTPS certificates automatically.
 - Caddy owns forwarded headers. There is no shared proxy secret in this pass.
 
-## 8. Create the owner account
+The app must start successfully once before owner creation or import because app
+startup applies PostgreSQL migrations.
 
-From a source checkout with Go installed and network access to RDS:
+After startup, verify `docker volume inspect jobcron_config` succeeds. Routine
+deploys may use `docker compose down`, but must not use `docker compose down -v`.
+
+## 8. Open a localhost-only tunnel to private RDS
+
+Keep RDS public access disabled. In a dedicated terminal on the operator's Mac:
 
 ```sh
-export DATABASE_URL='postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require'
-export JOBCRON_OWNER_PASSWORD='<temporary-owner-password>'
-go run ./cmd/jobcron-user create-owner \
-  --database-url "$DATABASE_URL" \
-  --email 'owner@example.com'
-unset JOBCRON_OWNER_PASSWORD
+ssh -o ExitOnForwardFailure=yes -N \
+  -L 127.0.0.1:15432:<rds-endpoint>:5432 \
+  ec2-user@<ec2-public-host>
 ```
 
-## 9. Final checks
+Leave that terminal running only for owner creation and optional import.
+
+In a trusted local source checkout, export private values in the current shell:
+
+```sh
+export TUNNELED_DATABASE_URL='<postgresql-url-using-127.0.0.1:15432-and-sslmode-require>'
+export OWNER_EMAIL='<owner-email>'
+```
+
+Do not paste the real URL or email into Git, issues, chat, or shared logs.
+
+## 9. Create the owner before any import
+
+Let `jobcron-user` prompt for the password so it does not enter shell history:
+
+```sh
+go run ./cmd/jobcron-user create-owner \
+  --database-url "$TUNNELED_DATABASE_URL" \
+  --email "$OWNER_EMAIL"
+```
+
+## 10. Optionally import the recovered SQLite state
+
+Skip this section unless the human approved import and a current RDS snapshot
+exists. Use the exact same `OWNER_EMAIL` as owner creation.
+
+Run the source-count dry run first:
+
+```sh
+go run ./cmd/jobcron-import \
+  --sqlite '<recovered-sqlite-path>' \
+  --postgres "$TUNNELED_DATABASE_URL" \
+  --owner-email "$OWNER_EMAIL" \
+  --dry-run
+```
+
+Review profile, postings, scores, bookmarks, not-interested state,
+AI extractions, AI scores, and AI usage counts. If approved, run:
+
+```sh
+go run ./cmd/jobcron-import \
+  --sqlite '<recovered-sqlite-path>' \
+  --postgres "$TUNNELED_DATABASE_URL" \
+  --owner-email "$OWNER_EMAIL"
+```
+
+The importer preserves the existing owner's password hash when the email
+matches. It does not import `ai_keys.json`, sessions, owner passwords, or
+production secrets.
+
+Close the SSH tunnel and clear the private shell variables:
+
+```sh
+unset TUNNELED_DATABASE_URL OWNER_EMAIL
+```
+
+## 11. Enter the Anthropic key after volume durability exists
+
+Sign in to `jobcron.app` and save the key through the application UI. The key
+stays in `/root/.config/jobcron/ai_keys.json` inside `jobcron_config`. Re-enter
+it after host loss unless a separate secure backup exists.
+
+## 12. Final checks
 
 Open these URLs in a browser:
 

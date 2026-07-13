@@ -26,6 +26,8 @@ services:
       JOBCRON_DAILY_SCRAPE_TIME: "05:00"
     expose:
       - "7777"
+    volumes:
+      - jobcron_config:/root/.config/jobcron
     restart: unless-stopped
 
   caddy:
@@ -42,5 +44,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  jobcron_config:
+    name: jobcron_config
   caddy_data:
   caddy_config:
