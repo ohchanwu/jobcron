@@ -87,6 +87,7 @@
       searchInput.addEventListener('input', applyFilters);
     }
     document.addEventListener('demo-state-change', applyFilters);
+    document.addEventListener('posting-list-change', applyFilters);
 
     function activeSource() {
       var on = container.querySelector('.source-pill.on');
@@ -96,11 +97,12 @@
     function applyFilters() {
       var source = activeSource();
       var q = searchInput ? searchInput.value.trim().normalize('NFC').toLowerCase() : '';
+      var liveCards = cards.filter(function (card) {
+        return card.el.isConnected;
+      });
 
       var anyVisible = false;
-      cards.forEach(function (c) {
-        /* Source match: the selected source is in the posting's CSV (covers
-           cross-portal duplicates collapsed onto a canonical from elsewhere). */
+      liveCards.forEach(function (c) {
         var srcMatch = source === ALL_KEY ||
           (',' + c.el.dataset.source + ',').indexOf(',' + source + ',') !== -1;
         var qMatch = q === '' || c.text.indexOf(q) !== -1;
@@ -109,15 +111,14 @@
         if (visible) anyVisible = true;
       });
 
-      /* Archive: hide day-group sections whose postings all got filtered away,
-         so a date header does not float over nothing. */
       document.querySelectorAll('.archive-day').forEach(function (day) {
         var visible = day.querySelectorAll('.posting:not(.filter-hidden)').length;
         day.classList.toggle('filter-hidden', visible === 0);
       });
 
+      markEmptyPills(container, liveCards);
       updateExcludedBox(q);
-      updateEmptyMessage(source, q, anyVisible);
+      updateEmptyMessage(source, q, anyVisible, liveCards.length > 0);
     }
 
     /* The 관심 밖 collapsible needs care during search: a matching low-score
@@ -147,9 +148,8 @@
     /* The filter-induced empty message is separate from the page's own
        no-postings-at-all empty state (rendered server-side). We only show ours
        when the active filters narrowed a non-empty page down to zero. */
-    function updateEmptyMessage(source, q, anyVisible) {
+    function updateEmptyMessage(source, q, anyVisible, pageHasPostings) {
       if (!emptyMsg) return;
-      var pageHasPostings = cards.length > 0;
       if (anyVisible || !pageHasPostings) {
         emptyMsg.hidden = true;
         emptyMsg.textContent = '';

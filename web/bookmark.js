@@ -27,6 +27,38 @@
     btn.setAttribute('aria-pressed', String(on));
   }
 
+  function signedInBookmarksPage() {
+    return !demoMode() && location.pathname === '/bookmarks';
+  }
+
+  function syncSignedInBookmarks() {
+    if (!signedInBookmarksPage()) return;
+    var cards = Array.from(document.querySelectorAll('.posting'))
+      .filter(function (card) { return card.isConnected; });
+    var count = document.querySelector('.count strong');
+    var list = document.querySelector('ol.postings');
+    var empty = document.querySelector('[data-bookmarks-empty]');
+
+    if (count) count.textContent = String(cards.length);
+    if (list) list.hidden = cards.length === 0;
+    if (empty) empty.hidden = cards.length !== 0;
+    document.dispatchEvent(new CustomEvent('posting-list-change'));
+  }
+
+  function fadeRemove(el, afterRemove) {
+    if (!el) return;
+    el.classList.add('removing');
+    var done = false;
+    function go() {
+      if (done) return;
+      done = true;
+      el.remove();
+      if (afterRemove) afterRemove();
+    }
+    el.addEventListener('transitionend', go, { once: true });
+    setTimeout(go, 260);
+  }
+
   function csrfToken() {
     var meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.getAttribute('content') || '' : '';
@@ -89,6 +121,9 @@
         var on = !!state.bookmarked;
         btn.classList.toggle('on', on);
         btn.setAttribute('aria-pressed', String(on));
+        if (!on && signedInBookmarksPage()) {
+          fadeRemove(btn.closest('.posting'), syncSignedInBookmarks);
+        }
       })
       .catch(function () {
         // Roll back the optimistic flip so the icon matches reality.
