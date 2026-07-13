@@ -6,12 +6,13 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Alpha pre-launch fixes](specs/260713-alpha-pre-launch-fixes.md)
-- [Alpha pre-launch fixes implementation plan](plans/260713-alpha-pre-launch-fixes-implementation-plan.md)
 - [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
 
 ## Recently Archived
 
+- [Alpha pre-launch fixes specification](archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes.md)
+- [Alpha pre-launch fixes implementation plan](archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-implementation-plan.md)
+- [Alpha pre-launch fixes verification](archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
 - [README deployment status refresh design](archive/2026-07-13-readme-deployment-status-refresh/260713-readme-deployment-status-refresh.md)
 - [README deployment status refresh implementation plan](archive/2026-07-13-readme-deployment-status-refresh/260713-readme-deployment-status-refresh-implementation-plan.md)
 - [Alpha milestone A polishes specification](archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes.md)

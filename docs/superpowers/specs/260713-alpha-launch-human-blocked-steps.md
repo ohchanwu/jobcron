@@ -1,8 +1,8 @@
 # Jobcron Alpha Launch: Human-Blocked Steps
 
-**Status:** Waiting for human execution after the agent-owned pre-launch fixes<br>
+**Status:** Ready for human execution<br>
 **Owner:** Human operator<br>
-**Implementation prerequisite:** [Alpha pre-launch fixes](260713-alpha-pre-launch-fixes.md)
+**Implementation prerequisite:** [Verified alpha pre-launch fixes](../archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
 
 ## Purpose
 
