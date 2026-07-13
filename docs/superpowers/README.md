@@ -25,6 +25,7 @@ decision records needed for the current task.
 - [No browser-driven scraping for v1.x](decisions/260606-no-browser-driven-scraping.md)
 - [RDS production settings](decisions/260710-rds-production-settings.md)
 - [Jobcron production and rename decisions](decisions/260711-jobcron-production.md)
+- [Hosted-first product and local database convergence](decisions/260714-hosted-first-local-database-convergence.md)
 
 ## Context Policy
 

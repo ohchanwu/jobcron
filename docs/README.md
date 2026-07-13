@@ -26,6 +26,7 @@ Use this index instead of recursively loading the entire documentation tree.
 - [No browser-driven scraping for v1.x](superpowers/decisions/260606-no-browser-driven-scraping.md)
 - [RDS production settings](superpowers/decisions/260710-rds-production-settings.md)
 - [Jobcron production and rename decisions](superpowers/decisions/260711-jobcron-production.md)
+- [Hosted-first product and local database convergence](superpowers/decisions/260714-hosted-first-local-database-convergence.md)
 
 ## Deployment
 

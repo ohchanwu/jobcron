@@ -2,15 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 
-**Goal:** Remove the two production launch blockers, make signed-in bookmark removal complete in place, and refresh the root README screenshots to the verified score-sorted release candidate.
+**Goal:** Remove the two production launch blockers, make signed-in bookmark removal complete in place, and publish hosted-first root READMEs with verified score-sorted screenshots.
 
-**Architecture:** Production keeps BYOK credentials in the existing filesystem-backed key store, but Compose gives that directory a stable named volume and the runbook reaches private RDS through a localhost SSH tunnel. The bookmarks page keeps the server API unchanged: bookmark.js removes a card only after a successful signed-in DELETE, then emits one generic posting-list-change event so the count, empty state, source filter, and search filter recompute from connected DOM nodes. Screenshot work happens last against the verified local candidate.
+**Architecture:** Production keeps BYOK credentials in the existing filesystem-backed key store, but Compose gives that directory a stable named volume and the runbook reaches private RDS through a localhost SSH tunnel. The bookmarks page keeps the server API unchanged: bookmark.js removes a card only after a successful signed-in DELETE, then emits one generic posting-list-change event so the count, empty state, source filter, and search filter recompute from connected DOM nodes. Documentation makes the hosted app the primary product path while preserving local operation as advanced use; screenshot work happens last against the verified local candidate.
 
 **Tech Stack:** Go 1.26, html/template, vanilla JavaScript, Node.js built-in vm/assert/test modules, Docker Compose, Alpine Linux, PostgreSQL 18, Caddy, Markdown, PNG assets, gstack /browse, and frontend-qa.
 
 **Source specification:** ../specs/260713-alpha-pre-launch-fixes.md
 
 **Human-only follow-up:** ../specs/260713-alpha-launch-human-blocked-steps.md
+
+**Durable product decision:** ../decisions/260714-hosted-first-local-database-convergence.md
 
 ## Global Constraints
 
@@ -24,6 +26,11 @@
 - The signed-in bookmark exit reuses .posting.removing and its existing 260 ms hard-removal fallback.
 - Demo bookmark behavior remains immediate localStorage-driven hiding with no new transition.
 - Dashboard images remain 1440 x 900 PNG files and show 점수순 active with kept postings descending by score.
+- Both root READMEs make the upcoming `jobcron.app` the primary full-product path,
+  keep `demo.jobcron.app` as the live evaluation path, and group local operation
+  under advanced use without deleting any local command or SQLite behavior.
+- PostgreSQL convergence for local runs is explicitly post-launch and must not
+  expand this implementation's scope.
 - Browser verification must use /browse and frontend-qa. Never open the user's default browser.
 - Layout-affecting frontend work receives Tier C verification: all signed-in pages, desktop and mobile, light and dark themes, and console-error review.
 - Commit locally at the end of each task after the relevant tests and publication gate pass. Never push.
@@ -51,8 +58,8 @@
 | web/styles.css | Reference only; supplies .posting.removing. |
 | docs/assets/screenshots/dashboard.png | 1440 x 900 light score-sorted capture. |
 | docs/assets/screenshots/dashboard-dark.png | 1440 x 900 dark score-sorted capture. |
-| README.md | English score-sorted screenshot alternative text. |
-| README.ko.md | Korean score-sorted screenshot alternative text. |
+| README.md | Hosted-first English hierarchy plus score-sorted screenshot alternative text. |
+| README.ko.md | Hosted-first Korean hierarchy plus score-sorted screenshot alternative text. |
 | docs/superpowers/README.md | Index this plan while active, then retain only the human launch checklist after implementation. |
 | docs/README.md | Expose the active plan, then link the archived verification record. |
 
@@ -1019,19 +1026,19 @@ Expected: no template, stylesheet, not-interested.js, or demo deployment change.
 
 ---
 
-### Task 4: Capture and Publish the Score-Sorted README Images
+### Task 4: Publish Hosted-First READMEs and Score-Sorted Images
 
 **Files:**
 - Modify: docs/assets/screenshots/dashboard.png
 - Modify: docs/assets/screenshots/dashboard-dark.png
-- Modify: README.md:21-24
-- Modify: README.ko.md:21-24
+- Modify: README.md:5-184
+- Modify: README.ko.md:5-184
 - Reference: scripts/preview-interactive.sh
 - Reference: web/archive.html:55-57
 
 **Interfaces:**
-- Consumes: the verified local release candidate, /?sort=score, theme toggle, 1440 x 900 browser viewport, public-safe posting data.
-- Produces: two 1440 x 900 PNGs and localized alternative text naming score order.
+- Consumes: the verified local release candidate, the hosted-first product decision, /?sort=score, theme toggle, 1440 x 900 browser viewport, public-safe posting data.
+- Produces: hosted-first English and Korean README journeys, two 1440 x 900 PNGs, and localized alternative text naming score order.
 
 - [ ] **Step 1: Start an isolated signed-in local preview without opening a browser**
 
@@ -1097,9 +1104,40 @@ Expected: both are non-interlaced PNG images with pixelWidth 1440 and
 pixelHeight 900. Inspect both with the image viewer and confirm there is no
 secret, personal data, clipped content, exposed browser chrome, or wrong sort.
 
-- [ ] **Step 5: Localize the alternative text**
+- [ ] **Step 5: Reframe both READMEs and localize the alternative text**
 
-Use this English picture block:
+Apply the same information hierarchy in both languages:
+
+1. The opening describes Jobcron as a daily job briefing whose primary full app
+   will be `jobcron.app`, rather than defining it as a local binary.
+2. The deployment notice says `demo.jobcron.app` is live and read-only and that
+   the full `jobcron.app` is coming soon. Remove the instruction to use localhost
+   as the default until launch.
+3. Keep product usage documentation in the main flow.
+4. Group release-binary installation, first-run filesystem notes, the isolated
+   writable preview, build-from-source instructions, and local PostgreSQL
+   development under `## Advanced local use` in English and
+   `## 고급 로컬 사용` in Korean.
+5. Open each advanced section with these localized expectations:
+
+~~~markdown
+Most users should use `jobcron.app` once it launches. Local binaries and source
+builds remain available for contributors and self-hosters who want to run the
+writable app themselves.
+~~~
+
+~~~markdown
+대부분의 사용자는 정식 출시 후 `jobcron.app`을 이용하면 됩니다. 로컬 바이너리와
+소스 빌드는 쓰기 가능한 앱을 직접 실행하려는 기여자와 셀프 호스팅 사용자를 위해
+계속 제공합니다.
+~~~
+
+Do not remove or alter a platform download command, local data-path note,
+preview command, build command, SQLite behavior description, or local PostgreSQL
+development command. Database convergence belongs to the linked post-launch
+decision, not this task.
+
+Then use this English picture block:
 
 ~~~html
 <picture>
@@ -1122,7 +1160,9 @@ Use this Korean picture block:
 Render README.md and README.ko.md using the repository's normal Markdown preview
 without opening the user's default browser. Verify the light/dark picture source
 switch, image proportions, alternative text, adjacent links, and surrounding
-copy.
+copy. Confirm the hosted path appears before advanced local operation, both
+languages make the same availability claims, and no text claims `jobcron.app` is
+already public.
 
 - [ ] **Step 7: Run the publication gate and commit the asset refresh**
 
@@ -1135,7 +1175,7 @@ git add \
 git diff --cached --check
 git diff --cached -- README.md README.ko.md
 gitleaks git --staged --redact --no-banner --no-color
-git commit -m "docs: show score-sorted dashboard"
+git commit -m "docs: make readmes hosted-first"
 ~~~
 
 Expected: only the two README files and two intended PNG assets are committed.
@@ -1153,7 +1193,7 @@ Expected: only the two README files and two intended PNG assets are committed.
 - Modify: docs/README.md
 
 **Interfaces:**
-- Consumes: Tasks 1-4 and all 25 specification acceptance criteria.
+- Consumes: Tasks 1-4 and all 26 specification acceptance criteria.
 - Produces: a verified local release commit plus one active human-only checklist; it does not execute any external launch action.
 
 - [ ] **Step 1: Run the complete repository gate**
@@ -1241,6 +1281,8 @@ Confirm:
   CSRF behavior, and .posting.removing CSS remain unchanged.
 - Production Compose has one app config mount and unchanged Caddy mounts.
 - Screenshot assets and alternative text match score order.
+- Both READMEs present the hosted app before advanced local operation, preserve
+  every local command, and make equivalent availability claims in both languages.
 - The only frontend behavior change is signed-in /bookmarks lifecycle
   completion plus filter recomputation.
 
@@ -1259,7 +1301,7 @@ Write the verification record with these sections and no raw logs:
 - Durable same-host BYOK key volume
 - Private-RDS owner and optional import runbook
 - Signed-in in-place bookmark removal and synchronized page state
-- Score-sorted English and Korean README images
+- Hosted-first English and Korean README journeys with score-sorted images
 
 ## Automated Verification
 
@@ -1364,6 +1406,7 @@ human-blocked checklist to the user.
 | 21-23 screenshot dimensions/order/safety | Task 4 Steps 2-5 |
 | 24 adjacent behavior unchanged | Task 3 Step 7 and Task 5 Steps 1-5 |
 | 25 full testing plan | Task 5 Steps 1-9 |
+| 26 hosted-first, local-advanced README hierarchy | Task 4 Steps 5-7 and Task 5 Steps 3, 5, and 8 |
 
 ## Execution Order
 

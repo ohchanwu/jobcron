@@ -6,7 +6,7 @@
 
 ## Context
 
-Four repository-owned gaps should be fixed before the human production launch:
+Five repository-owned gaps should be fixed before the human production launch:
 
 1. The production Compose stack does not persist the app configuration directory,
    so recreating the app container would delete the saved Anthropic API key.
@@ -18,6 +18,9 @@ Four repository-owned gaps should be fixed before the human production launch:
    leaves the card on screen until the user reloads.
 4. The root README files show the 전체 공고 page in 날짜순 mode, even though
    점수순 better communicates Jobcron's job-ranking value.
+5. The root README files still present the localhost binary as the normal user
+   journey instead of making the upcoming hosted app primary and local operation
+   an advanced contributor/self-hosting path.
 
 This file contains work an implementation agent can complete and verify inside
 the repository. AWS access, Docker Hub publication, production secrets, owner
@@ -35,6 +38,9 @@ into the human handoff linked above.
 - Keep the signed-in bookmark count, empty state, source filter, and search state
   synchronized after a card leaves the page.
 - Make both README screenshots show the 전체 공고 page with 점수순 active.
+- Present `jobcron.app` as the primary full-product path once launched, keep the
+  live demo as the immediate evaluation path, and retain local operation under
+  an advanced-use section.
 - Leave `demo.jobcron.app` and its browser-local bookmark behavior unchanged.
 
 ## Settled Overseer Feedback
@@ -45,6 +51,11 @@ into the human handoff linked above.
   `/bookmarks` condition, with existing demo tests proving no regression.
 - Human-only external actions do not belong in the agent execution path. They are
   specified separately in `260713-alpha-launch-human-blocked-steps.md`.
+- **Hosted first, local advanced.** Preserve release binaries, source builds,
+  SQLite, and the isolated writable preview for launch, but move them out of the
+  primary README journey. PostgreSQL convergence for local runs is the first
+  post-launch persistence task, as recorded in
+  `../decisions/260714-hosted-first-local-database-convergence.md`.
 
 ## Current State
 
@@ -61,6 +72,7 @@ into the human handoff linked above.
 | `web/bookmarks.html:71-116`                                | Renders a live empty state only when the initial server response has no postings.                                               | The signed-in page cannot reveal its empty state after JavaScript removes the last card.                                                                |
 | `web/source-filter.js:43-53`                               | Caches initial card nodes for source and text filtering.                                                                        | Removed nodes can produce a false non-empty filter result unless disconnected nodes are ignored.                                                        |
 | `README.md:21-24` and `README.ko.md:21-24`                 | Use `dashboard.png` and `dashboard-dark.png` for theme-aware screenshots.                                                       | The captured page has 날짜순 active, and the alternative text does not name the sort.                                                                   |
+| Root README introduction, install, preview, and build sections | Present a local single binary and localhost installation as the main usable product path while `jobcron.app` is still coming soon. | The launch-facing hierarchy should make the hosted app primary without removing advanced local operation.                                               |
 | `web/archive.html:55-57`                                   | Provides working 날짜순 and 점수순 links. `/?sort=score` activates the flat descending-score view.                              | No application behavior change is needed.                                                                                                               |
 
 ## Root Causes
@@ -89,11 +101,19 @@ empty state is decided only during server rendering.
 
 The screenshots were captured while the archive's default 날짜순 mode was active.
 
+### Competing public entry points
+
+The READMEs accurately document local operation, but their opening and install
+hierarchy makes localhost look like the product's long-term default. That is no
+longer the intended launch path: the hosted app should serve ordinary users,
+while local binaries, source builds, and previews remain available for advanced
+use.
+
 ## Execution Boundary
 
 | Agent-owned in this spec                                                                    | Human-owned in the handoff spec                                                                                                                                         |
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Compose volume, deploy documentation, signed-in bookmark behavior, tests, and README assets | AWS state, security groups, DNS, Docker Hub push, real `.env`, secrets, owner identity, import approval, API-key entry, production verification, and rollback execution |
+| Compose volume, deploy documentation, signed-in bookmark behavior, tests, and README hierarchy/assets | AWS state, security groups, DNS, Docker Hub push, real `.env`, secrets, owner identity, import approval, API-key entry, production verification, and rollback execution |
 
 The implementation agent must stop before mutating AWS, Docker Hub, DNS, RDS, or
 the production host. No real credential may enter a tracked file, test fixture,
@@ -240,7 +260,18 @@ Implementation requirements:
    leave count and empty-state UI unchanged.
 8. Do not reload or navigate the page to obtain the updated state.
 
-### P2: Replace README screenshots with 점수순 captures
+### P2: Make the READMEs hosted-first and replace screenshots with 점수순 captures
+
+Reorganize both root READMEs around the same product hierarchy:
+
+1. `demo.jobcron.app` is the live read-only evaluation path.
+2. `jobcron.app` is the upcoming primary full-product path; do not claim that it
+   is already public.
+3. Normal usage instructions describe the shared product UI.
+4. Release binaries, first-run notes, the writable localhost preview,
+   build-from-source instructions, and local PostgreSQL development live under
+   an `Advanced local use` section and its Korean equivalent.
+5. Do not remove a local command or change SQLite behavior in this launch task.
 
 Capture the signed-in 전체 공고 page at `/?sort=score` in both themes and replace:
 
@@ -269,8 +300,8 @@ P0-B private-RDS bootstrap runbook ────┘
 
 P1 signed-in bookmark lifecycle ──> automated tests ──> signed-in browser QA
 
-P2 prepare score-sorted page ──> light capture ─┬─> rendered README check
-                             └─> dark capture ──┘
+P2 hosted-first hierarchy ──> score-sorted page ──> light capture ─┬─> rendered README check
+                                                 └─> dark capture ──┘
 
 All agent verification ──> publication-safety review ──> implementation handoff
 ```
@@ -343,6 +374,9 @@ last so the documentation represents the verified release candidate.
 24. Existing 관심 없음 removal, bookmark API, per-user storage, CSRF handling,
     production auth, Caddy ingress, and demo read-only behavior remain unchanged.
 25. All checks in the testing plan pass before commit.
+26. Both READMEs present `jobcron.app` as the upcoming primary full-product path,
+    `demo.jobcron.app` as the live read-only evaluation path, and local
+    install/build/preview workflows as advanced use without removing them.
 
 ## Testing Plan
 
@@ -438,7 +472,11 @@ content.
 - Making RDS public or adding operator binaries to the production image.
 - Importing API keys, sessions, passwords, or production secrets from SQLite.
 - Changing the default 전체 공고 sort from 날짜순 to 점수순.
-- Redesigning the README, changing screenshot dimensions, or adding screenshots.
+- Visually redesigning the README, changing screenshot dimensions, or adding
+  screenshots beyond the two existing theme variants.
+- Removing local binaries, source builds, SQLite, or the writable preview before
+  launch. PostgreSQL convergence is the first post-launch persistence task, not
+  part of this implementation.
 - Changing bookmark storage, API contract, authentication, or database schema.
 - Removing muted cards from `/bookmarks`; muted bookmarked postings remain there.
 - Adding Cloudflare proxying, Worknet, a proxy secret, Multi-AZ, or a new
@@ -446,8 +484,8 @@ content.
 
 ## Definition of Done
 
-The work is complete when all 25 acceptance criteria pass, the two repository
+The work is complete when all 26 acceptance criteria pass, the two repository
 deployment blockers are fixed, Overseer's no-demo direction is verified, the
-signed-in bookmark flow and rendered READMEs pass browser review, publication
+signed-in bookmark flow and hosted-first rendered READMEs pass browser review, publication
 safety checks are clean, and the human can follow the separate handoff without
 needing an implementation decision from the agent.
