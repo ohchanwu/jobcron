@@ -44,3 +44,4 @@ screenshots/
 
 # Local implementation artifacts and human-only handoff notes.
 /.superpowers/archive/
+/.worktrees/
