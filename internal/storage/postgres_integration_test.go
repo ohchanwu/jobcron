@@ -10,6 +10,7 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 
 	for _, table := range []string{
 		"users",
+		"user_ai_credentials",
 		"sessions",
 		"postings",
 		"profiles",
@@ -28,6 +29,67 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 		if err != nil || !exists {
 			t.Fatalf("table %s exists=%v err=%v", table, exists, err)
 		}
+	}
+}
+
+func TestPostgresCredentialMigrationConstraintsAndCascade(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+
+	var userID int64
+	if err := st.db.QueryRowContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('credential-schema@example.invalid', 'synthetic-password-hash', now(), now())
+RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("insert credential owner: %v", err)
+	}
+
+	validCiphertext := []byte("synthetic-ciphertext")
+	validNonce := []byte("nonce-12byte")
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO user_ai_credentials (user_id, provider, ciphertext, nonce, encryption_version)
+VALUES ($1, $2, $3, $4, $5)`, userID, "anthropic", validCiphertext, validNonce, 1); err != nil {
+		t.Fatalf("insert valid credential: %v", err)
+	}
+
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO user_ai_credentials (user_id, provider, ciphertext, nonce, encryption_version)
+VALUES ($1, $2, $3, $4, $5)`, userID, "anthropic", validCiphertext, validNonce, 1); err == nil {
+		t.Fatal("duplicate user/provider insert succeeded, want primary-key violation")
+	}
+
+	tests := []struct {
+		name       string
+		provider   string
+		ciphertext []byte
+		nonce      []byte
+		version    int16
+	}{
+		{name: "empty provider", provider: "", ciphertext: validCiphertext, nonce: validNonce, version: 1},
+		{name: "ciphertext is only the GCM tag", provider: "short-ciphertext", ciphertext: []byte("0123456789abcdef"), nonce: validNonce, version: 1},
+		{name: "nonce is not twelve bytes", provider: "short-nonce", ciphertext: validCiphertext, nonce: []byte("eleven-byte"), version: 1},
+		{name: "version is zero", provider: "zero-version", ciphertext: validCiphertext, nonce: validNonce, version: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := st.db.ExecContext(ctx, `
+INSERT INTO user_ai_credentials (user_id, provider, ciphertext, nonce, encryption_version)
+VALUES ($1, $2, $3, $4, $5)`, userID, tt.provider, tt.ciphertext, tt.nonce, tt.version); err == nil {
+				t.Fatal("invalid credential insert succeeded")
+			}
+		})
+	}
+
+	if _, err := st.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		t.Fatalf("delete credential owner: %v", err)
+	}
+	var count int
+	if err := st.db.QueryRowContext(ctx, `
+SELECT count(*) FROM user_ai_credentials WHERE user_id = $1`, userID).Scan(&count); err != nil {
+		t.Fatalf("count cascaded credentials: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("credential rows after user delete = %d, want 0", count)
 	}
 }
 
