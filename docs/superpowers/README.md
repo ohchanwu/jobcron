@@ -7,6 +7,8 @@ decision records needed for the current task.
 ## Active Work
 
 - [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
+- [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
+- [PostgreSQL credential foundation: Slice 1 implementation plan](plans/260714-postgresql-credential-foundation-implementation-plan.md)
 
 ## Recently Archived
 

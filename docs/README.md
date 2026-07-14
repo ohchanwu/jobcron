@@ -21,6 +21,8 @@ Use this index instead of recursively loading the entire documentation tree.
 ## Implementation Work
 
 - [Active Superpowers work and context policy](superpowers/README.md)
+- [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
+- [PostgreSQL credential foundation: Slice 1 implementation plan](superpowers/plans/260714-postgresql-credential-foundation-implementation-plan.md)
 - [Alpha pre-launch fixes verification](superpowers/archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
 - [Alpha milestone A polishes verification](superpowers/archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-verification.md)
 - [No browser-driven scraping for v1.x](superpowers/decisions/260606-no-browser-driven-scraping.md)
