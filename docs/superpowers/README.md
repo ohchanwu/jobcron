@@ -8,10 +8,11 @@ decision records needed for the current task.
 
 - [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
-- [PostgreSQL credential foundation: Slice 1 implementation plan](plans/260714-postgresql-credential-foundation-implementation-plan.md)
 
 ## Recently Archived
 
+- [PostgreSQL credential foundation: Slice 1 implementation plan](archive/2026-07-14-postgresql-credential-foundation/260714-postgresql-credential-foundation-implementation-plan.md)
+- [PostgreSQL credential foundation: Slice 1 verification](archive/2026-07-14-postgresql-credential-foundation/260714-postgresql-credential-foundation-verification.md)
 - [Alpha pre-launch fixes specification](archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes.md)
 - [Alpha pre-launch fixes implementation plan](archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-implementation-plan.md)
 - [Alpha pre-launch fixes verification](archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
