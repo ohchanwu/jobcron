@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/ohchanwu/jobcron/internal/credential"
 )
 
 const (
@@ -18,25 +20,27 @@ const (
 // Config contains runtime configuration parsed from command-line flags and
 // environment variables.
 type Config struct {
-	Production       bool
-	DatabaseURL      string
-	SessionSecret    []byte
-	SchedulerEnabled bool
-	DailyScrapeTime  string
-	AdminToken       string
-	ProxySecret      string
-	WorknetKey       string
-	Host             string
-	Port             int
-	NoOpen           bool
-	Demo             bool
-	DBPath           string
-	ShowVersion      bool
+	Production              bool
+	DatabaseURL             string
+	SessionSecret           []byte
+	CredentialEncryptionKey []byte
+	SchedulerEnabled        bool
+	DailyScrapeTime         string
+	AdminToken              string
+	ProxySecret             string
+	WorknetKey              string
+	Host                    string
+	Port                    int
+	NoOpen                  bool
+	Demo                    bool
+	DBPath                  string
+	ShowVersion             bool
 }
 
 // Load parses jobcron configuration. Existing CLI flags override matching
 // environment defaults.
 func Load(args []string, env map[string]string) (Config, error) {
+	encodedCredentialEncryptionKey := envValue(env, "JOBCRON_CREDENTIAL_ENCRYPTION_KEY")
 	cfg := Config{
 		Production:       envValue(env, "JOBCRON_ENV") == "production",
 		DatabaseURL:      envValue(env, "DATABASE_URL"),
@@ -76,6 +80,13 @@ func Load(args []string, env map[string]string) (Config, error) {
 	if cfg.ShowVersion {
 		return cfg, nil
 	}
+	if encodedCredentialEncryptionKey != "" {
+		key, err := credential.ParseMasterKey(encodedCredentialEncryptionKey)
+		if err != nil {
+			return Config{}, fmt.Errorf("JOBCRON_CREDENTIAL_ENCRYPTION_KEY: %w", err)
+		}
+		cfg.CredentialEncryptionKey = key
+	}
 
 	if cfg.Production {
 		if cfg.DatabaseURL == "" {
@@ -83,6 +94,9 @@ func Load(args []string, env map[string]string) (Config, error) {
 		}
 		if len(cfg.SessionSecret) < minSessionSecretBytes {
 			return Config{}, fmt.Errorf("production requires SESSION_SECRET with at least %d bytes", minSessionSecretBytes)
+		}
+		if len(cfg.CredentialEncryptionKey) != credential.MasterKeyBytes {
+			return Config{}, fmt.Errorf("production requires JOBCRON_CREDENTIAL_ENCRYPTION_KEY with exactly %d decoded bytes", credential.MasterKeyBytes)
 		}
 	}
 	return cfg, nil
