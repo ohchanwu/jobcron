@@ -3,10 +3,14 @@ package storage
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ohchanwu/jobcron/internal/credential"
 )
 
 func TestUserAICredentialValidation(t *testing.T) {
@@ -225,6 +229,72 @@ func TestUserAICredentialCascadesOnUserDelete(t *testing.T) {
 	}
 }
 
+func TestUserAICredentialEncryptedRoundTrip(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	userA := insertCredentialTestUser(t, st, "encrypted-round-trip-a")
+	userB := insertCredentialTestUser(t, st, "encrypted-round-trip-b")
+	masterKey := bytes.Repeat([]byte{0x42}, credential.MasterKeyBytes)
+	cipher, err := credential.NewAESGCMCipher(masterKey)
+	if err != nil {
+		t.Fatalf("NewAESGCMCipher: %v", err)
+	}
+	plaintext := "slice-one-plaintext-marker"
+
+	ciphertext, nonce, version, err := cipher.Seal(userA, "anthropic", plaintext)
+	if err != nil {
+		t.Fatalf("Seal: %v", err)
+	}
+	if err := st.UpsertUserAICredential(ctx, EncryptedAICredential{
+		UserID:            userA,
+		Provider:          "anthropic",
+		Ciphertext:        ciphertext,
+		Nonce:             nonce,
+		EncryptionVersion: version,
+	}); err != nil {
+		t.Fatalf("UpsertUserAICredential: %v", err)
+	}
+
+	stored, found, err := st.UserAICredential(ctx, userA, "anthropic")
+	if err != nil || !found {
+		t.Fatalf("UserAICredential: found=%v err=%v", found, err)
+	}
+	if bytes.Contains(stored.Ciphertext, []byte(plaintext)) || bytes.Contains(stored.Nonce, []byte(plaintext)) {
+		t.Fatal("stored encrypted fields contain plaintext")
+	}
+	opened, err := cipher.Open(stored.UserID, stored.Provider, stored.Ciphertext, stored.Nonce, stored.EncryptionVersion)
+	if err != nil {
+		t.Fatalf("Open stored credential: %v", err)
+	}
+	if opened != plaintext {
+		t.Fatalf("opened credential = %q, want plaintext marker", opened)
+	}
+
+	_, wrongUserErr := cipher.Open(userB, stored.Provider, stored.Ciphertext, stored.Nonce, stored.EncryptionVersion)
+	if wrongUserErr == nil {
+		t.Fatal("Open succeeded after credential was reassigned to another user")
+	}
+	_, wrongProviderErr := cipher.Open(stored.UserID, "openai", stored.Ciphertext, stored.Nonce, stored.EncryptionVersion)
+	if wrongProviderErr == nil {
+		t.Fatal("Open succeeded after credential was reassigned to another provider")
+	}
+	for _, openErr := range []error{wrongUserErr, wrongProviderErr} {
+		assertErrorExcludesCredentialMaterial(t, openErr, plaintext, masterKey, stored.Ciphertext, stored.Nonce)
+	}
+
+	var ciphertextHex, nonceHex string
+	if err := st.db.QueryRowContext(ctx, `
+SELECT encode(ciphertext, 'hex'), encode(nonce, 'hex')
+  FROM user_ai_credentials
+ WHERE user_id = $1 AND provider = $2`, userA, "anthropic").Scan(&ciphertextHex, &nonceHex); err != nil {
+		t.Fatalf("read encoded credential fields: %v", err)
+	}
+	plaintextHex := hex.EncodeToString([]byte(plaintext))
+	if strings.Contains(ciphertextHex, plaintextHex) || strings.Contains(nonceHex, plaintextHex) {
+		t.Fatal("PostgreSQL encoded credential fields contain plaintext bytes")
+	}
+}
+
 func insertCredentialTestUser(t *testing.T, st *Store, label string) int64 {
 	t.Helper()
 	var userID int64
@@ -277,6 +347,22 @@ func assertStorageErrorOmits(t *testing.T, err error, values ...[]byte) {
 	for _, value := range values {
 		if len(value) != 0 && strings.Contains(err.Error(), string(value)) {
 			t.Fatalf("error %q contains encrypted value", err)
+		}
+	}
+}
+
+func assertErrorExcludesCredentialMaterial(t *testing.T, err error, plaintext string, values ...[]byte) {
+	t.Helper()
+	for _, forbidden := range []string{plaintext, hex.EncodeToString([]byte(plaintext)), base64.StdEncoding.EncodeToString([]byte(plaintext))} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("error %q contains plaintext material", err)
+		}
+	}
+	for _, value := range values {
+		for _, forbidden := range []string{string(value), hex.EncodeToString(value), base64.StdEncoding.EncodeToString(value)} {
+			if forbidden != "" && strings.Contains(err.Error(), forbidden) {
+				t.Fatalf("error %q contains credential material", err)
+			}
 		}
 	}
 }
