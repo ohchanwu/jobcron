@@ -16,7 +16,6 @@ const (
 	// EncryptionVersionAES256GCM identifies the first persisted credential
 	// envelope format.
 	EncryptionVersionAES256GCM int16 = 1
-	masterKeyBytes                   = 32
 )
 
 var providerPattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
@@ -44,8 +43,8 @@ func NormalizeProvider(provider string) (string, error) {
 
 // NewAESGCMCipher constructs an AES-256-GCM credential cipher.
 func NewAESGCMCipher(masterKey []byte) (*AESGCMCipher, error) {
-	if len(masterKey) != masterKeyBytes {
-		return nil, fmt.Errorf("credential: master key must be exactly %d bytes", masterKeyBytes)
+	if len(masterKey) != MasterKeyBytes {
+		return nil, fmt.Errorf("credential: master key must be exactly %d bytes", MasterKeyBytes)
 	}
 	key := append([]byte(nil), masterKey...)
 	block, err := aes.NewCipher(key)
