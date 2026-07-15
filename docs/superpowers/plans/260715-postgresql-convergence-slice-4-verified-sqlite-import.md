@@ -21,6 +21,12 @@ after those gates pass does the normal `jobcron` command become PostgreSQL-only.
 ## Global Constraints
 
 - Start after Slices 2 and 3 pass locally.
+- Treat the exact prior-slice commit named in the bead as authoritative, not
+  `origin/main`. A separate worker clone must fetch that commit from the Mayor
+  rig and verify its hash before editing.
+- Do not use the normal `gt done` path because it submits an MR. Commit locally,
+  report the exact tip and verification evidence, then defer so Mayor can fetch
+  the clone and integrate without pushing.
 - Follow the approved
   [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - The source SQLite database and optional `ai_keys.json` are read-only inputs.

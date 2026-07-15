@@ -22,6 +22,12 @@ operator commands, SSH local forwarding, gstack `/browse`, Gitleaks.
 ## Global Constraints
 
 - Start only after Slices 2 through 4 pass on the exact candidate commit.
+- Treat the exact prior-slice commit named in the bead as authoritative, not
+  `origin/main`. A separate worker clone must fetch that commit from the Mayor
+  rig and verify its hash before editing.
+- Do not use the normal `gt done` path because it submits an MR. Commit locally,
+  report the exact tip and verification evidence, then defer so Mayor can fetch
+  the clone and integrate without pushing.
 - Follow the approved
   [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - Current production reality is a blank application host: the EC2 instance has
