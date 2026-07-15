@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -16,6 +18,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
@@ -274,7 +277,7 @@ func assertImportErrorRedacts(t *testing.T, err error, privateValues ...string) 
 	}
 }
 
-func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testing.T) {
+func TestImportApplyCopiesRepresentativeData(t *testing.T) {
 	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
 		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
@@ -297,17 +300,15 @@ VALUES ($1, 'preexisting', now(), now())`, ownerEmail); err != nil {
 		t.Fatalf("close preexisting target: %v", err)
 	}
 
-	for i := 0; i < 2; i++ {
-		var out bytes.Buffer
-		if err := runImport(context.Background(), importOptions{
-			sqlitePath:  sqlitePath,
-			postgresURL: targetURL,
-			ownerEmail:  ownerEmail,
-			apply:       true,
-			out:         &out,
-		}); err != nil {
-			t.Fatalf("runImport pass %d: %v\n%s", i+1, err, out.String())
-		}
+	var out bytes.Buffer
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  ownerEmail,
+		apply:       true,
+		out:         &out,
+	}); err != nil {
+		t.Fatalf("runImport: %v\n%s", err, out.String())
 	}
 
 	db, err := sql.Open("pgx", targetURL)
@@ -325,6 +326,7 @@ VALUES ($1, 'preexisting', now(), now())`, ownerEmail); err != nil {
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_extractions`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_scores`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_usage`, 1)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM local_data_imports`, 1)
 	ownerID := lookupUserIDByEmail(t, db, ownerEmail)
 	assertAIUsage(t, db, ownerID, "2026-07-09", 123, 45)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM profiles WHERE user_id = %d`, ownerID), 1)
@@ -335,24 +337,6 @@ VALUES ($1, 'preexisting', now(), now())`, ownerEmail); err != nil {
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_scores WHERE user_id <> %d`, ownerID), 0)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_usage WHERE user_id = %d`, ownerID), 1)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_usage WHERE user_id <> %d`, ownerID), 0)
-
-	if _, err := db.Exec(`
-UPDATE ai_usage
-SET input_tokens = 200, output_tokens = 60
-WHERE user_id = $1 AND day = '2026-07-09'`, ownerID); err != nil {
-		t.Fatalf("raise target ai_usage: %v", err)
-	}
-	var out bytes.Buffer
-	if err := runImport(context.Background(), importOptions{
-		sqlitePath:  sqlitePath,
-		postgresURL: targetURL,
-		ownerEmail:  ownerEmail,
-		apply:       true,
-		out:         &out,
-	}); err != nil {
-		t.Fatalf("runImport after higher live usage: %v\n%s", err, out.String())
-	}
-	assertAIUsage(t, db, ownerID, "2026-07-09", 200, 60)
 
 	var title, company, profileJSON, importedOwnerEmail string
 	if err := db.QueryRow(`
@@ -383,6 +367,177 @@ WHERE p.source = 'jumpit' AND p.source_posting_id = 'import-1' AND s.total = 87`
 	}
 	if !duplicateOf.Valid || duplicateOf.Int64 != 1 {
 		t.Fatalf("duplicate_of = %+v, want posting 1", duplicateOf)
+	}
+}
+
+func TestImportCredentialIsEncryptedWithConfiguredMasterKey(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "credential-owner@example.invalid"
+	targetURL, owners := prepareImportTarget(t, postgresURL, ownerEmail)
+	keysPath := filepath.Join(t.TempDir(), "ai_keys.json")
+	const plaintext = "synthetic-anthropic-key"
+	if err := os.WriteFile(keysPath, []byte(`{"Anthropic":"`+plaintext+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	masterKey := bytes.Repeat([]byte{0x42}, credential.MasterKeyBytes)
+	t.Setenv("JOBCRON_ENV", "production")
+	t.Setenv("JOBCRON_CREDENTIAL_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(masterKey))
+
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		aiKeysPath: keysPath, apply: true, out: io.Discard,
+	}); err != nil {
+		t.Fatalf("runImport: %v", err)
+	}
+
+	db, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var ciphertext, nonce []byte
+	var version int16
+	if err := db.QueryRow(`
+SELECT ciphertext, nonce, encryption_version
+FROM user_ai_credentials WHERE user_id = $1 AND provider = 'anthropic'`,
+		owners[ownerEmail]).Scan(&ciphertext, &nonce, &version); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(ciphertext, []byte(plaintext)) {
+		t.Fatal("credential ciphertext contains plaintext")
+	}
+	cipher, err := credential.NewAESGCMCipher(masterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := cipher.Open(owners[ownerEmail], "anthropic", ciphertext, nonce, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != plaintext {
+		t.Fatalf("decrypted credential mismatch")
+	}
+}
+
+func TestImportCredentialMasterKeyRules(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	for _, tc := range []struct {
+		name       string
+		production bool
+		envKey     string
+		localKey   []byte
+		wantError  bool
+	}{
+		{name: "production missing", production: true, wantError: true},
+		{name: "production malformed", production: true, envKey: "not-base64", wantError: true},
+		{name: "local fallback", localKey: bytes.Repeat([]byte{0x24}, credential.MasterKeyBytes)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sqlitePath := seedSQLiteImportFixture(t)
+			ownerEmail := "master-key-owner@example.invalid"
+			targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+			keysPath := filepath.Join(t.TempDir(), "ai_keys.json")
+			if err := os.WriteFile(keysPath, []byte(`{"anthropic":"secret"}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if tc.production {
+				t.Setenv("JOBCRON_ENV", "production")
+			} else {
+				t.Setenv("JOBCRON_ENV", "")
+			}
+			t.Setenv("JOBCRON_CREDENTIAL_ENCRYPTION_KEY", tc.envKey)
+			localCalls := 0
+			err := runImport(context.Background(), importOptions{
+				sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+				aiKeysPath: keysPath, apply: true, out: io.Discard,
+				loadLocalMasterKey: func() ([]byte, error) {
+					localCalls++
+					return tc.localKey, nil
+				},
+			})
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "credential encryption key") {
+					t.Fatalf("runImport error = %v, want credential encryption key refusal", err)
+				}
+			} else if err != nil {
+				t.Fatalf("runImport: %v", err)
+			}
+			want := 0
+			if tc.name == "local fallback" {
+				want = 1
+			}
+			if localCalls != want {
+				t.Fatalf("local key loader calls = %d, want %d", localCalls, want)
+			}
+			db, err := sql.Open("pgx", targetURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			if tc.wantError {
+				assertPostgresScalar(t, db, `SELECT count(*) FROM postings`, 0)
+				assertPostgresScalar(t, db, `SELECT count(*) FROM user_ai_credentials`, 0)
+				assertPostgresScalar(t, db, `SELECT count(*) FROM local_data_imports`, 0)
+			}
+		})
+	}
+}
+
+func TestImportRollbackAtEveryApplyBoundary(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	stages := []string{
+		"after_postings", "after_profile", "after_scores", "after_bookmarks",
+		"after_not_interested", "after_ai_extractions", "after_ai_scores",
+		"after_ai_usage", "after_credential", "during_count_comparison",
+		"before_ledger_insert",
+	}
+	for _, stage := range stages {
+		t.Run(stage, func(t *testing.T) {
+			sqlitePath := seedSQLiteImportFixture(t)
+			ownerEmail := "rollback-owner@example.invalid"
+			targetURL, owners := prepareImportTarget(t, postgresURL, ownerEmail)
+			keysPath := filepath.Join(t.TempDir(), "ai_keys.json")
+			if err := os.WriteFile(keysPath, []byte(`{"anthropic":"rollback-secret"}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			const passwordHash = "synthetic-owner-password-hash"
+			err := runImport(context.Background(), importOptions{
+				sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+				aiKeysPath: keysPath, apply: true, out: io.Discard,
+				loadLocalMasterKey: func() ([]byte, error) {
+					return bytes.Repeat([]byte{0x61}, credential.MasterKeyBytes), nil
+				},
+				failAt: func(got string) error {
+					if got == stage {
+						return errors.New("injected apply failure")
+					}
+					return nil
+				},
+			})
+			if err == nil || !strings.Contains(err.Error(), "injected apply failure") {
+				t.Fatalf("runImport error = %v, want injected failure", err)
+			}
+			db, err := sql.Open("pgx", targetURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			for _, table := range []string{
+				"postings", "profiles", "scores", "bookmarks", "not_interested",
+				"ai_extractions", "ai_scores", "ai_usage", "user_ai_credentials",
+				"local_data_imports",
+			} {
+				assertPostgresScalar(t, db, `SELECT count(*) FROM `+table, 0)
+			}
+			var gotPassword string
+			if err := db.QueryRow(`SELECT password_hash FROM users WHERE id = $1`, owners[ownerEmail]).Scan(&gotPassword); err != nil {
+				t.Fatal(err)
+			}
+			if gotPassword != passwordHash {
+				t.Fatalf("password hash = %q, want unchanged", gotPassword)
+			}
+		})
 	}
 }
 

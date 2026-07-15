@@ -2,11 +2,14 @@ package ai
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ohchanwu/jobcron/internal/appdata"
+	"github.com/ohchanwu/jobcron/internal/credential"
 )
 
 // keysFileMode is the permission the BYOK key file is held at. 0600 keeps the
@@ -46,6 +49,27 @@ func LoadKeys(path string) (map[string]string, error) {
 		return nil, fmt.Errorf("ai: parse keys %s: %w", path, err)
 	}
 	return keys, nil
+}
+
+// NormalizeKeys canonicalizes provider identifiers and rejects aliases that
+// collapse to the same storage key. Empty provider names and values are ignored
+// to preserve the legacy file's disabled-key behavior.
+func NormalizeKeys(raw map[string]string) (map[string]string, error) {
+	normalized := make(map[string]string, len(raw))
+	for provider, key := range raw {
+		if strings.TrimSpace(provider) == "" || strings.TrimSpace(key) == "" {
+			continue
+		}
+		canonical, err := credential.NormalizeProvider(provider)
+		if err != nil {
+			return nil, errors.New("invalid legacy AI provider")
+		}
+		if _, exists := normalized[canonical]; exists {
+			return nil, fmt.Errorf("duplicate provider %q after normalization", canonical)
+		}
+		normalized[canonical] = strings.TrimSpace(key)
+	}
+	return normalized, nil
 }
 
 // SaveKeys writes the provider->key map to path with 0600 permissions,

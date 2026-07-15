@@ -86,6 +86,25 @@ func TestLoadKeysEmptyFileIsEmptyMap(t *testing.T) {
 	}
 }
 
+func TestNormalizeKeysCanonicalizesAndRejectsDuplicates(t *testing.T) {
+	got, err := NormalizeKeys(map[string]string{
+		" Anthropic ": " secret ",
+		"blank":       " ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, map[string]string{"anthropic": "secret"}) {
+		t.Fatalf("NormalizeKeys = %v", got)
+	}
+	if _, err := NormalizeKeys(map[string]string{
+		"Anthropic":   "first",
+		" anthropic ": "second",
+	}); err == nil {
+		t.Fatal("NormalizeKeys accepted duplicate canonical provider")
+	}
+}
+
 func TestDefaultKeysPathUsesCanonicalApplicationDirectory(t *testing.T) {
 	root := t.TempDir()
 	got, err := defaultKeysPath(func() (string, error) { return root, nil })

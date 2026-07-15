@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,17 +17,20 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/sqlitesnapshot"
 	_ "modernc.org/sqlite"
 )
 
 type importOptions struct {
-	sqlitePath  string
-	postgresURL string
-	ownerEmail  string
-	aiKeysPath  string
-	apply       bool
-	out         io.Writer
+	sqlitePath         string
+	postgresURL        string
+	ownerEmail         string
+	aiKeysPath         string
+	apply              bool
+	out                io.Writer
+	loadLocalMasterKey func() ([]byte, error)
+	failAt             func(string) error
 }
 
 type categoryCounts struct {
@@ -94,7 +98,7 @@ func runImport(ctx context.Context, opts importOptions) error {
 	}
 	defer sourceDB.Close()
 
-	_, providers, err := loadLegacyKeys(opts.aiKeysPath)
+	legacyKeys, providers, err := loadLegacyKeys(opts.aiKeysPath)
 	if err != nil {
 		return err
 	}
@@ -135,37 +139,98 @@ func runImport(ctx context.Context, opts importOptions) error {
 		return nil
 	}
 
-	tx, err := targetDB.BeginTx(ctx, nil)
+	var cipher credential.Cipher
+	if len(legacyKeys) > 0 {
+		cipher, err = loadImporterCredentialCipher(opts)
+		if err != nil {
+			return err
+		}
+	}
+
+	tx, err := targetDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("import: begin postgres transaction: %w", err)
 	}
 	defer tx.Rollback()
+	if err := lockImportDecision(ctx, tx, ownerID, opts.ownerEmail); err != nil {
+		return err
+	}
+	lockedTargetCounts, err := readTargetCounts(ctx, tx, ownerID)
+	if err != nil {
+		return err
+	}
+	lockedCollisions, err := readCollisionCounts(ctx, sourceDB, tx, ownerID, providers)
+	if err != nil {
+		return err
+	}
+	if lockedTargetCounts != (categoryCounts{}) || lockedCollisions != (categoryCounts{}) {
+		return errors.New("import: apply requires a clean target with no collisions")
+	}
 
+	if err := copyPostings(ctx, sourceDB, tx); err != nil {
+		return err
+	}
+	if err := injectImportFailure(opts, "after_postings"); err != nil {
+		return err
+	}
 	if err := copyProfile(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
-	if err := copyPostings(ctx, sourceDB, tx); err != nil {
+	if err := injectImportFailure(opts, "after_profile"); err != nil {
 		return err
 	}
 	if err := copyScores(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
+	if err := injectImportFailure(opts, "after_scores"); err != nil {
+		return err
+	}
 	if err := copyBookmarks(ctx, sourceDB, tx, ownerID); err != nil {
+		return err
+	}
+	if err := injectImportFailure(opts, "after_bookmarks"); err != nil {
 		return err
 	}
 	if err := copyNotInterested(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
+	if err := injectImportFailure(opts, "after_not_interested"); err != nil {
+		return err
+	}
 	if err := copyAIExtractions(ctx, sourceDB, tx); err != nil {
+		return err
+	}
+	if err := injectImportFailure(opts, "after_ai_extractions"); err != nil {
 		return err
 	}
 	if err := copyAIScores(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
+	if err := injectImportFailure(opts, "after_ai_scores"); err != nil {
+		return err
+	}
 	if err := copyAIUsage(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
+	if err := injectImportFailure(opts, "after_ai_usage"); err != nil {
+		return err
+	}
+	if err := copyEncryptedCredentials(ctx, tx, ownerID, legacyKeys, cipher); err != nil {
+		return err
+	}
+	if err := injectImportFailure(opts, "after_credential"); err != nil {
+		return err
+	}
 	if err := resetPostgresSequences(ctx, tx); err != nil {
+		return err
+	}
+	if err := verifyTransactionCopy(ctx, sourceDB, tx, ownerID, sourceCounts, opts); err != nil {
+		return err
+	}
+	if err := injectImportFailure(opts, "before_ledger_insert"); err != nil {
+		return err
+	}
+	if err := insertImportLedger(ctx, tx, ownerID, snapshot.SHA256, sourceCounts); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -256,20 +321,14 @@ func loadLegacyKeys(path string) (map[string]string, []string, error) {
 	if err != nil {
 		return nil, nil, errors.New("import: legacy AI keys are unavailable or invalid")
 	}
-	normalized := make(map[string]string, len(raw))
-	for provider, key := range raw {
-		provider = strings.ToLower(strings.TrimSpace(provider))
-		key = strings.TrimSpace(key)
-		if provider == "" || key == "" {
-			continue
-		}
+	normalized, err := ai.NormalizeKeys(raw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("import: %w", err)
+	}
+	for provider := range normalized {
 		if provider != "anthropic" {
 			return nil, nil, fmt.Errorf("import: unsupported legacy AI provider %q", provider)
 		}
-		if _, exists := normalized[provider]; exists {
-			return nil, nil, fmt.Errorf("import: duplicate provider %q after normalization", provider)
-		}
-		normalized[provider] = key
 	}
 	providers := make([]string, 0, len(normalized))
 	for provider := range normalized {
@@ -277,6 +336,62 @@ func loadLegacyKeys(path string) (map[string]string, []string, error) {
 	}
 	sort.Strings(providers)
 	return normalized, providers, nil
+}
+
+func loadImporterCredentialCipher(opts importOptions) (credential.Cipher, error) {
+	encoded := strings.TrimSpace(os.Getenv("JOBCRON_CREDENTIAL_ENCRYPTION_KEY"))
+	var (
+		masterKey []byte
+		err       error
+	)
+	if encoded != "" {
+		masterKey, err = credential.ParseMasterKey(encoded)
+		if err != nil {
+			return nil, errors.New("import: credential encryption key is malformed")
+		}
+	} else if os.Getenv("JOBCRON_ENV") == "production" {
+		return nil, errors.New("import: production requires a credential encryption key")
+	} else {
+		loader := opts.loadLocalMasterKey
+		if loader == nil {
+			loader = credential.LoadOrCreateLocalMasterKey
+		}
+		masterKey, err = loader()
+		if err != nil {
+			return nil, errors.New("import: local credential encryption key is unavailable")
+		}
+	}
+	cipher, err := credential.NewAESGCMCipher(masterKey)
+	if err != nil {
+		return nil, errors.New("import: credential encryption key is invalid")
+	}
+	return cipher, nil
+}
+
+func injectImportFailure(opts importOptions, stage string) error {
+	if opts.failAt == nil {
+		return nil
+	}
+	return opts.failAt(stage)
+}
+
+func lockImportDecision(ctx context.Context, tx *sql.Tx, ownerID int64, expectedEmail string) error {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('jobcron-import'))`); err != nil {
+		return fmt.Errorf("import: lock concurrent import: %w", err)
+	}
+	var email string
+	if err := tx.QueryRowContext(ctx, `SELECT email FROM users WHERE id = $1 FOR UPDATE`, ownerID).Scan(&email); err != nil {
+		return fmt.Errorf("import: lock owner: %w", err)
+	}
+	if email != expectedEmail {
+		return errors.New("import: owner email mismatch")
+	}
+	return nil
+}
+
+type postgresQuerier interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
 func lookupSoleOwner(ctx context.Context, db *sql.DB, expectedEmail string) (int64, error) {
@@ -309,7 +424,7 @@ func lookupSoleOwner(ctx context.Context, db *sql.DB, expectedEmail string) (int
 	return owners[0].id, nil
 }
 
-func readTargetCounts(ctx context.Context, db *sql.DB, ownerID int64) (categoryCounts, error) {
+func readTargetCounts(ctx context.Context, db postgresQuerier, ownerID int64) (categoryCounts, error) {
 	var c categoryCounts
 	queries := []struct {
 		name  string
@@ -335,7 +450,7 @@ func readTargetCounts(ctx context.Context, db *sql.DB, ownerID int64) (categoryC
 	return c, nil
 }
 
-func readCollisionCounts(ctx context.Context, source, target *sql.DB, ownerID int64, providers []string) (categoryCounts, error) {
+func readCollisionCounts(ctx context.Context, source *sql.DB, target postgresQuerier, ownerID int64, providers []string) (categoryCounts, error) {
 	var c categoryCounts
 	var sourceProfile bool
 	if err := source.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM profile WHERE id = 1)`).Scan(&sourceProfile); err != nil {
@@ -386,7 +501,7 @@ func readCollisionCounts(ctx context.Context, source, target *sql.DB, ownerID in
 	return c, nil
 }
 
-func countKeyCollisions(ctx context.Context, source, target *sql.DB, sourceQuery, targetQuery string, columns int, prefix []any) (int, error) {
+func countKeyCollisions(ctx context.Context, source *sql.DB, target postgresQuerier, sourceQuery, targetQuery string, columns int, prefix []any) (int, error) {
 	rows, err := source.QueryContext(ctx, sourceQuery)
 	if err != nil {
 		return 0, err
@@ -427,16 +542,6 @@ func copyProfile(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64)
 	}
 	if err != nil {
 		return fmt.Errorf("import: read profile: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-INSERT INTO profile (id, profile_json, profile_hash, updated_at)
-VALUES (1, $1, $2, $3)
-ON CONFLICT (id) DO UPDATE SET
-    profile_json = EXCLUDED.profile_json,
-    profile_hash = EXCLUDED.profile_hash,
-    updated_at = EXCLUDED.updated_at`,
-		profileJSON, profileHash, updatedAt.UTC()); err != nil {
-		return fmt.Errorf("import: write legacy profile: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO profiles (user_id, profile_json, profile_hash, updated_at)
@@ -671,13 +776,170 @@ func copyAIUsage(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64)
 INSERT INTO ai_usage (user_id, day, input_tokens, output_tokens)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, day) DO UPDATE SET
-    input_tokens = GREATEST(ai_usage.input_tokens, EXCLUDED.input_tokens),
-    output_tokens = GREATEST(ai_usage.output_tokens, EXCLUDED.output_tokens)`,
+    input_tokens = EXCLUDED.input_tokens,
+    output_tokens = EXCLUDED.output_tokens`,
 			ownerID, day, inputTokens, outputTokens); err != nil {
 			return fmt.Errorf("import: write ai_usage for day %s: %w", day, err)
 		}
 	}
 	return rows.Err()
+}
+
+func copyEncryptedCredentials(
+	ctx context.Context,
+	tx *sql.Tx,
+	ownerID int64,
+	legacyKeys map[string]string,
+	cipher credential.Cipher,
+) error {
+	if len(legacyKeys) == 0 {
+		return nil
+	}
+	if cipher == nil {
+		return errors.New("import: credential cipher is unavailable")
+	}
+	providers := make([]string, 0, len(legacyKeys))
+	for provider := range legacyKeys {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
+	for _, provider := range providers {
+		ciphertext, nonce, version, err := cipher.Seal(ownerID, provider, legacyKeys[provider])
+		if err != nil {
+			return errors.New("import: encrypt legacy AI credential")
+		}
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO user_ai_credentials (
+    user_id, provider, ciphertext, nonce, encryption_version, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, now(), now())
+ON CONFLICT (user_id, provider) DO UPDATE SET
+    ciphertext = EXCLUDED.ciphertext,
+    nonce = EXCLUDED.nonce,
+    encryption_version = EXCLUDED.encryption_version,
+    updated_at = now()`, ownerID, provider, ciphertext, nonce, version); err != nil {
+			return fmt.Errorf("import: write encrypted AI credential: %w", err)
+		}
+	}
+	return nil
+}
+
+func verifyTransactionCopy(
+	ctx context.Context,
+	source *sql.DB,
+	tx *sql.Tx,
+	ownerID int64,
+	want categoryCounts,
+	opts importOptions,
+) error {
+	got, err := readTargetCounts(ctx, tx, ownerID)
+	if err != nil {
+		return err
+	}
+	if err := injectImportFailure(opts, "during_count_comparison"); err != nil {
+		return err
+	}
+	if got != want {
+		return fmt.Errorf("import: transaction count comparison failed")
+	}
+	if err := compareRepresentativeProfile(ctx, source, tx, ownerID); err != nil {
+		return err
+	}
+	if err := compareRepresentativePosting(ctx, source, tx); err != nil {
+		return err
+	}
+	if err := compareRepresentativeScore(ctx, source, tx, ownerID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func compareRepresentativeProfile(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
+	var sourceJSON, sourceHash string
+	err := source.QueryRowContext(ctx, `SELECT profile_json, profile_hash FROM profile WHERE id = 1`).Scan(&sourceJSON, &sourceHash)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("import: read representative profile: %w", err)
+	}
+	var targetJSON, targetHash string
+	if err := tx.QueryRowContext(ctx, `SELECT profile_json, profile_hash FROM profiles WHERE user_id = $1`, ownerID).
+		Scan(&targetJSON, &targetHash); err != nil {
+		return fmt.Errorf("import: verify representative profile: %w", err)
+	}
+	if targetJSON != sourceJSON || targetHash != sourceHash {
+		return errors.New("import: representative profile comparison failed")
+	}
+	return nil
+}
+
+func compareRepresentativePosting(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+	var id int64
+	var sourceName, sourcePostingID, title, company string
+	err := source.QueryRowContext(ctx, `
+SELECT id, source, source_posting_id, title, company FROM postings ORDER BY id LIMIT 1`).
+		Scan(&id, &sourceName, &sourcePostingID, &title, &company)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("import: read representative posting: %w", err)
+	}
+	var gotSource, gotSourcePostingID, gotTitle, gotCompany string
+	if err := tx.QueryRowContext(ctx, `
+SELECT source, source_posting_id, title, company FROM postings WHERE id = $1`, id).
+		Scan(&gotSource, &gotSourcePostingID, &gotTitle, &gotCompany); err != nil {
+		return fmt.Errorf("import: verify representative posting: %w", err)
+	}
+	if gotSource != sourceName || gotSourcePostingID != sourcePostingID || gotTitle != title || gotCompany != company {
+		return errors.New("import: representative posting comparison failed")
+	}
+	return nil
+}
+
+func compareRepresentativeScore(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
+	var postingID int64
+	var total int
+	var breakdown string
+	err := source.QueryRowContext(ctx, `
+SELECT posting_id, total, breakdown_json FROM scores ORDER BY posting_id LIMIT 1`).
+		Scan(&postingID, &total, &breakdown)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("import: read representative score: %w", err)
+	}
+	var gotTotal int
+	var gotBreakdown string
+	if err := tx.QueryRowContext(ctx, `
+SELECT total, breakdown_json FROM scores WHERE user_id = $1 AND posting_id = $2`, ownerID, postingID).
+		Scan(&gotTotal, &gotBreakdown); err != nil {
+		return fmt.Errorf("import: verify representative score: %w", err)
+	}
+	if gotTotal != total || gotBreakdown != breakdown {
+		return errors.New("import: representative score comparison failed")
+	}
+	return nil
+}
+
+func insertImportLedger(
+	ctx context.Context,
+	tx *sql.Tx,
+	ownerID int64,
+	sourceSHA256 string,
+	counts categoryCounts,
+) error {
+	countsJSON, err := json.Marshal(counts)
+	if err != nil {
+		return fmt.Errorf("import: encode ledger counts: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO local_data_imports (user_id, source_sha256, source_counts, imported_counts)
+VALUES ($1, $2, $3::jsonb, $3::jsonb)`, ownerID, sourceSHA256, string(countsJSON)); err != nil {
+		return fmt.Errorf("import: write import ledger: %w", err)
+	}
+	return nil
 }
 
 func resetPostgresSequences(ctx context.Context, tx *sql.Tx) error {
@@ -687,7 +949,6 @@ func resetPostgresSequences(ctx context.Context, tx *sql.Tx) error {
 		column   string
 	}{
 		{"postings_id_seq", "postings", "id"},
-		{"users_id_seq", "users", "id"},
 	} {
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf(
 			`SELECT setval(pg_get_serial_sequence('%s', '%s'), COALESCE((SELECT MAX(%s) FROM %s), 1), true)`,
