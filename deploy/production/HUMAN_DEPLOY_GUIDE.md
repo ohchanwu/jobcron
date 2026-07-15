@@ -94,7 +94,7 @@ Authenticate to the image registry on EC2 only if the registry requires it.
 
 Back up the existing EC2 `.env` with owner-only permissions. Do not replace its
 database URL, session secret, environment, host, port, no-open setting, or daily
-scrape time. Add only:
+scrape time (`JOBCRON_DAILY_SCRAPE_TIME`). Add only:
 
 ```dotenv
 JOBCRON_IMAGE=<registry-user>/jobcron:sha-<12-character-commit>
@@ -110,7 +110,6 @@ Validate Compose before starting anything:
 
 ```sh
 cd <production-compose-directory>
-docker compose --env-file .env config --quiet
 (
   set -eu
   umask 077
@@ -127,8 +126,8 @@ docker compose --env-file .env config --quiet
     printf '%s\n' 'production Compose validation failed: render' >&2
     exit 1
   fi
-  if rg -q 'jobcron_config|/root/.config/jobcron' "$rendered_compose"; then
-    printf '%s\n' 'production Compose validation failed: legacy volume' >&2
+  if ! sh ../../scripts/inspect-production-compose-render.sh \
+    "$rendered_compose"; then
     exit 1
   fi
 )
@@ -136,8 +135,11 @@ docker compose --env-file .env config --quiet
 
 The private temporary file contains rendered secrets, so the subshell creates it
 with owner-only permissions and removes it on success, failure, or interruption.
-Tool diagnostics are suppressed so caller-controlled temporary paths and
-rendered values cannot leak through a failure message.
+The portable inspector uses core `grep -E -q` and handles its statuses
+explicitly: `0` rejects a legacy match, `1` passes, and any status above `1`
+fails with a fixed value-blind inspection error. Tool diagnostics are
+suppressed so caller-controlled temporary paths and rendered values cannot leak
+through a failure message.
 
 Do not pull or start the app yet. Owner creation and import happen from the Mac
 through the private-RDS tunnel before the first app start. `jobcron-user` opens

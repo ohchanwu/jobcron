@@ -11,11 +11,13 @@ import (
 )
 
 const (
-	productionVerifier = "scripts/verify-production-compose.sh"
-	syntheticImage     = "example.invalid/jobcron:sha-0123456789ab"
-	syntheticDatabase  = "postgres://synthetic:synthetic@db.example.invalid/jobcron?sslmode=require"
-	syntheticSession   = "synthetic-session-secret-at-least-32-bytes"
-	syntheticKey       = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+	productionVerifier      = "scripts/verify-production-compose.sh"
+	productionTextInspector = "scripts/inspect-production-compose-render.sh"
+	syntheticImage          = "example.invalid/jobcron:sha-0123456789ab"
+	syntheticDatabase       = "postgres://synthetic:synthetic@db.example.invalid/jobcron?sslmode=require"
+	syntheticSession        = "synthetic-session-secret-at-least-32-bytes"
+	syntheticKey            = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+	syntheticDailyTime      = "06:15"
 )
 
 var syntheticProductionEnvironment = []string{
@@ -23,6 +25,7 @@ var syntheticProductionEnvironment = []string{
 	"DATABASE_URL=" + syntheticDatabase,
 	"SESSION_SECRET=" + syntheticSession,
 	"JOBCRON_CREDENTIAL_ENCRYPTION_KEY=" + syntheticKey,
+	"JOBCRON_DAILY_SCRAPE_TIME=" + syntheticDailyTime,
 }
 
 func TestProductionComposeVerifierSyntax(t *testing.T) {
@@ -30,6 +33,123 @@ func TestProductionComposeVerifierSyntax(t *testing.T) {
 	cmd.Dir = filepath.Clean(filepath.Join(".."))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("sh -n %s: %v\n%s", productionVerifier, err, output)
+	}
+}
+
+func TestProductionComposeRenderedTextInspectorFailsClosed(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join(".."))
+	inspector := filepath.Join(repoRoot, productionTextInspector)
+
+	if output, err := exec.Command("sh", "-n", inspector).CombinedOutput(); err != nil {
+		t.Fatalf("sh -n %s: %v\n%s", productionTextInspector, err, output)
+	}
+
+	tests := []struct {
+		name       string
+		contents   string
+		missing    bool
+		wantError  bool
+		wantOutput string
+	}{
+		{name: "clean render", contents: "services:\n  app:\n    image: synthetic\n"},
+		{name: "legacy volume", contents: "volumes:\n  jobcron_config:\n", wantError: true, wantOutput: "legacy volume"},
+		{name: "missing render", missing: true, wantError: true, wantOutput: "rendered Compose inspection"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "must-not-leak-render-path")
+			if !test.missing {
+				if err := os.WriteFile(path, []byte(test.contents), 0o600); err != nil {
+					t.Fatalf("write rendered fixture: %v", err)
+				}
+			}
+			cmd := exec.Command("sh", inspector, path)
+			output, err := cmd.CombinedOutput()
+			if test.wantError != (err != nil) {
+				t.Fatalf("inspector error = %v, wantError %v; output=%q", err, test.wantError, output)
+			}
+			if test.wantOutput != "" && !strings.Contains(string(output), test.wantOutput) {
+				t.Fatalf("inspector output = %q, want %q", output, test.wantOutput)
+			}
+			if strings.Contains(string(output), path) {
+				t.Fatalf("inspector disclosed rendered path: %q", output)
+			}
+		})
+	}
+
+	t.Run("grep failure", func(t *testing.T) {
+		root := t.TempDir()
+		path := filepath.Join(root, "must-not-leak-render-path")
+		if err := os.WriteFile(path, []byte("services:\n"), 0o600); err != nil {
+			t.Fatalf("write rendered fixture: %v", err)
+		}
+		bin := filepath.Join(root, "bin")
+		if err := os.Mkdir(bin, 0o700); err != nil {
+			t.Fatalf("create fake bin: %v", err)
+		}
+		fakeGrep := filepath.Join(bin, "grep")
+		if err := os.WriteFile(fakeGrep, []byte("#!/bin/sh\nexit 2\n"), 0o700); err != nil {
+			t.Fatalf("write fake grep: %v", err)
+		}
+		cmd := exec.Command("sh", inspector, path)
+		cmd.Env = []string{"PATH=" + bin}
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			t.Fatalf("inspector accepted failed grep: %q", output)
+		}
+		want := "production Compose validation failed: rendered Compose inspection"
+		if got := strings.TrimSpace(string(output)); got != want {
+			t.Fatalf("grep failure output = %q, want only %q", got, want)
+		}
+	})
+}
+
+func TestProductionComposeOperatorDocsUseFailClosedInspector(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join(".."))
+	for _, name := range []string{
+		filepath.Join("deploy", "production", "HUMAN_DEPLOY_GUIDE.md"),
+		filepath.Join("docs", "superpowers", "plans", "260715-postgresql-convergence-slice-5-first-production-deployment.md"),
+	} {
+		contents, err := os.ReadFile(filepath.Join(repoRoot, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		text := string(contents)
+		if strings.Contains(text, "if rg -q 'jobcron_config|/root/.config/jobcron'") {
+			t.Errorf("%s retains fail-open rg inspector", name)
+		}
+		if strings.Contains(text, "docker compose --env-file .env config --quiet") {
+			t.Errorf("%s exposes unsuppressed real-.env Compose diagnostics", name)
+		}
+		if !strings.Contains(text, "sh ../../scripts/inspect-production-compose-render.sh") ||
+			!strings.Contains(text, "\"$rendered_compose\"") {
+			t.Errorf("%s does not invoke the fail-closed rendered-text inspector", name)
+		}
+	}
+}
+
+func TestProductionSurfacesUseExistingDailyScrapeTimeVariable(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join(".."))
+	standaloneInventedName := "JOBCRON_DAILY_" + "TIME"
+	for _, name := range []string{
+		filepath.Join(".github", "workflows", "ci.yml"),
+		filepath.Join("deploy", "production", ".env.example"),
+		filepath.Join("deploy", "production", "HUMAN_DEPLOY_GUIDE.md"),
+		filepath.Join("deploy", "production", "README.md"),
+		filepath.Join("deploy", "production", "compose.yaml"),
+		filepath.Join("deploy", "production", "compose_test.go"),
+		filepath.Join("docs", "superpowers", "plans", "260715-postgresql-convergence-slice-5-first-production-deployment.md"),
+		filepath.Join("scripts", "verify-production-compose.sh"),
+		filepath.Join("scripts", "verify_production_compose_test.go"),
+	} {
+		contents, err := os.ReadFile(filepath.Join(repoRoot, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if strings.Contains(string(contents), standaloneInventedName) {
+			t.Errorf("%s uses invented standalone daily-time variable", name)
+		}
 	}
 }
 
@@ -253,9 +373,9 @@ func TestProductionComposeVerifierRejectsWrongProductionSettings(t *testing.T) {
 			mutate:   replaceOnce("      JOBCRON_SCHEDULER_ENABLED: \"1\"", "      JOBCRON_SCHEDULER_ENABLED: \"0\""),
 		},
 		{
-			name:     "unexpected scrape time",
+			name:     "hardcoded scrape time",
 			contract: "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME",
-			mutate:   replaceOnce("      JOBCRON_DAILY_SCRAPE_TIME: \"05:00\"", "      JOBCRON_DAILY_SCRAPE_TIME: \"06:00\""),
+			mutate:   replaceOnce(`      JOBCRON_DAILY_SCRAPE_TIME: "${JOBCRON_DAILY_SCRAPE_TIME:-05:00}"`, `      JOBCRON_DAILY_SCRAPE_TIME: "05:00"`),
 		},
 	}
 
@@ -265,6 +385,49 @@ func TestProductionComposeVerifierRejectsWrongProductionSettings(t *testing.T) {
 			assertRejectedContract(t, result, test.contract)
 		})
 	}
+}
+
+func TestProductionComposeVerifierRejectsCommandOverrides(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(string) string
+	}{
+		{name: "port", mutate: replaceOnce("      - --port\n      - \"7777\"", "      - --port\n      - \"8888\"")},
+		{name: "host", mutate: replaceOnce("      - 0.0.0.0", "      - 127.0.0.1")},
+		{name: "demo", mutate: replaceOnce("      - --no-open", "      - --no-open\n      - --demo")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := runProductionVerifier(t, test.mutate, syntheticProductionEnvironment)
+			assertRejectedContract(t, result, "services.app.command")
+		})
+	}
+}
+
+func TestProductionComposeVerifierRejectsDifferentImmutableCandidate(t *testing.T) {
+	result := runProductionVerifier(t, replaceOnce(
+		`    image: "${JOBCRON_IMAGE:?set JOBCRON_IMAGE in .env}"`,
+		`    image: "example.invalid/jobcron:sha-fedcba987654"`,
+	), syntheticProductionEnvironment)
+	assertRejectedContract(t, result, "services.app.image must equal JOBCRON_IMAGE")
+}
+
+func TestProductionComposeVerifierDailyTimeDefaultAndPreservation(t *testing.T) {
+	result := runProductionVerifier(t, nil, syntheticProductionEnvironment)
+	if result.err != nil {
+		t.Fatalf("verifier rejected preserved daily time: %v\n%s", result.err, result.output)
+	}
+
+	result = runProductionVerifier(t, nil, removeEnvironment(syntheticProductionEnvironment, "JOBCRON_DAILY_SCRAPE_TIME"))
+	if result.err != nil {
+		t.Fatalf("verifier rejected safe daily-time default: %v\n%s", result.err, result.output)
+	}
+
+	result = runProductionVerifier(t, replaceOnce(
+		`${JOBCRON_DAILY_SCRAPE_TIME:-05:00}`,
+		`${JOBCRON_DAILY_SCRAPE_TIME:-04:00}`,
+	), removeEnvironment(syntheticProductionEnvironment, "JOBCRON_DAILY_SCRAPE_TIME"))
+	assertRejectedContract(t, result, "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME")
 }
 
 func TestProductionComposeVerifierRejectsForbiddenAppEnvironment(t *testing.T) {
@@ -335,6 +498,7 @@ func TestProductionComposeCIUsesSyntheticInputs(t *testing.T) {
 	}
 	for _, command := range []string{
 		"sh -n scripts/verify-production-compose.sh",
+		"sh -n scripts/inspect-production-compose-render.sh",
 		"go test ./scripts -run ProductionCompose -count=1",
 		"sh scripts/verify-production-compose.sh",
 	} {
@@ -348,6 +512,7 @@ func TestProductionComposeCIUsesSyntheticInputs(t *testing.T) {
 		"DATABASE_URL":                      syntheticDatabase,
 		"SESSION_SECRET":                    syntheticSession,
 		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY": syntheticKey,
+		"JOBCRON_DAILY_SCRAPE_TIME":         syntheticDailyTime,
 	}
 	if len(contractStep.Env) != len(wantEnvironment) {
 		t.Fatalf("production Compose CI environment has %d entries, want %d synthetic inputs", len(contractStep.Env), len(wantEnvironment))
@@ -421,7 +586,7 @@ func assertRejectedContract(t *testing.T, result verifierResult, contract string
 	if !strings.Contains(result.output, contract) {
 		t.Fatalf("rejection output = %q, want contract field %s", result.output, contract)
 	}
-	for _, value := range []string{syntheticImage, syntheticDatabase, syntheticSession, syntheticKey} {
+	for _, value := range []string{syntheticImage, syntheticDatabase, syntheticSession, syntheticKey, syntheticDailyTime} {
 		if strings.Contains(result.output, value) {
 			t.Fatalf("rejection output disclosed a synthetic environment value: %q", result.output)
 		}

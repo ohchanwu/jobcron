@@ -15,6 +15,7 @@ const (
 	testDatabaseURL      = "postgres://user:pass@db.example.invalid:5432/jobcron?sslmode=require"
 	testSessionSecret    = "synthetic-session-secret-at-least-32-bytes"
 	testCredentialKey    = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+	testDailyTime        = "06:15"
 	credentialKeyEnvName = "JOBCRON_CREDENTIAL_ENCRYPTION_KEY"
 )
 
@@ -25,6 +26,7 @@ type composeConfig struct {
 
 type composeService struct {
 	Image       string            `yaml:"image"`
+	Command     []string          `yaml:"command"`
 	Environment map[string]string `yaml:"environment"`
 	Volumes     []composeVolume   `yaml:"volumes"`
 }
@@ -99,6 +101,20 @@ func TestProductionComposeUsesImmutableImageReference(t *testing.T) {
 	if got := config.Services["app"].Image; !immutableImage.MatchString(got) {
 		t.Fatalf("app image = %q, want sha-<12-hex> tag or sha256 digest", got)
 	}
+	if got := config.Services["app"].Image; got != testImage {
+		t.Fatalf("app image = %q, want requested candidate %q", got, testImage)
+	}
+}
+
+func TestProductionComposePreservesDailyTimeAndCommand(t *testing.T) {
+	app := renderCompose(t).Services["app"]
+	if got := app.Environment["JOBCRON_DAILY_SCRAPE_TIME"]; got != testDailyTime {
+		t.Fatalf("JOBCRON_DAILY_SCRAPE_TIME = %q, want preserved %q", got, testDailyTime)
+	}
+	wantCommand := []string{"--no-open", "--host", "0.0.0.0", "--port", "7777"}
+	if strings.Join(app.Command, "\x00") != strings.Join(wantCommand, "\x00") {
+		t.Fatalf("app command = %q, want %q", app.Command, wantCommand)
+	}
 }
 
 func renderCompose(t *testing.T) composeConfig {
@@ -122,11 +138,13 @@ func composeCommand(includeCredentialKey bool) *exec.Cmd {
 		"DATABASE_URL",
 		"SESSION_SECRET",
 		credentialKeyEnvName,
+		"JOBCRON_DAILY_SCRAPE_TIME",
 	)
 	cmd.Env = append(cmd.Env,
 		"JOBCRON_IMAGE="+testImage,
 		"DATABASE_URL="+testDatabaseURL,
 		"SESSION_SECRET="+testSessionSecret,
+		"JOBCRON_DAILY_SCRAPE_TIME="+testDailyTime,
 	)
 	if includeCredentialKey {
 		cmd.Env = append(cmd.Env, credentialKeyEnvName+"="+testCredentialKey)

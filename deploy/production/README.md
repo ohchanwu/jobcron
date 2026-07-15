@@ -42,6 +42,7 @@ JOBCRON_IMAGE=example/jobcron:sha-000000000000 \
 DATABASE_URL='postgres://example:example@db.example.invalid:5432/example?sslmode=require' \
 SESSION_SECRET=synthetic-session-secret \
 JOBCRON_CREDENTIAL_ENCRYPTION_KEY='MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=' \
+JOBCRON_DAILY_SCRAPE_TIME='06:15' \
 docker compose config
 ```
 
@@ -50,6 +51,9 @@ private on `7777`; include the database, session, credential-key, production,
 no-open, scheduler, and daily-time settings; and contain no app filesystem or
 legacy credential volume. It must not include demo mode, an admin token, a
 Worknet key, or a proxy secret.
+
+Compose passes the preserved `JOBCRON_DAILY_SCRAPE_TIME` value into the app;
+omitting it uses the safe `05:00` default.
 
 Until a human closes the rollback window, retain the original SQLite snapshot,
 optional legacy key file, master-key backup, and pre-import RDS snapshot. Before

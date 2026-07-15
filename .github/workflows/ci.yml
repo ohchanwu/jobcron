@@ -40,8 +40,10 @@ jobs:
           DATABASE_URL: postgres://synthetic:synthetic@db.example.invalid/jobcron?sslmode=require
           SESSION_SECRET: synthetic-session-secret-at-least-32-bytes
           JOBCRON_CREDENTIAL_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+          JOBCRON_DAILY_SCRAPE_TIME: "06:15"
         run: |
           sh -n scripts/verify-production-compose.sh
+          sh -n scripts/inspect-production-compose-render.sh
           go test ./scripts -run ProductionCompose -count=1
           sh scripts/verify-production-compose.sh
       - name: local PostgreSQL Compose contract

@@ -205,6 +205,7 @@ no text claims EC2 stores it.
 **Files:**
 
 - Create: `scripts/verify-production-compose.sh`
+- Create: `scripts/inspect-production-compose-render.sh`
 - Create: `scripts/verify_production_compose_test.go`
 - Modify: `.github/workflows/ci.yml`
 
@@ -216,8 +217,10 @@ The script must accept only synthetic environment values in CI and verify:
 - rendered Compose has no app filesystem mount;
 - app is not published directly on host port `7777`;
 - Caddy alone publishes `80` and `443`;
-- database, session, credential key, production mode, and scheduler settings
-  reach the app; and
+- database, session, credential key, production mode, scheduler settings, and
+  the preserved `JOBCRON_DAILY_SCRAPE_TIME` reach the app;
+- the normalized app command exactly enforces no-open, `0.0.0.0`, and `7777`;
+- the rendered image equals the requested candidate; and
 - image reference is an immutable `sha-<12-hex>` tag or approved digest.
 
 - [ ] **Step 2: Implement a non-secret render verifier**
@@ -230,6 +233,7 @@ the environment value.
 
 ```sh
 sh -n scripts/verify-production-compose.sh
+sh -n scripts/inspect-production-compose-render.sh
 go test ./scripts -run ProductionCompose -count=1
 sh scripts/verify-production-compose.sh
 ```
@@ -240,6 +244,7 @@ CI supplies only documented synthetic placeholders.
 
 ```sh
 git add scripts/verify-production-compose.sh \
+  scripts/inspect-production-compose-render.sh \
   scripts/verify_production_compose_test.go .github/workflows/ci.yml
 git commit -m "test(deploy): enforce production compose contract"
 ```
@@ -267,12 +272,15 @@ JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' go test ./... -count=1
 JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' \
   go test -race ./... -count=1
 goreleaser check
+sh -n scripts/inspect-production-compose-render.sh
 sh scripts/verify-production-compose.sh
 ```
 
 Stop if the tree is dirty, `jq` or Docker Compose is unavailable, tests skip
 PostgreSQL coverage, or any gate fails. The Compose verifier intentionally
-fails closed when its structured-inspection dependencies are unavailable.
+fails closed when its structured-inspection dependencies are unavailable. Its
+mutation suite must reject CLI command overrides, a different immutable image,
+and a hardcoded daily scrape time.
 
 - [ ] **Step 2: Build an immutable arm64 image**
 
@@ -332,13 +340,14 @@ JOBCRON_CREDENTIAL_ENCRYPTION_KEY=<base64-32-byte-master-key>
 
 Generate the key on a trusted machine, store its backup separately from RDS,
 and validate decoded length without printing it. Do not replace the existing
-database URL or session secret.
+database URL, session secret, or `JOBCRON_DAILY_SCRAPE_TIME`; Compose passes that
+existing daily value through unchanged and defaults to `05:00` only when it is
+absent.
 
 - [ ] **Step 4: Validate Compose before starting anything**
 
 ```sh
 cd <production-compose-directory>
-docker compose --env-file .env config --quiet
 (
   set -eu
   umask 077
@@ -355,16 +364,18 @@ docker compose --env-file .env config --quiet
     printf '%s\n' 'production Compose validation failed: render' >&2
     exit 1
   fi
-  if rg -q 'jobcron_config|/root/.config/jobcron' "$rendered_compose"; then
-    printf '%s\n' 'production Compose validation failed: legacy volume' >&2
+  if ! sh ../../scripts/inspect-production-compose-render.sh \
+    "$rendered_compose"; then
     exit 1
   fi
 )
 ```
 
-The private render and every failure message must remain value-blind: suppress
-tool diagnostics that could include caller-controlled temporary paths or
-rendered secrets. Do not start the app yet.
+The portable inspector uses core `grep -E -q`; status `0` rejects the legacy
+match, `1` passes, and every status above `1` fails with a fixed value-blind
+inspection error. The private render and every failure message must remain
+value-blind: suppress tool diagnostics that could include caller-controlled
+temporary paths or rendered secrets. Do not start the app yet.
 
 ### Task 6: Create the owner, snapshot RDS, and run the verified import
 
@@ -553,13 +564,14 @@ JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' go test ./... -count=1
 JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' \
   go test -race ./... -count=1
 goreleaser check
+sh -n scripts/inspect-production-compose-render.sh
 sh scripts/verify-production-compose.sh
 ```
 
 Treat missing `jq` or Docker Compose as a gate failure. The verifier's
-invalid-`TMPDIR` regression and sensitive-value mismatch mutations must remain
-green so failure diagnostics cannot disclose paths or silently degrade to
-presence-only checks.
+invalid-`TMPDIR`, failed rendered-text inspector, CLI override, candidate-image
+equality, daily-time propagation, and sensitive-value mismatch mutations must
+remain green so failures cannot disclose paths or silently weaken the contract.
 
 - [ ] **Step 2: Review the cumulative public diff**
 

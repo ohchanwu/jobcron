@@ -106,8 +106,16 @@ check_contract "services.app.environment.JOBCRON_PROXY_SECRET must be absent" \
 	'(.services.app.environment | has("JOBCRON_PROXY_SECRET")) | not'
 check_contract "services.app.environment.JOBCRON_SCHEDULER_ENABLED must be 1" \
 	'.services.app.environment.JOBCRON_SCHEDULER_ENABLED == "1"'
-check_contract "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME must be 05:00" \
-	'.services.app.environment.JOBCRON_DAILY_SCRAPE_TIME == "05:00"'
+check_contract "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME must preserve the same-name input or default to 05:00" '
+	(env.JOBCRON_DAILY_SCRAPE_TIME // "") as $daily_time |
+	.services.app.environment.JOBCRON_DAILY_SCRAPE_TIME ==
+	(if $daily_time == "" then "05:00" else $daily_time end)
+'
+check_contract "services.app.command must enforce no-open host and port" '
+	.services.app.command == ["--no-open", "--host", "0.0.0.0", "--port", "7777"]
+'
+check_contract "services.app.image must equal JOBCRON_IMAGE" \
+	'.services.app.image == env.JOBCRON_IMAGE'
 check_contract "services.app.image must use sha-<12-hex> or sha256 digest" \
 	'(.services.app.image | type == "string") and
 	 (.services.app.image | test("(:sha-[0-9a-f]{12}|@sha256:[0-9a-f]{64})$"))'
