@@ -107,6 +107,28 @@ func TestDemoModeDoesNotRequireLogin(t *testing.T) {
 	}
 }
 
+func TestNonProductionPostgresUsesInjectedPositiveUser(t *testing.T) {
+	_, st := newPostgresTestServer(t, &fakeScraper{})
+	const localUserID int64 = 81
+	srv := NewForLocalUser(st, localUserID, &fakeScraper{})
+
+	got, err := srv.stateUserID(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("stateUserID: %v", err)
+	}
+	if got != localUserID {
+		t.Fatalf("stateUserID = %d, want %d", got, localUserID)
+	}
+}
+
+func TestNonProductionPostgresRefusesMissingLocalUser(t *testing.T) {
+	srv, _ := newPostgresTestServer(t, &fakeScraper{})
+	got, err := srv.stateUserID(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	if err == nil || got != 0 {
+		t.Fatalf("stateUserID = %d err %v, want missing-local-user error", got, err)
+	}
+}
+
 func TestLoginFailureUsesGenericError(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	srv.SetProductionMode(true)

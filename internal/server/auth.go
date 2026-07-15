@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 const (
@@ -66,8 +68,17 @@ func (s *Server) userFromRequest(ctx context.Context, r *http.Request) (userID i
 }
 
 func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error) {
-	if !s.productionMode || s.demoMode {
+	if s.demoMode {
 		return 0, nil
+	}
+	if !s.productionMode {
+		if s.store.Dialect() == storage.DialectSQLite {
+			return 0, nil
+		}
+		if s.localUserID <= 0 {
+			return 0, fmt.Errorf("server: non-production PostgreSQL requires a positive local user ID")
+		}
+		return s.localUserID, nil
 	}
 	userID, ok := s.userFromRequest(ctx, r)
 	if !ok {

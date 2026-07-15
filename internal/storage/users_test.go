@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/ohchanwu/jobcron/internal/auth"
 )
 
 func TestCreateOwnerUserCreatesOnlyOwner(t *testing.T) {
@@ -59,6 +61,106 @@ VALUES ('second-owner@example.invalid', 'synthetic-hash', now(), now())`); err !
 	}
 	if id, ok, err := st.SoleOwnerUserID(ctx); err == nil || ok || id != 0 || !strings.Contains(err.Error(), "multiple users") {
 		t.Fatalf("multiple users = id %d ok %v err %v, want stable ambiguity error", id, ok, err)
+	}
+}
+
+func TestEnsureManagedLocalOwnerCreatesAndReusesSyntheticPositiveUser(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+
+	firstID, err := st.EnsureManagedLocalOwner(ctx)
+	if err != nil {
+		t.Fatalf("first EnsureManagedLocalOwner: %v", err)
+	}
+	secondID, err := st.EnsureManagedLocalOwner(ctx)
+	if err != nil {
+		t.Fatalf("second EnsureManagedLocalOwner: %v", err)
+	}
+	if firstID <= 0 || secondID != firstID {
+		t.Fatalf("managed local IDs = %d, %d; want stable positive ID", firstID, secondID)
+	}
+	user, ok, err := st.UserByEmail(ctx, managedLocalOwnerEmail)
+	if err != nil || !ok {
+		t.Fatalf("UserByEmail managed owner = ok %v err %v", ok, err)
+	}
+	if user.ID != firstID || !strings.HasSuffix(user.Email, ".example.invalid") {
+		t.Fatalf("managed owner = ID %d email %q, want ID %d and reserved address", user.ID, user.Email, firstID)
+	}
+	if user.PasswordHash != managedLocalOwnerPasswordHash {
+		t.Fatal("managed owner password hash is not the fixed unusable value")
+	}
+	if matches, err := auth.VerifyPassword(user.PasswordHash, "any-password"); err == nil || matches {
+		t.Fatalf("managed owner password hash verified: matches %v err present %v, want unusable hash", matches, err != nil)
+	}
+}
+
+func TestEnsureManagedLocalOwnerReusesSoleExistingPositiveUser(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	created, err := st.CreateOwnerUser(ctx, "imported-owner@example.invalid", "imported-password-hash")
+	if err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	resolvedID, err := st.EnsureManagedLocalOwner(ctx)
+	if err != nil {
+		t.Fatalf("EnsureManagedLocalOwner: %v", err)
+	}
+	if resolvedID != created.ID || resolvedID <= 0 {
+		t.Fatalf("resolved ID = %d, want existing positive ID %d", resolvedID, created.ID)
+	}
+	user, ok, err := st.UserByEmail(ctx, created.Email)
+	if err != nil || !ok {
+		t.Fatalf("UserByEmail existing owner = ok %v err %v", ok, err)
+	}
+	if user.PasswordHash != created.PasswordHash {
+		t.Fatal("EnsureManagedLocalOwner changed the existing owner's password hash")
+	}
+}
+
+func TestEnsureManagedLocalOwnerConcurrentCallersReuseOneUser(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	start := make(chan struct{})
+	type result struct {
+		id  int64
+		err error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			<-start
+			id, err := st.EnsureManagedLocalOwner(ctx)
+			results <- result{id: id, err: err}
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil {
+		t.Fatalf("concurrent EnsureManagedLocalOwner errors = %v, %v", first.err, second.err)
+	}
+	if first.id <= 0 || second.id != first.id {
+		t.Fatalf("concurrent managed local IDs = %d, %d; want one positive ID", first.id, second.id)
+	}
+	var count int
+	if err := st.SQLDB().QueryRowContext(ctx, `SELECT count(*) FROM users WHERE email = $1`, managedLocalOwnerEmail).Scan(&count); err != nil {
+		t.Fatalf("count managed local owners: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("managed local owner rows = %d, want exactly 1", count)
+	}
+}
+
+func TestEnsureManagedLocalOwnerRefusesMultipleExistingUsers(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.SQLDB().ExecContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('first@example.invalid', 'synthetic-hash', now(), now()),
+       ('second@example.invalid', 'synthetic-hash', now(), now())`); err != nil {
+		t.Fatalf("insert multiple users: %v", err)
+	}
+	if _, err := st.EnsureManagedLocalOwner(ctx); err == nil || !strings.Contains(err.Error(), "multiple users") {
+		t.Fatalf("EnsureManagedLocalOwner error = %v, want multiple-user refusal", err)
 	}
 }
 

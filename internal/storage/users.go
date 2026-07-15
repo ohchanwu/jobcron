@@ -8,7 +8,11 @@ import (
 	"time"
 )
 
-const ownerRole = "owner"
+const (
+	ownerRole                     = "owner"
+	managedLocalOwnerEmail        = "local-owner@jobcron.example.invalid"
+	managedLocalOwnerPasswordHash = "$jobcron$local-login-disabled"
+)
 
 // User is an application account row. Milestone A only creates one owner.
 type User struct {
@@ -161,10 +165,80 @@ func (s *Store) SoleOwnerUserID(ctx context.Context) (int64, bool, error) {
 	case 0:
 		return 0, false, nil
 	case 1:
+		if ids[0] <= 0 {
+			return 0, false, errors.New("storage: sole owner must have a positive user ID")
+		}
 		return ids[0], true, nil
 	default:
 		return 0, false, errors.New("storage: multiple users exist; refusing sole-owner operation")
 	}
+}
+
+// EnsureManagedLocalOwner resolves the fixed no-login owner for the canonical
+// managed local PostgreSQL database, creating it only when the users table is
+// empty. A sole existing positive user is reused; ambiguous databases are
+// refused.
+func (s *Store) EnsureManagedLocalOwner(ctx context.Context) (int64, error) {
+	if s.dialect != DialectPostgres {
+		return 0, errors.New("storage: managed local owner requires PostgreSQL")
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return 0, fmt.Errorf("storage: begin managed local owner resolution: %w", err)
+	}
+	defer tx.Rollback()
+	if err := s.lockUsersForOwnerChange(ctx, tx); err != nil {
+		return 0, err
+	}
+
+	rows, err := tx.QueryContext(ctx, `SELECT id, email, password_hash FROM users ORDER BY id LIMIT 2`)
+	if err != nil {
+		return 0, fmt.Errorf("storage: list managed local owners: %w", err)
+	}
+	type ownerIdentity struct {
+		id           int64
+		email        string
+		passwordHash string
+	}
+	var owners []ownerIdentity
+	for rows.Next() {
+		var owner ownerIdentity
+		if err := rows.Scan(&owner.id, &owner.email, &owner.passwordHash); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("storage: scan managed local owner: %w", err)
+		}
+		owners = append(owners, owner)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, fmt.Errorf("storage: list managed local owners: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("storage: close managed local owner rows: %w", err)
+	}
+
+	var userID int64
+	switch len(owners) {
+	case 0:
+		now := time.Now().UTC()
+		if err := tx.QueryRowContext(ctx, s.query(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES (?, ?, ?, ?)
+RETURNING id`), managedLocalOwnerEmail, managedLocalOwnerPasswordHash, now, now).Scan(&userID); err != nil {
+			return 0, fmt.Errorf("storage: create managed local owner: %w", err)
+		}
+	case 1:
+		userID = owners[0].id
+	default:
+		return 0, errors.New("storage: multiple users exist; refusing managed local owner resolution")
+	}
+	if userID <= 0 {
+		return 0, errors.New("storage: managed local owner must have a positive user ID")
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("storage: commit managed local owner resolution: %w", err)
+	}
+	return userID, nil
 }
 
 // firstUserID is a transitional compatibility helper for legacy no-user

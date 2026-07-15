@@ -124,6 +124,7 @@ type Server struct {
 
 	demoMode       bool   // read-only public demo mode
 	productionMode bool   // require owner login for protected HTTP routes
+	localUserID    int64  // immutable positive owner for non-production PostgreSQL
 	adminToken     string // optional safety token for operator GET mutators in demo mode
 	proxySecret    string // optional shared secret that allows Caddy forwarded-client headers
 }
@@ -364,6 +365,19 @@ func (s *Server) notInterestedIDs(ctx context.Context, userID int64) (map[int64]
 // templates, panicking on a malformed template (a developer error caught at
 // startup).
 func New(store *storage.Store, sources ...scraper.Scraper) *Server {
+	return newServer(store, 0, sources...)
+}
+
+// NewForLocalUser builds a non-production PostgreSQL server whose request
+// state is permanently scoped to one resolved positive local owner.
+func NewForLocalUser(store *storage.Store, userID int64, sources ...scraper.Scraper) *Server {
+	if userID <= 0 {
+		panic("server.NewForLocalUser: user ID must be positive")
+	}
+	return newServer(store, userID, sources...)
+}
+
+func newServer(store *storage.Store, localUserID int64, sources ...scraper.Scraper) *Server {
 	if len(sources) == 0 {
 		panic("server.New: at least one scraper is required")
 	}
@@ -375,6 +389,7 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		csrfSecret:    newCSRFSecret(),
 		loginLimiter:  newLoginRateLimiter(),
 		newAIProvider: ai.New,
+		localUserID:   localUserID,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,

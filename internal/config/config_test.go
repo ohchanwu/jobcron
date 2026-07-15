@@ -127,6 +127,25 @@ func TestLoadDefaultsSchedulerOffOutsideProduction(t *testing.T) {
 	}
 }
 
+func TestUsesPostgresRuntimeOnlyForProductionOrExplicitURL(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{name: "ordinary local remains inactive until Slice 4", cfg: config.Config{}, want: false},
+		{name: "explicit URL", cfg: config.Config{DatabaseURL: "postgres://db.example.invalid/jobcron"}, want: true},
+		{name: "production", cfg: config.Config{Production: true}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.UsesPostgresRuntime(); got != tt.want {
+				t.Fatalf("UsesPostgresRuntime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadUsesExplicitDefaults(t *testing.T) {
 	cfg, err := config.Load(nil, map[string]string{})
 	if err != nil {

@@ -37,6 +37,13 @@ type Config struct {
 	ShowVersion             bool
 }
 
+// UsesPostgresRuntime reports whether the current Slice 3 startup path should
+// resolve PostgreSQL now. Ordinary no-URL local startup remains on the legacy
+// SQLite path until Slice 4 activates the managed database after import.
+func (c Config) UsesPostgresRuntime() bool {
+	return c.Production || c.DatabaseURL != ""
+}
+
 // Load parses jobcron configuration. Existing CLI flags override matching
 // environment defaults.
 func Load(args []string, env map[string]string) (Config, error) {
