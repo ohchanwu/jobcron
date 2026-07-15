@@ -259,6 +259,8 @@ authorization.
 ```sh
 git status --short
 git rev-parse HEAD
+command -v jq
+docker compose version
 test -z "$(gofmt -l .)"
 go vet ./...
 JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' go test ./... -count=1
@@ -268,7 +270,9 @@ goreleaser check
 sh scripts/verify-production-compose.sh
 ```
 
-Stop if the tree is dirty, tests skip PostgreSQL coverage, or any gate fails.
+Stop if the tree is dirty, `jq` or Docker Compose is unavailable, tests skip
+PostgreSQL coverage, or any gate fails. The Compose verifier intentionally
+fails closed when its structured-inspection dependencies are unavailable.
 
 - [ ] **Step 2: Build an immutable arm64 image**
 
@@ -335,13 +339,32 @@ database URL or session secret.
 ```sh
 cd <production-compose-directory>
 docker compose --env-file .env config --quiet
-docker compose --env-file .env config > /tmp/jobcron-production-compose.yaml
-! rg -n 'jobcron_config|/root/.config/jobcron' \
-  /tmp/jobcron-production-compose.yaml
-rm -f /tmp/jobcron-production-compose.yaml
+(
+  set -eu
+  umask 077
+  rendered_compose="$(
+    mktemp "${TMPDIR:-/tmp}/jobcron-production-compose.XXXXXX" 2>/dev/null
+  )" || {
+    printf '%s\n' 'production Compose validation failed: private render file' >&2
+    exit 1
+  }
+  trap 'rm -f "$rendered_compose" >/dev/null 2>&1 || :' EXIT
+  trap 'exit 1' HUP INT TERM
+  if ! docker compose --env-file .env config \
+    2>/dev/null >"$rendered_compose"; then
+    printf '%s\n' 'production Compose validation failed: render' >&2
+    exit 1
+  fi
+  if rg -q 'jobcron_config|/root/.config/jobcron' "$rendered_compose"; then
+    printf '%s\n' 'production Compose validation failed: legacy volume' >&2
+    exit 1
+  fi
+)
 ```
 
-Do not start the app yet.
+The private render and every failure message must remain value-blind: suppress
+tool diagnostics that could include caller-controlled temporary paths or
+rendered secrets. Do not start the app yet.
 
 ### Task 6: Create the owner, snapshot RDS, and run the verified import
 
@@ -521,6 +544,8 @@ git commit -m "docs: publish verified postgres deployment state"
 - [ ] **Step 1: Run all automated gates on the deployed commit**
 
 ```sh
+command -v jq
+docker compose version
 test -z "$(gofmt -l .)"
 go vet ./...
 go build ./...
@@ -530,6 +555,11 @@ JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' \
 goreleaser check
 sh scripts/verify-production-compose.sh
 ```
+
+Treat missing `jq` or Docker Compose as a gate failure. The verifier's
+invalid-`TMPDIR` regression and sensitive-value mismatch mutations must remain
+green so failure diagnostics cannot disclose paths or silently degrade to
+presence-only checks.
 
 - [ ] **Step 2: Review the cumulative public diff**
 

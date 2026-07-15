@@ -114,16 +114,30 @@ docker compose --env-file .env config --quiet
 (
   set -eu
   umask 077
-  rendered_compose="$(mktemp "${TMPDIR:-/tmp}/jobcron-production-compose.XXXXXX")"
-  trap 'rm -f "$rendered_compose"' EXIT
+  rendered_compose="$(
+    mktemp "${TMPDIR:-/tmp}/jobcron-production-compose.XXXXXX" 2>/dev/null
+  )" || {
+    printf '%s\n' 'production Compose validation failed: private render file' >&2
+    exit 1
+  }
+  trap 'rm -f "$rendered_compose" >/dev/null 2>&1 || :' EXIT
   trap 'exit 1' HUP INT TERM
-  docker compose --env-file .env config > "$rendered_compose"
-  ! rg -n 'jobcron_config|/root/.config/jobcron' "$rendered_compose"
+  if ! docker compose --env-file .env config \
+    2>/dev/null > "$rendered_compose"; then
+    printf '%s\n' 'production Compose validation failed: render' >&2
+    exit 1
+  fi
+  if rg -q 'jobcron_config|/root/.config/jobcron' "$rendered_compose"; then
+    printf '%s\n' 'production Compose validation failed: legacy volume' >&2
+    exit 1
+  fi
 )
 ```
 
 The private temporary file contains rendered secrets, so the subshell creates it
 with owner-only permissions and removes it on success, failure, or interruption.
+Tool diagnostics are suppressed so caller-controlled temporary paths and
+rendered values cannot leak through a failure message.
 
 Do not pull or start the app yet. Owner creation and import happen from the Mac
 through the private-RDS tunnel before the first app start. `jobcron-user` opens
