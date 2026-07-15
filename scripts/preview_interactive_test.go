@@ -586,8 +586,12 @@ func TestPreviewLockRemovalFailurePrintsExecutableCleanup(t *testing.T) {
 		secondExit:      0,
 		rmdirFail:       true,
 	})
-	if result.err != nil {
-		t.Fatalf("preview with simulated rmdir failure: %v\n%s", result.err, result.output)
+	if result.err == nil {
+		t.Fatalf("preview with simulated rmdir failure exited successfully:\n%s", result.output)
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(result.err, &exitErr) || exitErr.ExitCode() == 0 {
+		t.Fatalf("preview with simulated rmdir failure did not exit nonzero: %v\n%s", result.err, result.output)
 	}
 	if !pathExists(lockPath) {
 		t.Fatalf("simulated rmdir failure did not retain lock %q", lockPath)

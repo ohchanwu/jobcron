@@ -430,7 +430,10 @@ Expected: PASS and rendered Compose contract matches the embedded definition.
 - [ ] **Step 3: Confirm the activation gate remains intact**
 
 ```sh
-go run ./cmd/jobcron --help 2>&1 | rg -- '--db'
+test_path=/tmp/jobcron-slice3-unused.db
+rm -f "$test_path"
+go run ./cmd/jobcron --db "$test_path" --version | rg "^jobcron "
+test ! -e "$test_path"
 rg -n 'OpenSQLiteAt|storage\.Open\(|storage\.OpenAt' cmd internal/storage
 ```
 

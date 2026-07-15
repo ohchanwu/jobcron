@@ -54,7 +54,7 @@ jobs:
             status=1
           fi
 
-          lock_root="${TMPDIR:-/tmp}/jobcron-preview-locks-$(id -u)"
+          lock_root="/tmp/jobcron-preview-locks-$(id -u)"
           if [ -d "$lock_root" ] && find "$lock_root" -mindepth 1 -print -quit | grep -q .; then
             echo "Preview locks remained after the test suite:"
             find "$lock_root" -mindepth 1 -maxdepth 1 -print
@@ -63,7 +63,7 @@ jobs:
 
           if [ -n "${JOBCRON_CI_DATABASE:-}" ]; then
             docker exec jobcron-local-postgres-1 \
-              dropdb -U postgres --if-exists "$JOBCRON_CI_DATABASE"
+              dropdb --force -U postgres --if-exists "$JOBCRON_CI_DATABASE"
           fi
           exit "$status"
 

@@ -76,7 +76,7 @@ nc -z 127.0.0.1 55432
 ```
 
 Do not remove the older `local-postgres-1` container. Preserve both
-`jobscraper-postgres18-cluster` and `jobcron-postgres18-cluster`; recreating the
+`local_jobcron-postgres18-cluster` and `jobcron-postgres18-cluster`; recreating the
 new container does not require deleting either volume.
 
 ## Stop versus reset
@@ -115,16 +115,15 @@ the printed names; never use Compose `down` to clean up a preview.
 
 ## SQLite migration boundary
 
-Import from an old SQLite `jobs.db` after starting PostgreSQL with the planned
-import command:
+The future `jobcron-import` command lands in Slice 4 and is not available yet.
+After it ships, its planned syntax for importing an old SQLite `jobs.db` will be:
 
-```sh
+```text
 jobcron-import \
   --sqlite "$HOME/Library/Application Support/jobcron/jobs.db" \
   --postgres 'postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable'
 ```
 
-The verified importer lands in Slice 4. Do not treat this command as available
-or the writable cutover as complete yet. Avoid a raw `sqlite3 .dump | psql`
-transfer: SQLite-only details such as FTS5 virtual tables and type differences
-need project-aware conversion.
+Do not run that future example or treat the writable cutover as complete yet.
+Avoid a raw `sqlite3 .dump | psql` transfer: SQLite-only details such as FTS5
+virtual tables and type differences need project-aware conversion.

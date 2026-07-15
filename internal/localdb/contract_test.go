@@ -70,7 +70,7 @@ func TestComposeContract(t *testing.T) {
 
 			assertEqual(t, "image", postgres.Image, "postgres:18-alpine")
 			assertEqual(t, "database", postgres.Environment["POSTGRES_DB"], "jobcron_dev")
-			assertEqual(t, "ports", postgres.Ports, []string{"55432:5432"})
+			assertEqual(t, "ports", postgres.Ports, []string{"127.0.0.1:55432:5432"})
 			assertEqual(t, "mounts", postgres.Volumes, []string{"jobcron-postgres18-cluster:/var/lib/postgresql"})
 			assertEqual(t, "volume name", got.Volumes["jobcron-postgres18-cluster"].Name, "jobcron-postgres18-cluster")
 			assertEqual(t, "health command", postgres.Healthcheck.Test, []string{"CMD-SHELL", "pg_isready -U postgres -d jobcron_dev"})

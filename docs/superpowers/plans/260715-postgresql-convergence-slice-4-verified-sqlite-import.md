@@ -421,7 +421,7 @@ If the first Compose create ran while `55432` was occupied, the canonical
 `jobcron-local-postgres-1` container may exist without a usable published port.
 After the port is free, the documented operator remediation must recreate only
 `jobcron-local-postgres-1`. It must preserve the older `local-postgres-1`
-container, `jobscraper-postgres18-cluster`, and
+container, `local_jobcron-postgres18-cluster`, and
 `jobcron-postgres18-cluster`.
 
 After this cutover, no PostgreSQL-backed `Server` path may use the transitional

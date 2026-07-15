@@ -97,6 +97,9 @@ cleanup() {
 		if rmdir "$port_lock" 2>/dev/null; then
 			port_lock_acquired=0
 		else
+			if [ "$status" -eq 0 ]; then
+				status=1
+			fi
 			echo "preview: failed to release port lock: $port_lock" >&2
 			printf 'preview: remove it manually: rmdir ' >&2
 			shell_quote "$port_lock" >&2
