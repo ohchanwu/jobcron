@@ -25,9 +25,12 @@ operator commands, SSH local forwarding, gstack `/browse`, Gitleaks.
 - Treat the exact prior-slice commit named in the bead as authoritative, not
   `origin/main`. A separate worker clone must fetch that commit from the Mayor
   rig and verify its hash before editing.
-- Do not use the normal `gt done` path because it submits an MR. Commit locally,
-  report the exact tip and verification evidence, then defer so Mayor can fetch
-  the clone and integrate without pushing.
+- Do not use the normal `gt done` path because completed polecat work always
+  pushes and submits an MR; there is no local-only completion mode. The worker
+  commits locally, reports the exact tip and verification evidence, and defers
+  without running `gt done`. After Mayor fetches and integrates the tip, Mayor
+  runs `gt unsling <bead-id> <assigned-agent> --force` (or detaches the hook),
+  returning the bead to `open`, and then closes it with `bd close <bead-id>`.
 - Follow the approved
   [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - Current production reality is a blank application host: the EC2 instance has
