@@ -305,13 +305,13 @@ func seedSQLiteImportFixture(t *testing.T) string {
 	}, when); err != nil {
 		t.Fatalf("UpsertAIExtraction: %v", err)
 	}
-	if err := st.UpsertAIScore(ctx, id, "input-hash", "ai-v1", ai.Delta{
+	if err := st.UpsertAIScore(ctx, 1, id, "input-hash", "ai-v1", ai.Delta{
 		Items:    []ai.DeltaItem{{Signal: "Go", Kind: "positive", Delta: 3, Evidence: "Go", MatchedGoal: "Go"}},
 		NetDelta: 3,
 	}, when); err != nil {
 		t.Fatalf("UpsertAIScore: %v", err)
 	}
-	if err := st.AddAIUsage(ctx, "2026-07-09", 123, 45); err != nil {
+	if err := st.AddAIUsage(ctx, 1, "2026-07-09", 123, 45); err != nil {
 		t.Fatalf("AddAIUsage: %v", err)
 	}
 	return path

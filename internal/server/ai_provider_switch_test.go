@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -45,23 +44,15 @@ func TestRerateSurfacesProviderError(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, _ := seedRerate(t)
-			srv.SetAIProvider(failingScoreDeltaStub(tc.status, tc.body), "test-model")
-
-			rec := httptest.NewRecorder()
-			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200", rec.Code)
+			srv, _, _ := seedRerate(t)
+			runtime := testAIRuntime(1, failingScoreDeltaStub(tc.status, tc.body), "test-model")
+			_, err := srv.runRerate(context.Background(), "today", noopEmit, 1, runtime)
+			var pce *providerCallError
+			if !errors.As(err, &pce) {
+				t.Fatalf("runRerate error = %v, want providerCallError", err)
 			}
-			body := rec.Body.String()
-			if !strings.Contains(body, "event: failed") {
-				t.Fatalf("expected a terminal 'failed' event when every row errors:\n%s", body)
-			}
-			if strings.Contains(body, "event: done") {
-				t.Fatalf("must NOT emit 'done' when every row failed against the provider:\n%s", body)
-			}
-			if !strings.Contains(body, tc.wantSub) {
-				t.Fatalf("failed message missing %q:\n%s", tc.wantSub, body)
+			if msg := providerFailureMessage(pce.err); !strings.Contains(msg, tc.wantSub) {
+				t.Fatalf("failed message %q missing %q", msg, tc.wantSub)
 			}
 		})
 	}
@@ -109,14 +100,14 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 
 	// Model A (haiku) rated the posting: cache a delta under A's ai_version and
 	// the current goal hash, exactly as a 재평가 under A would.
-	srv.SetAIProvider(&ai.StubProvider{NameVal: "anthropic"}, "claude-haiku-4-5-20251001")
+	runtimeA := testAIRuntime(1, &ai.StubProvider{NameVal: "anthropic"}, "claude-haiku-4-5-20251001")
 	delta := ai.Delta{NetDelta: 7, Items: []ai.DeltaItem{
 		{Signal: "백엔드", Kind: ai.KindPresence, Delta: 7, Evidence: "서버 개발자를 찾습니다", MatchedGoal: "좋아하는 업무"},
 	}}
-	if err := srv.store.UpsertAIScore(ctx, id, profile.AIInputHash(prof), srv.aiVersion, delta, now); err != nil {
+	if err := srv.store.UpsertAIScore(ctx, 1, id, profile.AIInputHash(prof), runtimeA.Version, delta, now); err != nil {
 		t.Fatalf("seed delta under provider A: %v", err)
 	}
-	if _, err := srv.scoreAll(ctx); err != nil {
+	if _, err := srv.scoreAll(ctx, 1, runtimeA); err != nil {
 		t.Fatalf("scoreAll under A: %v", err)
 	}
 
@@ -131,8 +122,8 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 	// Switch to model B (sonnet) → ai_version rotates. Without the cross-version
 	// fallback, both the fresh and version-scoped stale lookups miss and the chip
 	// vanishes. With it, the chip persists, faded.
-	srv.SetAIProvider(&ai.StubProvider{NameVal: "anthropic"}, "claude-sonnet-4-6")
-	if _, err := srv.scoreAll(ctx); err != nil {
+	runtimeB := testAIRuntime(1, &ai.StubProvider{NameVal: "anthropic"}, "claude-sonnet-4-6")
+	if _, err := srv.scoreAll(ctx, 1, runtimeB); err != nil {
 		t.Fatalf("scoreAll under B: %v", err)
 	}
 
@@ -155,7 +146,6 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 // for the client-side swap.
 func TestProfileFormRendersModelDropdown(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
-	srv.SetAIKeysPath(filepath.Join(t.TempDir(), "ai_keys.json"))
 	ctx := context.Background()
 	prof := profile.Profile{AIProvider: "anthropic", AIModel: "claude-haiku-4-5-20251001"}
 	pj, _ := profile.Marshal(prof)
@@ -186,7 +176,6 @@ func TestProfileFormRendersModelDropdown(t *testing.T) {
 // default on save.
 func TestProfileFormForeignModelNotSelectable(t *testing.T) {
 	srv, _ := newTestServer(t, &fakeScraper{})
-	srv.SetAIKeysPath(filepath.Join(t.TempDir(), "ai_keys.json"))
 	ctx := context.Background()
 	// A foreign model id (a removed OpenAI model) stranded under anthropic.
 	prof := profile.Profile{AIProvider: "anthropic", AIModel: "gpt-4o-mini"}

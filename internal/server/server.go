@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
 	"github.com/ohchanwu/jobcron/internal/scoring"
 	"github.com/ohchanwu/jobcron/internal/scraper"
@@ -111,42 +112,111 @@ type Server struct {
 	csrfSecret   []byte
 	loginLimiter *loginRateLimiter
 
-	// AI extraction (BYOK, v2.0). ai is nil when no provider is configured —
-	// the default — and the pipeline behaves exactly like v1.5 (regex scoring,
-	// no provider calls). ReconfigureAI builds the provider from ai_keys.json +
-	// the profile's chosen provider/model; main.go calls it at startup and
-	// handleProfileSave on every save, so a key entered in the form goes live
-	// without a restart.
-	ai                ai.Provider
-	aiModel           string
-	aiVersion         string // ai.AIVersion(ai.Name(), aiModel), precomputed
-	aiRunTokenCap     int    // per-run, in-memory token ceiling (hard cap)
-	aiDailyTokenCap   int    // rolling daily token ceiling, enforced against the persisted ai_usage ledger (hard cap)
-	aiMonthlyTokenCap int    // rolling monthly token ceiling, derived from the persisted ai_usage ledger (hard cap)
-	aiPerCallCap      int    // 재평가: not-yet-analyzed rows analyzed per press (legibility knob, not a hard cap)
-	aiKeysPath        string // ai_keys.json location; empty = ai.DefaultKeysPath() (tests override)
-	demoMode          bool   // read-only public demo mode
-	productionMode    bool   // require owner login for protected HTTP routes
-	adminToken        string // optional safety token for operator GET mutators in demo mode
-	proxySecret       string // optional shared secret that allows Caddy forwarded-client headers
+	credentialCipher credential.Cipher
+	newAIProvider    aiProviderFactory
+
+	demoMode       bool   // read-only public demo mode
+	productionMode bool   // require owner login for protected HTTP routes
+	adminToken     string // optional safety token for operator GET mutators in demo mode
+	proxySecret    string // optional shared secret that allows Caddy forwarded-client headers
 }
 
-// SetAIProvider enables AI with the given provider and model. A nil provider
-// (the default) leaves AI off. Called after New (the constructor is variadic
-// over scrapers, so AI config rides a setter) and by ReconfigureAI. Tests call
-// it directly with a stub.
-func (s *Server) SetAIProvider(p ai.Provider, model string) {
-	s.ai = p
-	s.aiModel = model
-	if p != nil {
-		s.aiVersion = ai.AIVersion(p.Name(), model)
+type aiProviderFactory func(provider, key, model string, rateLimit time.Duration) (ai.Provider, error)
+
+// AIRuntime is immutable AI configuration resolved once for one user's
+// operation. It contains no plaintext credential and is never cached on Server.
+type AIRuntime struct {
+	UserID          int64
+	Provider        ai.Provider
+	Version         string
+	RunTokenCap     int
+	DailyTokenCap   int
+	MonthlyTokenCap int
+	PerCallCap      int
+}
+
+// SetCredentialCipher installs the process-level credential envelope cipher.
+// The cipher is immutable and must be configured before any AI operation.
+func (s *Server) SetCredentialCipher(c credential.Cipher) { s.credentialCipher = c }
+
+func (s *Server) aiRuntimeForUser(ctx context.Context, userID int64) (*AIRuntime, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("server: AI runtime requires a positive user ID")
 	}
+	profileJSON, _, found, err := s.store.ProfileForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("server: load AI profile: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	prof, err := profile.Unmarshal(profileJSON)
+	if err != nil {
+		return nil, fmt.Errorf("server: decode AI profile: %w", err)
+	}
+	if strings.TrimSpace(prof.AIProvider) == "" {
+		return nil, nil
+	}
+	provider, err := credential.NormalizeProvider(prof.AIProvider)
+	if err != nil {
+		return nil, fmt.Errorf("server: normalize AI provider: %w", err)
+	}
+	encrypted, found, err := s.store.UserAICredential(ctx, userID, provider)
+	if err != nil {
+		return nil, fmt.Errorf("server: load AI credential: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	if s.credentialCipher == nil {
+		return nil, fmt.Errorf("server: credential cipher is not configured")
+	}
+	key, err := s.credentialCipher.Open(
+		userID,
+		provider,
+		encrypted.Ciphertext,
+		encrypted.Nonce,
+		encrypted.EncryptionVersion,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("server: decrypt AI credential: %w", err)
+	}
+	model := strings.TrimSpace(prof.AIModel)
+	if model == "" {
+		model = ai.DefaultModel(provider)
+	}
+	factory := s.newAIProvider
+	if factory == nil {
+		factory = ai.New
+	}
+	aiProvider, err := factory(provider, key, model, ai.SuggestedRateLimit(provider))
+	if err != nil {
+		return nil, fmt.Errorf("server: construct AI provider: %w", err)
+	}
+	return &AIRuntime{
+		UserID:          userID,
+		Provider:        aiProvider,
+		Version:         ai.AIVersion(provider, model),
+		RunTokenCap:     aiRunTokenCapForUSDCents(prof.EffectiveAIRunUSDCapCents()),
+		DailyTokenCap:   minPositive(prof.EffectiveAIDailyTokenCap(), aiDailyTokenCapForUSDCents(prof.EffectiveAIDailyUSDCapCents())),
+		MonthlyTokenCap: aiMonthlyTokenCapForUSDCents(prof.EffectiveAIMonthlyUSDCapCents()),
+		PerCallCap:      prof.EffectiveAIPerCallCap(),
+	}, nil
 }
 
-// SetAIKeysPath overrides where ReconfigureAI reads/writes the BYOK key file.
-// Empty (the default) uses ai.DefaultKeysPath(). Tests point this at a temp dir
-// so they never touch the real ~/.../jobcron/ai_keys.json.
-func (s *Server) SetAIKeysPath(path string) { s.aiKeysPath = path }
+// runtimeForRender resolves one runtime for a read-only page operation. A
+// missing or unreadable credential hides AI controls while rule-based content
+// remains available; paid operations surface resolution errors explicitly.
+func (s *Server) runtimeForRender(ctx context.Context, userID int64) *AIRuntime {
+	if userID <= 0 {
+		return nil
+	}
+	runtime, err := s.aiRuntimeForUser(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	return runtime
+}
 
 // SetDemoMode makes the HTTP surface read-only. Visitor bookmark/hide state is
 // handled by browser localStorage in this mode; no request should mutate the DB.
@@ -185,68 +255,6 @@ func (s *Server) validAdminToken(r *http.Request) bool {
 	wantHash := sha256.Sum256([]byte(s.adminToken))
 	gotHash := sha256.Sum256([]byte(got))
 	return subtle.ConstantTimeCompare(wantHash[:], gotHash[:]) == 1
-}
-
-// keysPath returns the configured ai_keys.json path, falling back to the OS
-// default.
-func (s *Server) keysPath() (string, error) {
-	if s.aiKeysPath != "" {
-		return s.aiKeysPath, nil
-	}
-	return ai.DefaultKeysPath()
-}
-
-// ReconfigureAI (re)builds the AI provider from the saved profile + ai_keys.json
-// and applies the profile's AI budget caps. It is the single wiring point:
-// main.go calls it once at startup, handleProfileSave on every save. AI is left
-// OFF (provider nil, silent regex fallback) when the profile selects no provider
-// or the selected provider has no saved key. A bad provider name / build error
-// also leaves AI off and is returned for the caller to log — never fatal.
-func (s *Server) ReconfigureAI(ctx context.Context, userIDOpt ...int64) error {
-	prof, ok, err := s.loadProfile(ctx, userIDOpt...)
-	if err != nil {
-		return err
-	}
-	if ok {
-		s.aiRunTokenCap = aiRunTokenCapForUSDCents(prof.EffectiveAIRunUSDCapCents())
-		s.aiDailyTokenCap = minPositive(
-			prof.EffectiveAIDailyTokenCap(),
-			aiDailyTokenCapForUSDCents(prof.EffectiveAIDailyUSDCapCents()),
-		)
-		s.aiMonthlyTokenCap = aiMonthlyTokenCapForUSDCents(prof.EffectiveAIMonthlyUSDCapCents())
-		s.aiPerCallCap = prof.EffectiveAIPerCallCap()
-	}
-	if !ok || prof.AIProvider == "" {
-		s.SetAIProvider(nil, "")
-		return nil
-	}
-	path, err := s.keysPath()
-	if err != nil {
-		s.SetAIProvider(nil, "")
-		return err
-	}
-	keys, err := ai.LoadKeys(path)
-	if err != nil {
-		s.SetAIProvider(nil, "")
-		return err
-	}
-	key := keys[prof.AIProvider]
-	if key == "" {
-		// Provider chosen but no key yet → silent regex fallback (D4).
-		s.SetAIProvider(nil, "")
-		return nil
-	}
-	model := prof.AIModel
-	if model == "" {
-		model = ai.DefaultModel(prof.AIProvider)
-	}
-	p, err := ai.New(prof.AIProvider, key, model, ai.SuggestedRateLimit(prof.AIProvider))
-	if err != nil {
-		s.SetAIProvider(nil, "")
-		return err
-	}
-	s.SetAIProvider(p, model)
-	return nil
 }
 
 func optionalUserID(userIDOpt []int64) int64 {
@@ -301,16 +309,13 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 		panic("server.New: at least one scraper is required")
 	}
 	srv := &Server{
-		store:             store,
-		sources:           sources,
-		flight:            newSingleFlight(),
-		rerates:           newRerateTracker(),
-		csrfSecret:        newCSRFSecret(),
-		loginLimiter:      newLoginRateLimiter(),
-		aiRunTokenCap:     defaultRunTokenCap,
-		aiDailyTokenCap:   profile.DefaultDailyTokenCap,
-		aiMonthlyTokenCap: aiMonthlyTokenCapForUSDCents(profile.DefaultAIMonthlyUSDCents),
-		aiPerCallCap:      profile.DefaultAIPerCallCap,
+		store:         store,
+		sources:       sources,
+		flight:        newSingleFlight(),
+		rerates:       newRerateTracker(),
+		csrfSecret:    newCSRFSecret(),
+		loginLimiter:  newLoginRateLimiter(),
+		newAIProvider: ai.New,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,
@@ -336,7 +341,7 @@ type ScrapeResult = storage.ScrapeResult
 // triggered independently.
 const scrapeAllKey = "_all_"
 
-func (s *Server) runScrapeWithHistory(ctx context.Context, trigger string, emit func(event, data string), userIDOpt ...int64) (result ScrapeResult, err error) {
+func (s *Server) runScrapeWithHistory(ctx context.Context, trigger string, emit func(event, data string), userID int64, runtime *AIRuntime) (result ScrapeResult, err error) {
 	run, startErr := s.store.StartScrapeRun(ctx, trigger)
 	if startErr != nil {
 		return ScrapeResult{}, startErr
@@ -358,7 +363,7 @@ func (s *Server) runScrapeWithHistory(ctx context.Context, trigger string, emit 
 			err = finishErr
 		}
 	}()
-	return s.runScrapeForTrigger(ctx, trigger, emit, userIDOpt...)
+	return s.runScrapeForTrigger(ctx, trigger, emit, userID, runtime)
 }
 
 func truncateScrapeRunError(s string) string {
@@ -373,12 +378,11 @@ func truncateScrapeRunError(s string) string {
 // check → listing → detail fetch → upsert → sweep → score. Disabled sources
 // are skipped entirely and their data is frozen in the DB so re-enabling a
 // source does not require a fresh scrape.
-func (s *Server) runScrape(ctx context.Context, emit func(event, data string), userIDOpt ...int64) (ScrapeResult, error) {
-	return s.runScrapeForTrigger(ctx, storage.ScrapeTriggerManual, emit, userIDOpt...)
+func (s *Server) runScrape(ctx context.Context, emit func(event, data string), userID int64, runtime *AIRuntime) (ScrapeResult, error) {
+	return s.runScrapeForTrigger(ctx, storage.ScrapeTriggerManual, emit, userID, runtime)
 }
 
-func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit func(event, data string), userIDOpt ...int64) (ScrapeResult, error) {
-	userID := optionalUserID(userIDOpt)
+func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit func(event, data string), userID int64, runtime *AIRuntime) (ScrapeResult, error) {
 	prof, profileOK, err := s.loadProfile(ctx, userID)
 	if err != nil {
 		return ScrapeResult{}, err
@@ -404,8 +408,8 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	var res ScrapeResult
 	// One AI token budget for the whole run (persists across sources). nil
 	// when AI is off, so no per-posting budget bookkeeping happens at all.
-	freshAI := s.freshAIAllowedForTrigger(trigger, profileOK, prof)
-	budget := s.newAIBudget(ctx)
+	freshAI := freshAIAllowedForTrigger(trigger, profileOK, prof, runtime)
+	budget := s.newAIBudget(ctx, userID, runtime)
 	if !freshAI {
 		budget = nil
 	}
@@ -415,7 +419,7 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	// untouched until the next successful scrape.
 	var succeeded []scraper.Scraper
 	for _, src := range active {
-		sub, err := s.runScrapeSource(ctx, src, now, budget, emit)
+		sub, err := s.runScrapeSource(ctx, src, now, userID, runtime, budget, emit)
 		if err != nil {
 			// Per-source fault isolation: one source's failure must not
 			// abort the whole briefing. Surface the failure as a status
@@ -461,7 +465,7 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	}
 
 	emit("status", "공고에 점수를 매기는 중...")
-	scored, err := s.scoreAll(ctx, userID)
+	scored, err := s.scoreAll(ctx, userID, runtime)
 	if err != nil {
 		return res, err
 	}
@@ -475,13 +479,13 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	// (newAIBudget re-reads the ledger). aiPerCallCap bounds the spend per scrape;
 	// the rest stays for a manual 재평가.
 	if freshAI {
-		if vis, verr := s.visibleForRerate(ctx, "today", now, userID); verr == nil && len(vis) > 0 {
+		if vis, verr := s.visibleForRerate(ctx, "today", now, userID, runtime); verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
-			rateBudget := s.newAIBudget(ctx)
-			rated, _, provErr := s.rateStage2(ctx, vis, prof, rateBudget, emit)
+			rateBudget := s.newAIBudget(ctx, userID, runtime)
+			rated, _, provErr := s.rateStage2(ctx, vis, prof, userID, runtime, rateBudget, emit)
 			if rated > 0 {
 				// Merge the fresh Stage-2 deltas into the rendered scores.
-				if rescored, rerr := s.scoreAll(ctx, userID); rerr == nil {
+				if rescored, rerr := s.scoreAll(ctx, userID, runtime); rerr == nil {
 					res.Scored = rescored
 				}
 			}
@@ -498,8 +502,8 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	return res, nil
 }
 
-func (s *Server) freshAIAllowedForTrigger(trigger string, profileOK bool, prof profile.Profile) bool {
-	if s.ai == nil || !profileOK {
+func freshAIAllowedForTrigger(trigger string, profileOK bool, prof profile.Profile, runtime *AIRuntime) bool {
+	if runtime == nil || !profileOK {
 		return false
 	}
 	if trigger == storage.ScrapeTriggerScheduled {
@@ -517,6 +521,7 @@ func (s *Server) freshAIAllowedForTrigger(trigger string, profileOK bool, prof p
 // double-spending the daily budget by the scrape⟷re-rate exclusion — T7.)
 type aiBudget struct {
 	store          *storage.Store
+	userID         int64
 	day            string // UTC date, e.g. "2026-06-03"
 	month          string // UTC month, e.g. "2026-06"
 	runCap         int
@@ -540,28 +545,29 @@ type aiBudget struct {
 // scrape loop skips all AI bookkeeping). It reads the day's ledger total once so
 // the daily cap accounts for spend from earlier runs (and earlier process
 // lifetimes) the same day.
-func (s *Server) newAIBudget(ctx context.Context) *aiBudget {
-	if s.ai == nil {
+func (s *Server) newAIBudget(ctx context.Context, userID int64, runtime *AIRuntime) *aiBudget {
+	if runtime == nil || userID <= 0 || runtime.UserID != userID {
 		return nil
 	}
 	now := time.Now().UTC()
 	day := now.Format("2006-01-02")
 	month := now.Format("2006-01")
-	in, out, err := s.store.AIUsageForDay(ctx, day)
+	in, out, err := s.store.AIUsageForDay(ctx, userID, day)
 	if err != nil {
 		in, out = 0, 0 // a ledger read error must not block scoring — start from 0
 	}
-	monthIn, monthOut, err := s.store.AIUsageForMonth(ctx, month)
+	monthIn, monthOut, err := s.store.AIUsageForMonth(ctx, userID, month)
 	if err != nil {
 		monthIn, monthOut = 0, 0
 	}
 	return &aiBudget{
 		store:          s.store,
+		userID:         userID,
 		day:            day,
 		month:          month,
-		runCap:         s.aiRunTokenCap,
-		dailyCap:       s.aiDailyTokenCap,
-		monthlyCap:     s.aiMonthlyTokenCap,
+		runCap:         runtime.RunTokenCap,
+		dailyCap:       runtime.DailyTokenCap,
+		monthlyCap:     runtime.MonthlyTokenCap,
 		dailyAtStart:   in + out,
 		monthlyAtStart: monthIn + monthOut,
 	}
@@ -590,7 +596,7 @@ func (b *aiBudget) debit(ctx context.Context, u ai.Usage) {
 	b.mu.Lock()
 	b.runSpent += u.InputTokens + u.OutputTokens
 	b.mu.Unlock()
-	_ = b.store.AddAIUsage(ctx, b.day, u.InputTokens, u.OutputTokens)
+	_ = b.store.AddAIUsage(ctx, b.userID, b.day, u.InputTokens, u.OutputTokens)
 }
 
 // isDegraded reports whether either cap was hit during the run.
@@ -603,7 +609,7 @@ func (b *aiBudget) isDegraded() bool {
 // runScrapeSource scrapes one source, emitting source-prefixed status events
 // so the user can tell which source is currently active in the stream.
 func (s *Server) runScrapeSource(
-	ctx context.Context, src scraper.Scraper, now time.Time, budget *aiBudget, emit func(event, data string),
+	ctx context.Context, src scraper.Scraper, now time.Time, userID int64, runtime *AIRuntime, budget *aiBudget, emit func(event, data string),
 ) (ScrapeResult, error) {
 	label := sourceLabel(src.Source())
 	emit("status", fmt.Sprintf("[%s] robots.txt 확인 중...", label))
@@ -666,7 +672,7 @@ func (s *Server) runScrapeSource(
 		// Stage-1 AI extraction (cache-read, D2). Best-effort: any failure
 		// leaves no ai_extractions row and the posting is scored by the regex
 		// path exactly as v1.5 — the scrape never fails on an AI error.
-		s.extractStage1(ctx, id, detailed, now, budget)
+		s.extractStage1(ctx, id, detailed, now, userID, runtime, budget)
 	}
 
 	// Edited-JD refresh (T7): re-fetch the detail of the stalest already-seen
@@ -690,7 +696,7 @@ func (s *Server) runScrapeSource(
 		}
 		res.Refreshed++
 		emit("progress", fmt.Sprintf("[%s] 기존 공고 새로고침 %d/%d...", label, i+1, len(cands)))
-		s.extractStage1(ctx, c.id, detailed, now, budget)
+		s.extractStage1(ctx, c.id, detailed, now, userID, runtime, budget)
 	}
 	return res, nil
 }
@@ -699,24 +705,24 @@ func (s *Server) runScrapeSource(
 // if AI is enabled and the per-run budget has headroom. It writes only the
 // ai_extractions cache row — the postings columns stay a faithful source
 // mirror (D2). Every failure path is silent (regex fallback at score time).
-func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting, now time.Time, budget *aiBudget) {
-	if s.ai == nil || budget == nil || !budget.canSpend() {
+func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting, now time.Time, userID int64, runtime *AIRuntime, budget *aiBudget) {
+	if runtime == nil || runtime.UserID != userID || budget == nil || !budget.canSpend() {
 		return
 	}
 	sent, contentHash, _ := ai.ModelInput(p)
 	// Cache hit (same content already extracted under this ai_version): reuse,
 	// no provider call. New postings always miss; this matters for the T7
 	// re-rate backfill and idempotent re-runs.
-	if _, ok, err := s.store.AIExtraction(ctx, id, contentHash, s.aiVersion); err == nil && ok {
+	if _, ok, err := s.store.AIExtraction(ctx, id, contentHash, runtime.Version); err == nil && ok {
 		return
 	}
-	ext, usage, err := s.ai.Extract(ctx, sent)
+	ext, usage, err := runtime.Provider.Extract(ctx, sent)
 	if err != nil {
 		return // timeout / 5xx / malformed JSON / out-of-range → regex fallback
 	}
 	budget.debit(ctx, usage)
 	// Best-effort cache write; a failure here just means a regex score this pass.
-	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, s.aiVersion, ext, now)
+	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, runtime.Version, ext, now)
 }
 
 // loadProfile fetches the saved profile, returning ok=false when none has
@@ -738,8 +744,8 @@ func (s *Server) loadProfile(ctx context.Context, userIDOpt ...int64) (profile.P
 	return p, true, nil
 }
 
-// RescoreAll re-scores every stored posting against the current profile. main
-// calls it once at startup (right after ReconfigureAI) so a posting left
+// RescoreAll re-scores every stored posting against the current profile. The
+// exact-owner startup path calls it so a posting left
 // unscored by an INTERRUPTED scrape is healed on the next boot rather than
 // rendering as a blank card. Fix 2A keeps CLIENT navigation from leaving the
 // unscored state; this covers PROCESS death — a crash / SIGKILL / OOM / deploy
@@ -747,14 +753,27 @@ func (s *Server) loadProfile(ctx context.Context, userIDOpt ...int64) (profile.P
 // end-of-run scoreAll, which nothing else self-heals. It is the exported entry
 // point to scoreAll; it never calls the AI provider (merge-only, D10), so the
 // startup pass is a cheap cache-only re-score. No-op when no profile is saved.
-func (s *Server) RescoreAll(ctx context.Context) (int, error) {
-	return s.scoreAll(ctx)
+func (s *Server) RescoreAll(ctx context.Context, userID int64, runtime *AIRuntime) (int, error) {
+	return s.scoreAll(ctx, userID, runtime)
+}
+
+// RescoreSoleOwner heals cached scores at startup only when ownership is exact.
+// Zero users is a clean no-op; multiple users returns a stable operator error.
+func (s *Server) RescoreSoleOwner(ctx context.Context) (int, error) {
+	userID, ok, err := s.store.SoleOwnerUserID(ctx)
+	if err != nil || !ok {
+		return 0, err
+	}
+	runtime, err := s.aiRuntimeForUser(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	return s.scoreAll(ctx, userID, runtime)
 }
 
 // scoreAll scores every stored posting against the current profile and upserts
 // the score rows. It is a no-op when no profile has been saved yet.
-func (s *Server) scoreAll(ctx context.Context, userIDOpt ...int64) (int, error) {
-	userID := optionalUserID(userIDOpt)
+func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime) (int, error) {
 	profJSON, profHash, ok, err := s.profileJSON(ctx, userID)
 	if err != nil {
 		return 0, err
@@ -781,17 +800,20 @@ func (s *Server) scoreAll(ctx context.Context, userIDOpt ...int64) (int, error) 
 		latestDeltas map[int64]ai.Delta // newest per posting under the current ai_version, any goal text — stale fallback for a goal edit
 		anyVerDeltas map[int64]ai.Delta // newest per posting across ANY ai_version — stale fallback for a provider/model switch
 	)
-	if s.ai != nil {
-		exts, err = s.store.AIExtractionsByPostingID(ctx, s.aiVersion)
+	if runtime != nil {
+		if userID <= 0 || runtime.UserID != userID {
+			return 0, fmt.Errorf("server: AI runtime user mismatch")
+		}
+		exts, err = s.store.AIExtractionsByPostingID(ctx, runtime.Version)
 		if err != nil {
 			return 0, err
 		}
 		aiInputHash := profile.AIInputHash(prof)
-		freshDeltas, err = s.store.AIScoresByPostingID(ctx, aiInputHash, s.aiVersion)
+		freshDeltas, err = s.store.AIScoresByPostingID(ctx, userID, aiInputHash, runtime.Version)
 		if err != nil {
 			return 0, err
 		}
-		latestDeltas, err = s.store.LatestAIScoresByPostingID(ctx, s.aiVersion)
+		latestDeltas, err = s.store.LatestAIScoresByPostingID(ctx, userID, runtime.Version)
 		if err != nil {
 			return 0, err
 		}
@@ -800,16 +822,18 @@ func (s *Server) scoreAll(ctx context.Context, userIDOpt ...int64) (int, error) 
 		// above. Without this, the AI chip would VANISH on a provider switch; with
 		// it, the latest prior reading persists faded ("이전 설정 기준") until a
 		// 재평가 refreshes it under the new provider/model.
-		anyVerDeltas, err = s.store.LatestAIScoresAnyVersionByPostingID(ctx)
+		anyVerDeltas, err = s.store.LatestAIScoresAnyVersionByPostingID(ctx, userID)
 		if err != nil {
 			return 0, err
 		}
 	} else if s.demoMode {
-		// The public demo runs without ai_keys.json, but the uploaded database
+		// The public demo runs without a provider runtime, but the uploaded database
 		// already contains tonight's cached Stage-2 deltas. Merge the newest
 		// cached row as current so the first server boot does not erase the
 		// visible AI chips.
-		anyVerDeltas, err = s.store.LatestAIScoresAnyVersionByPostingID(ctx)
+		// Demo SQLite preserves its non-secret cache for rendering without
+		// resolving or reading the legacy key file.
+		anyVerDeltas, err = s.store.LatestAIScoresAnyVersionByPostingID(ctx, 1)
 		if err != nil {
 			return 0, err
 		}
@@ -834,7 +858,7 @@ func (s *Server) scoreAll(ctx context.Context, userIDOpt ...int64) (int, error) 
 			d.Stale = true
 			delta = &d
 		} else if d, ok := anyVerDeltas[p.ID]; ok {
-			d.Stale = !(s.demoMode && s.ai == nil)
+			d.Stale = !s.demoMode
 			delta = &d
 		}
 		result := scoring.Score(p, prof, ext, delta)

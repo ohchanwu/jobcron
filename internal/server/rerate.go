@@ -99,11 +99,11 @@ type rerateInfo struct {
 // a row analyzed but with no surviving signal shows no chip yet is still counted,
 // which is the whole point of the indicator (it resolves "analyzed or just
 // silent?"). A cache read error degrades Analyzed to 0; it never blocks render.
-func (s *Server) buildRerateInfo(ctx context.Context, prof profile.Profile, surface string, lists ...[]dashboardPosting) *rerateInfo {
-	if s.ai == nil {
+func (s *Server) buildRerateInfo(ctx context.Context, userID int64, runtime *AIRuntime, prof profile.Profile, surface string, lists ...[]dashboardPosting) *rerateInfo {
+	if runtime == nil || runtime.UserID != userID {
 		return nil
 	}
-	fresh, err := s.store.AIScoresByPostingID(ctx, profile.AIInputHash(prof), s.aiVersion)
+	fresh, err := s.store.AIScoresByPostingID(ctx, userID, profile.AIInputHash(prof), runtime.Version)
 	if err != nil {
 		fresh = nil
 	}
@@ -165,7 +165,8 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "올바르지 않은 화면 기록이에요.", http.StatusBadRequest)
 		return
 	}
-	if s.ai == nil {
+	runtime, err := s.aiRuntimeForUser(r.Context(), userID)
+	if err != nil || runtime == nil {
 		// No provider configured — there is nothing to re-rate. The button is
 		// hidden in this state; this guards a direct request. 503 (not 409): the
 		// feature is unavailable in this configuration, not in conflict with
@@ -215,7 +216,7 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 	// SSE writes after disconnect are no-ops.
 	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
 	defer cancel()
-	summary, err := s.runRerate(ctx, surface, emit, userID)
+	summary, err := s.runRerate(ctx, surface, emit, userID, runtime)
 	if err != nil {
 		// A provider failure (every attempted row errored) carries a calm,
 		// specific message; a storage/profile failure keeps the generic one. The
@@ -275,19 +276,21 @@ func rerateDoneMessage(summary rerateSummary) string {
 // still spaces request starts. The shared token budget and the per-call counter
 // are mutex-guarded; each worker commits its own ai_scores row.
 //
-// One press analyzes at most s.aiPerCallCap NOT-yet-cached rows (a legibility
+// One press analyzes at most runtime.PerCallCap NOT-yet-cached rows (a legibility
 // knob so the spend per click is predictable), still capped by the hard token
 // budgets. Cached rows are free cache hits and don't count against the per-call
 // cap, so a later press resumes on the still-uncached rows. It returns the
 // cumulative analyzed count (N — visible rows now cached against the current
 // goal) and the total visible rows (M) for the progress copy.
-func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userIDOpt ...int64) (summary rerateSummary, err error) {
-	userID := optionalUserID(userIDOpt)
+func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userID int64, runtime *AIRuntime) (summary rerateSummary, err error) {
+	if runtime == nil || runtime.UserID != userID {
+		return summary, fmt.Errorf("server: rerate requires matching AI runtime")
+	}
 	prof, ok, err := s.loadProfile(ctx, userID)
 	if err != nil || !ok {
 		return summary, err
 	}
-	postings, err := s.visibleForRerate(ctx, surface, time.Now(), userID)
+	postings, err := s.visibleForRerate(ctx, surface, time.Now(), userID, runtime)
 	if err != nil {
 		return summary, err
 	}
@@ -297,9 +300,9 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	}
 	emit("status", "AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕")
 
-	budget := s.newAIBudget(ctx)
+	budget := s.newAIBudget(ctx, userID, runtime)
 	var provErr error
-	summary.Analyzed, summary.ProviderCalls, provErr = s.rateStage2(ctx, postings, prof, budget, emit)
+	summary.Analyzed, summary.ProviderCalls, provErr = s.rateStage2(ctx, postings, prof, userID, runtime, budget, emit)
 	if budget != nil && budget.isDegraded() {
 		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 	}
@@ -309,7 +312,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 		emit("status", providerFailureMessage(provErr))
 	}
 	emit("status", "점수를 다시 매기는 중...")
-	if _, err := s.scoreAll(ctx, userID); err != nil {
+	if _, err := s.scoreAll(ctx, userID, runtime); err != nil {
 		return summary, err
 	}
 	if summary.Analyzed == 0 && provErr != nil {
@@ -334,14 +337,14 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 // limiter still spaces request starts. SSE progress writes stay on this
 // goroutine (a ResponseWriter is not safe for concurrent writes); workers send
 // results to a fully-buffered channel that a closer goroutine ends.
-func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, budget *aiBudget, emit func(event, data string)) (analyzed int, providerCalls int, provErr error) {
-	if s.ai == nil || budget == nil || len(postings) == 0 {
+func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, userID int64, runtime *AIRuntime, budget *aiBudget, emit func(event, data string)) (analyzed int, providerCalls int, provErr error) {
+	if runtime == nil || runtime.UserID != userID || budget == nil || len(postings) == 0 {
 		return 0, 0, nil
 	}
 	aiInputHash := profile.AIInputHash(prof)
 	profileText := profile.BuildStage2ProfileText(prof)
 	now := time.Now().UTC()
-	calls := &callCap{max: s.aiPerCallCap}
+	calls := &callCap{max: runtime.PerCallCap}
 	total := len(postings)
 
 	type rerateResult struct {
@@ -358,7 +361,7 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			cached, providerCalled, err := s.rerateOne(ctx, p, aiInputHash, profileText, now, budget, calls)
+			cached, providerCalled, err := s.rerateOne(ctx, p, aiInputHash, profileText, now, userID, runtime, budget, calls)
 			results <- rerateResult{cached: cached, providerCalled: providerCalled, err: err}
 		}(p)
 	}
@@ -398,11 +401,11 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 // (regex score) but still consumes the reserved per-call slot, so a burst of
 // failing calls can't ignore the cap.
 func (s *Server) rerateOne(
-	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, budget *aiBudget, calls *callCap,
+	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, userID int64, runtime *AIRuntime, budget *aiBudget, calls *callCap,
 ) (cached bool, providerCalled bool, err error) {
 	// Already rated against the current goal text → reuse (reconnect-safe, no
 	// re-spend, free). An empty cached delta still counts as analyzed.
-	if _, ok, e := s.store.AIScore(ctx, p.ID, aiInputHash, s.aiVersion); e == nil && ok {
+	if _, ok, e := s.store.AIScore(ctx, userID, p.ID, aiInputHash, runtime.Version); e == nil && ok {
 		return true, false, nil
 	}
 	// Uncached: spend only if the token budget has headroom AND the per-call cap
@@ -417,10 +420,10 @@ func (s *Server) rerateOne(
 	}
 	// Backfill Stage 1 so career/education facts are AI-grounded too (e.g. rows
 	// scraped before AI was enabled). Best-effort, budget-bounded.
-	s.extractStage1(ctx, p.ID, p, now, budget)
+	s.extractStage1(ctx, p.ID, p, now, userID, runtime, budget)
 
 	sent, _, _ := ai.ModelInput(p)
-	raw, usage, err := s.ai.ScoreDelta(ctx, sent, profileText)
+	raw, usage, err := runtime.Provider.ScoreDelta(ctx, sent, profileText)
 	if err != nil {
 		// Provider error (bad key, mismatched model, transport) → no delta. Return
 		// it so rateStage2 can surface a calm, specific message instead of letting
@@ -431,7 +434,7 @@ func (s *Server) rerateOne(
 	// Gate: presence against the SENT (truncated) text, absence against the FULL
 	// Description (S5). Survivors net into the stored delta.
 	delta := ai.GateDelta(raw, sent, p.Description)
-	if err := s.store.UpsertAIScore(ctx, p.ID, aiInputHash, s.aiVersion, delta, now); err != nil {
+	if err := s.store.UpsertAIScore(ctx, userID, p.ID, aiInputHash, runtime.Version, delta, now); err != nil {
 		return false, true, err
 	}
 	return true, true, nil
@@ -440,23 +443,22 @@ func (s *Server) rerateOne(
 // visibleForRerate returns the non-dealbreaker postings currently shown on a
 // surface — the exact rows the user sees, never the whole DB. Each surface
 // reuses its existing page builder so re-rate and render agree on "visible".
-func (s *Server) visibleForRerate(ctx context.Context, surface string, now time.Time, userIDOpt ...int64) ([]scraper.Posting, error) {
-	userID := optionalUserID(userIDOpt)
+func (s *Server) visibleForRerate(ctx context.Context, surface string, now time.Time, userID int64, runtime *AIRuntime) ([]scraper.Posting, error) {
 	switch surface {
 	case "today":
-		b, err := s.buildBriefing(ctx, now, userID)
+		b, err := s.buildBriefingWithRuntime(ctx, now, userID, runtime)
 		if err != nil {
 			return nil, err
 		}
 		return postingsOf(b.Today), nil
 	case "bookmarks":
-		v, err := s.buildBookmarks(ctx, now, userID)
+		v, err := s.buildBookmarksWithRuntime(ctx, now, userID, runtime)
 		if err != nil {
 			return nil, err
 		}
 		return postingsOf(v.Postings), nil
 	case "archive":
-		v, err := s.buildArchive(ctx, now, userID)
+		v, err := s.buildArchiveWithRuntime(ctx, now, userID, runtime)
 		if err != nil {
 			return nil, err
 		}

@@ -39,6 +39,29 @@ func TestCreateOwnerUserCreatesOnlyOwner(t *testing.T) {
 	}
 }
 
+func TestSoleOwnerUserIDRequiresExactOwnership(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if id, ok, err := st.SoleOwnerUserID(ctx); err != nil || ok || id != 0 {
+		t.Fatalf("zero users = id %d ok %v err %v, want 0 false nil", id, ok, err)
+	}
+	owner, err := st.CreateOwnerUser(ctx, "sole-owner@example.invalid", "synthetic-hash")
+	if err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	if id, ok, err := st.SoleOwnerUserID(ctx); err != nil || !ok || id != owner.ID {
+		t.Fatalf("one user = id %d ok %v err %v, want %d true nil", id, ok, err, owner.ID)
+	}
+	if _, err := st.SQLDB().ExecContext(ctx, `
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ('second-owner@example.invalid', 'synthetic-hash', now(), now())`); err != nil {
+		t.Fatalf("insert second user: %v", err)
+	}
+	if id, ok, err := st.SoleOwnerUserID(ctx); err == nil || ok || id != 0 || !strings.Contains(err.Error(), "multiple users") {
+		t.Fatalf("multiple users = id %d ok %v err %v, want stable ambiguity error", id, ok, err)
+	}
+}
+
 func TestResetOwnerPasswordUpdatesExistingOwner(t *testing.T) {
 	st := newPostgresTestStore(t)
 	ctx := context.Background()

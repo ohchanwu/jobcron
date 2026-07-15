@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
 	"github.com/ohchanwu/jobcron/internal/scoring"
 	"github.com/ohchanwu/jobcron/internal/scraper"
@@ -139,6 +140,14 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 		writeAuthUnauthorized(w)
 		return
 	}
+	var runtime *AIRuntime
+	if userID > 0 {
+		runtime, err = s.aiRuntimeForUser(r.Context(), userID)
+		if err != nil {
+			http.Error(w, "AI 설정을 불러오지 못했어요.", http.StatusServiceUnavailable)
+			return
+		}
+	}
 	if !s.flight.tryAcquire(scrapeAllKey) {
 		http.Error(w, "이미 스크랩이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
 		return
@@ -162,7 +171,7 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 	// (sseWriter.event ignores write errors).
 	ctx, cancel := context.WithTimeout(context.Background(), scrapeMaxDuration)
 	defer cancel()
-	res, err := s.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, sw.event, userID)
+	res, err := s.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, sw.event, userID, runtime)
 	if err != nil {
 		sw.event("failed", "스크랩에 실패했어요. 잠시 후 다시 시도해 주세요.")
 		return
@@ -243,6 +252,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // the "also on …" badge).
 func (s *Server) buildBriefing(ctx context.Context, now time.Time, userIDOpt ...int64) (briefing, error) {
 	userID := optionalUserID(userIDOpt)
+	return s.buildBriefingWithRuntime(ctx, now, userID, s.runtimeForRender(ctx, userID))
+}
+
+func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (briefing, error) {
 	postings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return briefing{}, err
@@ -327,7 +340,7 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time, userIDOpt ...
 	if len(b.Today) > briefingCap {
 		b.Today = b.Today[:briefingCap]
 	}
-	b.Rerate = s.buildRerateInfo(ctx, prof, "today", b.Today)
+	b.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "today", b.Today)
 	b.ShowScheduledAITip = b.Rerate != nil && !prof.ScheduledAIEnabled
 	b.AIEstimatedDailyCents = prof.EffectiveAIDailyUSDCapCents()
 	return b, nil
@@ -458,7 +471,7 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 	form := toProfileForm(p)
 	form.ProfileRequired = r.URL.Query().Get("reason") == "profile-required"
 	form.Sources = s.sourceOptions(p.DisabledSources, !ok)
-	s.fillAIFormState(r.Context(), &form, p)
+	s.fillAIFormState(r.Context(), userID, &form, p)
 	s.renderWithRequest(w, r, "profile.html", form)
 }
 
@@ -467,7 +480,7 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 // instead of an empty field), the effective daily cap, and today's usage /
 // remaining. Read failures degrade quietly to "no key / zero used" — the form
 // must still render.
-func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profile.Profile) {
+func (s *Server) fillAIFormState(ctx context.Context, userID int64, form *profileForm, p profile.Profile) {
 	form.AIDailyCapEffective = p.EffectiveAIDailyTokenCap()
 	form.AIPerCallCapEffect = p.EffectiveAIPerCallCap()
 	form.AIMonthlyUSDDefault = profile.DefaultAIMonthlyUSDCents
@@ -480,14 +493,10 @@ func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profi
 	if b, err := json.Marshal(ai.ModelsByProvider()); err == nil {
 		form.AIModelOptionsJSON = template.JS(b)
 	}
-	if p.AIProvider != "" {
-		if path, err := s.keysPath(); err == nil {
-			if keys, err := ai.LoadKeys(path); err == nil && keys[p.AIProvider] != "" {
-				form.AIKeySaved = true
-			}
-		}
+	if userID > 0 && p.AIProvider != "" {
+		_, form.AIKeySaved, _ = s.store.UserAICredential(ctx, userID, p.AIProvider)
 	}
-	in, out, err := s.store.AIUsageForDay(ctx, time.Now().UTC().Format("2006-01-02"))
+	in, out, err := s.store.AIUsageForDay(ctx, userID, time.Now().UTC().Format("2006-01-02"))
 	if err == nil {
 		form.AITokensUsedToday = in + out
 	}
@@ -499,6 +508,11 @@ func (s *Server) fillAIFormState(ctx context.Context, form *profileForm, p profi
 // handleProfileSave parses the submitted form, stores the profile, re-scores
 // every posting against it, and redirects to the dashboard.
 func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
+	userID, err := s.stateUserID(r.Context(), r)
+	if err != nil {
+		writeAuthUnauthorized(w)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -568,34 +582,51 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		AIDailyUSDCapCents:   dailyUSDCap,
 		AIRunUSDCapCents:     runUSDCap,
 	}
-	// Persist a newly-entered API key to the 0600 ai_keys.json (never the DB). A
-	// blank key field keeps the existing key — the form shows "•••• 저장됨" and
-	// the user only types here to change it.
-	if err := s.saveAIKey(p.AIProvider, r.FormValue("ai_key")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	canonical, err := profile.Marshal(p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	userID, err := s.stateUserID(r.Context(), r)
-	if err != nil {
-		writeAuthUnauthorized(w)
+	if userID == 0 {
+		if _, _, err := s.saveProfileJSON(r.Context(), userID, canonical); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := s.scoreAll(r.Context(), userID, nil); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/briefing", http.StatusSeeOther)
 		return
 	}
-	if _, _, err := s.saveProfileJSON(r.Context(), userID, canonical); err != nil {
+	var encrypted *storage.EncryptedAICredential
+	if plaintext := strings.TrimSpace(r.FormValue("ai_key")); plaintext != "" {
+		provider, err := credential.NormalizeProvider(p.AIProvider)
+		if err != nil {
+			http.Error(w, "AI 제공자 설정을 확인해주세요.", http.StatusBadRequest)
+			return
+		}
+		if s.credentialCipher == nil {
+			http.Error(w, "AI 자격 증명 암호화를 사용할 수 없어요.", http.StatusServiceUnavailable)
+			return
+		}
+		ciphertext, nonce, version, err := s.credentialCipher.Seal(userID, provider, plaintext)
+		if err != nil {
+			http.Error(w, "AI 자격 증명을 암호화하지 못했어요.", http.StatusInternalServerError)
+			return
+		}
+		encrypted = &storage.EncryptedAICredential{UserID: userID, Provider: provider, Ciphertext: ciphertext, Nonce: nonce, EncryptionVersion: version}
+	}
+	if _, _, err := s.store.SaveProfileAndCredentialForUser(r.Context(), userID, canonical, encrypted); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// Re-wire AI from the just-saved provider/model + key so a key entered here
-	// goes live immediately (no restart). A configuration error leaves AI off;
-	// surface it rather than 500ing — the profile saved fine.
-	if err := s.ReconfigureAI(r.Context(), userID); err != nil {
-		log.Printf("server: AI reconfigure after profile save: %v", err)
+	runtime, err := s.aiRuntimeForUser(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "AI 설정을 불러오지 못했어요.", http.StatusInternalServerError)
+		return
 	}
-	if _, err := s.scoreAll(r.Context(), userID); err != nil {
+	if _, err := s.scoreAll(r.Context(), userID, runtime); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -612,26 +643,6 @@ func aiProviderValue(v string) string {
 	default:
 		return ""
 	}
-}
-
-// saveAIKey writes a newly-entered key for provider into ai_keys.json at 0600,
-// preserving every other provider's key. A blank key (the common case — the user
-// didn't retype the saved secret) is a no-op. An empty provider is also a no-op.
-func (s *Server) saveAIKey(provider, key string) error {
-	key = strings.TrimSpace(key)
-	if provider == "" || key == "" {
-		return nil
-	}
-	path, err := s.keysPath()
-	if err != nil {
-		return err
-	}
-	keys, err := ai.LoadKeys(path)
-	if err != nil {
-		return err
-	}
-	keys[provider] = key
-	return ai.SaveKeys(path, keys)
 }
 
 // toProfileForm converts a stored profile into the flat form view model.

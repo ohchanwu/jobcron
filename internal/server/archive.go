@@ -119,6 +119,10 @@ func resolveArchiveSort(w http.ResponseWriter, r *http.Request) string {
 // briefing's behavior.
 func (s *Server) buildArchive(ctx context.Context, now time.Time, userIDOpt ...int64) (archiveView, error) {
 	userID := optionalUserID(userIDOpt)
+	return s.buildArchiveWithRuntime(ctx, now, userID, s.runtimeForRender(ctx, userID))
+}
+
+func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (archiveView, error) {
 	allPostings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return archiveView{}, err
@@ -235,6 +239,6 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time, userIDOpt ...i
 	for _, day := range view.Days {
 		lists = append(lists, day.Postings)
 	}
-	view.Rerate = s.buildRerateInfo(ctx, prof, "archive", lists...)
+	view.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "archive", lists...)
 	return view, nil
 }

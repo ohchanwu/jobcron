@@ -137,6 +137,36 @@ SELECT id, email, password_hash, created_at, updated_at
 	return user, true, nil
 }
 
+// SoleOwnerUserID returns the only application's user ID. It refuses to guess
+// when more than one user exists so startup and scheduled work can never spend
+// against an arbitrary account.
+func (s *Store) SoleOwnerUserID(ctx context.Context) (int64, bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM users ORDER BY id LIMIT 2`)
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: list owner users: %w", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return 0, false, fmt.Errorf("storage: scan owner user: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, false, fmt.Errorf("storage: list owner users: %w", err)
+	}
+	switch len(ids) {
+	case 0:
+		return 0, false, nil
+	case 1:
+		return ids[0], true, nil
+	default:
+		return 0, false, errors.New("storage: multiple users exist; refusing sole-owner operation")
+	}
+}
+
 // firstUserID is a transitional compatibility helper for legacy no-user
 // storage wrappers. Production request paths should pass the authenticated
 // user id and avoid this fallback.

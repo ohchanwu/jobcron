@@ -49,12 +49,12 @@ func TestRerateInjectionProducesNoInflatedScore(t *testing.T) {
 			}, ai.Usage{InputTokens: 10, OutputTokens: 5}, nil
 		},
 	}
-	srv.SetAIProvider(stub, "test-model")
-	if _, err := srv.scoreAll(ctx); err != nil {
+	runtime := testAIRuntime(1, stub, "test-model")
+	if _, err := srv.scoreAll(ctx, 1, runtime); err != nil {
 		t.Fatalf("scoreAll: %v", err)
 	}
 
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestRerateInjectionProducesNoInflatedScore(t *testing.T) {
 		t.Fatal("the API key reached the model prompt — it must never be in the model input")
 	}
 	// A cached (empty) delta row exists — reconnect-safe — but it carries no items.
-	d, ok, err := st.AIScore(ctx, id, profile.AIInputHash(prof), srv.aiVersion)
+	d, ok, err := st.AIScore(ctx, 1, id, profile.AIInputHash(prof), runtime.Version)
 	if err != nil {
 		t.Fatalf("AIScore: %v", err)
 	}

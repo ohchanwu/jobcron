@@ -22,6 +22,7 @@ import (
 
 	"github.com/ohchanwu/jobcron/internal/appdata"
 	"github.com/ohchanwu/jobcron/internal/config"
+	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/scraper/demoday"
 	"github.com/ohchanwu/jobcron/internal/scraper/greenhouse"
@@ -83,18 +84,17 @@ func main() {
 	srv.SetProductionMode(cfg.Production)
 	srv.SetAdminToken(cfg.AdminToken)
 	srv.SetProxySecret(cfg.ProxySecret)
-	// Wire BYOK AI from the saved profile + ai_keys.json. Non-fatal: any error
-	// (or simply no key configured) leaves AI off and the briefing falls back to
-	// the v1.5 offline scoring. The user enables AI on /profile.
-	if err := srv.ReconfigureAI(context.Background()); err != nil {
-		log.Printf("jobcron: AI 설정을 불러오지 못해 일반 점수로 시작해요: %v", err)
+	credentialCipher, err := credentialCipherForConfig(cfg)
+	if err != nil {
+		log.Fatalf("jobcron: credential encryption: %v", err)
 	}
+	srv.SetCredentialCipher(credentialCipher)
 	// Heal any posting left unscored by an interrupted scrape (e.g. a crash or
 	// restart between insert and the end-of-run scoring) so it never renders as
-	// a blank card. Runs after ReconfigureAI so cached AI deltas merge in too;
+	// a blank card. Exact-owner resolution merges that user's cached AI deltas;
 	// it never calls the provider, so there is no startup cost or token spend.
 	// Non-fatal: a transient error just defers healing to the next scrape/save.
-	if _, err := srv.RescoreAll(context.Background()); err != nil {
+	if _, err := srv.RescoreSoleOwner(context.Background()); err != nil {
 		log.Printf("jobcron: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
 	}
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -139,6 +139,25 @@ func main() {
 	if err := httpSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("jobcron: %v", err)
 	}
+}
+
+func credentialCipherForConfig(cfg config.Config) (credential.Cipher, error) {
+	masterKey := append([]byte(nil), cfg.CredentialEncryptionKey...)
+	if len(masterKey) == 0 {
+		if cfg.Production {
+			return nil, fmt.Errorf("JOBCRON_CREDENTIAL_ENCRYPTION_KEY is required in production")
+		}
+		var err error
+		masterKey, err = credential.LoadOrCreateLocalMasterKey()
+		if err != nil {
+			return nil, err
+		}
+	}
+	cipher, err := credential.NewAESGCMCipher(masterKey)
+	if err != nil {
+		return nil, err
+	}
+	return cipher, nil
 }
 
 // openConfiguredStore opens the database from DATABASE_URL in production, or

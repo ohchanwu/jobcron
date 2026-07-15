@@ -78,6 +78,20 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 }
 
 func (s *Server) runScheduledScrape(ctx context.Context) {
+	userID, ok, err := s.store.SoleOwnerUserID(ctx)
+	if err != nil {
+		s.recordSkippedScheduledRun(ctx, "skipped: scheduled owner is ambiguous")
+		return
+	}
+	if !ok {
+		s.recordSkippedScheduledRun(ctx, "skipped: scheduled owner is unavailable")
+		return
+	}
+	runtime, err := s.aiRuntimeForUser(ctx, userID)
+	if err != nil {
+		s.recordSkippedScheduledRun(ctx, "skipped: scheduled AI runtime is unavailable")
+		return
+	}
 	if !s.flight.tryAcquire(scrapeAllKey) {
 		s.recordSkippedScheduledRun(ctx, "skipped: scrape already running")
 		return
@@ -85,7 +99,7 @@ func (s *Server) runScheduledScrape(ctx context.Context) {
 	defer s.flight.release(scrapeAllKey)
 	scrapeCtx, cancel := context.WithTimeout(ctx, scrapeMaxDuration)
 	defer cancel()
-	_, _ = s.runScrapeWithHistory(scrapeCtx, storage.ScrapeTriggerScheduled, noopSchedulerEmit)
+	_, _ = s.runScrapeWithHistory(scrapeCtx, storage.ScrapeTriggerScheduled, noopSchedulerEmit, userID, runtime)
 }
 
 func (s *Server) recordSkippedScheduledRun(ctx context.Context, reason string) {

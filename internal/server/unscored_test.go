@@ -75,8 +75,8 @@ func TestRescoreAllHealsUnscoredPosting(t *testing.T) {
 		t.Fatal("precondition failed: posting should start unscored")
 	}
 
-	// Startup heal — main calls this right after ReconfigureAI.
-	if _, err := srv.RescoreAll(ctx); err != nil {
+	// Startup heal — main calls this after resolving the sole owner.
+	if _, err := srv.RescoreAll(ctx, 0, nil); err != nil {
 		t.Fatalf("RescoreAll: %v", err)
 	}
 

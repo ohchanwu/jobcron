@@ -55,6 +55,9 @@ func TestStartSchedulerRunsScheduledScrapeAfterSleep(t *testing.T) {
 	f := &fakeScraper{listing: []scraper.Posting{listingPosting("1", "백엔드 신입")}}
 	srv, st := newTestServer(t, f)
 	ctx := context.Background()
+	if _, err := st.CreateOwnerUser(ctx, "scheduler@example.invalid", "synthetic-hash"); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
 	profJSON, _ := profile.Marshal(profile.Profile{CareerYears: 0})
 	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
@@ -93,6 +96,9 @@ func TestStartSchedulerRunsScheduledScrapeAfterSleep(t *testing.T) {
 
 func TestStartSchedulerRecordsSkippedRunWhenScrapeLockBusy(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
+	if _, err := st.CreateOwnerUser(context.Background(), "scheduler-busy@example.invalid", "synthetic-hash"); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
 	if !srv.flight.tryAcquire(scrapeAllKey) {
 		t.Fatal("failed to arrange busy scrape lock")
 	}

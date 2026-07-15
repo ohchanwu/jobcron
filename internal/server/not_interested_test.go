@@ -99,7 +99,7 @@ func TestMutedPostingHiddenFromBriefing(t *testing.T) {
 	hidden.LastSeenAt = hidden.FirstSeenAt
 	mustUpsert(t, st, shown)
 	hiddenID := mustUpsert(t, st, hidden)
-	if _, err := srv.scoreAll(ctx); err != nil {
+	if _, err := srv.scoreAll(ctx, 0, nil); err != nil {
 		t.Fatalf("scoreAll: %v", err)
 	}
 	if err := st.SetNotInterested(ctx, hiddenID, time.Now()); err != nil {

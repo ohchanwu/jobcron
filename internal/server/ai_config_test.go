@@ -1,29 +1,20 @@
 package server
 
 import (
+	"bytes"
 	"context"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"path/filepath"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
 	"github.com/ohchanwu/jobcron/internal/scraper"
+	"github.com/ohchanwu/jobcron/internal/storage"
 )
-
-// aiKeysTempPath points a server's key file at a temp dir so a test never
-// touches the user's real ai_keys.json.
-func aiKeysTempPath(t *testing.T, srv *Server) string {
-	t.Helper()
-	p := filepath.Join(t.TempDir(), "ai_keys.json")
-	srv.SetAIKeysPath(p)
-	return p
-}
 
 func saveProfileJSON(t *testing.T, srv *Server, p profile.Profile) {
 	t.Helper()
@@ -36,157 +27,249 @@ func saveProfileJSON(t *testing.T, srv *Server, p profile.Profile) {
 	}
 }
 
-func TestReconfigureAI(t *testing.T) {
-	srv, _ := newTestServer(t, &fakeScraper{})
-	keysPath := aiKeysTempPath(t, srv)
+func TestAIRuntimeForUserIsolatesEncryptedCredentials(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
 	ctx := context.Background()
+	userA := insertAIRuntimeTestUser(t, st, "runtime-a@example.invalid")
+	userB := insertAIRuntimeTestUser(t, st, "runtime-b@example.invalid")
+	masterKey := bytes.Repeat([]byte{0x71}, credential.MasterKeyBytes)
+	cipher, err := credential.NewAESGCMCipher(masterKey)
+	if err != nil {
+		t.Fatalf("NewAESGCMCipher: %v", err)
+	}
+	srv.SetCredentialCipher(cipher)
+	srv.newAIProvider = func(provider, key, model string, _ time.Duration) (ai.Provider, error) {
+		return &fingerprintProvider{name: provider, keyFingerprint: keyFingerprint(key)}, nil
+	}
 
-	t.Run("provider chosen but no key → AI stays off", func(t *testing.T) {
-		saveProfileJSON(t, srv, profile.Profile{AIProvider: "anthropic"})
-		if err := srv.ReconfigureAI(ctx); err != nil {
-			t.Fatalf("ReconfigureAI: %v", err)
-		}
-		if srv.ai != nil {
-			t.Fatal("a provider with no saved key must leave AI off (regex fallback)")
-		}
-	})
-
-	t.Run("provider + key → AI on with the right version", func(t *testing.T) {
-		if err := ai.SaveKeys(keysPath, map[string]string{"anthropic": "sk-ant-test"}); err != nil {
-			t.Fatalf("SaveKeys: %v", err)
-		}
-		saveProfileJSON(t, srv, profile.Profile{AIProvider: "anthropic", AIModel: "claude-x"})
-		if err := srv.ReconfigureAI(ctx); err != nil {
-			t.Fatalf("ReconfigureAI: %v", err)
-		}
-		if srv.ai == nil {
-			t.Fatal("a provider WITH a key must turn AI on")
-		}
-		if srv.ai.Name() != "anthropic" || srv.aiModel != "claude-x" {
-			t.Fatalf("provider=%q model=%q, want anthropic/claude-x", srv.ai.Name(), srv.aiModel)
-		}
-		if srv.aiVersion != ai.AIVersion("anthropic", "claude-x") {
-			t.Fatal("aiVersion not derived from the configured provider+model")
-		}
-	})
-
-	t.Run("blank model falls back to the provider default", func(t *testing.T) {
-		saveProfileJSON(t, srv, profile.Profile{AIProvider: "anthropic"}) // no model
-		if err := srv.ReconfigureAI(ctx); err != nil {
-			t.Fatalf("ReconfigureAI: %v", err)
-		}
-		if srv.aiModel != ai.DefaultModel("anthropic") {
-			t.Fatalf("model = %q, want the default %q", srv.aiModel, ai.DefaultModel("anthropic"))
-		}
-	})
-
-	t.Run("selecting 없음 turns AI back off", func(t *testing.T) {
-		saveProfileJSON(t, srv, profile.Profile{AIProvider: ""})
-		if err := srv.ReconfigureAI(ctx); err != nil {
-			t.Fatalf("ReconfigureAI: %v", err)
-		}
-		if srv.ai != nil {
-			t.Fatal("an empty provider must turn AI off")
-		}
-	})
-
-	t.Run("daily cap from the profile is applied", func(t *testing.T) {
-		saveProfileJSON(t, srv, profile.Profile{AIProvider: "", AIDailyTokenCap: 12345})
-		if err := srv.ReconfigureAI(ctx); err != nil {
-			t.Fatalf("ReconfigureAI: %v", err)
-		}
-		if srv.aiDailyTokenCap != 12345 {
-			t.Fatalf("daily cap = %d, want 12345 from the profile", srv.aiDailyTokenCap)
-		}
-	})
-
-	t.Run("estimated USD caps are mapped into runtime token ceilings", func(t *testing.T) {
-		saveProfileJSON(t, srv, profile.Profile{
-			AIProvider:           "",
-			AIMonthlyUSDCapCents: 2,
-			AIDailyUSDCapCents:   3,
+	keys := map[int64]string{
+		userA: "synthetic-user-a-provider-key",
+		userB: "synthetic-user-b-provider-key",
+	}
+	profiles := map[int64]profile.Profile{
+		userA: {
+			AIProvider:           "anthropic",
+			AIModel:              "model-a",
+			AIDailyTokenCap:      12345,
+			AIPerCallCap:         7,
+			AIMonthlyUSDCapCents: 9,
+			AIDailyUSDCapCents:   8,
+			AIRunUSDCapCents:     7,
+		},
+		userB: {
+			AIProvider:           "anthropic",
+			AIModel:              "model-b",
+			AIDailyTokenCap:      54321,
+			AIPerCallCap:         11,
+			AIMonthlyUSDCapCents: 6,
+			AIDailyUSDCapCents:   5,
 			AIRunUSDCapCents:     4,
-		})
-		if err := srv.ReconfigureAI(ctx); err != nil {
-			t.Fatalf("ReconfigureAI: %v", err)
+		},
+	}
+	for _, userID := range []int64{userA, userB} {
+		saveAIRuntimeProfile(t, st, userID, profiles[userID])
+		saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", keys[userID])
+	}
+
+	runtimeA, err := srv.aiRuntimeForUser(ctx, userA)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser user A: %v", err)
+	}
+	runtimeB, err := srv.aiRuntimeForUser(ctx, userB)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser user B: %v", err)
+	}
+	if runtimeA == nil || runtimeB == nil {
+		t.Fatalf("resolved runtimes = A:%v B:%v, want both non-nil", runtimeA != nil, runtimeB != nil)
+	}
+	providerA := runtimeA.Provider.(*fingerprintProvider)
+	providerB := runtimeB.Provider.(*fingerprintProvider)
+	if providerA.keyFingerprint != keyFingerprint(keys[userA]) || providerB.keyFingerprint != keyFingerprint(keys[userB]) {
+		t.Fatal("provider factory received the wrong user's credential fingerprint")
+	}
+	if providerA.keyFingerprint == providerB.keyFingerprint {
+		t.Fatal("distinct user credentials produced the same test fingerprint")
+	}
+	if runtimeA.UserID != userA || runtimeA.Version != ai.AIVersion("anthropic", "model-a") ||
+		runtimeA.RunTokenCap != aiRunTokenCapForUSDCents(7) ||
+		runtimeA.DailyTokenCap != minPositive(12345, aiDailyTokenCapForUSDCents(8)) ||
+		runtimeA.MonthlyTokenCap != aiMonthlyTokenCapForUSDCents(9) || runtimeA.PerCallCap != 7 {
+		t.Fatalf("user A runtime metadata = %+v", runtimeA)
+	}
+	if runtimeB.UserID != userB || runtimeB.Version != ai.AIVersion("anthropic", "model-b") || runtimeB.PerCallCap != 11 {
+		t.Fatalf("user B runtime metadata = %+v", runtimeB)
+	}
+}
+
+func TestAIRuntimeForUserFallbacksAndSafeFailures(t *testing.T) {
+	t.Run("AI disabled", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userID := insertAIRuntimeTestUser(t, st, "runtime-disabled@example.invalid")
+		saveAIRuntimeProfile(t, st, userID, profile.Profile{})
+		runtime, err := srv.aiRuntimeForUser(context.Background(), userID)
+		if err != nil || runtime != nil {
+			t.Fatalf("aiRuntimeForUser = runtime %v err=%v, want nil nil", runtime, err)
 		}
-		if srv.aiMonthlyTokenCap != aiMonthlyTokenCapForUSDCents(2) {
-			t.Fatalf("monthly token cap = %d, want mapped cap", srv.aiMonthlyTokenCap)
+	})
+
+	t.Run("missing credential", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userID := insertAIRuntimeTestUser(t, st, "runtime-missing@example.invalid")
+		saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic"})
+		runtime, err := srv.aiRuntimeForUser(context.Background(), userID)
+		if err != nil || runtime != nil {
+			t.Fatalf("aiRuntimeForUser = runtime %v err=%v, want nil nil", runtime, err)
 		}
-		if srv.aiDailyTokenCap != aiDailyTokenCapForUSDCents(3) {
-			t.Fatalf("daily token cap = %d, want mapped cap", srv.aiDailyTokenCap)
+	})
+
+	t.Run("cipher not configured", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userID := insertAIRuntimeTestUser(t, st, "runtime-no-cipher@example.invalid")
+		cipher := newAIRuntimeTestCipher(t, 0x41)
+		saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic"})
+		saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "synthetic-no-cipher-key")
+		if _, err := srv.aiRuntimeForUser(context.Background(), userID); err == nil || !strings.Contains(err.Error(), "credential cipher") {
+			t.Fatalf("aiRuntimeForUser error = %v, want stable missing-cipher error", err)
 		}
-		if srv.aiRunTokenCap != aiRunTokenCapForUSDCents(4) {
-			t.Fatalf("run token cap = %d, want mapped cap", srv.aiRunTokenCap)
+	})
+
+	t.Run("wrong master key", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userID := insertAIRuntimeTestUser(t, st, "runtime-wrong-key@example.invalid")
+		encryptingCipher := newAIRuntimeTestCipher(t, 0x42)
+		srv.SetCredentialCipher(newAIRuntimeTestCipher(t, 0x43))
+		saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic"})
+		saveAIRuntimeCredential(t, st, encryptingCipher, userID, "anthropic", "synthetic-wrong-master-key")
+		if _, err := srv.aiRuntimeForUser(context.Background(), userID); err == nil || !strings.Contains(err.Error(), "decrypt") {
+			t.Fatalf("aiRuntimeForUser error = %v, want non-secret decrypt failure", err)
+		}
+	})
+
+	t.Run("moved ciphertext", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userA := insertAIRuntimeTestUser(t, st, "runtime-moved-a@example.invalid")
+		userB := insertAIRuntimeTestUser(t, st, "runtime-moved-b@example.invalid")
+		cipher := newAIRuntimeTestCipher(t, 0x44)
+		srv.SetCredentialCipher(cipher)
+		saveAIRuntimeProfile(t, st, userB, profile.Profile{AIProvider: "anthropic"})
+		ciphertext, nonce, version, err := cipher.Seal(userA, "anthropic", "synthetic-moved-key")
+		if err != nil {
+			t.Fatalf("Seal: %v", err)
+		}
+		if err := st.UpsertUserAICredential(context.Background(), storage.EncryptedAICredential{
+			UserID: userB, Provider: "anthropic", Ciphertext: ciphertext, Nonce: nonce, EncryptionVersion: version,
+		}); err != nil {
+			t.Fatalf("store moved credential: %v", err)
+		}
+		if _, err := srv.aiRuntimeForUser(context.Background(), userB); err == nil || !strings.Contains(err.Error(), "decrypt") {
+			t.Fatalf("aiRuntimeForUser error = %v, want moved-ciphertext failure", err)
+		}
+	})
+
+	t.Run("unknown encryption version", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userID := insertAIRuntimeTestUser(t, st, "runtime-version@example.invalid")
+		cipher := newAIRuntimeTestCipher(t, 0x45)
+		srv.SetCredentialCipher(cipher)
+		saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic"})
+		ciphertext, nonce, _, err := cipher.Seal(userID, "anthropic", "synthetic-version-key")
+		if err != nil {
+			t.Fatalf("Seal: %v", err)
+		}
+		if err := st.UpsertUserAICredential(context.Background(), storage.EncryptedAICredential{
+			UserID: userID, Provider: "anthropic", Ciphertext: ciphertext, Nonce: nonce, EncryptionVersion: 2,
+		}); err != nil {
+			t.Fatalf("store unknown-version credential: %v", err)
+		}
+		if _, err := srv.aiRuntimeForUser(context.Background(), userID); err == nil || !strings.Contains(err.Error(), "unsupported encryption version") {
+			t.Fatalf("aiRuntimeForUser error = %v, want unknown-version failure", err)
+		}
+	})
+
+	t.Run("provider construction failure", func(t *testing.T) {
+		srv, st := newPostgresTestServer(t, &fakeScraper{})
+		userID := insertAIRuntimeTestUser(t, st, "runtime-provider@example.invalid")
+		cipher := newAIRuntimeTestCipher(t, 0x46)
+		srv.SetCredentialCipher(cipher)
+		saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "synthetic-provider", AIModel: "synthetic-model"})
+		saveAIRuntimeCredential(t, st, cipher, userID, "synthetic-provider", "synthetic-provider-key")
+		if _, err := srv.aiRuntimeForUser(context.Background(), userID); err == nil || !strings.Contains(err.Error(), "construct AI provider") {
+			t.Fatalf("aiRuntimeForUser error = %v, want provider construction failure", err)
 		}
 	})
 }
 
-// TestProfileSaveWritesKeyAt0600AndEnablesAI covers the verify bar: the settings
-// UI saves a key at 0600 and AI then renders.
-func TestProfileSaveWritesKeyAt0600AndEnablesAI(t *testing.T) {
-	srv, _ := newTestServer(t, &fakeScraper{})
-	keysPath := aiKeysTempPath(t, srv)
+type fingerprintProvider struct {
+	name           string
+	keyFingerprint string
+}
 
-	form := url.Values{}
-	form.Set("ai_provider", "anthropic")
-	form.Set("ai_model", "claude-x")
-	form.Set("ai_key", "sk-ant-secret")
-	form.Set("min_score", "40")
-	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
+func (p *fingerprintProvider) Name() string { return p.name }
+func (p *fingerprintProvider) Extract(context.Context, string) (ai.Extraction, ai.Usage, error) {
+	return ai.Extraction{}, ai.Usage{}, ai.ErrNotImplemented
+}
+func (p *fingerprintProvider) ScoreDelta(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+	return nil, ai.Usage{}, ai.ErrNotImplemented
+}
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 303 (redirect to /)", rec.Code)
+func keyFingerprint(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:4])
+}
+
+func insertAIRuntimeTestUser(t *testing.T, st *storage.Store, email string) int64 {
+	t.Helper()
+	var userID int64
+	if err := st.SQLDB().QueryRow(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ($1, 'synthetic-password-hash', now(), now())
+RETURNING id`, email).Scan(&userID); err != nil {
+		t.Fatalf("insert AI runtime user: %v", err)
 	}
-	// The key file landed at 0600.
-	info, err := os.Stat(keysPath)
+	return userID
+}
+
+func saveAIRuntimeProfile(t *testing.T, st *storage.Store, userID int64, p profile.Profile) {
+	t.Helper()
+	profileJSON, err := profile.Marshal(p)
 	if err != nil {
-		t.Fatalf("stat key file: %v", err)
+		t.Fatalf("profile.Marshal: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("key file mode = %o, want 600", perm)
+	if _, _, err := st.SaveProfileForUser(context.Background(), userID, profileJSON); err != nil {
+		t.Fatalf("SaveProfileForUser: %v", err)
 	}
-	keys, err := ai.LoadKeys(keysPath)
-	if err != nil || keys["anthropic"] != "sk-ant-secret" {
-		t.Fatalf("saved keys = %v err=%v, want anthropic→sk-ant-secret", keys, err)
-	}
-	// AI is now live on the running server.
-	if srv.ai == nil {
-		t.Fatal("AI must be enabled after saving a provider + key")
-	}
+}
 
-	t.Run("re-saving with a blank key keeps the existing key", func(t *testing.T) {
-		form := url.Values{}
-		form.Set("ai_provider", "anthropic")
-		form.Set("ai_key", "") // blank — the user didn't retype the secret
-		form.Set("min_score", "40")
-		req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		srv.Handler().ServeHTTP(httptest.NewRecorder(), req)
+func saveAIRuntimeCredential(
+	t *testing.T,
+	st *storage.Store,
+	cipher credential.Cipher,
+	userID int64,
+	provider, plaintext string,
+) {
+	t.Helper()
+	ciphertext, nonce, version, err := cipher.Seal(userID, provider, plaintext)
+	if err != nil {
+		t.Fatalf("Seal credential: %v", err)
+	}
+	if err := st.UpsertUserAICredential(context.Background(), storage.EncryptedAICredential{
+		UserID:            userID,
+		Provider:          provider,
+		Ciphertext:        ciphertext,
+		Nonce:             nonce,
+		EncryptionVersion: version,
+	}); err != nil {
+		t.Fatalf("UpsertUserAICredential: %v", err)
+	}
+}
 
-		keys, _ := ai.LoadKeys(keysPath)
-		if keys["anthropic"] != "sk-ant-secret" {
-			t.Fatalf("blank key must not wipe the saved key; got %q", keys["anthropic"])
-		}
-		if srv.ai == nil {
-			t.Fatal("AI must stay enabled when the key is preserved")
-		}
-	})
-
-	t.Run("the form shows the key as saved, never the secret", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
-		body := rec.Body.String()
-		if strings.Contains(body, "sk-ant-secret") {
-			t.Fatal("the profile form must NEVER re-render the secret key")
-		}
-		if !strings.Contains(body, "저장됨") {
-			t.Fatal("the form should show the key as saved (•••• 저장됨)")
-		}
-	})
+func newAIRuntimeTestCipher(t *testing.T, fill byte) credential.Cipher {
+	t.Helper()
+	cipher, err := credential.NewAESGCMCipher(bytes.Repeat([]byte{fill}, credential.MasterKeyBytes))
+	if err != nil {
+		t.Fatalf("NewAESGCMCipher: %v", err)
+	}
+	return cipher
 }
 
 // TestDailyTokenCapHaltsAIRegexContinues covers: the daily cap halts AI while
@@ -198,25 +281,25 @@ func TestDailyTokenCapHaltsAIRegexContinues(t *testing.T) {
 	}
 	srv, st := newTestServer(t, f)
 	stub := newcomerStub()
-	srv.SetAIProvider(stub, "test-model")
-	srv.aiDailyTokenCap = 50 // tiny daily cap
+	runtime := testAIRuntime(1, stub, "test-model")
+	runtime.DailyTokenCap = 50 // tiny daily cap
 	saveSinipProfile(t, srv)
 	ctx := context.Background()
 
 	// Pre-spend today's budget so the run starts already over the daily cap.
 	day := time.Now().UTC().Format("2006-01-02")
-	if err := st.AddAIUsage(ctx, day, 100, 0); err != nil {
+	if err := st.AddAIUsage(ctx, 1, day, 100, 0); err != nil {
 		t.Fatalf("seed usage: %v", err)
 	}
 
-	res, err := srv.runScrape(ctx, noopEmit)
+	res, err := srv.runScrape(ctx, noopEmit, 1, runtime)
 	if err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if stub.Calls != 0 {
 		t.Errorf("Extract calls = %d, want 0 (daily cap already exhausted)", stub.Calls)
 	}
-	if n := aiExtractionCount(t, srv); n != 0 {
+	if n := aiExtractionCount(t, srv, runtime); n != 0 {
 		t.Errorf("ai_extractions rows = %d, want 0 (AI halted)", n)
 	}
 	// Regex scoring still ran: the posting is present and scored.
@@ -226,24 +309,22 @@ func TestDailyTokenCapHaltsAIRegexContinues(t *testing.T) {
 }
 
 func TestDailyUSDCapHaltsManualRerate(t *testing.T) {
-	srv, _ := seedRerate(t)
+	srv, _, _ := seedRerate(t)
 	ctx := context.Background()
 	saveProfileJSON(t, srv, profile.Profile{
 		CareerYears:        0,
 		JobLikes:           "백엔드 서버 개발",
 		AIDailyUSDCapCents: 1,
 	})
-	if err := srv.ReconfigureAI(ctx); err != nil {
-		t.Fatalf("ReconfigureAI: %v", err)
-	}
 	stub := rerateStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
+	runtime.DailyTokenCap = aiDailyTokenCapForUSDCents(1)
 	day := time.Now().UTC().Format("2006-01-02")
-	if err := srv.store.AddAIUsage(ctx, day, aiDailyTokenCapForUSDCents(1), 0); err != nil {
+	if err := srv.store.AddAIUsage(ctx, 1, day, aiDailyTokenCapForUSDCents(1), 0); err != nil {
 		t.Fatalf("seed daily usage: %v", err)
 	}
 
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 	if stub.ScoreDeltaCalls != 0 {
@@ -252,25 +333,23 @@ func TestDailyUSDCapHaltsManualRerate(t *testing.T) {
 }
 
 func TestMonthlyUSDCapHaltsManualRerate(t *testing.T) {
-	srv, _ := seedRerate(t)
+	srv, _, _ := seedRerate(t)
 	ctx := context.Background()
 	saveProfileJSON(t, srv, profile.Profile{
 		CareerYears:          0,
 		JobLikes:             "백엔드 서버 개발",
 		AIMonthlyUSDCapCents: 1,
 	})
-	if err := srv.ReconfigureAI(ctx); err != nil {
-		t.Fatalf("ReconfigureAI: %v", err)
-	}
 	stub := rerateStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
+	runtime.MonthlyTokenCap = aiMonthlyTokenCapForUSDCents(1)
 	now := time.Now().UTC()
 	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	if err := srv.store.AddAIUsage(ctx, firstOfMonth, aiMonthlyTokenCapForUSDCents(1), 0); err != nil {
+	if err := srv.store.AddAIUsage(ctx, 1, firstOfMonth, aiMonthlyTokenCapForUSDCents(1), 0); err != nil {
 		t.Fatalf("seed monthly usage: %v", err)
 	}
 
-	if _, err := srv.runRerate(ctx, "today", noopEmit); err != nil {
+	if _, err := srv.runRerate(ctx, "today", noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runRerate: %v", err)
 	}
 	if stub.ScoreDeltaCalls != 0 {
@@ -286,15 +365,15 @@ func TestBudgetLedgerPersistsAcrossRestart(t *testing.T) {
 		details: map[string]scraper.Posting{"1": listingPosting("1", "백엔드 신입")},
 	}
 	srv, st := newTestServer(t, f)
-	srv.SetAIProvider(newcomerStub(), "test-model") // each Extract spends 120 tokens
+	runtime := testAIRuntime(1, newcomerStub(), "test-model") // each Extract spends 120 tokens
 	saveSinipProfile(t, srv)
 	ctx := context.Background()
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	day := time.Now().UTC().Format("2006-01-02")
-	in, out, _ := st.AIUsageForDay(ctx, day)
+	in, out, _ := st.AIUsageForDay(ctx, 1, day)
 	if in != 100 || out != 20 {
 		t.Fatalf("ledger after scrape = (%d,%d), want (100,20) — the debit must persist", in, out)
 	}
@@ -302,8 +381,8 @@ func TestBudgetLedgerPersistsAcrossRestart(t *testing.T) {
 	// "Restart": a brand-new Server over the same store. Its budget must start
 	// from the persisted daily total, not zero.
 	srv2 := New(st, f)
-	srv2.SetAIProvider(newcomerStub(), "test-model")
-	b := srv2.newAIBudget(ctx)
+	runtime2 := testAIRuntime(1, newcomerStub(), "test-model")
+	b := srv2.newAIBudget(ctx, 1, runtime2)
 	if b == nil || b.dailyAtStart != 120 {
 		t.Fatalf("new run's dailyAtStart = %v, want 120 (read from the persisted ledger)", b)
 	}

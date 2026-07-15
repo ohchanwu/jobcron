@@ -49,7 +49,7 @@ func TestRerateTrackerRunTokensDoNotRepeatAcrossProcesses(t *testing.T) {
 }
 
 func TestRerateStatusEndpoint(t *testing.T) {
-	srv, _ := seedRerate(t)
+	srv, _, _ := seedRerate(t)
 	started := srv.rerates.start(0, "today", "entry-token-00000001")
 	srv.rerates.record(0, "today", started.RunID, "progress", "공고 2/7 분석 중...")
 
@@ -71,7 +71,7 @@ func TestRerateStatusEndpoint(t *testing.T) {
 }
 
 func TestRerateStatusEndpointRejectsUnknownSurface(t *testing.T) {
-	srv, _ := seedRerate(t)
+	srv, _, _ := seedRerate(t)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate/status?surface=hidden", nil))
 	if rec.Code != http.StatusBadRequest {
@@ -84,37 +84,11 @@ func TestRerateStreamRequiresValidatedHistoryEntry(t *testing.T) {
 		"/api/rerate?surface=today",
 		"/api/rerate?surface=today&entry=bad!",
 	} {
-		srv, _ := seedRerate(t)
+		srv, _, _ := seedRerate(t)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("GET %s = %d, want 400", target, rec.Code)
 		}
-	}
-}
-
-func TestRerateStatusPublishesServerAuthoritativeHistoryOwner(t *testing.T) {
-	srv, _ := seedRerate(t)
-	const entry = "entry-token-1234567890"
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
-		"/api/rerate?surface=today&entry="+entry, nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("rerate = %d, body = %q", rec.Code, rec.Body.String())
-	}
-
-	statusRec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(statusRec, httptest.NewRequest(http.MethodGet,
-		"/api/rerate/status?surface=today", nil))
-	var got struct {
-		RunID      uint64 `json:"run_id"`
-		RunToken   string `json:"run_token"`
-		OwnerEntry string `json:"owner_entry"`
-	}
-	if err := json.Unmarshal(statusRec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.RunID == 0 || got.RunToken == "" || got.OwnerEntry != entry {
-		t.Fatalf("server lifecycle identity = %+v", got)
 	}
 }

@@ -113,10 +113,10 @@ func runImport(ctx context.Context, opts importOptions) error {
 	if err := copyAIExtractions(ctx, sourceDB, tx); err != nil {
 		return err
 	}
-	if err := copyAIScores(ctx, sourceDB, tx); err != nil {
+	if err := copyAIScores(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
-	if err := copyAIUsage(ctx, sourceDB, tx); err != nil {
+	if err := copyAIUsage(ctx, sourceDB, tx, ownerID); err != nil {
 		return err
 	}
 	if err := resetPostgresSequences(ctx, tx); err != nil {
@@ -390,7 +390,7 @@ ON CONFLICT (posting_id, content_hash, ai_version) DO UPDATE SET
 	return rows.Err()
 }
 
-func copyAIScores(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+func copyAIScores(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
 	rows, err := source.QueryContext(ctx, `SELECT posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at FROM ai_scores`)
 	if err != nil {
 		return fmt.Errorf("import: read ai_scores: %w", err)
@@ -405,20 +405,20 @@ func copyAIScores(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
 			return fmt.Errorf("import: scan ai_score: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO ai_scores (posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
-VALUES ($1,$2,$3,$4,$5,$6)
-ON CONFLICT (posting_id, ai_input_hash, ai_version) DO UPDATE SET
+INSERT INTO ai_scores (user_id, posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+ON CONFLICT (user_id, posting_id, ai_input_hash, ai_version) DO UPDATE SET
     items_json = EXCLUDED.items_json,
     net_delta = EXCLUDED.net_delta,
     computed_at = EXCLUDED.computed_at`,
-			postingID, inputHash, aiVersion, itemsJSON, netDelta, computedAt.UTC()); err != nil {
+			ownerID, postingID, inputHash, aiVersion, itemsJSON, netDelta, computedAt.UTC()); err != nil {
 			return fmt.Errorf("import: write ai_score for posting %d: %w", postingID, err)
 		}
 	}
 	return rows.Err()
 }
 
-func copyAIUsage(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+func copyAIUsage(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
 	rows, err := source.QueryContext(ctx, `SELECT day, input_tokens, output_tokens FROM ai_usage`)
 	if err != nil {
 		return fmt.Errorf("import: read ai_usage: %w", err)
@@ -431,12 +431,12 @@ func copyAIUsage(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
 			return fmt.Errorf("import: scan ai_usage: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO ai_usage (day, input_tokens, output_tokens)
-VALUES ($1, $2, $3)
-ON CONFLICT (day) DO UPDATE SET
+INSERT INTO ai_usage (user_id, day, input_tokens, output_tokens)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id, day) DO UPDATE SET
     input_tokens = GREATEST(ai_usage.input_tokens, EXCLUDED.input_tokens),
     output_tokens = GREATEST(ai_usage.output_tokens, EXCLUDED.output_tokens)`,
-			day, inputTokens, outputTokens); err != nil {
+			ownerID, day, inputTokens, outputTokens); err != nil {
 			return fmt.Errorf("import: write ai_usage for day %s: %w", day, err)
 		}
 	}

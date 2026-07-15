@@ -174,7 +174,7 @@ func TestBriefingStatus(t *testing.T) {
 				t.Fatalf("UpsertPosting(%s): %v", posting.SourcePostingID, err)
 			}
 		}
-		if _, err := srv.scoreAll(context.Background()); err != nil {
+		if _, err := srv.scoreAll(context.Background(), 0, nil); err != nil {
 			t.Fatalf("scoreAll: %v", err)
 		}
 
@@ -193,7 +193,7 @@ func TestBriefingStatus(t *testing.T) {
 		if _, _, err := st.UpsertPosting(context.Background(), posting); err != nil {
 			t.Fatalf("UpsertPosting: %v", err)
 		}
-		if _, err := srv.scoreAll(context.Background()); err != nil {
+		if _, err := srv.scoreAll(context.Background(), 0, nil); err != nil {
 			t.Fatalf("scoreAll: %v", err)
 		}
 		got := requestBriefingStatus(t, srv)
@@ -312,7 +312,7 @@ func TestRunScrapeStoresAndScoresPostings(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
-	res, err := srv.runScrape(ctx, noopEmit)
+	res, err := srv.runScrape(ctx, noopEmit, 0, nil)
 	if err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestRunScrapeWithHistoryRecordsScheduledSuccess(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
-	res, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerScheduled, noopEmit)
+	res, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerScheduled, noopEmit, 0, nil)
 	if err != nil {
 		t.Fatalf("runScrapeWithHistory: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestRunScrapeWithHistoryRecordsPanicAsFailure(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
-	if _, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, noopEmit); err == nil {
+	if _, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, noopEmit, 0, nil); err == nil {
 		t.Fatal("runScrapeWithHistory succeeded, want panic converted to error")
 	}
 	run, ok, err := st.LatestScrapeRun(ctx)
@@ -407,7 +407,7 @@ func TestRunScrapeWithHistoryRecordsReturnedErrorAsFailure(t *testing.T) {
 		t.Fatalf("SaveProfile malformed JSON fixture: %v", err)
 	}
 
-	if _, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, noopEmit); err == nil {
+	if _, err := srv.runScrapeWithHistory(ctx, storage.ScrapeTriggerManual, noopEmit, 0, nil); err == nil {
 		t.Fatal("runScrapeWithHistory succeeded with malformed profile, want returned error")
 	}
 	run, ok, err := st.LatestScrapeRun(ctx)
@@ -449,7 +449,7 @@ func TestRunScrapeSkipsDetailForFreshKnownPostings(t *testing.T) {
 		t.Fatalf("seed UpsertPosting: %v", err)
 	}
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 0, nil); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if len(f.detailCalls) != 1 || f.detailCalls[0] != "2" {
@@ -480,7 +480,7 @@ func TestRunScrapeRefetchesStaleDetail(t *testing.T) {
 		t.Fatalf("seed UpsertPosting: %v", err)
 	}
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 0, nil); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 
@@ -523,7 +523,7 @@ func TestRunScrapeSweepsStalePostings(t *testing.T) {
 			sweepStatus = data
 		}
 	}
-	res, err := srv.runScrape(ctx, emit)
+	res, err := srv.runScrape(ctx, emit, 0, nil)
 	if err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
@@ -547,7 +547,7 @@ func TestRunScrapeIsolatesPerSourceFailures(t *testing.T) {
 	// the whole briefing.
 	f := &fakeScraper{accessErr: errors.New("robots.txt disallows")}
 	srv, _ := newTestServer(t, f)
-	res, err := srv.runScrape(context.Background(), noopEmit)
+	res, err := srv.runScrape(context.Background(), noopEmit, 0, nil)
 	if err != nil {
 		t.Fatalf("runScrape returned unexpected error: %v", err)
 	}
@@ -805,7 +805,7 @@ func TestDashboardHidesPostingsBelowMinScore(t *testing.T) {
 		if _, _, err := st.UpsertPosting(ctx, p); err != nil {
 			t.Fatalf("UpsertPosting: %v", err)
 		}
-		if _, err := srv.scoreAll(ctx); err != nil {
+		if _, err := srv.scoreAll(ctx, 0, nil); err != nil {
 			t.Fatalf("scoreAll: %v", err)
 		}
 		rec := httptest.NewRecorder()
@@ -846,7 +846,7 @@ func TestDashboardShowsScoredPostings(t *testing.T) {
 	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 0, nil); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"net"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/ohchanwu/jobcron/internal/appdata"
 	"github.com/ohchanwu/jobcron/internal/config"
+	"github.com/ohchanwu/jobcron/internal/credential"
 )
 
 func TestListenFallsBackWhenPortBusy(t *testing.T) {
@@ -65,6 +67,58 @@ func TestOpenConfiguredStoreDatabaseURLUsesPostgresOutsideProduction(t *testing.
 	}
 	if got, want := err.Error(), "storage: open postgres"; len(got) < len(want) || got[:len(want)] != want {
 		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
+	}
+}
+
+func TestConfiguredStoreCredentialCipherUsesConfiguredKey(t *testing.T) {
+	masterKey := bytes.Repeat([]byte{0x31}, credential.MasterKeyBytes)
+	cipher, err := credentialCipherForConfig(config.Config{CredentialEncryptionKey: masterKey})
+	if err != nil {
+		t.Fatalf("credentialCipherForConfig: %v", err)
+	}
+	ciphertext, nonce, version, err := cipher.Seal(7, "anthropic", "synthetic-configured-key")
+	if err != nil {
+		t.Fatalf("Seal: %v", err)
+	}
+	opened, err := cipher.Open(7, "anthropic", ciphertext, nonce, version)
+	if err != nil || opened != "synthetic-configured-key" {
+		t.Fatalf("configured cipher round trip opened=%v err=%v", opened == "synthetic-configured-key", err)
+	}
+}
+
+func TestConfiguredStoreCredentialCipherRequiresProductionKey(t *testing.T) {
+	if _, err := credentialCipherForConfig(config.Config{Production: true}); err == nil {
+		t.Fatal("credentialCipherForConfig accepted production without a master key")
+	}
+}
+
+func TestConfiguredStoreCredentialCipherCreatesProtectedLocalKey(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
+
+	cipher, err := credentialCipherForConfig(config.Config{})
+	if err != nil {
+		t.Fatalf("credentialCipherForConfig: %v", err)
+	}
+	ciphertext, nonce, version, err := cipher.Seal(8, "anthropic", "synthetic-local-key")
+	if err != nil {
+		t.Fatalf("Seal: %v", err)
+	}
+	if _, err := cipher.Open(8, "anthropic", ciphertext, nonce, version); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	path, err := credential.DefaultMasterKeyPath()
+	if err != nil {
+		t.Fatalf("DefaultMasterKeyPath: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat local master key: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("local master key mode = %o, want 600", perm)
 	}
 }
 

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
@@ -11,11 +12,16 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/ohchanwu/jobcron/internal/ai"
 	"github.com/ohchanwu/jobcron/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/credential"
+	"github.com/ohchanwu/jobcron/internal/profile"
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
@@ -72,6 +78,283 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 	assertBookmarkedForUser(t, st, userB, userBOnlyPostingID, true)
 	assertPageMissing(t, srv, cookieA, "/bookmarks", "유저B 전용 북마크")
 	assertPageContains(t, srv, cookieB, "/bookmarks", "유저B 전용 북마크")
+}
+
+type countingCipher struct {
+	inner credential.Cipher
+	opens atomic.Int32
+}
+
+type failingSealCipher struct{ err error }
+
+func (c failingSealCipher) Seal(int64, string, string) ([]byte, []byte, int16, error) {
+	return nil, nil, 0, c.err
+}
+
+type sealCountingCipher struct {
+	inner credential.Cipher
+	seals atomic.Int32
+}
+
+func (c *sealCountingCipher) Seal(userID int64, provider, plaintext string) ([]byte, []byte, int16, error) {
+	c.seals.Add(1)
+	return c.inner.Seal(userID, provider, plaintext)
+}
+func (c *sealCountingCipher) Open(userID int64, provider string, ciphertext, nonce []byte, version int16) (string, error) {
+	return c.inner.Open(userID, provider, ciphertext, nonce, version)
+}
+func (c failingSealCipher) Open(int64, string, []byte, []byte, int16) (string, error) {
+	return "", c.err
+}
+
+func TestProductionProfileSaveEncryptsKeyAndBlankKeepsCredential(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-key@example.invalid", "profile-key-session")
+	cipher := newAIRuntimeTestCipher(t, 0x51)
+	srv.SetCredentialCipher(cipher)
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return rerateStub(), nil }
+
+	postProfile := func(key, likes string) *httptest.ResponseRecorder {
+		form := url.Values{
+			"ai_provider": {"anthropic"},
+			"ai_model":    {"claude-haiku-4-5-20251001"},
+			"ai_key":      {key},
+			"job_likes":   {likes},
+			"min_score":   {"0"},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(cookie)
+		addCSRFToRequest(req, srv, cookie)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := postProfile("synthetic-profile-provider-key", "first goal"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("new-key save status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	before, ok, err := st.UserAICredential(context.Background(), userID, "anthropic")
+	if err != nil || !ok {
+		t.Fatalf("UserAICredential after save: ok=%v err=%v", ok, err)
+	}
+	opened, err := cipher.Open(userID, "anthropic", before.Ciphertext, before.Nonce, before.EncryptionVersion)
+	if err != nil || opened != "synthetic-profile-provider-key" {
+		t.Fatalf("stored credential did not decrypt to submitted value: matched=%v err=%v", opened == "synthetic-profile-provider-key", err)
+	}
+	if rec := postProfile("", "second goal"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("blank-key save status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	after, ok, err := st.UserAICredential(context.Background(), userID, "anthropic")
+	if err != nil || !ok || string(after.Ciphertext) != string(before.Ciphertext) || string(after.Nonce) != string(before.Nonce) || after.EncryptionVersion != before.EncryptionVersion {
+		t.Fatalf("blank key changed credential: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestProductionProfileSaveEncryptionFailureChangesNothing(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-seal-fail@example.invalid", "profile-seal-fail-session")
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{JobLikes: "unchanged goal"})
+	srv.SetCredentialCipher(failingSealCipher{err: errors.New("synthetic seal failure")})
+	form := url.Values{"ai_provider": {"anthropic"}, "ai_key": {"synthetic-new-key"}, "job_likes": {"must not persist"}}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	addCSRFToRequest(req, srv, cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "synthetic-new-key") {
+		t.Fatalf("seal failure status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	got, _, ok, err := st.ProfileForUser(context.Background(), userID)
+	if err != nil || !ok || !strings.Contains(got, "unchanged goal") || strings.Contains(got, "must not persist") {
+		t.Fatalf("profile changed after encryption failure: ok=%v err=%v profile=%s", ok, err, got)
+	}
+	if _, ok, err := st.UserAICredential(context.Background(), userID, "anthropic"); err != nil || ok {
+		t.Fatalf("credential persisted after encryption failure: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestProductionProfileFailureAfterKeyPreparationRollsBackCredential(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-rollback@example.invalid", "profile-rollback-session")
+	base := newAIRuntimeTestCipher(t, 0x52)
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic", JobLikes: "old goal"})
+	saveAIRuntimeCredential(t, st, base, userID, "anthropic", "synthetic-old-key")
+	before, _, _ := st.UserAICredential(context.Background(), userID, "anthropic")
+	spy := &sealCountingCipher{inner: base}
+	srv.SetCredentialCipher(spy)
+	if _, err := st.SQLDB().ExecContext(context.Background(), `
+CREATE FUNCTION fail_handler_profile_save() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'synthetic profile failure'; END $$;
+CREATE TRIGGER fail_handler_profile_save
+BEFORE INSERT OR UPDATE ON profiles
+FOR EACH ROW EXECUTE FUNCTION fail_handler_profile_save()`); err != nil {
+		t.Fatalf("install failure trigger: %v", err)
+	}
+	form := url.Values{"ai_provider": {"anthropic"}, "ai_key": {"synthetic-new-key"}, "job_likes": {"new goal"}}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	addCSRFToRequest(req, srv, cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError || spy.seals.Load() != 1 || strings.Contains(rec.Body.String(), "synthetic-new-key") {
+		t.Fatalf("profile failure status=%d seals=%d body=%q", rec.Code, spy.seals.Load(), rec.Body.String())
+	}
+	after, ok, err := st.UserAICredential(context.Background(), userID, "anthropic")
+	if err != nil || !ok || string(after.Ciphertext) != string(before.Ciphertext) || string(after.Nonce) != string(before.Nonce) || after.EncryptionVersion != before.EncryptionVersion {
+		t.Fatalf("credential changed after profile failure: ok=%v err=%v", ok, err)
+	}
+	got, _, ok, err := st.ProfileForUser(context.Background(), userID)
+	if err != nil || !ok || !strings.Contains(got, "old goal") || strings.Contains(got, "new goal") {
+		t.Fatalf("profile changed after rollback: ok=%v err=%v profile=%s", ok, err, got)
+	}
+}
+
+func (c *countingCipher) Seal(userID int64, provider, plaintext string) ([]byte, []byte, int16, error) {
+	return c.inner.Seal(userID, provider, plaintext)
+}
+
+func (c *countingCipher) Open(userID int64, provider string, ciphertext, nonce []byte, version int16) (string, error) {
+	c.opens.Add(1)
+	return c.inner.Open(userID, provider, ciphertext, nonce, version)
+}
+
+func TestProductionRerateDecryptsCredentialOnceForMultipleRows(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "decrypt-once@example.invalid")
+	prof := profile.Profile{CareerYears: 0, JobLikes: "백엔드 서버 개발", AIProvider: "anthropic", AIModel: "synthetic-model"}
+	zero := 0
+	prof.MinScore = &zero
+	saveAIRuntimeProfile(t, st, userID, prof)
+	base := newAIRuntimeTestCipher(t, 0x61)
+	saveAIRuntimeCredential(t, st, base, userID, "anthropic", "synthetic-decrypt-once-key")
+	spy := &countingCipher{inner: base}
+	srv.SetCredentialCipher(spy)
+	provider := rerateStub()
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return provider, nil }
+	now := time.Now().UTC()
+	for _, sourceID := range []string{"decrypt-a", "decrypt-b", "decrypt-c"} {
+		p := listingPosting(sourceID, "신입 백엔드 개발자")
+		p.Description = "서버 개발자를 찾습니다"
+		p.FirstSeenAt, p.LastSeenAt = now, now
+		mustUpsert(t, st, p)
+	}
+	runtime, err := srv.aiRuntimeForUser(ctx, userID)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser: %v", err)
+	}
+	if _, err := srv.scoreAll(ctx, userID, runtime); err != nil {
+		t.Fatalf("scoreAll: %v", err)
+	}
+	if _, err := srv.runRerate(ctx, "today", noopEmit, userID, runtime); err != nil {
+		t.Fatalf("runRerate: %v", err)
+	}
+	if got := spy.opens.Load(); got != 1 {
+		t.Fatalf("credential decrypts = %d, want exactly 1 for the operation", got)
+	}
+	if provider.ScoreDeltaCalls != 3 {
+		t.Fatalf("ScoreDelta calls = %d, want 3 rows", provider.ScoreDeltaCalls)
+	}
+}
+
+type isolatedProvider struct {
+	name  string
+	delta int
+	mu    sync.Mutex
+	calls int
+}
+
+func (p *isolatedProvider) Name() string { return p.name }
+func (p *isolatedProvider) Extract(context.Context, string) (ai.Extraction, ai.Usage, error) {
+	return ai.Extraction{}, ai.Usage{}, ai.ErrNotImplemented
+}
+func (p *isolatedProvider) ScoreDelta(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+	p.mu.Lock()
+	p.calls++
+	p.mu.Unlock()
+	return []ai.RawDeltaItem{{Signal: p.name, Kind: ai.KindPresence, Delta: p.delta, Quote: "서버 개발자를 찾습니다"}}, ai.Usage{InputTokens: 10, OutputTokens: 2}, nil
+}
+
+func TestProductionConcurrentReratesIsolateUserRuntimeScoresAndUsage(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userA := insertAIRuntimeTestUser(t, st, "concurrent-a@example.invalid")
+	userB := insertAIRuntimeTestUser(t, st, "concurrent-b@example.invalid")
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"}
+	saveAIRuntimeProfile(t, st, userA, prof)
+	saveAIRuntimeProfile(t, st, userB, prof)
+	now := time.Now().UTC()
+	p := listingPosting("concurrent-shared", "신입 백엔드 개발자")
+	p.Description = "서버 개발자를 찾습니다"
+	p.FirstSeenAt, p.LastSeenAt = now, now
+	postingID := mustUpsert(t, st, p)
+	providerA := &isolatedProvider{name: "user-a-provider", delta: 7}
+	providerB := &isolatedProvider{name: "user-b-provider", delta: -4}
+	runtimeA := testAIRuntime(userA, providerA, "model-a")
+	runtimeB := testAIRuntime(userB, providerB, "model-b")
+	if _, err := srv.scoreAll(ctx, userA, runtimeA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.scoreAll(ctx, userB, runtimeB); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for _, op := range []struct {
+		userID  int64
+		runtime *AIRuntime
+	}{{userA, runtimeA}, {userB, runtimeB}} {
+		wg.Add(1)
+		go func(userID int64, runtime *AIRuntime) {
+			defer wg.Done()
+			_, err := srv.runRerate(ctx, "today", noopEmit, userID, runtime)
+			errs <- err
+		}(op.userID, op.runtime)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent rerate: %v", err)
+		}
+	}
+	scoreA, ok, err := st.ScoreByPostingIDForUser(ctx, userA, postingID)
+	if err != nil || !ok {
+		t.Fatalf("user A score: ok=%v err=%v", ok, err)
+	}
+	scoreB, ok, err := st.ScoreByPostingIDForUser(ctx, userB, postingID)
+	if err != nil || !ok {
+		t.Fatalf("user B score: ok=%v err=%v", ok, err)
+	}
+	if scoreA.Total == scoreB.Total || scoreA.Total <= scoreB.Total {
+		t.Fatalf("user scores crossed: A=%s B=%s", scoreA.BreakdownJSON, scoreB.BreakdownJSON)
+	}
+	hash := profile.AIInputHash(prof)
+	deltaA, ok, err := st.AIScore(ctx, userA, postingID, hash, runtimeA.Version)
+	if err != nil || !ok || deltaA.NetDelta != 7 {
+		t.Fatalf("user A delta=%+v ok=%v err=%v", deltaA, ok, err)
+	}
+	deltaB, ok, err := st.AIScore(ctx, userB, postingID, hash, runtimeB.Version)
+	if err != nil || !ok || deltaB.NetDelta != -4 {
+		t.Fatalf("user B delta=%+v ok=%v err=%v", deltaB, ok, err)
+	}
+	day := time.Now().UTC().Format("2006-01-02")
+	for _, userID := range []int64{userA, userB} {
+		in, out, err := st.AIUsageForDay(ctx, userID, day)
+		if err != nil || in != 10 || out != 2 {
+			t.Fatalf("user %d daily usage=(%d,%d) err=%v, want (10,2)", userID, in, out, err)
+		}
+		monthIn, monthOut, err := st.AIUsageForMonth(ctx, userID, day[:7])
+		if err != nil || monthIn != 10 || monthOut != 2 {
+			t.Fatalf("user %d monthly usage=(%d,%d) err=%v, want (10,2)", userID, monthIn, monthOut, err)
+		}
+	}
 }
 
 func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
@@ -210,8 +493,8 @@ func TestProductionProfileUsesSessionOwnerState(t *testing.T) {
 	if !strings.Contains(gotB, "유저B 새 목표") {
 		t.Fatalf("userB profile = %s, want updated userB goal", gotB)
 	}
-	if srv.aiDailyTokenCap != 222222 {
-		t.Fatalf("aiDailyTokenCap = %d, want userB cap 222222", srv.aiDailyTokenCap)
+	if p, err := profile.Unmarshal(gotB); err != nil || p.EffectiveAIDailyTokenCap() != 222222 {
+		t.Fatalf("userB effective AI daily cap not persisted: profile=%s err=%v", gotB, err)
 	}
 
 	assertPageContains(t, srv, cookieA, "/profile", "유저A 새 목표")

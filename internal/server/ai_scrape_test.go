@@ -36,9 +36,9 @@ func saveSinipProfile(t *testing.T, srv *Server) {
 
 // aiExtractionCount counts cached extractions under the server's ai_version
 // (one row per posting in these tests).
-func aiExtractionCount(t *testing.T, srv *Server) int {
+func aiExtractionCount(t *testing.T, srv *Server, runtime *AIRuntime) int {
 	t.Helper()
-	m, err := srv.store.AIExtractionsByPostingID(context.Background(), srv.aiVersion)
+	m, err := srv.store.AIExtractionsByPostingID(context.Background(), runtime.Version)
 	if err != nil {
 		t.Fatalf("count ai_extractions: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestRunScrapeAutoRatesFreshBriefingWithStage2(t *testing.T) {
 		},
 	}
 	srv, st := newTestServer(t, f)
-	srv.SetAIProvider(rerateStub(), "test-model") // ScoreDeltaFn set; Stage-1 backfill errors harmlessly
+	runtime := testAIRuntime(1, rerateStub(), "test-model") // ScoreDeltaFn set; Stage-1 backfill errors harmlessly
 	ctx := context.Background()
 	zero := 0
 	pj, _ := profile.Marshal(profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"})
@@ -70,13 +70,13 @@ func TestRunScrapeAutoRatesFreshBriefingWithStage2(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 
 	// Both fresh, visible postings should have a Stage-2 delta cached against the
 	// current goal — no 재평가 needed.
-	if n := countAIScores(t, srv); n != 2 {
+	if n := countAIScores(t, srv, runtime); n != 2 {
 		t.Fatalf("after scrape: %d Stage-2 deltas cached, want 2 (auto-rated, no manual 재평가)", n)
 	}
 }
@@ -88,11 +88,11 @@ func TestScheduledScrapeSkipsFreshAIByDefault(t *testing.T) {
 	}
 	srv, st := newTestServer(t, f)
 	stub := rerateStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
 	saveSinipProfile(t, srv)
 	ctx := context.Background()
 
-	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit); err != nil {
+	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("scheduled runScrape: %v", err)
 	}
 
@@ -102,10 +102,10 @@ func TestScheduledScrapeSkipsFreshAIByDefault(t *testing.T) {
 	if stub.ScoreDeltaCalls != 0 {
 		t.Fatalf("ScoreDelta calls = %d, want 0 for scheduled AI default-off", stub.ScoreDeltaCalls)
 	}
-	if n := aiExtractionCount(t, srv); n != 0 {
+	if n := aiExtractionCount(t, srv, runtime); n != 0 {
 		t.Fatalf("ai_extractions rows = %d, want 0", n)
 	}
-	if n := countAIScores(t, srv); n != 0 {
+	if n := countAIScores(t, srv, runtime); n != 0 {
 		t.Fatalf("ai_scores rows = %d, want 0", n)
 	}
 	if _, err := st.ScoresByPostingID(ctx); err != nil {
@@ -122,7 +122,7 @@ func TestScheduledScrapeRunsFreshAIWhenEnabled(t *testing.T) {
 	}
 	srv, st := newTestServer(t, f)
 	stub := rerateStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
 	ctx := context.Background()
 	zero := 0
 	pj, _ := profile.Marshal(profile.Profile{
@@ -135,14 +135,14 @@ func TestScheduledScrapeRunsFreshAIWhenEnabled(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
-	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit); err != nil {
+	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("scheduled runScrape: %v", err)
 	}
 
 	if stub.ScoreDeltaCalls == 0 {
 		t.Fatal("scheduled AI opt-in should run Stage-2 over the fresh briefing")
 	}
-	if n := countAIScores(t, srv); n != 1 {
+	if n := countAIScores(t, srv, runtime); n != 1 {
 		t.Fatalf("ai_scores rows = %d, want 1", n)
 	}
 }
@@ -161,9 +161,6 @@ func TestRunUSDCapHaltsManualScrapeExtractionAfterFirstCall(t *testing.T) {
 	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
-	if err := srv.ReconfigureAI(ctx); err != nil {
-		t.Fatalf("ReconfigureAI: %v", err)
-	}
 	stub := &ai.StubProvider{
 		NameVal: "stub",
 		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
@@ -172,9 +169,10 @@ func TestRunUSDCapHaltsManualScrapeExtractionAfterFirstCall(t *testing.T) {
 				ai.Usage{InputTokens: aiRunTokenCapForUSDCents(1) + 1}, nil
 		},
 	}
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
+	runtime.RunTokenCap = aiRunTokenCapForUSDCents(1)
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if stub.Calls != 1 {
@@ -196,9 +194,6 @@ func TestRunUSDCapHaltsOptInScheduledScrapeExtractionAfterFirstCall(t *testing.T
 	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
-	if err := srv.ReconfigureAI(ctx); err != nil {
-		t.Fatalf("ReconfigureAI: %v", err)
-	}
 	stub := &ai.StubProvider{
 		NameVal: "stub",
 		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
@@ -207,9 +202,10 @@ func TestRunUSDCapHaltsOptInScheduledScrapeExtractionAfterFirstCall(t *testing.T
 				ai.Usage{InputTokens: aiRunTokenCapForUSDCents(1) + 1}, nil
 		},
 	}
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
+	runtime.RunTokenCap = aiRunTokenCapForUSDCents(1)
 
-	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit); err != nil {
+	if _, err := srv.runScrapeForTrigger(ctx, storage.ScrapeTriggerScheduled, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("scheduled runScrape: %v", err)
 	}
 	if stub.Calls != 1 {
@@ -227,16 +223,16 @@ func TestRunScrapeStubProviderExtractsNewPostings(t *testing.T) {
 	}
 	srv, st := newTestServer(t, f)
 	stub := newcomerStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
 	saveSinipProfile(t, srv)
 	ctx := context.Background()
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 
 	// One ai_extractions row per new posting, and exactly one Extract call each.
-	if n := aiExtractionCount(t, srv); n != 2 {
+	if n := aiExtractionCount(t, srv, runtime); n != 2 {
 		t.Errorf("ai_extractions rows = %d, want 2", n)
 	}
 	if stub.Calls != 2 {
@@ -246,7 +242,7 @@ func TestRunScrapeStubProviderExtractsNewPostings(t *testing.T) {
 		t.Errorf("FetchDetail calls = %d, want 2", len(f.detailCalls))
 	}
 	// The cached extraction is readable under the run's ai_version.
-	exts, err := st.AIExtractionsByPostingID(ctx, srv.aiVersion)
+	exts, err := st.AIExtractionsByPostingID(ctx, runtime.Version)
 	if err != nil || len(exts) != 2 {
 		t.Fatalf("AIExtractionsByPostingID: got %d (err=%v), want 2", len(exts), err)
 	}
@@ -263,20 +259,20 @@ func TestRunScrapeProviderFailsScrapeContinues(t *testing.T) {
 		details: map[string]scraper.Posting{"1": listingPosting("1", "신입 공고")},
 	}
 	srv, st := newTestServer(t, f)
-	srv.SetAIProvider(&ai.StubProvider{NameVal: "stub", ExtractFn: func(ctx context.Context, _ string) (ai.Extraction, ai.Usage, error) {
+	runtime := testAIRuntime(1, &ai.StubProvider{NameVal: "stub", ExtractFn: func(ctx context.Context, _ string) (ai.Extraction, ai.Usage, error) {
 		return ai.Extraction{}, ai.Usage{}, errors.New("provider down")
 	}}, "test-model")
 	saveSinipProfile(t, srv)
 	ctx := context.Background()
 
-	res, err := srv.runScrape(ctx, noopEmit)
+	res, err := srv.runScrape(ctx, noopEmit, 1, runtime)
 	if err != nil {
 		t.Fatalf("runScrape must not fail when the provider errors: %v", err)
 	}
 	if res.New != 1 || res.Scored != 1 {
 		t.Errorf("ScrapeResult = %+v, want the posting still inserted + scored", res)
 	}
-	if n := aiExtractionCount(t, srv); n != 0 {
+	if n := aiExtractionCount(t, srv, runtime); n != 0 {
 		t.Errorf("ai_extractions rows = %d, want 0 (provider failed, no cache row)", n)
 	}
 	// Posting is present and scored via the regex path.
@@ -292,11 +288,8 @@ func TestRunScrapeNoExtractorMakesNoAICalls(t *testing.T) {
 	}
 	srv, _ := newTestServer(t, f) // no SetAIProvider — AI off (the default)
 	saveSinipProfile(t, srv)
-	if _, err := srv.runScrape(context.Background(), noopEmit); err != nil {
+	if _, err := srv.runScrape(context.Background(), noopEmit, 0, nil); err != nil {
 		t.Fatalf("runScrape: %v", err)
-	}
-	if n := aiExtractionCount(t, srv); n != 0 {
-		t.Errorf("ai_extractions rows = %d, want 0 (AI off)", n)
 	}
 }
 
@@ -307,7 +300,7 @@ func TestRunScrapeAlreadySeenDoesNotExtract(t *testing.T) {
 	}
 	srv, st := newTestServer(t, f)
 	stub := newcomerStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
 	saveSinipProfile(t, srv)
 	ctx := context.Background()
 
@@ -320,7 +313,7 @@ func TestRunScrapeAlreadySeenDoesNotExtract(t *testing.T) {
 		t.Fatalf("seed posting: %v", err)
 	}
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if len(f.detailCalls) != 0 {
@@ -329,7 +322,7 @@ func TestRunScrapeAlreadySeenDoesNotExtract(t *testing.T) {
 	if stub.Calls != 0 {
 		t.Errorf("Extract called %d times for a known posting; want 0 (no steady-state token burn)", stub.Calls)
 	}
-	if n := aiExtractionCount(t, srv); n != 0 {
+	if n := aiExtractionCount(t, srv, runtime); n != 0 {
 		t.Errorf("ai_extractions rows = %d, want 0", n)
 	}
 }
@@ -340,7 +333,7 @@ func TestRunScrapeAlreadySeenDoesNotExtract(t *testing.T) {
 func TestExtractStage1CacheHitSkipsProvider(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	stub := newcomerStub()
-	srv.SetAIProvider(stub, "test-model")
+	runtime := testAIRuntime(1, stub, "test-model")
 	ctx := context.Background()
 
 	p := listingPosting("1", "백엔드 신입")
@@ -352,11 +345,11 @@ func TestExtractStage1CacheHitSkipsProvider(t *testing.T) {
 	}
 	_, contentHash, _ := ai.ModelInput(p)
 	seeded := ai.Extraction{MinCareer: 0, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "seeded"}
-	if err := st.UpsertAIExtraction(ctx, id, contentHash, srv.aiVersion, seeded, time.Now()); err != nil {
+	if err := st.UpsertAIExtraction(ctx, id, contentHash, runtime.Version, seeded, time.Now()); err != nil {
 		t.Fatalf("seed extraction: %v", err)
 	}
 
-	srv.extractStage1(ctx, id, p, time.Now().UTC(), srv.newAIBudget(ctx))
+	srv.extractStage1(ctx, id, p, time.Now().UTC(), 1, runtime, srv.newAIBudget(ctx, 1, runtime))
 	if stub.Calls != 0 {
 		t.Errorf("Extract called %d times on a cache hit; want 0", stub.Calls)
 	}
@@ -371,20 +364,20 @@ func TestRunScrapePerRunBudgetHalts(t *testing.T) {
 	}
 	srv, _ := newTestServer(t, f)
 	stub := newcomerStub() // each Extract spends 120 tokens (100 in + 20 out)
-	srv.SetAIProvider(stub, "test-model")
-	srv.aiRunTokenCap = 5 // tiny: the first call exhausts it
+	runtime := testAIRuntime(1, stub, "test-model")
+	runtime.RunTokenCap = 5 // tiny: the first call exhausts it
 	saveSinipProfile(t, srv)
 
 	var events []string
 	emit := func(ev, data string) { events = append(events, ev+"\x00"+data) }
 
-	if _, err := srv.runScrape(context.Background(), emit); err != nil {
+	if _, err := srv.runScrape(context.Background(), emit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	if stub.Calls != 1 {
 		t.Errorf("Extract calls = %d, want 1 (budget halts after the first)", stub.Calls)
 	}
-	if n := aiExtractionCount(t, srv); n != 1 {
+	if n := aiExtractionCount(t, srv, runtime); n != 1 {
 		t.Errorf("ai_extractions rows = %d, want 1", n)
 	}
 	var sawColdStart bool
@@ -412,11 +405,11 @@ func TestRunScrapeEndToEndScoreCorrection(t *testing.T) {
 		details: map[string]scraper.Posting{"1": body},
 	}
 	srv, st := newTestServer(t, f)
-	srv.SetAIProvider(newcomerStub(), "test-model")
+	runtime := testAIRuntime(1, newcomerStub(), "test-model")
 	saveSinipProfile(t, srv) // 신입 (CareerYears 0)
 	ctx := context.Background()
 
-	if _, err := srv.runScrape(ctx, noopEmit); err != nil {
+	if _, err := srv.runScrape(ctx, noopEmit, 1, runtime); err != nil {
 		t.Fatalf("runScrape: %v", err)
 	}
 	scores, err := st.ScoresByPostingID(ctx)

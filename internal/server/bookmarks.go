@@ -42,6 +42,10 @@ func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 // order is most-recently-saved first (storage layer does the sort).
 func (s *Server) buildBookmarks(ctx context.Context, now time.Time, userIDOpt ...int64) (bookmarksView, error) {
 	userID := optionalUserID(userIDOpt)
+	return s.buildBookmarksWithRuntime(ctx, now, userID, s.runtimeForRender(ctx, userID))
+}
+
+func (s *Server) buildBookmarksWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (bookmarksView, error) {
 	postings, err := s.bookmarkedPostings(ctx, userID)
 	if err != nil {
 		return bookmarksView{}, err
@@ -89,7 +93,7 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time, userIDOpt ..
 	if err != nil {
 		return bookmarksView{}, err
 	}
-	view.Rerate = s.buildRerateInfo(ctx, prof, "bookmarks", view.Postings)
+	view.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "bookmarks", view.Postings)
 	return view, nil
 }
 

@@ -106,7 +106,7 @@ func TestDemoModeScrapeAcceptsJobcronAdminTokenHeader(t *testing.T) {
 }
 
 func TestDemoModeRerateAlwaysRefused(t *testing.T) {
-	srv, _ := seedRerate(t)
+	srv, _, _ := seedRerate(t)
 	srv.SetDemoMode(true)
 	srv.SetAdminToken("secret-token")
 
@@ -200,11 +200,11 @@ func TestDemoRescoreUsesCachedAIScoreWithoutProviderAsCurrent(t *testing.T) {
 		}},
 		NetDelta: 7,
 	}
-	if err := st.UpsertAIScore(ctx, id, profile.AIInputHash(profile.Profile{CareerYears: 0, JobLikes: "백엔드"}), "anthropic-old", d, time.Now()); err != nil {
+	if err := st.UpsertAIScore(ctx, 1, id, profile.AIInputHash(profile.Profile{CareerYears: 0, JobLikes: "백엔드"}), "anthropic-old", d, time.Now()); err != nil {
 		t.Fatalf("UpsertAIScore: %v", err)
 	}
 
-	if _, err := srv.RescoreAll(ctx); err != nil {
+	if _, err := srv.RescoreAll(ctx, 0, nil); err != nil {
 		t.Fatalf("RescoreAll: %v", err)
 	}
 	scores, err := st.ScoresByPostingID(ctx)

@@ -247,6 +247,14 @@ Pass `ownerID` into `copyAIScores` and `copyAIUsage`. Insert their rows with
 `user_id` and conflict on the user-scoped primary keys. Keep
 `copyAIExtractions` global.
 
+Slice 2 discovery: migration `0015` immediately invalidated the existing
+importer's old conflict targets, so the `ownerID` arguments and user-scoped
+`ai_scores` / `ai_usage` writes landed as a build-and-test compatibility fix in
+Slice 2. In this slice, verify those helpers against the full apply contract;
+do not reintroduce the pre-`0015` conflict keys. SQLite fixture setup still
+passes a positive sentinel user ID only because the shared storage API now
+requires one—the legacy source tables themselves remain unscoped.
+
 - [ ] **Step 2: Load the importer master key without a CLI flag**
 
 Use `JOBCRON_CREDENTIAL_ENCRYPTION_KEY` when present. Outside production, use

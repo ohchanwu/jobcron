@@ -27,7 +27,7 @@ func TestInternGuardEndToEnd(t *testing.T) {
 	if _, _, err := st.SaveProfile(ctx, pj); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
-	srv.SetAIProvider(newcomerStub(), "test-model") // sets aiVersion; cache overridden below
+	runtime := testAIRuntime(1, newcomerStub(), "test-model")
 	now := time.Now().UTC()
 	bad := ai.Extraction{MinCareer: 2, MaxCareer: nil, Newcomer: false, EducationEnum: ai.EduNone}
 
@@ -41,7 +41,7 @@ func TestInternGuardEndToEnd(t *testing.T) {
 			t.Fatalf("UpsertPosting(%s): %v", srcID, err)
 		}
 		_, contentHash, _ := ai.ModelInput(p)
-		if err := st.UpsertAIExtraction(ctx, id, contentHash, srv.aiVersion, bad, now); err != nil {
+		if err := st.UpsertAIExtraction(ctx, id, contentHash, runtime.Version, bad, now); err != nil {
 			t.Fatalf("seed extraction(%s): %v", srcID, err)
 		}
 		return id
@@ -49,7 +49,7 @@ func TestInternGuardEndToEnd(t *testing.T) {
 	internID := seed("intern1", "[인턴] 풀스택 개발자")
 	seniorID := seed("senior1", "백엔드 개발자")
 
-	if _, err := srv.scoreAll(ctx); err != nil {
+	if _, err := srv.scoreAll(ctx, 1, runtime); err != nil {
 		t.Fatalf("scoreAll: %v", err)
 	}
 	scores, err := st.ScoresByPostingID(ctx)
