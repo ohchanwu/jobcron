@@ -19,6 +19,14 @@ credential survive app-container recreation.
 **Tech Stack:** Docker Compose v2, AWS EC2, AWS RDS PostgreSQL 18, Caddy, Go
 operator commands, SSH local forwarding, gstack `/browse`, Gitleaks.
 
+## Execution Status
+
+Local repository preparation in Tasks 1 through 3 was completed and independently
+verified on 2026-07-16. Tasks 4 through 9 remain pending because they build or
+publish an image, change AWS/RDS/EC2/DNS state, access production data, exercise
+a paid provider, or finalize deployed screenshots. Do not treat this checkpoint
+as authorization for those operations.
+
 ## Global Constraints
 
 - Start only after Slices 2 through 4 pass on the exact candidate commit.
@@ -30,7 +38,9 @@ operator commands, SSH local forwarding, gstack `/browse`, Gitleaks.
   commits locally, reports the exact tip and verification evidence, and defers
   without running `gt done`. After Mayor fetches and integrates the tip, Mayor
   runs `gt unsling <bead-id> <assigned-agent> --force` (or detaches the hook),
-  returning the bead to `open`, and then closes it with `bd close <bead-id>`.
+  returning the bead to `open`. Close the bead only if its full acceptance
+  criteria are satisfied; otherwise leave it open for the authorization-gated
+  work.
 - Follow the approved
   [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - Current production reality is a blank application host: the EC2 instance has
@@ -71,7 +81,7 @@ behavior.
 - Modify: `deploy/production/.env.example`
 - Create: `deploy/production/compose_test.go`
 
-- [ ] **Step 1: Write a failing Compose contract test**
+- [x] **Step 1: Write a failing Compose contract test**
 
 Render `docker compose config` with synthetic values and assert:
 
@@ -85,7 +95,7 @@ func TestProductionComposeUsesImmutableImageReference(t *testing.T)
 The absence test must inspect parsed rendered services and top-level volumes;
 do not pass by grepping comments alone.
 
-- [ ] **Step 2: Update the production service**
+- [x] **Step 2: Update the production service**
 
 Remove:
 
@@ -104,7 +114,7 @@ JOBCRON_CREDENTIAL_ENCRYPTION_KEY: >-
 Keep `DATABASE_URL`, `SESSION_SECRET`, the immutable `JOBCRON_IMAGE`, and both
 Caddy volumes.
 
-- [ ] **Step 3: Update the environment template**
+- [x] **Step 3: Update the environment template**
 
 Add an empty placeholder and a safe generation command:
 
@@ -116,7 +126,7 @@ JOBCRON_CREDENTIAL_ENCRYPTION_KEY=
 Do not add any real value. Document generation with `openssl rand -base64 32`
 and validation without echoing the result.
 
-- [ ] **Step 4: Run contract tests and commit**
+- [x] **Step 4: Run contract tests and commit**
 
 ```sh
 go test ./deploy/production -run ProductionCompose -count=1
@@ -141,7 +151,7 @@ git commit -m "feat(deploy): use database-backed production credentials"
 - Modify: `deploy/production/HUMAN_DEPLOY_GUIDE.md`
 - Modify: `deploy/production/README.md`
 
-- [ ] **Step 1: Replace stale sequencing and volume guidance**
+- [x] **Step 1: Replace stale sequencing and volume guidance**
 
 The guide must state:
 
@@ -157,7 +167,7 @@ The guide must state:
 Delete instructions that start the app to apply migrations before owner
 creation; `jobcron-user` opens PostgreSQL and applies embedded migrations.
 
-- [ ] **Step 2: Document the exact private-RDS sequence**
+- [x] **Step 2: Document the exact private-RDS sequence**
 
 Use placeholders and this order:
 
@@ -175,7 +185,7 @@ Use placeholders and this order:
 The guide must say the importer preserves the new password hash and does not
 import sessions or passwords.
 
-- [ ] **Step 3: Document rollback by deployment phase**
+- [x] **Step 3: Document rollback by deployment phase**
 
 - Before import commit: fix the cause and rerun dry-run.
 - After import but before new writes: restore the pre-import RDS snapshot.
@@ -185,7 +195,7 @@ import sessions or passwords.
 Keep the original SQLite snapshot, legacy key file, master key backup, and RDS
 snapshot until the human closes the rollback window.
 
-- [ ] **Step 4: Check public-safety language and commit**
+- [x] **Step 4: Check public-safety language and commit**
 
 ```sh
 rg -n 'jobcron_config|ai_keys\.json|first app start|create-owner|--apply' \
@@ -209,7 +219,7 @@ no text claims EC2 stores it.
 - Create: `scripts/verify_production_compose_test.go`
 - Modify: `.github/workflows/ci.yml`
 
-- [ ] **Step 1: Write the harness tests first**
+- [x] **Step 1: Write the harness tests first**
 
 The script must accept only synthetic environment values in CI and verify:
 
@@ -223,13 +233,13 @@ The script must accept only synthetic environment values in CI and verify:
 - the rendered image equals the requested candidate; and
 - image reference is an immutable `sha-<12-hex>` tag or approved digest.
 
-- [ ] **Step 2: Implement a non-secret render verifier**
+- [x] **Step 2: Implement a non-secret render verifier**
 
 Write rendered output to a private temporary file, inspect structured fields,
 and remove the file on exit. On failure, report the missing contract field, not
 the environment value.
 
-- [ ] **Step 3: Add CI coverage and run it**
+- [x] **Step 3: Add CI coverage and run it**
 
 ```sh
 sh -n scripts/verify-production-compose.sh
@@ -240,7 +250,7 @@ sh scripts/verify-production-compose.sh
 
 CI supplies only documented synthetic placeholders.
 
-- [ ] **Step 4: Commit the harness**
+- [x] **Step 4: Commit the harness**
 
 ```sh
 git add scripts/verify-production-compose.sh \
