@@ -28,24 +28,36 @@ type EncryptedAICredential struct {
 
 // UpsertUserAICredential inserts or replaces one encrypted user/provider row.
 func (s *Store) UpsertUserAICredential(ctx context.Context, c EncryptedAICredential) error {
-	normalizedProvider, err := validateCredentialKey(c.UserID, c.Provider)
+	normalizedProvider, err := validateEncryptedAICredential(c)
 	if err != nil {
 		return err
-	}
-	if len(c.Ciphertext) <= credentialGCMTagBytes {
-		return errors.New("storage: credential ciphertext is too short")
-	}
-	if len(c.Nonce) != credentialNonceBytes {
-		return errors.New("storage: credential nonce must be 12 bytes")
-	}
-	if c.EncryptionVersion <= 0 {
-		return errors.New("storage: credential encryption version must be positive")
 	}
 	if err := s.requirePostgresCredentials(); err != nil {
 		return err
 	}
+	c.Provider = normalizedProvider
+	return s.upsertUserAICredential(ctx, s.db, c)
+}
 
-	_, err = s.db.ExecContext(ctx, s.query(`
+func validateEncryptedAICredential(c EncryptedAICredential) (string, error) {
+	normalizedProvider, err := validateCredentialKey(c.UserID, c.Provider)
+	if err != nil {
+		return "", err
+	}
+	if len(c.Ciphertext) <= credentialGCMTagBytes {
+		return "", errors.New("storage: credential ciphertext is too short")
+	}
+	if len(c.Nonce) != credentialNonceBytes {
+		return "", errors.New("storage: credential nonce must be 12 bytes")
+	}
+	if c.EncryptionVersion <= 0 {
+		return "", errors.New("storage: credential encryption version must be positive")
+	}
+	return normalizedProvider, nil
+}
+
+func (s *Store) upsertUserAICredential(ctx context.Context, db queryExecer, c EncryptedAICredential) error {
+	_, err := db.ExecContext(ctx, s.query(`
 INSERT INTO user_ai_credentials (
     user_id, provider, ciphertext, nonce, encryption_version, created_at, updated_at
 )
@@ -56,7 +68,7 @@ ON CONFLICT (user_id, provider) DO UPDATE SET
     encryption_version = EXCLUDED.encryption_version,
     updated_at = now()`),
 		c.UserID,
-		normalizedProvider,
+		c.Provider,
 		c.Ciphertext,
 		c.Nonce,
 		c.EncryptionVersion,
