@@ -22,9 +22,9 @@ Use this index instead of recursively loading the entire documentation tree.
 
 - [Active Superpowers work and context policy](superpowers/README.md)
 - [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
-- [Slice 4: Verified SQLite import](superpowers/plans/260715-postgresql-convergence-slice-4-verified-sqlite-import.md)
 - [Slice 5: First production deployment](superpowers/plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
 - [Multi-user account expansion follow-up](superpowers/specs/260715-multi-user-account-expansion.md)
+- [PostgreSQL convergence Slice 4 verification](superpowers/archive/2026-07-16-postgresql-convergence-slice-4/260715-postgresql-convergence-slice-4-verification.md)
 - [PostgreSQL convergence Slice 3 verification](superpowers/archive/2026-07-15-postgresql-convergence-slice-3/260715-postgresql-convergence-slice-3-verification.md)
 - [PostgreSQL convergence Slice 2 verification](superpowers/archive/2026-07-15-postgresql-convergence-slice-2/260715-postgresql-convergence-slice-2-verification.md)
 - [PostgreSQL credential foundation: Slice 1 verification](superpowers/archive/2026-07-14-postgresql-credential-foundation/260714-postgresql-credential-foundation-verification.md)
