@@ -16,6 +16,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.15.1"
+      - name: start managed PostgreSQL
+        run: |
+          docker compose -p jobcron-local -f deploy/local/compose.yaml up -d --wait
+          database="jobcron_ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          docker exec jobcron-local-postgres-1 createdb -U postgres "$database"
+          echo "JOBCRON_CI_DATABASE=$database" >>"$GITHUB_ENV"
+          echo "JOBCRON_TEST_POSTGRES_URL=postgres://postgres@127.0.0.1:55432/$database?sslmode=disable" >>"$GITHUB_ENV"
       - name: gofmt
         run: |
           unformatted=$(gofmt -l .)
@@ -24,11 +31,41 @@ jobs:
           fi
       - run: go vet ./...
       - run: go build ./...
-      - run: go test ./...
+      - name: local PostgreSQL Compose contract
+        run: go test ./internal/localdb -run 'Test(ComposeContract|DecodedComposeEqualityDetectsUnmodeledDrift)$' -count=1
+      - name: preview isolation, cleanup, and locking contracts
+        run: go test ./scripts -run Preview -count=1
+      - name: full test suite
+        run: go test ./... -count=1
       - name: cross-compile arm64 targets
         run: |
           GOOS=linux GOARCH=arm64 go build ./cmd/jobcron
           GOOS=darwin GOARCH=arm64 go build ./cmd/jobcron
+      - name: verify PostgreSQL test cleanup
+        if: always()
+        run: |
+          status=0
+          preview_databases=$(docker exec jobcron-local-postgres-1 \
+            psql -U postgres -d postgres -Atqc \
+            "SELECT datname FROM pg_database WHERE datname LIKE 'jobcron_preview_%'")
+          if [ -n "$preview_databases" ]; then
+            echo "Preview databases remained after the test suite:"
+            echo "$preview_databases"
+            status=1
+          fi
+
+          lock_root="${TMPDIR:-/tmp}/jobcron-preview-locks-$(id -u)"
+          if [ -d "$lock_root" ] && find "$lock_root" -mindepth 1 -print -quit | grep -q .; then
+            echo "Preview locks remained after the test suite:"
+            find "$lock_root" -mindepth 1 -maxdepth 1 -print
+            status=1
+          fi
+
+          if [ -n "${JOBCRON_CI_DATABASE:-}" ]; then
+            docker exec jobcron-local-postgres-1 \
+              dropdb -U postgres --if-exists "$JOBCRON_CI_DATABASE"
+          fi
+          exit "$status"
 
   smoke:
     name: smoke (${{ matrix.os }})
