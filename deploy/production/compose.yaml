@@ -22,12 +22,12 @@ services:
       JOBCRON_NO_OPEN: "1"
       DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
       SESSION_SECRET: "${SESSION_SECRET:?set SESSION_SECRET in .env}"
+      JOBCRON_CREDENTIAL_ENCRYPTION_KEY: >-
+        ${JOBCRON_CREDENTIAL_ENCRYPTION_KEY:?set JOBCRON_CREDENTIAL_ENCRYPTION_KEY in .env}
       JOBCRON_SCHEDULER_ENABLED: "1"
       JOBCRON_DAILY_SCRAPE_TIME: "05:00"
     expose:
       - "7777"
-    volumes:
-      - jobcron_config:/root/.config/jobcron
     restart: unless-stopped
 
   caddy:
@@ -44,7 +44,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  jobcron_config:
-    name: jobcron_config
   caddy_data:
   caddy_config:
