@@ -1,51 +1,58 @@
 # AWS production deploy: jobcron.app
 
-This stack is for the private production `jobcron.app` app on AWS. It is
-separate from the read-only demo stack in `deploy/demo`.
+This directory defines the first production deployment to a blank EC2 host. No
+app or Docker stack is currently deployed. Caddy is the only public entry point,
+the app uses private AWS RDS PostgreSQL, and the EC2 `.env` already holds the
+configured database URL, session secret, environment, host, port, no-open
+setting, and daily scrape time.
 
-Production assumptions:
+For the first rollout, preserve those existing values and add only
+`JOBCRON_IMAGE` and `JOBCRON_CREDENTIAL_ENCRYPTION_KEY`. Validate Compose before
+starting anything. From the trusted Mac, open the localhost-only tunnel,
+silently read private values only into the current shell, and export
+`JOBCRON_ENV=production` so import fails closed, run `create-owner`, create the
+pre-import RDS snapshot, dry-run `jobcron-import`, review the fingerprint, eight
+category counts, provider count, and collisions, then rerun with `--apply`.
+Start the app only after verification. See `HUMAN_DEPLOY_GUIDE.md` for the exact
+sequence, private temporary-file handling, and phase-specific rollback boundary.
 
-- Public hostnames: `jobcron.app` and `www.jobcron.app`
-- Caddy is the only public entry point and terminates HTTPS directly.
-- Cloudflare proxy is off for this first pass.
-- The app uses AWS RDS PostgreSQL 18 through `DATABASE_URL`.
-- Worknet stays disabled until a human explicitly adds `JOBCRON_WORKNET_KEY`.
-- `JOBCRON_PROXY_SECRET`, `JOBCRON_DEMO`, and `JOBCRON_ADMIN_TOKEN`
-  are intentionally unset.
-- The app stores BYOK credentials below `/root/.config/jobcron` in the explicitly
-  named `jobcron_config` Docker volume.
-- Normal container recreation and `docker compose down` preserve the volume on
-  the same EC2 host. `docker compose down -v` deletes it and is not a routine
-  deploy command.
-- Host loss is outside the volume's durability boundary; recover through a
-  secure backup or re-enter the API key.
+Production has no app filesystem mount, `jobcron_config` volume, legacy
+credential volume, or migration container. Encrypted BYOK credentials live in
+PostgreSQL. A retained local `ai_keys.json` may be used only as an optional
+legacy import source from the trusted Mac; it is not stored on EC2.
 
 ## Files
 
-- `compose.yaml` mounts `jobcron_config` into the app and retains the existing
-  Caddy volumes. It has no local build section and no local database service.
+- `compose.yaml` pulls the approved immutable image, reaches RDS through
+  `DATABASE_URL`, and retains only Caddy's standard volumes.
 - `Caddyfile` redirects `www.jobcron.app` to `jobcron.app` and proxies the
   canonical host to the private app container.
-- `.env.example` documents required human-entered values without real secrets.
-- `Dockerfile` is for building the arm64 image on your Mac before pushing it to
-  a registry.
-- `HUMAN_DEPLOY_GUIDE.md` keeps RDS private by using a localhost SSH tunnel for
-  owner creation and optional import.
+- `.env.example` documents required values with placeholders only.
+- `Dockerfile` builds the arm64 image on the trusted build machine.
+- `HUMAN_DEPLOY_GUIDE.md` defines the blank-host rollout, private-RDS import,
+  first app start, verification, retention, and rollback sequence.
 
 ## Validate the compose file locally
 
-Use dummy values only:
+Use synthetic values only:
 
 ```sh
 cd deploy/production
-JOBCRON_IMAGE=example/jobcron:sha-test \
-DATABASE_URL='postgres://jobcron_admin:<database-password>@db.example.invalid:5432/jobcron?sslmode=require' \
-SESSION_SECRET=dummy-session-secret \
+JOBCRON_IMAGE=example/jobcron:sha-000000000000 \
+DATABASE_URL='postgres://example:example@db.example.invalid:5432/example?sslmode=require' \
+SESSION_SECRET=synthetic-session-secret \
+JOBCRON_CREDENTIAL_ENCRYPTION_KEY='MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=' \
 docker compose config
 ```
 
-The rendered config must mount `jobcron_config` at `/root/.config/jobcron`,
-retain Caddy's `caddy_data` and `caddy_config` volumes, and include
-`DATABASE_URL`, `SESSION_SECRET`, `JOBCRON_ENV=production`,
-`JOBCRON_SCHEDULER_ENABLED=1`, and `JOBCRON_DAILY_SCRAPE_TIME=05:00`. It must
-not include demo mode, an admin token, a Worknet key, or a proxy secret.
+The rendered config must expose only Caddy on ports `80` and `443`; keep the app
+private on `7777`; include the database, session, credential-key, production,
+no-open, scheduler, and daily-time settings; and contain no app filesystem or
+legacy credential volume. It must not include demo mode, an admin token, a
+Worknet key, or a proxy secret.
+
+Until a human closes the rollback window, retain the original SQLite snapshot,
+optional legacy key file, master-key backup, and pre-import RDS snapshot. Before
+import commit, fix and rerun dry-run. After import but before new writes, restore
+the snapshot. After new writes, keep PostgreSQL authoritative and roll back code
+or PostgreSQL; never return to SQLite.

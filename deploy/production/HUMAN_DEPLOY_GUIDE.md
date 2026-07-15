@@ -1,19 +1,39 @@
 # Human deploy guide for jobcron.app production
 
-This guide deploys the production jobcron app to AWS using an image built on
-your Mac, an AWS EC2 host, AWS RDS PostgreSQL 18, and Caddy-managed HTTPS.
+This is the first deployment of the production jobcron app to a blank AWS EC2
+host. No app or Docker stack is currently deployed. The operator builds the
+approved image on a Mac, keeps AWS RDS PostgreSQL private, and lets Caddy manage
+HTTPS after the verified import is complete.
 
-The production deploy files are configured for:
+The existing EC2 `.env` already contains the configured database URL, session
+secret, environment, host, port, no-open setting, and daily scrape time. Preserve
+those values. This rollout adds only the immutable image reference and the
+production credential master key before the first app start.
 
-- Public URLs: `https://jobcron.app` and `https://www.jobcron.app`
-- App compose directory on EC2: `/srv/jobcron/deploy/production`
-- Database: AWS RDS PostgreSQL 18 through `DATABASE_URL`
-- App port inside Docker: `7777`
+Production has no legacy credential volume, `jobcron_config` volume, or
+migration container. The production app stores encrypted BYOK credentials in
+PostgreSQL. A retained local `ai_keys.json` is an optional legacy import source
+on the trusted Mac only; do not copy it to EC2.
 
-Do not put real secrets in Git. The real `DATABASE_URL` password and
-`SESSION_SECRET` are entered by a human on EC2.
+Do not put real secrets, host addresses, database identifiers, account identity,
+source paths, personal data, or captured logs in Git, issues, or chat. Keep exact
+deployment evidence in the access-controlled operator log.
 
-## 1. Build and publish the approved immutable image
+## 1. Preserve the rollback materials
+
+Before changing the host or database, retain these materials through the human-
+approved rollback window:
+
+- the original SQLite snapshot and its durable `-wal` file;
+- the optional legacy key file used as the local import source;
+- a separate backup of the production credential master key; and
+- the pre-import RDS snapshot created later in this guide.
+
+Keep these materials outside Git and do not move the SQLite database or legacy
+key file to EC2. Stop the legacy local app before import and leave the retained
+source unchanged through verification.
+
+## 2. Build and publish the approved immutable image
 
 From the approved release checkout on the operator's Mac:
 
@@ -22,7 +42,7 @@ git status --short
 git rev-parse HEAD
 
 RELEASE_TAG="sha-$(git rev-parse --short=12 HEAD)"
-IMAGE="<dockerhub-user>/jobcron:$RELEASE_TAG"
+IMAGE="<registry-user>/jobcron:$RELEASE_TAG"
 
 docker login
 docker buildx build \
@@ -33,183 +53,123 @@ docker buildx build \
 docker buildx imagetools inspect "$IMAGE"
 ```
 
-Stop if `git status` is not clean or the inspected image does not match the
-approved release architecture and tag. Set `JOBCRON_IMAGE` in the EC2 `.env`
-file to this exact immutable image.
+Stop if the checkout is dirty or the inspected image does not match the approved
+commit and architecture. Record the digest only in the access-controlled
+operator log.
 
-## 2. Confirm AWS RDS PostgreSQL 18
+## 3. Confirm the blank EC2 host, private RDS, and DNS
 
-The production RDS database must exist before the app starts.
+Confirm that no app container or Docker stack is running on EC2. Keep RDS public
+access disabled. Its security group must allow PostgreSQL `5432` only from the
+EC2 instance security group, and the configured URL must require TLS.
 
-Expected first-pass settings:
+Cloudflare proxy remains off for the first pass. Confirm that the apex A record
+points to the EC2 host and that `www` is a CNAME to the apex. Use placeholders in
+shared documentation; record exact addresses only in the operator log.
 
-- Database name: `jobcron`
-- App database user: `jobcron_admin`
-- Public access: off unless there is a specific temporary maintenance need
-- Security group: allow PostgreSQL `5432` only from the EC2 instance security
-  group
-- TLS: require TLS in the connection string with `sslmode=require`
+## 4. Install Docker and place the approved deployment files
 
-The EC2 `.env` file uses this shape:
-
-```sh
-DATABASE_URL=postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require
-```
-
-## 3. Confirm DNS points at the EC2 host
-
-Cloudflare proxy is off for this first pass, so Caddy talks directly to Let's
-Encrypt.
-
-At your DNS provider for `jobcron.app`, these records should exist:
-
-```text
-Type: A      Name: @    Value: <EC2 public IPv4 address>    Proxy: off
-Type: CNAME  Name: www  Value: jobcron.app                  Proxy: off
-```
-
-Verify from your Mac:
-
-```sh
-dig jobcron.app
-dig www.jobcron.app
-```
-
-The answers should route to the EC2 host before Caddy starts.
-
-## 4. Install Docker on EC2
-
-SSH into the instance, then install and start Docker:
+On the expected Amazon Linux 2023 host:
 
 ```sh
 sudo dnf install -y docker
 sudo systemctl enable --now docker
-sudo usermod -aG docker ec2-user
-exit
+sudo usermod -aG docker "$USER"
 ```
 
-SSH back in so the Docker group change applies, then install Docker Compose:
+Reconnect once, install the Compose v2 plugin for the host architecture, then
+verify `docker version` and `docker compose version`. Obtain the exact approved
+commit under the production application directory without rewriting history:
 
 ```sh
-sudo mkdir -p /usr/local/lib/docker/cli-plugins
-sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
-sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-docker compose version
+cd <production-repository-directory>
+git rev-parse HEAD
+git status --short
 ```
 
-If your registry requires authentication:
+The commit must equal the approved release commit and the tree must be clean.
+Authenticate to the image registry on EC2 only if the registry requires it.
+
+## 5. Preserve `.env` and add only the missing entries
+
+Back up the existing EC2 `.env` with owner-only permissions. Do not replace its
+database URL, session secret, environment, host, port, no-open setting, or daily
+scrape time. Add only:
+
+```dotenv
+JOBCRON_IMAGE=<registry-user>/jobcron:sha-<12-character-commit>
+JOBCRON_CREDENTIAL_ENCRYPTION_KEY=<base64-32-byte-master-key>
+```
+
+Generate the credential master key on a trusted machine, keep a separate secure
+backup, and validate that it decodes to exactly 32 bytes without printing it.
+Keep demo mode, the legacy admin token, the Worknet key, and the proxy secret
+unset for this first pass.
+
+Validate Compose before starting anything:
 
 ```sh
-docker login <registry>
+cd <production-compose-directory>
+docker compose --env-file .env config --quiet
+(
+  set -eu
+  umask 077
+  rendered_compose="$(mktemp "${TMPDIR:-/tmp}/jobcron-production-compose.XXXXXX")"
+  trap 'rm -f "$rendered_compose"' EXIT
+  trap 'exit 1' HUP INT TERM
+  docker compose --env-file .env config > "$rendered_compose"
+  ! rg -n 'jobcron_config|/root/.config/jobcron' "$rendered_compose"
+)
 ```
 
-## 5. Place the app files on EC2
+The private temporary file contains rendered secrets, so the subshell creates it
+with owner-only permissions and removes it on success, failure, or interruption.
 
-Create the app directory and clone or update the repo:
+Do not pull or start the app yet. Owner creation and import happen from the Mac
+through the private-RDS tunnel before the first app start. `jobcron-user` opens
+PostgreSQL and applies the embedded migrations, so no migration container or
+early app start is needed.
 
-```sh
-sudo mkdir -p /srv/jobcron
-sudo chown -R ec2-user:ec2-user /srv/jobcron
-git clone <repo-url> /srv/jobcron
-```
+## 6. Open the localhost-only tunnel from the Mac
 
-For later deploys:
-
-```sh
-cd /srv/jobcron
-git pull --ff-only
-```
-
-## 6. Create the production environment file
-
-On EC2:
-
-```sh
-cd /srv/jobcron/deploy/production
-cp .env.example .env
-openssl rand -base64 48
-nano .env
-```
-
-Fill in:
-
-```sh
-JOBCRON_IMAGE=<dockerhub-user>/jobcron:sha-<12-character-commit>
-DATABASE_URL=postgres://jobcron_admin:<database-password>@<rds-endpoint>:5432/jobcron?sslmode=require
-SESSION_SECRET=<paste-random-session-secret-here>
-```
-
-Do not add these variables for this first production pass:
-
-```text
-JOBCRON_DEMO
-JOBCRON_ADMIN_TOKEN
-JOBCRON_PROXY_SECRET
-JOBCRON_WORKNET_KEY
-```
-
-The compose file already sets:
-
-```text
-JOBCRON_ENV=production
-JOBCRON_HOST=0.0.0.0
-JOBCRON_PORT=7777
-JOBCRON_NO_OPEN=1
-JOBCRON_SCHEDULER_ENABLED=1
-JOBCRON_DAILY_SCRAPE_TIME=05:00
-```
-
-## 7. Pull the image and start production
-
-On EC2:
-
-```sh
-cd /srv/jobcron/deploy/production
-docker compose --env-file .env pull
-docker compose --env-file .env up -d
-docker compose logs -f
-```
-
-Do not run `docker compose build` or `docker compose up --build` on EC2. The
-compose file uses the image named by `JOBCRON_IMAGE`.
-
-Expected behavior:
-
-- Caddy listens on public ports `80` and `443`.
-- The app is reachable only inside the Docker network as `app:7777`.
-- Caddy requests and stores HTTPS certificates automatically.
-- Caddy owns forwarded headers. There is no shared proxy secret in this pass.
-
-The app must start successfully once before owner creation or import because app
-startup applies PostgreSQL migrations.
-
-After startup, verify `docker volume inspect jobcron_config` succeeds. Routine
-deploys may use `docker compose down`, but must not use `docker compose down -v`.
-
-## 8. Open a localhost-only tunnel to private RDS
-
-Keep RDS public access disabled. In a dedicated terminal on the operator's Mac:
+In a dedicated terminal on the trusted Mac, open the tunnel and leave it running
+through owner creation, import, and verification:
 
 ```sh
 ssh -o ExitOnForwardFailure=yes -N \
-  -L 127.0.0.1:15432:<rds-endpoint>:5432 \
-  ec2-user@<ec2-public-host>
+  -L 127.0.0.1:15432:<private-rds-host>:5432 \
+  <ec2-user>@<ec2-host>
 ```
 
-Leave that terminal running only for owner creation and optional import.
+Never make RDS public. In a second terminal at the trusted source checkout, use
+the default macOS `zsh` to read the tunneled URL and the same protected
+production master key added to the EC2 `.env` without echoing either value. Read
+the owner email without placing it in command history, then export all values
+only in the current shell:
 
-In a trusted local source checkout, export private values in the current shell:
+```zsh
+read -r -s 'TUNNELED_DATABASE_URL?Tunneled PostgreSQL URL: '
+printf '\n'
+export TUNNELED_DATABASE_URL
 
-```sh
-export TUNNELED_DATABASE_URL='<postgresql-url-using-127.0.0.1:15432-and-sslmode-require>'
-export OWNER_EMAIL='<owner-email>'
+read -r 'OWNER_EMAIL?Owner email: '
+export OWNER_EMAIL
+
+read -r -s 'JOBCRON_CREDENTIAL_ENCRYPTION_KEY?Production credential master key: '
+printf '\n'
+export JOBCRON_CREDENTIAL_ENCRYPTION_KEY
+
+export JOBCRON_ENV=production
 ```
 
-Do not paste the real URL or email into Git, issues, chat, or shared logs.
+Validate the decoded key length without printing the key. Do not put these
+values in a shell profile, command transcript, or tracked file. Production mode
+makes the importer fail closed if the master key is missing or invalid instead
+of falling back to a local development key.
 
-## 9. Create the owner before any import
+## 7. Create exactly one owner before import
 
-Let `jobcron-user` prompt for the password so it does not enter shell history:
+Let `jobcron-user` prompt securely for the new password:
 
 ```sh
 go run ./cmd/jobcron-user create-owner \
@@ -217,66 +177,117 @@ go run ./cmd/jobcron-user create-owner \
   --email "$OWNER_EMAIL"
 ```
 
-## 10. Optionally import the recovered SQLite state
+The command opens PostgreSQL and applies the embedded migrations. After success,
+confirm through an approved query that the user count is exactly one. Do not run
+`create-owner` again.
 
-Skip this section unless the human approved import and a current RDS snapshot
-exists. Use the exact same `OWNER_EMAIL` as owner creation.
+## 8. Create the pre-import RDS snapshot
 
-Run the source-count dry run first:
+Create a manual pre-import RDS snapshot through the approved AWS operator
+surface and wait until its status is `available`. Record its identifier only in
+the access-controlled operator log. Do not begin the importer dry-run before the
+snapshot is available.
+
+## 9. Dry-run, review, and apply the import
+
+Stop the legacy local app and confirm it has exited. Invoke the importer from the
+trusted Mac without `--apply`; dry-run is the default:
 
 ```sh
 go run ./cmd/jobcron-import \
-  --sqlite '<recovered-sqlite-path>' \
+  --sqlite '<immutable-sqlite-snapshot>' \
   --postgres "$TUNNELED_DATABASE_URL" \
   --owner-email "$OWNER_EMAIL" \
-  --dry-run
+  --ai-keys '<optional-legacy-key-file>'
 ```
 
-Review profile, postings, scores, bookmarks, not-interested state,
-AI extractions, AI scores, and AI usage counts. If approved, run:
+Omit `--ai-keys` when no legacy key file was approved. Before any write, review:
+
+- the immutable source fingerprint;
+- all eight category counts: profile, postings, rule scores, bookmarks, hidden
+  jobs, AI extractions, AI scores, and AI usage;
+- the credential provider count; and
+- every collision, with zero unapproved collisions.
+
+Stop on any mismatch. Fix the cause and rerun the same dry-run; do not apply a
+result that has not been explicitly approved.
+
+After approval, rerun the identical importer command with `--apply`:
 
 ```sh
 go run ./cmd/jobcron-import \
-  --sqlite '<recovered-sqlite-path>' \
+  --sqlite '<immutable-sqlite-snapshot>' \
   --postgres "$TUNNELED_DATABASE_URL" \
-  --owner-email "$OWNER_EMAIL"
+  --owner-email "$OWNER_EMAIL" \
+  --ai-keys '<optional-legacy-key-file>' \
+  --apply
 ```
 
-The importer preserves the existing owner's password hash when the email
-matches. It does not import `ai_keys.json`, sessions, owner passwords, or
-production secrets.
+The importer preserves the newly created owner's password hash. It does not
+import sessions or passwords. It may import an approved legacy credential by
+re-encrypting it for PostgreSQL with the production master key; it never makes
+the legacy key file part of the EC2 deployment.
 
-Close the SSH tunnel and clear the private shell variables:
+Rerun the command once more without `--apply`. Expect `already imported` plus
+successful verification. Confirm that the owner password hash did not change
+and that PostgreSQL contains no plaintext credential.
+
+After verification, clear the values from the trusted shell:
 
 ```sh
-unset TUNNELED_DATABASE_URL OWNER_EMAIL
+unset TUNNELED_DATABASE_URL OWNER_EMAIL JOBCRON_CREDENTIAL_ENCRYPTION_KEY \
+  JOBCRON_ENV
 ```
 
-## 11. Enter the Anthropic key after volume durability exists
+Then stop the dedicated SSH tunnel. Keep it open until verification finishes;
+do not leave it running afterward.
 
-Sign in to `jobcron.app` and save the key through the application UI. The key
-stays in `/root/.config/jobcron/ai_keys.json` inside `jobcron_config`. Re-enter
-it after host loss unless a separate secure backup exists.
+## 10. Pull and start production for the first time
 
-## 12. Final checks
+Only after owner creation and verified import, run on EC2:
 
-Open these URLs in a browser:
-
-```text
-https://jobcron.app/
-https://www.jobcron.app/
+```sh
+cd <production-compose-directory>
+docker compose --env-file .env pull
+docker compose --env-file .env up -d
+docker compose --env-file .env ps
+docker compose --env-file .env logs --no-color --tail=200 app caddy
 ```
 
-Check:
+Do not run `docker compose build`, `docker compose up --build`, or a migration
+container on EC2. Expected behavior:
 
-- HTTPS works with a valid certificate.
-- `http://jobcron.app/` redirects to HTTPS.
-- `https://www.jobcron.app/` redirects to `https://jobcron.app/`.
-- The owner can log in.
-- The app can load its production PostgreSQL-backed data.
-- The daily scrape is scheduled for `05:00` KST, or a first manual scrape is run
-  after deploy to populate the briefing.
-- Worknet is absent unless a human later adds `JOBCRON_WORKNET_KEY`.
+- Caddy alone publishes ports `80` and `443`.
+- The app is reachable only inside the Docker network as `app:7777`.
+- The app starts against the already imported PostgreSQL database.
+- Caddy obtains and stores HTTPS certificates in its own standard volumes.
+- No app filesystem or legacy credential volume is mounted.
 
-If the app cannot connect to RDS, check the RDS security group, the database
-endpoint, the username and password in `DATABASE_URL`, and `sslmode=require`.
+## 11. Walk the production checks
+
+Use the approved headless browser workflow to verify the real user path:
+
+- HTTPS works with a valid certificate and HTTP redirects to HTTPS.
+- `www` redirects to the canonical apex host.
+- The owner can sign in with the newly created password.
+- The migrated profile, one known rule score, one known AI score, one bookmark,
+  and one hidden job match the approved source evidence.
+- Saving a BYOK credential, reloading it, and using it works through the
+  PostgreSQL-backed credential path.
+- The daily scrape time matches the preserved EC2 `.env` value.
+
+Keep exact URLs, identities, screenshots, and logs out of tracked documentation.
+
+## 12. Roll back according to the deployment phase
+
+- **Before import commit:** fix the cause and rerun the dry-run. No PostgreSQL
+  import rollback is needed because dry-run does not write.
+- **After import but before new writes:** restore the pre-import RDS snapshot,
+  then investigate and repeat the approved owner/import sequence.
+- **After the app accepts new writes:** keep PostgreSQL authoritative. Roll back
+  application code or restore PostgreSQL as appropriate; never return to
+  SQLite.
+
+Keep the original SQLite snapshot, legacy key file, production master-key
+backup, and pre-import RDS snapshot until the human explicitly closes the
+rollback window.
