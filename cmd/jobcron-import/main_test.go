@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -19,14 +20,16 @@ import (
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
-func TestImportDryRunReportsSQLiteCountsWithoutPostgres(t *testing.T) {
+func TestImportDefaultsToDryRunAndWritesNothing(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
 	sqlitePath := seedSQLiteImportFixture(t)
+	targetURL, owners := prepareImportTarget(t, postgresURL, "dry-run-owner@example.invalid")
 
 	var out bytes.Buffer
 	err := runImport(context.Background(), importOptions{
 		sqlitePath:  sqlitePath,
-		postgresURL: "postgres://dry-run-should-not-connect.invalid/jobs",
-		dryRun:      true,
+		postgresURL: targetURL,
+		ownerEmail:  "dry-run-owner@example.invalid",
 		out:         &out,
 	})
 	if err != nil {
@@ -44,16 +47,230 @@ func TestImportDryRunReportsSQLiteCountsWithoutPostgres(t *testing.T) {
 		"ai_extractions: 1",
 		"ai_scores: 1",
 		"ai_usage: 1",
+		"ai_providers: 0",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("dry-run output missing %q:\n%s", want, got)
 		}
 	}
+	db, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 1)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM postings`, 0)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM profiles`, 0)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM local_data_imports`, 0)
+	if owners["dry-run-owner@example.invalid"] <= 0 {
+		t.Fatal("prepared owner has no positive ID")
+	}
 }
 
-func TestImportOwnerDefaultEmailUsesCanonicalJobcronAddress(t *testing.T) {
-	if defaultOwnerEmail != "sqlite-import-owner@jobcron.local" {
-		t.Fatalf("default owner email = %q, want canonical jobcron address", defaultOwnerEmail)
+func TestImportDryRunReportsAllCategoriesFingerprintAndCollisions(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	targetURL, owners := prepareImportTarget(t, postgresURL, "collision-owner@example.invalid")
+	target, err := storage.OpenPostgres(targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := target.UpsertPosting(context.Background(), scraper.Posting{
+		Source:          "jumpit",
+		SourcePostingID: "import-1",
+		URL:             "https://example.invalid/existing",
+		Title:           "existing",
+		Company:         "existing",
+		Description:     "existing",
+		RawJSON:         `{}`,
+		FirstSeenAt:     time.Now().UTC(),
+		LastSeenAt:      time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := target.SaveProfileForUser(context.Background(), owners["collision-owner@example.invalid"], `{"stacks":["Rust"]}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  "collision-owner@example.invalid",
+		out:         &out,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	report := out.String()
+	for _, category := range []string{
+		"profile", "postings", "scores", "bookmarks", "not_interested",
+		"ai_extractions", "ai_scores", "ai_usage", "ai_providers",
+	} {
+		if !strings.Contains(report, category+":") {
+			t.Fatalf("report missing category %q:\n%s", category, report)
+		}
+	}
+	if !regexp.MustCompile(`source_sha256: [0-9a-f]{64}`).MatchString(report) {
+		t.Fatalf("report missing lowercase SHA-256 fingerprint:\n%s", report)
+	}
+	for _, want := range []string{"collisions:", "profile: 1", "postings: 1"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("report missing %q:\n%s", want, report)
+		}
+	}
+}
+
+func TestImportRequiresExistingSoleOwner(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	for _, tc := range []struct {
+		name   string
+		emails []string
+	}{
+		{name: "missing", emails: nil},
+		{name: "multiple", emails: []string{"first@example.invalid", "second@example.invalid"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			targetURL, _ := prepareImportTarget(t, postgresURL, tc.emails...)
+			err := runImport(context.Background(), importOptions{
+				sqlitePath:  sqlitePath,
+				postgresURL: targetURL,
+				ownerEmail:  "first@example.invalid",
+				out:         io.Discard,
+			})
+			if err == nil || !strings.Contains(err.Error(), "exactly one owner") {
+				t.Fatalf("runImport error = %v, want exactly-one-owner refusal", err)
+			}
+		})
+	}
+}
+
+func TestImportRefusesOwnerEmailMismatch(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	targetURL, _ := prepareImportTarget(t, postgresURL, "actual-owner@example.invalid")
+	err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  "different-owner@example.invalid",
+		out:         io.Discard,
+	})
+	if err == nil || !strings.Contains(err.Error(), "owner email mismatch") {
+		t.Fatalf("runImport error = %v, want owner email mismatch", err)
+	}
+}
+
+func TestImportReportDoesNotContainSecretsOrPrivateInputs(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "private-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	keysPath := filepath.Join(t.TempDir(), "private-legacy-keys.json")
+	const secret = "synthetic-secret-that-must-not-appear"
+	if err := os.WriteFile(keysPath, []byte(`{"Anthropic":"`+secret+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  ownerEmail,
+		aiKeysPath:  keysPath,
+		out:         &out,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	report := out.String()
+	for _, private := range []string{sqlitePath, targetURL, ownerEmail, keysPath, secret} {
+		if strings.Contains(report, private) {
+			t.Fatalf("report contains private input %q:\n%s", private, report)
+		}
+	}
+	for _, want := range []string{"ai_providers: 1", "anthropic"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("report missing %q:\n%s", want, report)
+		}
+	}
+}
+
+func TestImportDryRunRejectsDuplicateNormalizedProviders(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	targetURL, _ := prepareImportTarget(t, postgresURL, "provider-owner@example.invalid")
+	keysPath := filepath.Join(t.TempDir(), "duplicate-provider-keys.json")
+	if err := os.WriteFile(keysPath, []byte(`{"Anthropic":"first"," anthropic ":"second"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := runImport(context.Background(), importOptions{
+		sqlitePath:  sqlitePath,
+		postgresURL: targetURL,
+		ownerEmail:  "provider-owner@example.invalid",
+		aiKeysPath:  keysPath,
+		out:         io.Discard,
+	})
+	if err == nil || !strings.Contains(err.Error(), "duplicate provider") {
+		t.Fatalf("runImport error = %v, want duplicate provider refusal", err)
+	}
+}
+
+func TestImportErrorsDoNotContainPrivateInputs(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	ownerEmail := "private-error-owner@example.invalid"
+
+	t.Run("source path", func(t *testing.T) {
+		privatePath := filepath.Join(t.TempDir(), "private-missing-source.db")
+		err := runImport(context.Background(), importOptions{
+			sqlitePath:  privatePath,
+			postgresURL: "postgres://private-target.invalid/jobs",
+			ownerEmail:  ownerEmail,
+			out:         io.Discard,
+		})
+		assertImportErrorRedacts(t, err, privatePath, "private-target", ownerEmail)
+	})
+
+	t.Run("legacy key path", func(t *testing.T) {
+		sqlitePath := seedSQLiteImportFixture(t)
+		targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+		keysPath := filepath.Join(t.TempDir(), "private-malformed-keys.json")
+		if err := os.WriteFile(keysPath, []byte(`{"anthropic":`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		err := runImport(context.Background(), importOptions{
+			sqlitePath:  sqlitePath,
+			postgresURL: targetURL,
+			ownerEmail:  ownerEmail,
+			aiKeysPath:  keysPath,
+			out:         io.Discard,
+		})
+		assertImportErrorRedacts(t, err, sqlitePath, targetURL, ownerEmail, keysPath)
+	})
+
+	t.Run("postgres URL", func(t *testing.T) {
+		sqlitePath := seedSQLiteImportFixture(t)
+		privateURL := "postgres://private-user:private-password@127.0.0.1:1/private-db?sslmode=disable&connect_timeout=1"
+		err := runImport(context.Background(), importOptions{
+			sqlitePath:  sqlitePath,
+			postgresURL: privateURL,
+			ownerEmail:  ownerEmail,
+			out:         io.Discard,
+		})
+		assertImportErrorRedacts(t, err, sqlitePath, privateURL, "private-user", "private-password", "private-db", ownerEmail)
+	})
+}
+
+func assertImportErrorRedacts(t *testing.T, err error, privateValues ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("runImport succeeded, want failure")
+	}
+	message := err.Error()
+	for _, private := range privateValues {
+		if strings.Contains(message, private) {
+			t.Fatalf("error contains private input %q: %s", private, message)
+		}
 	}
 }
 
@@ -73,7 +290,7 @@ func TestImportSQLiteToPostgresCopiesRepresentativeDataAndIsIdempotent(t *testin
 	}
 	if _, err := preexisting.SQLDB().Exec(`
 INSERT INTO users (email, password_hash, created_at, updated_at)
-VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil {
+VALUES ($1, 'preexisting', now(), now())`, ownerEmail); err != nil {
 		t.Fatalf("seed preexisting user: %v", err)
 	}
 	if err := preexisting.Close(); err != nil {
@@ -86,6 +303,7 @@ VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil 
 			sqlitePath:  sqlitePath,
 			postgresURL: targetURL,
 			ownerEmail:  ownerEmail,
+			apply:       true,
 			out:         &out,
 		}); err != nil {
 			t.Fatalf("runImport pass %d: %v\n%s", i+1, err, out.String())
@@ -98,7 +316,7 @@ VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil 
 	}
 	defer db.Close()
 
-	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 2)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM postings`, 2)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM profiles`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM scores`, 1)
@@ -129,6 +347,7 @@ WHERE user_id = $1 AND day = '2026-07-09'`, ownerID); err != nil {
 		sqlitePath:  sqlitePath,
 		postgresURL: targetURL,
 		ownerEmail:  ownerEmail,
+		apply:       true,
 		out:         &out,
 	}); err != nil {
 		t.Fatalf("runImport after higher live usage: %v\n%s", err, out.String())
@@ -199,6 +418,7 @@ RETURNING id`, ownerEmail, passwordHash).Scan(&ownerID); err != nil {
 		sqlitePath:  sqlitePath,
 		postgresURL: targetURL,
 		ownerEmail:  ownerEmail,
+		apply:       true,
 		out:         &out,
 	}); err != nil {
 		t.Fatalf("runImport: %v\n%s", err, out.String())
@@ -336,6 +556,41 @@ func createPostgresImportSchema(t *testing.T, databaseURL string) string {
 		t.Fatalf("create schema %s: %v", schema, err)
 	}
 	return schema
+}
+
+func requireImportPostgres(t *testing.T) string {
+	t.Helper()
+	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
+	if postgresURL == "" {
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
+	}
+	return postgresURL
+}
+
+func prepareImportTarget(t *testing.T, postgresURL string, emails ...string) (string, map[string]int64) {
+	t.Helper()
+	schema := createPostgresImportSchema(t, postgresURL)
+	targetURL := databaseURLWithSearchPath(postgresURL, schema)
+	target, err := storage.OpenPostgres(targetURL)
+	if err != nil {
+		t.Fatalf("open prepared import target: %v", err)
+	}
+	owners := make(map[string]int64, len(emails))
+	for _, email := range emails {
+		var ownerID int64
+		if err := target.SQLDB().QueryRow(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ($1, 'synthetic-owner-password-hash', now(), now())
+RETURNING id`, email).Scan(&ownerID); err != nil {
+			_ = target.Close()
+			t.Fatalf("insert prepared owner: %v", err)
+		}
+		owners[email] = ownerID
+	}
+	if err := target.Close(); err != nil {
+		t.Fatalf("close prepared import target: %v", err)
+	}
+	return targetURL, owners
 }
 
 func assertPostgresScalar(t *testing.T, db *sql.DB, query string, want int) {
