@@ -164,8 +164,8 @@ recover an API key without the separately protected master key.
 
 ### 1. Make PostgreSQL The Writable Runtime
 
-`openConfiguredStore` must use these rules. The `--db` flag is removed in every
-mode.
+Runtime resolution and store opening must use these rules. The `--db` flag is
+removed in every mode; do not retain a parallel configuration-only store opener.
 
 - **Production:** `DATABASE_URL` is required. Open the supplied PostgreSQL URL.
 - **Normal local with `DATABASE_URL`:** Open the supplied PostgreSQL URL and

@@ -136,10 +136,14 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 - **macOS Gatekeeper**가 서명되지 않은 바이너리를 차단할 수 있습니다. 파일을 우클릭 →
   Open을 선택하거나, `xattr -d com.apple.quarantine ./jobcron`을 실행하세요.
 - **Windows SmartScreen**: **More info → Run anyway**를 선택하세요.
-- **기존 SQLite 앱에서 업그레이드하는 경우:** 앱을 완전히 종료하고 `jobs.db`, `-wal`
-  보조 파일, 선택적 `ai_keys.json`을 보존한 뒤
-  [deploy/local/README.md](deploy/local/README.md)의 검증된 가져오기 절차를 따르세요.
-  일반 시작 경로는 기존 데이터베이스를 열거나 이동하지 않습니다.
+- **기존 SQLite 앱에서 업그레이드:** 앱을 완전히 종료하세요. `jobs.db`, `-wal`
+  보조 파일과 선택적 `ai_keys.json`을 보존하세요. 검증된 가져오기는
+  [로컬 PostgreSQL 가이드][local-postgres-guide]를 따르세요.
+  릴리스 압축 파일에는 패키징된 `jobcron-import`가 포함됩니다.
+  소스 체크아웃은 필요 없습니다. 일반 시작 경로는
+  기존 데이터베이스를 열거나 이동하지 않습니다.
+
+[local-postgres-guide]: https://github.com/ohchanwu/jobcron/blob/main/deploy/local/README.md
 
 플래그(flag): `--port` (기본값 `7777`), `--no-open` (브라우저를 열지 않음),
 `--worknet-api-key` (워크넷 출처 활성화 — [data.go.kr](https://www.data.go.kr)에서

@@ -139,8 +139,10 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 - **Windows SmartScreen**: choose **More info → Run anyway**.
 - **Upgrading from the legacy SQLite app:** fully stop it, preserve `jobs.db`,
   its `-wal` sidecar, and the optional `ai_keys.json`, then follow the verified
-  import procedure in [deploy/local/README.md](deploy/local/README.md). Normal
-  startup never opens or moves the legacy database.
+  import procedure in the
+  [local PostgreSQL guide](https://github.com/ohchanwu/jobcron/blob/main/deploy/local/README.md).
+  Release archives include the packaged `jobcron-import`; no source checkout is
+  required. Normal startup never opens or moves the legacy database.
 
 Flags: `--port` (default `7777`), `--no-open` (do not open a browser),
 `--worknet-api-key` (enable the 워크넷 source — a free key from

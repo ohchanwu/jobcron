@@ -245,15 +245,6 @@ func openPostgresRuntime(runtime runtimeStorage) (*storage.Store, error) {
 	return storage.OpenPostgres(runtime.DatabaseURL)
 }
 
-// openConfiguredStore is retained as a narrow test seam. Runtime resolution
-// supplies either an explicit or managed-local PostgreSQL URL before opening.
-func openConfiguredStore(cfg config.Config) (*storage.Store, error) {
-	if cfg.DatabaseURL == "" {
-		return nil, fmt.Errorf("PostgreSQL runtime requires a database URL")
-	}
-	return storage.OpenPostgres(cfg.DatabaseURL)
-}
-
 // listen binds host on the preferred port, falling back to the next ten
 // if it is busy. It returns the listener and the bound "host:port" address.
 func listen(host string, preferred int, strict bool) (net.Listener, string, error) {

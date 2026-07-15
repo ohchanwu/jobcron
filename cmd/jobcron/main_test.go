@@ -416,21 +416,6 @@ func TestListenUsesConfiguredHost(t *testing.T) {
 	}
 }
 
-func TestOpenConfiguredStoreAlwaysUsesPostgres(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", root)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
-	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
-	if store, err := openConfiguredStore(config.Config{}); err == nil {
-		_ = store.Close()
-		t.Fatal("openConfiguredStore selected SQLite without a PostgreSQL URL")
-	}
-	_, err := openConfiguredStore(config.Config{DatabaseURL: "://not-a-valid-postgres-url"})
-	if err == nil || !strings.HasPrefix(err.Error(), "storage: open postgres") {
-		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
-	}
-}
-
 func TestNormalLocalStartupDoesNotCreateSQLite(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("HOME", root)

@@ -120,26 +120,37 @@ importer independently takes a no-wait writer lock, snapshots through SQLite's
 online backup API, and refuses a concurrent writer. It never raw-copies the
 database. SQLite's rebuildable `-shm` WAL index is not byte-stability evidence.
 
-Start PostgreSQL, create the sole target owner if needed, and export the same
-credential master key that the app will use. Then run the importer without
-`--apply` and review the fingerprint, category counts, providers, and collisions:
+Release archives contain both `jobcron` and `jobcron-import`; a source checkout
+is not required. For a clean managed-local target, first ensure `DATABASE_URL`,
+`JOBCRON_ENV`, and `JOBCRON_CREDENTIAL_ENCRYPTION_KEY` are unset, then bootstrap
+the database, fixed owner, and protected local master-key file:
+
+```sh
+unset DATABASE_URL JOBCRON_ENV JOBCRON_CREDENTIAL_ENCRYPTION_KEY
+./jobcron --no-open
+```
+
+Wait for the ready message, then stop `jobcron` with Ctrl+C before importing.
+Do not export a different credential master key: the importer and ordinary app
+must both load the canonical key created by that bootstrap. Run the packaged
+importer without `--apply` and review the fingerprint, category counts,
+providers, and collisions:
 
 ```sh
 export DATABASE_URL='postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable'
-export OWNER_EMAIL='<owner-email>'
-export JOBCRON_CREDENTIAL_ENCRYPTION_KEY='<base64-encoded-32-byte-key>'
+export OWNER_EMAIL='local-owner@jobcron.example.invalid'
 
-go run ./cmd/jobcron-user create-owner \
-  --database-url "$DATABASE_URL" --email "$OWNER_EMAIL"
-
-go run ./cmd/jobcron-import \
+./jobcron-import \
   --sqlite '<legacy-jobs.db>' \
   --postgres "$DATABASE_URL" \
   --owner-email "$OWNER_EMAIL" \
   --ai-keys '<optional-legacy-ai_keys.json>'
 ```
 
-When the dry run is clean, repeat the identical importer command with `--apply`.
+When the dry run is clean, repeat the identical importer command with `--apply`,
+then restart `./jobcron`. From a source checkout, `go run ./cmd/jobcron` and
+`go run ./cmd/jobcron-import` are equivalent alternatives.
+
 The import is one transaction, preserves the existing owner password, never
 imports sessions or passwords, encrypts any legacy credential, records its
 fingerprint, and reconnects for exact readback. A repeat of the same fingerprint
