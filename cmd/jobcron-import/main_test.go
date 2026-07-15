@@ -3,14 +3,18 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -541,6 +545,161 @@ func TestImportRollbackAtEveryApplyBoundary(t *testing.T) {
 	}
 }
 
+func TestImportSameFingerprintVerifiesWithoutWrites(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "same-fingerprint-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	keysPath := filepath.Join(t.TempDir(), "ai_keys.json")
+	if err := os.WriteFile(keysPath, []byte(`{"anthropic":"same-fingerprint-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	masterKey := bytes.Repeat([]byte{0x35}, credential.MasterKeyBytes)
+	opts := importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		aiKeysPath: keysPath, apply: true, out: io.Discard,
+		loadLocalMasterKey: func() ([]byte, error) { return masterKey, nil },
+	}
+	if err := runImport(context.Background(), opts); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+	db, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	before := captureImportedTargetState(t, db)
+
+	var out bytes.Buffer
+	opts.out = &out
+	opts.failAt = func(stage string) error {
+		return fmt.Errorf("copy stage unexpectedly reached: %s", stage)
+	}
+	if err := runImport(context.Background(), opts); err != nil {
+		t.Fatalf("same-fingerprint import: %v", err)
+	}
+	if !strings.Contains(out.String(), "already imported") {
+		t.Fatalf("output missing already imported: %s", out.String())
+	}
+	after := captureImportedTargetState(t, db)
+	if after != before {
+		t.Fatalf("same-fingerprint verification mutated target\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+func TestImportDifferentFingerprintForImportedOwnerIsRefused(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	ownerEmail := "different-fingerprint-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	firstSource := seedSQLiteImportFixture(t)
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath: firstSource, postgresURL: targetURL, ownerEmail: ownerEmail,
+		apply: true, out: io.Discard,
+	}); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+
+	secondSource := seedSQLiteImportFixture(t)
+	sourceDB, err := sql.Open("sqlite", secondSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sourceDB.Exec(`UPDATE postings SET title = 'different source' WHERE id = 1`); err != nil {
+		_ = sourceDB.Close()
+		t.Fatal(err)
+	}
+	if err := sourceDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = runImport(context.Background(), importOptions{
+		sqlitePath: secondSource, postgresURL: targetURL, ownerEmail: ownerEmail,
+		apply: true, out: io.Discard,
+		failAt: func(stage string) error {
+			return fmt.Errorf("copy stage unexpectedly reached: %s", stage)
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "different source fingerprint") {
+		t.Fatalf("runImport error = %v, want different-fingerprint refusal", err)
+	}
+}
+
+func TestImportPostCommitMismatchFailsVerification(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "post-commit-mismatch-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	err := runImport(context.Background(), importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		apply: true, out: io.Discard,
+		failAt: func(stage string) error {
+			if stage != "after_commit_before_verification" {
+				return nil
+			}
+			db, err := sql.Open("pgx", targetURL)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			_, err = db.Exec(`UPDATE postings SET title = 'post-commit corruption' WHERE id = 1`)
+			return err
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "post-commit verification failed") ||
+		!strings.Contains(err.Error(), "preserve both systems") {
+		t.Fatalf("runImport error = %v, want distinct post-commit verification failure", err)
+	}
+	db, openErr := sql.Open("pgx", targetURL)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer db.Close()
+	assertPostgresScalar(t, db, `SELECT count(*) FROM local_data_imports`, 1)
+	assertPostgresScalar(t, db, `SELECT count(*) FROM postings WHERE title = 'post-commit corruption'`, 1)
+}
+
+func TestImportDoesNotModifySourceOrLegacyKeyFile(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "source-safety-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	keysPath := filepath.Join(t.TempDir(), "ai_keys.json")
+	if err := os.WriteFile(keysPath, []byte(`{"anthropic":"source-safety-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	beforeFiles := map[string]string{
+		"database": hashOptionalFile(t, sqlitePath),
+		"wal":      hashOptionalFile(t, sqlitePath+"-wal"),
+		"key":      hashOptionalFile(t, keysPath),
+	}
+	if beforeFiles["wal"] == "missing" {
+		t.Fatal("source-safety fixture must exercise a durable WAL file")
+	}
+	beforeLogical := captureSQLiteLogicalState(t, sqlitePath)
+
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		aiKeysPath: keysPath, apply: true, out: io.Discard,
+		loadLocalMasterKey: func() ([]byte, error) {
+			return bytes.Repeat([]byte{0x44}, credential.MasterKeyBytes), nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	afterFiles := map[string]string{
+		"database": hashOptionalFile(t, sqlitePath),
+		"wal":      hashOptionalFile(t, sqlitePath+"-wal"),
+		"key":      hashOptionalFile(t, keysPath),
+	}
+	afterLogical := captureSQLiteLogicalState(t, sqlitePath)
+	if !reflect.DeepEqual(afterFiles, beforeFiles) {
+		t.Fatalf("durable source hashes changed\nbefore: %v\nafter:  %v", beforeFiles, afterFiles)
+	}
+	if afterLogical != beforeLogical {
+		t.Fatalf("source schema or rows changed\nbefore: %s\nafter:  %s", beforeLogical, afterLogical)
+	}
+	// Deliberately no -shm byte comparison: it is SQLite's rebuildable WAL index.
+}
+
 func TestImportSQLiteToPostgresUsesExistingOwnerWithoutChangingPassword(t *testing.T) {
 	postgresURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
 	if postgresURL == "" {
@@ -778,6 +937,107 @@ func lookupUserIDByEmail(t *testing.T, db *sql.DB, email string) int64 {
 		t.Fatalf("query user id for %s: %v", email, err)
 	}
 	return id
+}
+
+func captureImportedTargetState(t *testing.T, db *sql.DB) string {
+	t.Helper()
+	queries := []string{
+		`SELECT * FROM users ORDER BY id`,
+		`SELECT * FROM profiles ORDER BY user_id`,
+		`SELECT * FROM postings ORDER BY id`,
+		`SELECT * FROM scores ORDER BY user_id, posting_id`,
+		`SELECT * FROM bookmarks ORDER BY user_id, posting_id`,
+		`SELECT * FROM not_interested ORDER BY user_id, posting_id`,
+		`SELECT * FROM ai_extractions ORDER BY posting_id, content_hash, ai_version`,
+		`SELECT * FROM ai_scores ORDER BY user_id, posting_id, ai_input_hash, ai_version`,
+		`SELECT * FROM ai_usage ORDER BY user_id, day`,
+		`SELECT * FROM user_ai_credentials ORDER BY user_id, provider`,
+		`SELECT * FROM local_data_imports ORDER BY user_id, source_sha256`,
+	}
+	return dumpSQLQueries(t, db, queries)
+}
+
+func captureSQLiteLogicalState(t *testing.T, path string) string {
+	t.Helper()
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	query := u.Query()
+	query.Set("mode", "ro")
+	u.RawQuery = query.Encode()
+	db, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	queries := []string{
+		`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name`,
+		`SELECT * FROM profile ORDER BY id`,
+		`SELECT * FROM postings ORDER BY id`,
+		`SELECT * FROM scores ORDER BY posting_id`,
+		`SELECT * FROM bookmarks ORDER BY posting_id`,
+		`SELECT * FROM not_interested ORDER BY posting_id`,
+		`SELECT * FROM ai_extractions ORDER BY posting_id, content_hash, ai_version`,
+		`SELECT * FROM ai_scores ORDER BY posting_id, ai_input_hash, ai_version`,
+		`SELECT * FROM ai_usage ORDER BY day`,
+	}
+	return dumpSQLQueries(t, db, queries)
+}
+
+func dumpSQLQueries(t *testing.T, db *sql.DB, queries []string) string {
+	t.Helper()
+	var out strings.Builder
+	for _, query := range queries {
+		rows, err := db.Query(query)
+		if err != nil {
+			t.Fatalf("query state %q: %v", query, err)
+		}
+		columns, err := rows.Columns()
+		if err != nil {
+			_ = rows.Close()
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&out, "%s|%v\n", query, columns)
+		for rows.Next() {
+			values := make([]any, len(columns))
+			dest := make([]any, len(columns))
+			for i := range values {
+				dest[i] = &values[i]
+			}
+			if err := rows.Scan(dest...); err != nil {
+				_ = rows.Close()
+				t.Fatal(err)
+			}
+			for _, value := range values {
+				switch value := value.(type) {
+				case []byte:
+					fmt.Fprintf(&out, "bytes:%x|", value)
+				default:
+					fmt.Fprintf(&out, "%T:%v|", value, value)
+				}
+			}
+			out.WriteByte('\n')
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			t.Fatal(err)
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return out.String()
+}
+
+func hashOptionalFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "missing"
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 var nonSchemaChars = regexp.MustCompile(`[^a-z0-9_]`)

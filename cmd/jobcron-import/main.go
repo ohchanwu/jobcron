@@ -155,6 +155,22 @@ func runImport(ctx context.Context, opts importOptions) error {
 	if err := lockImportDecision(ctx, tx, ownerID, opts.ownerEmail); err != nil {
 		return err
 	}
+	alreadyImported, err := inspectImportLedger(ctx, tx, ownerID, snapshot.SHA256)
+	if err != nil {
+		return err
+	}
+	if alreadyImported {
+		if err := tx.Rollback(); err != nil {
+			return fmt.Errorf("import: release verification transaction: %w", err)
+		}
+		if err := verifyPostCommitImport(
+			ctx, opts.postgresURL, sourceDB, ownerID, snapshot.SHA256, sourceCounts, legacyKeys, cipher,
+		); err != nil {
+			return postCommitVerificationError()
+		}
+		fmt.Fprintln(opts.out, "already imported")
+		return nil
+	}
 	lockedTargetCounts, err := readTargetCounts(ctx, tx, ownerID)
 	if err != nil {
 		return err
@@ -235,6 +251,14 @@ func runImport(ctx context.Context, opts importOptions) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("import: commit postgres transaction: %w", err)
+	}
+	if err := injectImportFailure(opts, "after_commit_before_verification"); err != nil {
+		return postCommitVerificationError()
+	}
+	if err := verifyPostCommitImport(
+		ctx, opts.postgresURL, sourceDB, ownerID, snapshot.SHA256, sourceCounts, legacyKeys, cipher,
+	); err != nil {
+		return postCommitVerificationError()
 	}
 	fmt.Fprintln(opts.out, "import complete")
 	return nil
@@ -387,6 +411,34 @@ func lockImportDecision(ctx context.Context, tx *sql.Tx, ownerID int64, expected
 		return errors.New("import: owner email mismatch")
 	}
 	return nil
+}
+
+func inspectImportLedger(ctx context.Context, tx *sql.Tx, ownerID int64, sourceSHA256 string) (bool, error) {
+	rows, err := tx.QueryContext(ctx, `
+SELECT source_sha256 FROM local_data_imports WHERE user_id = $1 ORDER BY completed_at`, ownerID)
+	if err != nil {
+		return false, fmt.Errorf("import: inspect import ledger: %w", err)
+	}
+	defer rows.Close()
+	foundSame := false
+	for rows.Next() {
+		var fingerprint string
+		if err := rows.Scan(&fingerprint); err != nil {
+			return false, fmt.Errorf("import: scan import ledger: %w", err)
+		}
+		if fingerprint != sourceSHA256 {
+			return false, errors.New("import: different source fingerprint already imported for owner")
+		}
+		foundSame = true
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("import: iterate import ledger: %w", err)
+	}
+	return foundSame, nil
+}
+
+func postCommitVerificationError() error {
+	return errors.New("import: post-commit verification failed; preserve both systems and restore the documented PostgreSQL backup before retrying")
 }
 
 type postgresQuerier interface {
@@ -853,7 +905,241 @@ func verifyTransactionCopy(
 	return nil
 }
 
-func compareRepresentativeProfile(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
+func verifyPostCommitImport(
+	ctx context.Context,
+	postgresURL string,
+	source *sql.DB,
+	ownerID int64,
+	sourceSHA256 string,
+	wantCounts categoryCounts,
+	legacyKeys map[string]string,
+	cipher credential.Cipher,
+) error {
+	target, err := sql.Open("pgx", postgresURL)
+	if err != nil {
+		return errors.New("open verification target")
+	}
+	defer target.Close()
+	if err := target.PingContext(ctx); err != nil {
+		return errors.New("connect verification target")
+	}
+	gotCounts, err := readTargetCounts(ctx, target, ownerID)
+	if err != nil || gotCounts != wantCounts {
+		return errors.New("verification count mismatch")
+	}
+	for _, compare := range []func() error{
+		func() error { return compareRepresentativeProfile(ctx, source, target, ownerID) },
+		func() error { return compareRepresentativePosting(ctx, source, target) },
+		func() error { return compareRepresentativeScore(ctx, source, target, ownerID) },
+		func() error {
+			return compareRepresentativeTimestamp(ctx, source, target, ownerID, "bookmarks", "bookmarked_at")
+		},
+		func() error {
+			return compareRepresentativeTimestamp(ctx, source, target, ownerID, "not_interested", "muted_at")
+		},
+		func() error { return compareRepresentativeAIExtraction(ctx, source, target) },
+		func() error { return compareRepresentativeAIScore(ctx, source, target, ownerID) },
+		func() error { return compareAllAIUsage(ctx, source, target, ownerID) },
+		func() error { return compareAllCredentials(ctx, target, ownerID, legacyKeys, cipher) },
+		func() error { return compareImportLedger(ctx, target, ownerID, sourceSHA256, wantCounts) },
+	} {
+		if err := compare(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func compareImportLedger(
+	ctx context.Context,
+	target postgresQuerier,
+	ownerID int64,
+	sourceSHA256 string,
+	wantCounts categoryCounts,
+) error {
+	var sourceJSON, importedJSON []byte
+	if err := target.QueryRowContext(ctx, `
+SELECT source_counts, imported_counts
+FROM local_data_imports WHERE user_id = $1 AND source_sha256 = $2`, ownerID, sourceSHA256).
+		Scan(&sourceJSON, &importedJSON); err != nil {
+		return fmt.Errorf("verify import ledger: %w", err)
+	}
+	for _, raw := range [][]byte{sourceJSON, importedJSON} {
+		var got categoryCounts
+		if err := json.Unmarshal(raw, &got); err != nil || got != wantCounts {
+			return errors.New("import ledger count mismatch")
+		}
+	}
+	return nil
+}
+
+func compareRepresentativeTimestamp(
+	ctx context.Context,
+	source *sql.DB,
+	target postgresQuerier,
+	ownerID int64,
+	table string,
+	column string,
+) error {
+	query := fmt.Sprintf(`SELECT posting_id, %s FROM %s ORDER BY posting_id LIMIT 1`, column, table)
+	var postingID int64
+	var sourceTime time.Time
+	err := source.QueryRowContext(ctx, query).Scan(&postingID, &sourceTime)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read representative %s: %w", table, err)
+	}
+	targetQuery := fmt.Sprintf(`SELECT %s FROM %s WHERE user_id = $1 AND posting_id = $2`, column, table)
+	var targetTime time.Time
+	if err := target.QueryRowContext(ctx, targetQuery, ownerID, postingID).Scan(&targetTime); err != nil {
+		return fmt.Errorf("verify representative %s: %w", table, err)
+	}
+	if !targetTime.Equal(sourceTime) {
+		return fmt.Errorf("representative %s mismatch", table)
+	}
+	return nil
+}
+
+func compareRepresentativeAIExtraction(ctx context.Context, source *sql.DB, target postgresQuerier) error {
+	type extraction struct {
+		postingID            int64
+		contentHash, version string
+		minCareer            int
+		maxCareer            sql.NullInt64
+		newcomer             bool
+		education, evidence  string
+		computedAt           time.Time
+	}
+	var want extraction
+	err := source.QueryRowContext(ctx, `
+SELECT posting_id, content_hash, ai_version, min_career, max_career, newcomer,
+       education_enum, evidence, computed_at
+FROM ai_extractions ORDER BY posting_id, content_hash, ai_version LIMIT 1`).Scan(
+		&want.postingID, &want.contentHash, &want.version, &want.minCareer, &want.maxCareer,
+		&want.newcomer, &want.education, &want.evidence, &want.computedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read representative AI extraction: %w", err)
+	}
+	var got extraction
+	err = target.QueryRowContext(ctx, `
+SELECT posting_id, content_hash, ai_version, min_career, max_career, newcomer,
+       education_enum, evidence, computed_at
+FROM ai_extractions
+WHERE posting_id = $1 AND content_hash = $2 AND ai_version = $3`,
+		want.postingID, want.contentHash, want.version).Scan(
+		&got.postingID, &got.contentHash, &got.version, &got.minCareer, &got.maxCareer,
+		&got.newcomer, &got.education, &got.evidence, &got.computedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("verify representative AI extraction: %w", err)
+	}
+	if got.postingID != want.postingID || got.contentHash != want.contentHash || got.version != want.version ||
+		got.minCareer != want.minCareer || got.maxCareer != want.maxCareer || got.newcomer != want.newcomer ||
+		got.education != want.education || got.evidence != want.evidence || !got.computedAt.Equal(want.computedAt) {
+		return errors.New("representative AI extraction mismatch")
+	}
+	return nil
+}
+
+func compareRepresentativeAIScore(ctx context.Context, source *sql.DB, target postgresQuerier, ownerID int64) error {
+	type score struct {
+		postingID                     int64
+		inputHash, version, itemsJSON string
+		netDelta                      int
+		computedAt                    time.Time
+	}
+	var want score
+	err := source.QueryRowContext(ctx, `
+SELECT posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at
+FROM ai_scores ORDER BY posting_id, ai_input_hash, ai_version LIMIT 1`).Scan(
+		&want.postingID, &want.inputHash, &want.version, &want.itemsJSON, &want.netDelta, &want.computedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read representative AI score: %w", err)
+	}
+	var got score
+	err = target.QueryRowContext(ctx, `
+SELECT posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at
+FROM ai_scores
+WHERE user_id = $1 AND posting_id = $2 AND ai_input_hash = $3 AND ai_version = $4`,
+		ownerID, want.postingID, want.inputHash, want.version).Scan(
+		&got.postingID, &got.inputHash, &got.version, &got.itemsJSON, &got.netDelta, &got.computedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("verify representative AI score: %w", err)
+	}
+	if got.postingID != want.postingID || got.inputHash != want.inputHash || got.version != want.version ||
+		got.itemsJSON != want.itemsJSON || got.netDelta != want.netDelta || !got.computedAt.Equal(want.computedAt) {
+		return errors.New("representative AI score mismatch")
+	}
+	return nil
+}
+
+func compareAllAIUsage(ctx context.Context, source *sql.DB, target postgresQuerier, ownerID int64) error {
+	rows, err := source.QueryContext(ctx, `SELECT day, input_tokens, output_tokens FROM ai_usage ORDER BY day`)
+	if err != nil {
+		return fmt.Errorf("read AI usage verification rows: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var day string
+		var inputTokens, outputTokens int64
+		if err := rows.Scan(&day, &inputTokens, &outputTokens); err != nil {
+			return err
+		}
+		var gotInput, gotOutput int64
+		if err := target.QueryRowContext(ctx, `
+SELECT input_tokens, output_tokens FROM ai_usage WHERE user_id = $1 AND day = $2`, ownerID, day).
+			Scan(&gotInput, &gotOutput); err != nil {
+			return fmt.Errorf("verify AI usage row: %w", err)
+		}
+		if gotInput != inputTokens || gotOutput != outputTokens {
+			return errors.New("AI usage total mismatch")
+		}
+	}
+	return rows.Err()
+}
+
+func compareAllCredentials(
+	ctx context.Context,
+	target postgresQuerier,
+	ownerID int64,
+	legacyKeys map[string]string,
+	cipher credential.Cipher,
+) error {
+	if len(legacyKeys) == 0 {
+		return nil
+	}
+	if cipher == nil {
+		return errors.New("credential verification cipher unavailable")
+	}
+	for provider, wantPlaintext := range legacyKeys {
+		var ciphertext, nonce []byte
+		var version int16
+		if err := target.QueryRowContext(ctx, `
+SELECT ciphertext, nonce, encryption_version
+FROM user_ai_credentials WHERE user_id = $1 AND provider = $2`, ownerID, provider).
+			Scan(&ciphertext, &nonce, &version); err != nil {
+			return fmt.Errorf("verify encrypted credential: %w", err)
+		}
+		gotPlaintext, err := cipher.Open(ownerID, provider, ciphertext, nonce, version)
+		if err != nil || gotPlaintext != wantPlaintext {
+			return errors.New("credential verification mismatch")
+		}
+	}
+	return nil
+}
+
+func compareRepresentativeProfile(ctx context.Context, source *sql.DB, target postgresQuerier, ownerID int64) error {
 	var sourceJSON, sourceHash string
 	err := source.QueryRowContext(ctx, `SELECT profile_json, profile_hash FROM profile WHERE id = 1`).Scan(&sourceJSON, &sourceHash)
 	if err == sql.ErrNoRows {
@@ -863,7 +1149,7 @@ func compareRepresentativeProfile(ctx context.Context, source *sql.DB, tx *sql.T
 		return fmt.Errorf("import: read representative profile: %w", err)
 	}
 	var targetJSON, targetHash string
-	if err := tx.QueryRowContext(ctx, `SELECT profile_json, profile_hash FROM profiles WHERE user_id = $1`, ownerID).
+	if err := target.QueryRowContext(ctx, `SELECT profile_json, profile_hash FROM profiles WHERE user_id = $1`, ownerID).
 		Scan(&targetJSON, &targetHash); err != nil {
 		return fmt.Errorf("import: verify representative profile: %w", err)
 	}
@@ -873,7 +1159,7 @@ func compareRepresentativeProfile(ctx context.Context, source *sql.DB, tx *sql.T
 	return nil
 }
 
-func compareRepresentativePosting(ctx context.Context, source *sql.DB, tx *sql.Tx) error {
+func compareRepresentativePosting(ctx context.Context, source *sql.DB, target postgresQuerier) error {
 	var id int64
 	var sourceName, sourcePostingID, title, company string
 	err := source.QueryRowContext(ctx, `
@@ -886,7 +1172,7 @@ SELECT id, source, source_posting_id, title, company FROM postings ORDER BY id L
 		return fmt.Errorf("import: read representative posting: %w", err)
 	}
 	var gotSource, gotSourcePostingID, gotTitle, gotCompany string
-	if err := tx.QueryRowContext(ctx, `
+	if err := target.QueryRowContext(ctx, `
 SELECT source, source_posting_id, title, company FROM postings WHERE id = $1`, id).
 		Scan(&gotSource, &gotSourcePostingID, &gotTitle, &gotCompany); err != nil {
 		return fmt.Errorf("import: verify representative posting: %w", err)
@@ -897,7 +1183,7 @@ SELECT source, source_posting_id, title, company FROM postings WHERE id = $1`, i
 	return nil
 }
 
-func compareRepresentativeScore(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {
+func compareRepresentativeScore(ctx context.Context, source *sql.DB, target postgresQuerier, ownerID int64) error {
 	var postingID int64
 	var total int
 	var breakdown string
@@ -912,7 +1198,7 @@ SELECT posting_id, total, breakdown_json FROM scores ORDER BY posting_id LIMIT 1
 	}
 	var gotTotal int
 	var gotBreakdown string
-	if err := tx.QueryRowContext(ctx, `
+	if err := target.QueryRowContext(ctx, `
 SELECT total, breakdown_json FROM scores WHERE user_id = $1 AND posting_id = $2`, ownerID, postingID).
 		Scan(&gotTotal, &gotBreakdown); err != nil {
 		return fmt.Errorf("import: verify representative score: %w", err)
