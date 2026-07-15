@@ -29,6 +29,9 @@ after those gates pass does the normal `jobcron` command become PostgreSQL-only.
   the clone and integrate without pushing.
 - Follow the approved
   [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
+- Preserve Slice 2's operation-scoped AI runtime, scheduler lock ordering,
+  single render snapshot, missing-score omission, and rule-only recovery
+  behavior. This slice changes persistence activation, not those contracts.
 - The source SQLite database and optional `ai_keys.json` are read-only inputs.
   Never modify, rename, truncate, or delete them.
 - The importer is dry-run by default. Only `--apply` may write PostgreSQL.
@@ -402,6 +405,10 @@ startup. Activate Slice 3's `resolvePostgresRuntime` for the ordinary no-URL
 local launch in this same commit and pass its positive local owner ID into the
 server. The managed helper may create only the fixed synthetic local owner; an
 explicit URL must already contain exactly one user.
+
+After this cutover, no PostgreSQL-backed `Server` path may use the transitional
+`userID == 0` SQLite compatibility branch. Keep that branch reachable only from
+the importer's legacy-source storage path until its fixtures no longer need it.
 
 - [ ] **Step 3: Update user documentation to final truth**
 

@@ -29,6 +29,14 @@ them.
   the clone and integrate without pushing.
 - Follow the approved
   [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
+- PostgreSQL AI score, usage, and runtime paths now require a positive user ID.
+  The temporary `userID == 0` compatibility path belongs only to retained
+  SQLite reads. Resolve the stable local owner before a PostgreSQL-backed
+  request reaches `Server`.
+- Preserve the Slice 2 operation boundaries: acquire the scrape flight lock
+  before resolving an AI runtime, pass one runtime through an operation, render
+  from one profile/hash snapshot, omit missing or stale score rows, and run
+  rule-based startup recovery even when AI runtime resolution fails.
 - Do not remove the SQLite fallback or `--db` in this slice. Slice 4 owns that
   activation after the verified importer lands.
 - Never run `docker compose down -v` from tests or automatic startup.
@@ -220,6 +228,8 @@ func TestResolveRuntimeProductionRequiresExplicitURL(t *testing.T)
 func TestResolveRuntimeLocalWithoutURLUsesManagedPostgres(t *testing.T)
 func TestResolveRuntimeLocalLoadsProtectedMasterKey(t *testing.T)
 func TestResolveRuntimeProductionNeverCreatesLocalMasterKey(t *testing.T)
+func TestResolveRuntimeManagedLocalCreatesStablePositiveUser(t *testing.T)
+func TestResolveRuntimeExplicitURLRequiresSolePositiveUser(t *testing.T)
 ```
 
 Inject `ensureLocalPostgres` and `loadLocalMasterKey` function variables in the
@@ -272,7 +282,9 @@ Add an immutable local-user injection point on `Server` and make non-production
 PostgreSQL request paths return that positive ID instead of `0`. Production
 continues to resolve the authenticated session. Tests must prove the synthetic
 local owner is created only for the fixed managed local database, is reused on
-restart, and is never created for production or an explicit URL.
+restart, and is never created for production or an explicit URL. Keep the
+existing scheduler lock ordering, operation-scoped runtime, render snapshot,
+and rule-recovery regression tests passing while this startup seam changes.
 
 - [ ] **Step 4: Run tests and commit the seam**
 
