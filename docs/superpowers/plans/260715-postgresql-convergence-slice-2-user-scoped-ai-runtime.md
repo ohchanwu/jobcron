@@ -32,6 +32,11 @@ new provider is constructed.
   one owner.
 - Preserve the legacy SQLite reader for Slice 4. Do not remove the normal
   SQLite startup fallback in this slice.
+- Treat Slice 2 as a non-release migration checkpoint. A legacy SQLite launch
+  remains readable and supports rule-based scoring, but paid AI is off because
+  SQLite has no positive account ID for the user-scoped runtime. Do not invent
+  a `user_id = 0` exception or continue reading `ai_keys.json` in the server.
+  Leave the SQLite data and legacy key file untouched for Slice 4 import.
 - Use disposable PostgreSQL schemas for integration tests. Never reset
   `jobcron_dev`, RDS, or the retained SQLite source.
 - Keep commits local. Never push.
@@ -41,7 +46,9 @@ new provider is constructed.
 This slice is complete when authenticated request paths cannot observe or spend
 another user's AI state, the server owns no mutable global provider/model/budget
 fields, profile plus credential saves are atomic, and the required storage and
-server isolation tests pass against PostgreSQL 18.
+server isolation tests pass against PostgreSQL 18. The retained SQLite fallback
+must still render and rescore with rules only, without reading or changing the
+legacy key file.
 
 ---
 
@@ -416,6 +423,11 @@ retain a first-row fallback merely to keep startup rescoring active.
 Use `runtime.Provider` and `runtime.Version` only when runtime is non-nil. Pass
 `userID` into every AI-score and usage method. Keep global
 `AIExtractionsByPostingID` calls unchanged.
+
+For the transitional SQLite path, resolve no `AIRuntime`, make no provider call,
+and preserve the existing cached non-secret rows. Add a regression test proving
+the app can render and perform rule-based rescoring without reading or changing
+the legacy `ai_keys.json` file.
 
 - [ ] **Step 3: Add an exact decrypt-count test**
 
