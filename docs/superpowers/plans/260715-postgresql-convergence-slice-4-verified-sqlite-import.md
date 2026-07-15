@@ -44,6 +44,10 @@ after those gates pass does the normal `jobcron` command become PostgreSQL-only.
 - There is no force-overwrite flag.
 - Use disposable PostgreSQL schemas and temporary SQLite fixtures in tests.
 - Keep commits local. Never push.
+- Preserve Slice 3's internal `JOBCRON_STRICT_PORT=1` preview contract: the
+  preview exports it for both bootstrap and the main child so the requested
+  port is attempted exactly once. Do not promote it to a public CLI flag;
+  ordinary startup keeps the existing ten-port fallback.
 
 ## Slice Completion Contract
 
@@ -427,6 +431,9 @@ container, `local_jobcron-postgres18-cluster`, and
 After this cutover, no PostgreSQL-backed `Server` path may use the transitional
 `userID == 0` SQLite compatibility branch. Keep that branch reachable only from
 the importer's legacy-source storage path until its fixtures no longer need it.
+Keep `Config.StrictPort` and the strict branch of `cmd/jobcron.listen` while
+rewiring startup; preview launch must fail if its requested port becomes busy
+after preflight rather than silently serving on a fallback port.
 
 - [ ] **Step 3: Update user documentation to final truth**
 

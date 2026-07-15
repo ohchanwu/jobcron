@@ -31,6 +31,7 @@ type Config struct {
 	WorknetKey              string
 	Host                    string
 	Port                    int
+	StrictPort              bool
 	NoOpen                  bool
 	Demo                    bool
 	DBPath                  string
@@ -59,6 +60,7 @@ func Load(args []string, env map[string]string) (Config, error) {
 		WorknetKey:       envValue(env, "JOBCRON_WORKNET_KEY"),
 		Host:             envDefault(env, "JOBCRON_HOST", defaultHost),
 		Port:             defaultPort,
+		StrictPort:       envBool(envValue(env, "JOBCRON_STRICT_PORT")),
 		NoOpen:           envBool(envValue(env, "JOBCRON_NO_OPEN")),
 		Demo:             envBool(envValue(env, "JOBCRON_DEMO")),
 		DBPath:           envValue(env, "JOBCRON_DB"),

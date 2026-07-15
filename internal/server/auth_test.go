@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -118,6 +119,35 @@ func TestNonProductionPostgresUsesInjectedPositiveUser(t *testing.T) {
 	}
 	if got != localUserID {
 		t.Fatalf("stateUserID = %d, want %d", got, localUserID)
+	}
+}
+
+func TestNonProductionPostgresDemoUsesInjectedPositiveUser(t *testing.T) {
+	_, st := newPostgresTestServer(t, &fakeScraper{})
+	const localUserID int64 = 82
+	srv := NewForLocalUser(st, localUserID, &fakeScraper{})
+	srv.SetDemoMode(true)
+
+	got, err := srv.stateUserID(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("stateUserID: %v", err)
+	}
+	if got != localUserID {
+		t.Fatalf("stateUserID = %d, want %d", got, localUserID)
+	}
+}
+
+func TestNonProductionPostgresDemoRefusesNonpositiveLocalUser(t *testing.T) {
+	_, st := newPostgresTestServer(t, &fakeScraper{})
+	for _, localUserID := range []int64{0, -1} {
+		t.Run(fmt.Sprintf("user-%d", localUserID), func(t *testing.T) {
+			srv := newServer(st, localUserID, &fakeScraper{})
+			srv.SetDemoMode(true)
+			got, err := srv.stateUserID(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+			if err == nil || got != 0 {
+				t.Fatalf("stateUserID = %d err %v, want nonpositive-local-user error", got, err)
+			}
+		})
 	}
 }
 

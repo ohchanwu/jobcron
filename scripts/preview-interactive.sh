@@ -50,6 +50,7 @@ child=
 cleanup_started=0
 lock_root=
 port_lock=
+port_lock_owner=
 port_lock_acquired=0
 ownership_critical=0
 pending_signal=
@@ -94,6 +95,7 @@ cleanup() {
 		fi
 	fi
 	if [ "$port_lock_acquired" -eq 1 ]; then
+		rm -f "$port_lock_owner"
 		if rmdir "$port_lock" 2>/dev/null; then
 			port_lock_acquired=0
 		else
@@ -174,14 +176,29 @@ if ! mkdir -m 700 "$lock_root" 2>/dev/null; then
 	chmod 700 "$lock_root"
 fi
 port_lock="$lock_root/port-$port.lock"
+port_lock_owner="$port_lock.owner.pid"
 begin_ownership_critical
 if mkdir -m 700 "$port_lock" 2>/dev/null; then
 	port_lock_acquired=1
+	printf '%s\n' "$$" >"$port_lock_owner"
 	end_ownership_critical
 else
 	lock_status=$?
 	end_ownership_critical
 	echo "preview: requested loopback port is already in use: 127.0.0.1:$port" >&2
+	if [ -f "$port_lock_owner" ]; then
+		lock_owner_pid=$(sed -n '1p' "$port_lock_owner")
+		case "$lock_owner_pid" in
+			*[!0-9]*|'') ;;
+			*)
+				if ! kill -0 "$lock_owner_pid" 2>/dev/null; then
+					printf 'preview: stale port lock; remove it manually: rmdir ' >&2
+					shell_quote "$port_lock" >&2
+					printf '\n' >&2
+				fi
+				;;
+		esac
+	fi
 	exit "$lock_status"
 fi
 
@@ -251,6 +268,7 @@ JOBCRON_CREDENTIAL_ENCRYPTION_KEY=$(tr -d '\r\n' <"$key_file")
 export JOBCRON_NO_OPEN=1
 export JOBCRON_HOST=127.0.0.1
 export JOBCRON_PORT="$port"
+export JOBCRON_STRICT_PORT=1
 unset JOBCRON_ENV JOBCRON_DAILY_SCRAPE_TIME
 export JOBCRON_SCHEDULER_ENABLED=0
 

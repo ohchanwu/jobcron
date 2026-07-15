@@ -162,6 +162,16 @@ func TestLoadUsesExplicitDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadParsesInternalStrictPortEnvironment(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{"JOBCRON_STRICT_PORT": "1"})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.StrictPort {
+		t.Fatal("StrictPort = false, want true")
+	}
+}
+
 func TestLoadParsesVersionFlag(t *testing.T) {
 	tests := [][]string{
 		{"--version"},

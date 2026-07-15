@@ -152,7 +152,7 @@ func main() {
 		log.Printf("jobcron: 매일 %s KST에 자동 스크랩을 실행해요.", cfg.DailyScrapeTime)
 	}
 
-	ln, addr, err := listen(cfg.Host, cfg.Port)
+	ln, addr, err := listen(cfg.Host, cfg.Port, cfg.StrictPort)
 	if err != nil {
 		log.Fatalf("jobcron: %v", err)
 	}
@@ -207,7 +207,7 @@ func credentialCipherForRuntime(runtime runtimeStorage) (credential.Cipher, erro
 	return credential.NewAESGCMCipher(runtime.CredentialEncryptionKey)
 }
 
-func resolvePostgresRuntime(ctx context.Context, cfg config.Config) (runtimeStorage, error) {
+func resolvePostgresRuntime(ctx context.Context, cfg config.Config) (resolved runtimeStorage, retErr error) {
 	if cfg.Production {
 		if cfg.DatabaseURL == "" {
 			return runtimeStorage{}, fmt.Errorf("production requires DATABASE_URL")
@@ -249,7 +249,11 @@ func resolvePostgresRuntime(ctx context.Context, cfg config.Config) (runtimeStor
 	if err != nil {
 		return runtimeStorage{}, fmt.Errorf("resolve PostgreSQL owner: %w", err)
 	}
-	defer store.Close()
+	defer func() {
+		if closeErr := store.Close(); retErr == nil && closeErr != nil {
+			retErr = fmt.Errorf("close PostgreSQL owner store: %w", closeErr)
+		}
+	}()
 
 	var userID int64
 	if managedLocal {
@@ -300,12 +304,19 @@ func prepareApplicationData(configRoot string) error {
 
 // listen binds host on the preferred port, falling back to the next ten
 // if it is busy. It returns the listener and the bound "host:port" address.
-func listen(host string, preferred int) (net.Listener, string, error) {
-	for p := preferred; p <= preferred+10; p++ {
+func listen(host string, preferred int, strict bool) (net.Listener, string, error) {
+	last := preferred + 10
+	if strict {
+		last = preferred
+	}
+	for p := preferred; p <= last; p++ {
 		addr := net.JoinHostPort(host, fmt.Sprintf("%d", p))
 		if ln, err := net.Listen("tcp", addr); err == nil {
 			return ln, addr, nil
 		}
+	}
+	if strict {
+		return nil, "", fmt.Errorf("requested port %d is unavailable", preferred)
 	}
 	return nil, "", fmt.Errorf("no free port in %d..%d", preferred, preferred+10)
 }

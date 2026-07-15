@@ -24,6 +24,8 @@ type fakeRuntimeUserStore struct {
 	soleErr      error
 	managedCalls int
 	soleCalls    int
+	closeErr     error
+	closeCalls   int
 }
 
 func (s *fakeRuntimeUserStore) EnsureManagedLocalOwner(context.Context) (int64, error) {
@@ -36,7 +38,10 @@ func (s *fakeRuntimeUserStore) SoleOwnerUserID(context.Context) (int64, bool, er
 	return s.soleID, s.soleOK, s.soleErr
 }
 
-func (s *fakeRuntimeUserStore) Close() error { return nil }
+func (s *fakeRuntimeUserStore) Close() error {
+	s.closeCalls++
+	return s.closeErr
+}
 
 func stubRuntimeDependencies(
 	t *testing.T,
@@ -90,6 +95,54 @@ func TestResolveRuntimeExplicitURLBypassesLocalEnsure(t *testing.T) {
 	}
 	if runtime.UserID != 41 {
 		t.Fatalf("UserID = %d, want 41", runtime.UserID)
+	}
+}
+
+func TestResolveRuntimeReturnsStoreCloseErrorAfterSuccessfulResolution(t *testing.T) {
+	store := &fakeRuntimeUserStore{
+		soleID:   41,
+		soleOK:   true,
+		closeErr: errors.New("close runtime owner store"),
+	}
+	stubRuntimeDependencies(t,
+		func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
+		func() ([]byte, error) { return bytes.Repeat([]byte{0x11}, credential.MasterKeyBytes), nil },
+		func(string) (runtimeUserStore, error) { return store, nil },
+	)
+
+	_, err := resolvePostgresRuntime(context.Background(), config.Config{
+		DatabaseURL: "postgres://explicit.example.invalid/jobcron",
+	})
+	if err == nil || !strings.Contains(err.Error(), "close runtime owner store") {
+		t.Fatalf("resolvePostgresRuntime error = %v, want close error", err)
+	}
+	if store.closeCalls != 1 {
+		t.Fatalf("Close calls = %d, want 1", store.closeCalls)
+	}
+}
+
+func TestResolveRuntimePreservesOwnerErrorWhenStoreCloseAlsoFails(t *testing.T) {
+	store := &fakeRuntimeUserStore{
+		soleErr:  errors.New("resolve owner failed"),
+		closeErr: errors.New("close runtime owner store"),
+	}
+	stubRuntimeDependencies(t,
+		func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
+		func() ([]byte, error) { return bytes.Repeat([]byte{0x11}, credential.MasterKeyBytes), nil },
+		func(string) (runtimeUserStore, error) { return store, nil },
+	)
+
+	_, err := resolvePostgresRuntime(context.Background(), config.Config{
+		DatabaseURL: "postgres://explicit.example.invalid/jobcron",
+	})
+	if err == nil || !strings.Contains(err.Error(), "resolve owner failed") {
+		t.Fatalf("resolvePostgresRuntime error = %v, want original owner error", err)
+	}
+	if strings.Contains(err.Error(), "close runtime owner store") {
+		t.Fatalf("resolvePostgresRuntime error = %v, must not obscure original error", err)
+	}
+	if store.closeCalls != 1 {
+		t.Fatalf("Close calls = %d, want 1", store.closeCalls)
 	}
 }
 
@@ -274,7 +327,7 @@ func TestListenFallsBackWhenPortBusy(t *testing.T) {
 	defer busy.Close()
 	busyPort := busy.Addr().(*net.TCPAddr).Port
 
-	ln, addr, err := listen("127.0.0.1", busyPort)
+	ln, addr, err := listen("127.0.0.1", busyPort, false)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -284,8 +337,26 @@ func TestListenFallsBackWhenPortBusy(t *testing.T) {
 	}
 }
 
+func TestListenStrictRefusesBusyPreferredPort(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy a port: %v", err)
+	}
+	defer busy.Close()
+	busyPort := busy.Addr().(*net.TCPAddr).Port
+
+	ln, addr, err := listen("127.0.0.1", busyPort, true)
+	if err == nil {
+		ln.Close()
+		t.Fatalf("listen strict returned %q, want busy-port error", addr)
+	}
+	if ln != nil || addr != "" {
+		t.Fatalf("listen strict = (%v, %q, %v), want no listener/address", ln, addr, err)
+	}
+}
+
 func TestListenUsesConfiguredHost(t *testing.T) {
-	ln, addr, err := listen("0.0.0.0", 0)
+	ln, addr, err := listen("0.0.0.0", 0, false)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}

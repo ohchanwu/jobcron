@@ -60,6 +60,7 @@ type fakePreviewConfig struct {
 	signalAfterLock bool
 	signalCreatedb  bool
 	rmdirFail       bool
+	portRace        bool
 }
 
 type fakePreviewResult struct {
@@ -347,6 +348,39 @@ func TestPreviewBootstrapUnrelatedFailureNeverSeedsOwner(t *testing.T) {
 	}
 }
 
+func TestPreviewPropagatesStrictPortToBootstrapAndServer(t *testing.T) {
+	result := runPreviewWithFakeCommands(t, fakePreviewConfig{
+		suffix:          "0123456789abcdef",
+		bootstrapOutput: "explicit DATABASE_URL requires exactly one existing user",
+		bootstrapExit:   1,
+		secondExit:      0,
+	})
+	if result.err != nil {
+		t.Fatalf("preview with fake app: %v\n%s", result.err, result.output)
+	}
+	if got := strings.Count(result.log, " strict-port=1 "); got != 2 {
+		t.Fatalf("strict-port propagation count = %d, want bootstrap and server:\n%s", got, result.log)
+	}
+}
+
+func TestPreviewPortRaceFailsInsteadOfFallingBack(t *testing.T) {
+	result := runPreviewWithFakeCommands(t, fakePreviewConfig{
+		suffix:          "0123456789abcdef",
+		bootstrapOutput: "explicit DATABASE_URL requires exactly one existing user",
+		bootstrapExit:   1,
+		portRace:        true,
+	})
+	if result.err == nil {
+		t.Fatalf("preview succeeded after requested port was occupied:\n%s", result.output)
+	}
+	if !strings.Contains(result.log, " requested-port-occupied ") {
+		t.Fatalf("port-race holder was not installed after preflight:\n%s", result.log)
+	}
+	if strings.Contains(result.log, " fallback-port ") {
+		t.Fatalf("preview served a fallback port after requested-port race:\n%s", result.log)
+	}
+}
+
 func TestPreviewRejectsBusyRequestedPortBeforeCreatingStateOrDatabase(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -478,6 +512,39 @@ func TestPreviewDifferentPortLocksDoNotConflict(t *testing.T) {
 	})
 	if result.err != nil {
 		t.Fatalf("different port lock blocked preview: %v\n%s", result.err, result.output)
+	}
+}
+
+func TestPreviewStaleLockPrintsQuotedExecutableRemediationWithoutStealing(t *testing.T) {
+	port := reserveLoopbackPort(t)
+	lockPath := previewLockPath(t, port)
+	if err := os.MkdirAll(lockPath, 0o700); err != nil {
+		t.Fatalf("create stale lock: %v", err)
+	}
+	if err := os.WriteFile(lockPath+".owner.pid", []byte("999999999\n"), 0o600); err != nil {
+		t.Fatalf("write stale owner PID: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(lockPath)
+		_ = os.Remove(lockPath + ".owner.pid")
+	})
+
+	result := runPreviewWithFakeCommands(t, fakePreviewConfig{
+		port:   port,
+		suffix: "0123456789abcdef",
+	})
+	if result.err == nil {
+		t.Fatalf("stale-lock preview unexpectedly succeeded:\n%s", result.output)
+	}
+	canonical := fmt.Sprintf("preview: requested loopback port is already in use: 127.0.0.1:%d", port)
+	remediation := "preview: stale port lock; remove it manually: rmdir " + shellQuote(lockPath)
+	for _, want := range []string{canonical, remediation} {
+		if !strings.Contains(result.output, want) {
+			t.Fatalf("stale-lock output missing %q:\n%s", want, result.output)
+		}
+	}
+	if !pathExists(lockPath) {
+		t.Fatalf("launcher stole stale lock %q", lockPath)
 	}
 }
 
@@ -729,7 +796,7 @@ done
 if [ -z "$out" ]; then
 	exit 2
 fi
-printf '%s\n' '#!/bin/sh' 'printf " app start \\n" >>"$PREVIEW_FAKE_LOG"' 'if [ ! -e "$PREVIEW_FAKE_APP_COUNT" ]; then' '  : >"$PREVIEW_FAKE_APP_COUNT"' '  printf "%s\\n" "$PREVIEW_FAKE_BOOTSTRAP_OUTPUT" >&2' '  exit "$PREVIEW_FAKE_BOOTSTRAP_EXIT"' 'fi' 'exit "$PREVIEW_FAKE_SECOND_EXIT"' >"$out"
+	printf '%s\n' '#!/bin/sh' 'printf " app start strict-port=%s \\n" "${JOBCRON_STRICT_PORT:-}" >>"$PREVIEW_FAKE_LOG"' 'if [ ! -e "$PREVIEW_FAKE_APP_COUNT" ]; then' '  : >"$PREVIEW_FAKE_APP_COUNT"' '  printf "%s\\n" "$PREVIEW_FAKE_BOOTSTRAP_OUTPUT" >&2' '  exit "$PREVIEW_FAKE_BOOTSTRAP_EXIT"' 'fi' 'if [ "$PREVIEW_FAKE_PORT_RACE" = "1" ]; then' '  "$PREVIEW_REAL_NC" -l 127.0.0.1 "$JOBCRON_PORT" >/dev/null 2>&1 &' '  occupier=$!' '  tries=0' '  until "$PREVIEW_REAL_NC" -z 127.0.0.1 "$JOBCRON_PORT" >/dev/null 2>&1; do tries=$((tries + 1)); if [ "$tries" -ge 50 ]; then kill "$occupier" 2>/dev/null || true; exit 97; fi; sleep 0.02; done' '  printf " requested-port-occupied \\n" >>"$PREVIEW_FAKE_LOG"' '  if [ "${JOBCRON_STRICT_PORT:-}" != "1" ]; then printf " fallback-port \\n" >>"$PREVIEW_FAKE_LOG"; kill "$occupier" 2>/dev/null || true; wait "$occupier" 2>/dev/null || true; exit 0; fi' '  kill "$occupier" 2>/dev/null || true' '  wait "$occupier" 2>/dev/null || true' '  exit 98' 'fi' 'exit "$PREVIEW_FAKE_SECOND_EXIT"' >"$out"
 chmod +x "$out"
 `)
 	writeFakeCommand(t, fakeBin, "mktemp", `#!/bin/sh
@@ -777,6 +844,7 @@ exec /usr/bin/mktemp "$@"
 		"PREVIEW_SIGNAL_AFTER_LOCK="+boolEnv(cfg.signalAfterLock),
 		"PREVIEW_SIGNAL_CREATEDB="+boolEnv(cfg.signalCreatedb),
 		"PREVIEW_FAKE_RMDIR_FAIL="+boolEnv(cfg.rmdirFail),
+		"PREVIEW_FAKE_PORT_RACE="+boolEnv(cfg.portRace),
 	)
 	output, err := cmd.CombinedOutput()
 	logBytes, readErr := os.ReadFile(logPath)

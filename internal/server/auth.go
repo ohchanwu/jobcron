@@ -68,9 +68,6 @@ func (s *Server) userFromRequest(ctx context.Context, r *http.Request) (userID i
 }
 
 func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error) {
-	if s.demoMode {
-		return 0, nil
-	}
 	if !s.productionMode {
 		if s.store.Dialect() == storage.DialectSQLite {
 			return 0, nil
@@ -79,6 +76,9 @@ func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error
 			return 0, fmt.Errorf("server: non-production PostgreSQL requires a positive local user ID")
 		}
 		return s.localUserID, nil
+	}
+	if s.demoMode {
+		return 0, nil
 	}
 	userID, ok := s.userFromRequest(ctx, r)
 	if !ok {
