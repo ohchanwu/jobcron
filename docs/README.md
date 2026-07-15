@@ -22,6 +22,7 @@ Use this index instead of recursively loading the entire documentation tree.
 
 - [Active Superpowers work and context policy](superpowers/README.md)
 - [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
+- [Multi-user account expansion follow-up](superpowers/specs/260715-multi-user-account-expansion.md)
 - [PostgreSQL credential foundation: Slice 1 verification](superpowers/archive/2026-07-14-postgresql-credential-foundation/260714-postgresql-credential-foundation-verification.md)
 - [Alpha pre-launch fixes verification](superpowers/archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
 - [Alpha milestone A polishes verification](superpowers/archive/2026-07-12-alpha-milestone-a-polishes/260712-alpha-milestone-a-polishes-verification.md)

@@ -8,8 +8,10 @@
 
 Jobcron currently has two writable persistence modes. A normal local launch falls
 back to SQLite, while production uses PostgreSQL when `DATABASE_URL` is present.
-AI credentials live outside both databases in one global `ai_keys.json`, and the
-production container preserves that file with the `jobcron_config` Docker volume.
+AI credentials live outside both databases in one global `ai_keys.json`. The
+repository's production Compose file declares a `jobcron_config` volume for that
+file, but Jobcron has not been deployed to EC2. The instance currently has only
+the application `.env`; Docker, the app, and the owner account are not set up.
 
 That split no longer matches the hosted-first product. Account data and AI results
 must follow the authenticated user across devices, and one server-wide key file
@@ -40,7 +42,8 @@ after launch.
 
 ## Verified Current State
 
-Verified against `main` on 2026-07-14.
+Code verified against `main` on 2026-07-14. Production EC2 preparation state
+confirmed on 2026-07-15.
 
 ### Runtime selection
 
@@ -100,9 +103,10 @@ Verified against `main` on 2026-07-14.
 
 ### Production Compose
 
-- **Current:** `deploy/production/compose.yaml:29-30,47-48` mounts the named
-  `jobcron_config` volume.
-- **Gap:** Credential durability is host-local and not account-scoped.
+- **Current:** `deploy/production/compose.yaml:29-30,47-48` declares and mounts
+  `jobcron_config`, although that configuration has not been deployed to EC2.
+- **Gap:** Leaving it in the first production deployment would introduce obsolete,
+  host-local credential storage that is not account-scoped.
 
 No similar open GitHub issue was found using the terms `PostgreSQL SQLite AI
 credentials`.
@@ -113,7 +117,7 @@ credentials`.
 - Preserve the current local user's data without silently mutating the source.
 - Store AI credentials encrypted at rest and keyed by the authenticated user.
 - Make AI score caches and usage budgets user-scoped.
-- Remove `jobcron_config` from the final production application service.
+- Remove `jobcron_config` before the first production application deployment.
 - Keep offline scoring functional when a credential is missing or unreadable.
 - Provide a cutover and rollback procedure that never deletes the only copy of
   user data or credentials.
@@ -128,6 +132,9 @@ credentials`.
 - Automatic master-key rotation or AWS KMS integration. The schema is versioned
   so rotation can be added without changing credential ownership.
 - Secure deletion guarantees for an old SQLite or `ai_keys.json` file on SSDs.
+
+Deferred account-expansion requirements are recorded in
+[`260715-multi-user-account-expansion.md`](260715-multi-user-account-expansion.md).
 
 ## Target Architecture
 
@@ -238,7 +245,7 @@ func (s *Store) DeleteUserAICredential(ctx context.Context, userID int64, provid
 Blank credential input keeps the existing row, matching the current profile
 form. Turning AI off keeps the encrypted row so re-enabling does not require
 re-entry. Explicit credential deletion is an internal storage operation in this
-scope; a new delete-key UI is deferred.
+scope; a new delete-key UI is deferred to the account-expansion specification.
 
 ### 3. Encrypt Credentials At The Application Boundary
 
@@ -312,20 +319,28 @@ operator error rather than guessing. Multi-user scheduler fan-out is out of scop
 
 Profile save must resolve the authenticated user before handling the key. It then:
 
-1. validates and encrypts a newly entered key;
-2. upserts `(user_id, provider)`;
-3. saves the non-secret profile;
-4. resolves a fresh runtime for that same user; and
-5. rerates only that user's score rows.
+1. if a new key was entered, validate and encrypt it; otherwise, leave the
+   existing credential row unchanged;
+2. in one PostgreSQL transaction, upsert `(user_id, provider)` only when a new
+   key exists and save the non-secret profile;
+3. commit both changes before reporting success;
+4. resolve a fresh runtime for that same user; and
+5. rerate only that user's score rows.
 
-If steps 1 or 3 fail, no partial credential/profile combination may be presented
-as successfully saved. Use a PostgreSQL transaction for the credential row and
-profile row; provider construction and paid calls occur only after commit.
+If key preparation or the transaction fails, no partial credential/profile
+combination may be presented as successfully saved. Provider construction and
+paid calls occur only after commit.
 
 ### 5. Scope AI Scores And Usage By User
 
 `ai_extractions` remains global. It derives facts only from public posting content
 and is reusable when content hash and AI version match.
+
+Using `ai_extractions` as a compact, cross-model Stage-2 input is deferred to the
+[feature ideas document](../../product/feature-ideas.md#cross-model-ai-extraction-reuse-for-token-efficient-stage-2-scoring).
+Cross-model reuse is allowed in principle; it first needs a provider-neutral
+extraction schema and its own schema/prompt version so compatibility is not
+incorrectly inferred from the model vendor alone.
 
 Add PostgreSQL migration `0015_user_scoped_ai_state.sql` that replaces the other
 two global tables with:
@@ -444,36 +459,44 @@ The preview must not connect to `jobcron_dev`, production RDS, or the legacy
 SQLite file. Its test must prove isolation by writing a profile and asserting
 that neither the normal local database nor a second preview contains it.
 
-### 8. Remove The Production Credential Volume Safely
+### 8. Prepare The First Production Deployment
 
 The final `deploy/production/compose.yaml` must:
 
 - remove the app mount at `/root/.config/jobcron`;
 - remove the top-level `jobcron_config` declaration;
 - require `JOBCRON_CREDENTIAL_ENCRYPTION_KEY`; and
-- retain the RDS URL, session secret, and existing Caddy volumes.
+- retain the RDS URL, session secret, and Caddy volumes.
 
-The production image must include `jobcron-import`. Add a separate
-`deploy/production/compose.migrate.yaml` that is used only for cutover. Its
-migration service mounts the existing `jobcron_config` volume read-only at
-`/legacy-config`, reads `/legacy-config/ai_keys.json`, and writes the encrypted
-credential through the production database connection. The normal app service
-must never mount that volume after cutover.
+The existing EC2 `.env` already contains `DATABASE_URL`, `SESSION_SECRET`, and:
+
+```dotenv
+JOBCRON_ENV=production
+JOBCRON_HOST=0.0.0.0
+JOBCRON_PORT=7777
+JOBCRON_NO_OPEN=1
+JOBCRON_DAILY_SCRAPE_TIME=05:00
+```
+
+Keep those values and add `JOBCRON_CREDENTIAL_ENCRYPTION_KEY`. Do not replace the
+existing database URL or session secret.
+
+Production migration runs from a trusted local checkout through the existing
+localhost-only SSH tunnel to private RDS. The local importer reads the retained
+SQLite snapshot and optional local `ai_keys.json`; no production image, Compose
+override, EC2 path, or Docker volume is used for legacy credential migration.
 
 Production sequence:
 
-1. Snapshot RDS and record the current image tag privately.
-2. Pull the migration-capable image without replacing the running app.
-3. Run importer dry-run through the migration override.
-4. Run importer `--apply` and verify the encrypted row can be decrypted and used
-   for the owner without printing or making an unapproved paid call.
-5. Deploy the final Compose configuration without `jobcron_config`.
-6. Sign in, confirm masked-key state, run one approved AI rating, recreate the app
-   container, and confirm the rating and key still work.
-7. Keep the old Docker volume through the rollback window. Remove it only after
-   the human explicitly closes the rollback window.
-
-Neither Compose nor the importer automatically deletes the old volume.
+1. Install Docker and Docker Compose on EC2.
+2. Add the credential-encryption key to the existing `.env`.
+3. Through the localhost-only SSH tunnel, create the sole owner, snapshot RDS,
+   then run the importer dry-run and `--apply` from the trusted local checkout.
+4. Deploy the app with the final Compose file, which has no `jobcron_config`.
+5. Sign in, verify the migrated profile, ratings, and masked-key state, run one
+   approved AI rating, then recreate the app container and verify persistence.
+6. Keep the original local SQLite snapshot and `ai_keys.json` until the human
+   closes the rollback window.
 
 ## Failure Modes And Required Behavior
 
@@ -501,8 +524,6 @@ Neither Compose nor the importer automatically deletes the old volume.
   re-entry message, and do not expose provider response bodies.
 - **One user changes provider, model, or key:** Invalidate only that user's
   runtime and caches; other users are unchanged.
-- **Old Docker volume is absent:** Continue if the credential table already
-  verifies; otherwise require key re-entry.
 - **EC2 is lost but RDS survives:** Restore the separately protected master key
   or require users to replace credentials.
 
@@ -516,7 +537,7 @@ Neither Compose nor the importer automatically deletes the old volume.
 local PostgreSQL bootstrap ──> PostgreSQL preview                         upgraded importer
                                                                                         │
                                                                                         v
-                                                                          production volume cutover
+                                                                           first production deploy
                                                                                         │
                                                                                         v
                                                                             docs + full verification
@@ -525,8 +546,9 @@ local PostgreSQL bootstrap ──> PostgreSQL preview                         up
 Schema and encryption land first because every later path depends on stable
 storage contracts. Runtime isolation lands before credential cutover so a stored
 per-user key cannot accidentally feed the existing global provider. The importer
-lands before SQLite fallback removal. Production drops the volume last, after the
-credential row and rollback evidence exist.
+lands before SQLite fallback removal. The first production deployment happens
+only after the owner, imported rows, encrypted credential, and rollback evidence
+exist in RDS; production never receives the legacy credential volume.
 
 ## Acceptance Criteria
 
@@ -560,8 +582,9 @@ credential row and rollback evidence exist.
 15. Import `--apply` preserves profile, postings, rule scores, bookmarks, hidden
     jobs, AI extractions, per-user AI scores, per-user AI usage, and the optional
     credential in one transaction.
-16. The importer preserves an existing owner's password hash and never imports
-    sessions or plaintext passwords.
+16. The first-deploy workflow creates the sole owner before import. The importer
+    targets that same owner email, preserves the newly chosen password hash, and
+    never imports sessions or plaintext passwords.
 17. A forced failure in any copied category leaves all target category counts and
     credentials unchanged.
 18. Repeating the same completed import performs verification only; a different
@@ -570,17 +593,20 @@ credential row and rollback evidence exist.
     the importer.
 20. Existing profile values, at least one rule score, one AI score, one bookmark,
     one hidden job, and AI usage totals match between source and target verification.
-21. The final production Compose render has no `jobcron_config` declaration or
+21. The production Compose render has no `jobcron_config` declaration or
     `/root/.config/jobcron` mount.
-22. The one-time production migration service is the only configuration that can
-    mount the legacy volume, and it mounts it read-only.
-23. After app-container recreation, the owner remains signed in after a new login,
-    sees the migrated profile and ratings, and can use the encrypted credential.
+22. Production import runs from a trusted local checkout through the
+    localhost-only SSH tunnel; no production migration service is required.
+23. After the first deployment, the newly created owner can sign in, see the
+    migrated profile and ratings, and use the encrypted credential. Deliberately
+    recreating the new app container preserves that database-backed state.
 24. Missing credentials or decryption failures fall back to rule-based scoring for
     the affected user without crashing the app or exposing secret material.
 25. English and Korean documentation no longer describe SQLite as the normal
     writable database or `jobcron_config` as production credential storage.
-26. `gofmt -l .`, `go vet ./...`, `go test -race ./...`, the PostgreSQL integration
+26. The light and dark README dashboard screenshots show score-sorted results
+    with AI deltas applied and visible AI-delta detail chips.
+27. `gofmt -l .`, `go vet ./...`, `go test -race ./...`, the PostgreSQL integration
     suite, Compose contract tests, import tests, and browser journeys all pass.
 
 ## Testing Plan
@@ -621,9 +647,10 @@ credential row and rollback evidence exist.
 
 ### Browser
 
-- **Minimum new coverage:** 4 journeys.
+- **Minimum new coverage:** 5 journeys.
 - **Required cases:** Migrated state, key save and masked state, durability after
-  container recreation, and two-session account isolation with seeded users.
+  container recreation, two-session account isolation with seeded users, and
+  light/dark README screenshot capture with applied AI deltas visible.
 
 ### Regression
 
@@ -641,23 +668,25 @@ legacy SQLite source.
 ### Before import commit
 
 - The importer transaction rolls back automatically.
-- Keep running the old binary against the untouched SQLite source or the old
-  production image/volume.
+- Production has not been deployed yet. Keep the immutable local SQLite snapshot
+  and legacy key file untouched; the old local binary may continue using the
+  original source until local cutover.
 
 ### After import but before PostgreSQL-only writes
 
 - Stop the new app.
 - Restore the pre-import RDS snapshot or remove only the disposable local
   PostgreSQL volume.
-- Restart the prior version with the untouched SQLite/key source or prior
-  production Compose configuration.
+- Re-run owner creation and import only from the documented clean state. There is
+  no prior production app or Compose deployment to restore.
 
 ### After PostgreSQL-only writes begin
 
 - Do not switch back to SQLite; doing so would discard newer account changes.
 - Roll back application code while keeping the PostgreSQL schema compatible, or
   restore a PostgreSQL backup and replay only explicitly approved data.
-- Keep the credential master key and old volume through the rollback window.
+- Keep the credential master key, immutable SQLite snapshot, legacy local key
+  file, and pre-import RDS snapshot through the rollback window.
 
 No rollback command may run `docker compose down -v` against an unidentified
 Compose project or delete the source snapshot automatically.
@@ -672,16 +701,16 @@ Slice work:
 2. User-scoped AI runtime, scores, usage, and server tests.
 3. Local Compose bootstrap and PostgreSQL preview.
 4. Import snapshot, ledger, credential migration, and verification.
-5. Production cutover, browser QA, documentation, and security review.
+5. First production deployment, browser QA, documentation, and security review.
 
-| Slice | Human estimate | AI-agent estimate |
-| ----: | -------------- | ----------------- |
-| 1 | 1.5-2 days | 3-5 hours |
-| 2 | 2-3 days | 6-10 hours |
-| 3 | 1-1.5 days | 3-5 hours |
-| 4 | 1.5-2 days | 4-7 hours |
-| 5 | 1.5-2 days | 4-7 hours |
-| **Total** | **7.5-10.5 days** | **20-34 hours** |
+|     Slice | Human estimate    | AI-agent estimate |
+| --------: | ----------------- | ----------------- |
+|         1 | 1.5-2 days        | 3-5 hours         |
+|         2 | 2-3 days          | 6-10 hours        |
+|         3 | 1-1.5 days        | 3-5 hours         |
+|         4 | 1.5-2 days        | 4-7 hours         |
+|         5 | 1.5-2 days        | 4-7 hours         |
+| **Total** | **7.5-10.5 days** | **20-34 hours**   |
 
 ## Files Reference
 
@@ -740,22 +769,22 @@ Slice work:
 - `internal/ai/keys.go`
   - Remove it from runtime; retain only a narrowly scoped legacy reader if the
     importer needs it.
-- `deploy/production/Dockerfile`
-  - Ship `jobcron-import` beside the app binary.
 - `deploy/production/compose.yaml`
-  - Remove `jobcron_config` and require the master key.
-- `deploy/production/compose.migrate.yaml`
-  - Add the one-time read-only legacy-volume migration service.
+  - Remove `jobcron_config` before first deployment and require the master key.
 - `deploy/production/.env.example`
   - Add a placeholder for the encryption master key.
 - `deploy/production/README.md`
   - Document final durability and recovery boundaries.
 - `deploy/production/HUMAN_DEPLOY_GUIDE.md`
-  - Replace key-volume steps with the migration, verification, and rollback
-    sequence.
+  - Document blank-slate owner creation, tunnel-based local import, first
+    deployment, verification, and rollback.
 - `README.md` and `README.ko.md`
   - Make PostgreSQL the writable local database and document the Docker
-    prerequisite.
+    prerequisite. Replace both dashboard screenshots with score-sorted data that
+    has AI deltas applied and exposes the AI-delta detail chips.
+- `docs/assets/screenshots/dashboard.png` and `dashboard-dark.png`
+  - Replace both sanitized dashboard captures after the AI-delta state is visible
+    in light and dark themes.
 - `.goreleaser.yml`
   - Ship the importer and any local Compose artifact required by release users.
 - `.github/workflows/ci.yml`
@@ -765,7 +794,7 @@ Slice work:
 ## Security And Publication Requirements
 
 - Never commit or print a real API key, credential master key, database URL,
-  account identity, host address, SQLite source path, or Docker volume contents.
+  account identity, host address, SQLite source path, or legacy key-file contents.
 - Tests use deterministic fake keys only and assert that plaintext is absent from
   error strings and captured logs.
 - Production documentation uses placeholders and tells the operator to keep the
@@ -776,8 +805,7 @@ Slice work:
 
 ## Definition Of Done
 
-All 26 acceptance criteria pass on the exact commit proposed for deployment. The
-local SQLite snapshot, production RDS snapshot, old image tag, credential master
-key, and legacy Docker volume remain available through the human-approved rollback
-window. Only then may the old local plaintext key file and production
-`jobcron_config` volume be removed.
+All 27 acceptance criteria pass on the exact commit proposed for deployment. The
+local SQLite snapshot, production RDS snapshot, credential master key, and legacy
+local key file remain available through the human-approved rollback window. Only
+then may the old local plaintext key file be removed.

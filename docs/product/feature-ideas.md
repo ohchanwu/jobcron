@@ -32,6 +32,36 @@ Things we discussed but explicitly cut from v1 to protect scope. Each entry shou
 
 ---
 
+## Cross-model AI-extraction reuse for token-efficient Stage-2 scoring
+
+**What.** Let the profile-aware Stage-2 scorer inspect the cached, posting-only
+`ai_extractions` facts and evidence before sending the full job description. When
+the structured extraction is sufficient, Stage 2 can use that compact evidence;
+otherwise it falls back to the full posting text. Haiku, GPT mini, or another
+validated model may reuse the same extraction rather than repeating identical
+public-content analysis.
+
+**Why we want it.** The extraction is independent of any user's profile and can
+be reused across users. Treating it as a compact evidence layer could reduce paid
+input tokens, latency, and duplicate model work while keeping the final score and
+delta user-specific.
+
+**Why not now.** The current `ai_version` combines provider, model, and one shared
+prompt-template version for both extraction and scoring. A cache hit therefore
+proves only that the exact current model/prompt combination produced the row. The
+problem is not that two models can never share facts; it is that schema meaning,
+prompt behavior, and evidence quality can change independently. Safe cross-model
+reuse first needs a provider-neutral extraction contract, a separate extraction
+schema/prompt version, evidence validation against the current posting, and an
+evaluation showing that the compact path does not degrade Stage-2 decisions.
+
+**Build trigger.** Stage-2 input cost or latency becomes material, and an eval set
+shows that using normalized extractions first preserves score and evidence quality.
+Then split extraction compatibility from provider/model identity and measure the
+compact-path hit rate before making it the default.
+
+---
+
 ## Self-healing Ollama runner restart
 
 **What.** When the local-model provider is using Ollama and an inference wedges the runner, the app would detect the stuck state, stop the bad Ollama runner process, restart or reload it, and continue the overnight batch without the user waking up to press anything.

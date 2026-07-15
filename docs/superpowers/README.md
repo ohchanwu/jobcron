@@ -8,6 +8,7 @@ decision records needed for the current task.
 
 - [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
+- [Multi-user account expansion follow-up](specs/260715-multi-user-account-expansion.md)
 
 ## Recently Archived
 
