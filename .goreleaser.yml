@@ -1,4 +1,4 @@
-# GoReleaser config — cross-compiles jobcron for every v1 target platform.
+# GoReleaser config — cross-compiles jobcron and its importer for every target.
 # Validate with `goreleaser check`; dry-run with `goreleaser release --snapshot --clean`.
 version: 2
 
@@ -26,9 +26,31 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X main.version={{ .Version }}
+  - id: jobcron-import
+    main: ./cmd/jobcron-import
+    binary: jobcron-import
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
 
 archives:
   - id: default
+    ids:
+      - jobcron
+      - jobcron-import
     # Version-free names so README install URLs (releases/latest/download/...)
     # stay stable across releases.
     name_template: "jobcron_{{ .Os }}_{{ .Arch }}"

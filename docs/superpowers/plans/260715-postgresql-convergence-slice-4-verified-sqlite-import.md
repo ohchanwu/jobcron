@@ -410,7 +410,6 @@ Cover:
 ```go
 func TestLoadRejectsDBFlag(t *testing.T)
 func TestLoadIgnoresNoLegacyDatabaseEnvironment(t *testing.T)
-func TestOpenConfiguredStoreAlwaysUsesPostgres(t *testing.T)
 func TestNormalLocalStartupDoesNotCreateSQLite(t *testing.T)
 func TestExplicitDatabaseURLNeverInvokesDocker(t *testing.T)
 func TestManagedLocalStartupUsesStablePositiveUserID(t *testing.T)
@@ -425,7 +424,7 @@ SHM file appears.
 - [ ] **Step 2: Remove normal SQLite selection**
 
 Delete `Config.DBPath`, the `--db` flag, `JOBCRON_DB` handling,
-`openConfiguredStore` SQLite branches, and normal calls to `storage.Open` or
+configuration-only store-opening seams, and normal calls to `storage.Open` or
 `storage.OpenAt`. Keep `storage.OpenSQLiteAt` only for the importer and its
 fixtures. Stop moving or preparing legacy application data during normal app
 startup. Activate Slice 3's `resolvePostgresRuntime` for the ordinary no-URL
@@ -499,6 +498,7 @@ git commit -m "feat: make postgres the only writable runtime"
 
 - Modify: `.goreleaser.yml`
 - Modify: `.github/workflows/ci.yml`
+- Create: `scripts/release_config_test.go`
 
 - [ ] **Step 1: Add `jobcron-import` to release builds**
 
@@ -523,9 +523,14 @@ JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' go test ./... -count=1
 JOBCRON_TEST_POSTGRES_URL='<disposable-postgres-url>' \
   go test -race ./... -count=1
 goreleaser check
+goreleaser release --snapshot --clean
+for archive in dist/*.tar.gz; do tar -tzf "$archive"; done
+for archive in dist/*.zip; do unzip -Z1 "$archive"; done
 ```
 
-Expected: PASS with no PostgreSQL or importer test skipped.
+Expected: PASS with no PostgreSQL or importer test skipped. Every supported
+archive must contain both `jobcron` and `jobcron-import` (with `.exe` on
+Windows).
 
 - [ ] **Step 4: Perform the publication and secret review**
 
@@ -533,7 +538,8 @@ Inspect the complete diff and scan staged content. Confirm fixtures contain
 only synthetic keys, URLs, identities, and paths.
 
 ```sh
-git add .goreleaser.yml .github/workflows/ci.yml
+git add .goreleaser.yml .github/workflows/ci.yml \
+  scripts/release_config_test.go
 git diff --check
 git diff --cached
 gitleaks git --staged --redact --no-banner

@@ -30,17 +30,26 @@ jobs:
             echo "These files need gofmt:"; echo "$unformatted"; exit 1
           fi
       - run: go vet ./...
-      - run: go build ./...
+      - name: build shipped commands
+        run: go build ./cmd/jobcron ./cmd/jobcron-import ./cmd/jobcron-user
+      - name: release archive contract
+        run: go test ./scripts -run TestReleaseConfigPackagesImporter -count=1
       - name: local PostgreSQL Compose contract
         run: go test ./internal/localdb -run 'Test(ComposeContract|DecodedComposeEqualityDetectsUnmodeledDrift)$' -count=1
+      - name: importer PostgreSQL integration tests
+        run: go test ./cmd/jobcron-import -count=1
       - name: preview isolation, cleanup, and locking contracts
         run: go test ./scripts -run Preview -count=1
       - name: full test suite
         run: go test ./... -count=1
+      - name: full race suite
+        run: go test -race ./... -count=1
       - name: cross-compile arm64 targets
         run: |
           GOOS=linux GOARCH=arm64 go build ./cmd/jobcron
+          GOOS=linux GOARCH=arm64 go build ./cmd/jobcron-import
           GOOS=darwin GOARCH=arm64 go build ./cmd/jobcron
+          GOOS=darwin GOARCH=arm64 go build ./cmd/jobcron-import
       - name: verify PostgreSQL test cleanup
         if: always()
         run: |
