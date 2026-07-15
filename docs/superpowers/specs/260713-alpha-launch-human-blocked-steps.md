@@ -1,8 +1,17 @@
 # Jobcron Alpha Launch: Human-Blocked Steps
 
-**Status:** Ready for human execution<br>
+**Status:** Superseded; retained temporarily for the human progress record<br>
 **Owner:** Human operator<br>
 **Implementation prerequisite:** [Verified alpha pre-launch fixes](../archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
+
+> **Convergence note (2026-07-15):** The checked boxes and `OF` annotations
+> below record the human's launch preparation feedback. Do not execute this
+> checklist as the current deployment guide. The approved
+> [PostgreSQL convergence specification](260714-postgresql-local-convergence-user-ai-credentials.md)
+> and [Slice 5 plan](../plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
+> supersede its credential-volume, import, and rollback instructions. Final
+> production has no `jobcron_config` volume, and reverting Git alone is not a
+> safe rollback after PostgreSQL accepts newer writes.
 
 ## Purpose
 
@@ -17,16 +26,22 @@ or other access-controlled operational source.
 
 ## Why These Steps Are Human-Blocked
 
-| Step | Why the human must own it |
-|---|---|
-| AWS EC2, RDS, and security groups | Requires cloud credentials, billing authority, and permission to change network exposure. |
-| DNS | Changes the public route to production and may affect an existing domain. |
-| Docker Hub publication | Requires registry credentials and publishes a release artifact externally. |
-| Production `.env` | Contains the database connection string and session secret. |
-| Owner account | Requires the human to choose the real owner identity and password. |
-| Recovered-data import | Can overwrite production profile and user-scoped state and therefore needs explicit approval. |
-| Anthropic API key | It is a paid credential that must be entered directly by its owner. |
-| Go-live and rollback | Changes public availability and may require restoring production data or DNS. |
+- **AWS EC2, RDS, and security groups:** Require cloud credentials, billing
+  authority, and permission to change network exposure.
+- **DNS:** Changes the public production route and may affect an existing
+  domain.
+- **Docker Hub publication:** Requires registry credentials and publishes a
+  release artifact externally.
+- **Production `.env`:** Contains the database connection string and session
+  secret.
+- **Owner account:** Requires the human to choose the real owner identity and
+  password.
+- **Recovered-data import:** Can overwrite production profile and user-scoped
+  state, so it needs explicit approval.
+- **Anthropic API key:** Is a paid credential that its owner must enter
+  directly.
+- **Go-live and rollback:** Change public availability and may require restoring
+  production data or DNS.
 
 ## Secret and Publication Rules
 
@@ -43,31 +58,36 @@ or other access-controlled operational source.
 
 ## Human Inputs to Prepare Privately
 
-| Input | Secret? | Used for |
-|---|---:|---|
-| Approved release commit SHA | No | Immutable image tag and audit trail |
-| Docker Hub repository | No | Image publication and EC2 pull |
-| Docker Hub credentials | Yes | `docker login` |
-| EC2 host/address and SSH key | Sensitive | Deployment and RDS tunnel |
-| RDS endpoint, database user, and password | Yes | Production `DATABASE_URL` |
-| New `SESSION_SECRET` | Yes | Signed-in session integrity |
-| Owner email and password | Yes | First production login |
-| Recovered SQLite path | Sensitive | Optional local-to-RDS import |
-| Anthropic API key | Yes | Optional BYOK scoring |
-| Backup/snapshot identifiers | Sensitive | Rollback evidence |
+- **Approved release commit SHA** — Not secret; used for the immutable image
+  tag and audit trail.
+- **Docker Hub repository** — Not secret; used for image publication and EC2
+  pull.
+- **Docker Hub credentials** — Secret; used by `docker login`.
+- **EC2 host/address and SSH key** — Sensitive; used for deployment and the RDS
+  tunnel.
+- **RDS endpoint, database user, and password** — Secret; used in the
+  production `DATABASE_URL`.
+- **New `SESSION_SECRET`** — Secret; protects signed-in session integrity.
+- **Owner email and password** — Secret; used for the first production login.
+- **Recovered SQLite path** — Sensitive; used for the optional local-to-RDS
+  import.
+- **Anthropic API key** — Secret; used for optional BYOK scoring.
+- **Backup/snapshot identifiers** — Sensitive; retained as rollback evidence.
 
 ## Preconditions
 
-- [ ] The alpha pre-launch implementation spec is complete and its commit is on
+- [x] The alpha pre-launch implementation spec is complete and its commit is on
       the intended GitHub branch.
-- [ ] CI and the full local regression suite pass on that exact commit.
+- [x] CI and the full local regression suite pass on that exact commit.
 - [ ] Production Compose has the explicit `jobcron_config` volume mounted at
       `/root/.config/jobcron`.
 - [ ] The human deploy guide contains the verified SSH-tunnel owner/import path.
-- [ ] The selected release commit contains no real credentials or private
+- [x] The selected release commit contains no real credentials or private
       operational data.
-- [ ] The human has decided whether to import the recovered SQLite data.
-- [ ] A rollback window is available and no other operator is deploying.
+- [x] The human has decided whether to import the recovered SQLite data.
+  - **OF** import it.
+- [x] A rollback window is available and no other operator is deploying.
+  - **OF** rollback can be done by reverting back to a previous commit. No other operator is deploying.
 
 Stop if any precondition is false.
 
@@ -75,9 +95,9 @@ Stop if any precondition is false.
 
 In the AWS console, verify and record the results privately:
 
-- [ ] The EC2 instance is running, uses the expected ARM64 architecture, has
+- [x] The EC2 instance is running, uses the expected ARM64 architecture, has
       enough disk space, and retains a stable public address for DNS.
-- [ ] RDS is available on PostgreSQL 18, is not publicly accessible, and is
+- [x] RDS is available on PostgreSQL 18, is not publicly accessible, and is
       reachable from the EC2 security group on TCP `5432`.
 - [ ] EC2 inbound rules allow SSH `22` only from the operator's current IP and
       allow public HTTP `80` and HTTPS `443`.
