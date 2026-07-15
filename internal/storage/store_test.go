@@ -198,7 +198,8 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 func TestPostgresRuntimeStorageMethods(t *testing.T) {
 	st := newPostgresTestStore(t)
 	ctx := context.Background()
-	if _, err := st.CreateOwnerUser(ctx, "runtime-owner@example.test", "hash"); err != nil {
+	user, err := st.CreateOwnerUser(ctx, "runtime-owner@example.test", "hash")
+	if err != nil {
 		t.Fatalf("CreateOwnerUser: %v", err)
 	}
 
@@ -297,25 +298,25 @@ func TestPostgresRuntimeStorageMethods(t *testing.T) {
 	}
 
 	delta := ai.Delta{Items: []ai.DeltaItem{{Signal: "Go", Kind: "positive", Delta: 4, Evidence: "Go", MatchedGoal: "Go"}}, NetDelta: 4}
-	if err := st.UpsertAIScore(ctx, id, "input", "v1", delta, when); err != nil {
+	if err := st.UpsertAIScore(ctx, user.ID, id, "input", "v1", delta, when); err != nil {
 		t.Fatalf("UpsertAIScore: %v", err)
 	}
-	if got, ok, err := st.AIScore(ctx, id, "input", "v1"); err != nil || !ok || got.NetDelta != delta.NetDelta {
+	if got, ok, err := st.AIScore(ctx, user.ID, id, "input", "v1"); err != nil || !ok || got.NetDelta != delta.NetDelta {
 		t.Fatalf("AIScore net=%d ok=%v err=%v", got.NetDelta, ok, err)
 	}
-	if got, err := st.AIScoresByPostingID(ctx, "input", "v1"); err != nil || got[id].NetDelta != delta.NetDelta {
+	if got, err := st.AIScoresByPostingID(ctx, user.ID, "input", "v1"); err != nil || got[id].NetDelta != delta.NetDelta {
 		t.Fatalf("AIScoresByPostingID net=%d err=%v", got[id].NetDelta, err)
 	}
-	if got, err := st.LatestAIScoresByPostingID(ctx, "v1"); err != nil || got[id].NetDelta != delta.NetDelta {
+	if got, err := st.LatestAIScoresByPostingID(ctx, user.ID, "v1"); err != nil || got[id].NetDelta != delta.NetDelta {
 		t.Fatalf("LatestAIScoresByPostingID net=%d err=%v", got[id].NetDelta, err)
 	}
-	if got, err := st.LatestAIScoresAnyVersionByPostingID(ctx); err != nil || got[id].NetDelta != delta.NetDelta {
+	if got, err := st.LatestAIScoresAnyVersionByPostingID(ctx, user.ID); err != nil || got[id].NetDelta != delta.NetDelta {
 		t.Fatalf("LatestAIScoresAnyVersionByPostingID net=%d err=%v", got[id].NetDelta, err)
 	}
-	if err := st.AddAIUsage(ctx, "2026-07-09", 10, 3); err != nil {
+	if err := st.AddAIUsage(ctx, user.ID, "2026-07-09", 10, 3); err != nil {
 		t.Fatalf("AddAIUsage: %v", err)
 	}
-	if in, out, err := st.AIUsageForDay(ctx, "2026-07-09"); err != nil || in != 10 || out != 3 {
+	if in, out, err := st.AIUsageForDay(ctx, user.ID, "2026-07-09"); err != nil || in != 10 || out != 3 {
 		t.Fatalf("AIUsageForDay in=%d out=%d err=%v", in, out, err)
 	}
 }

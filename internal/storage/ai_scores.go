@@ -11,13 +11,13 @@ import (
 	"github.com/ohchanwu/jobcron/internal/ai"
 )
 
-// UpsertAIScore caches one Stage-2 delta, keyed by (posting_id, ai_input_hash,
-// ai_version). The surviving gated items are stored as items_json and the net is
-// stored alongside so a read need not re-sum. Re-rating the same posting under
-// the same AI-input hash overwrites the row (refreshing computed_at). The
-// ai_input_hash is the hash of the goal text only (profile.AIInputHash), so a
-// weight/MinScore tweak keeps the cached delta fresh — only a goal edit rotates
-// the key (T1).
+// UpsertAIScore caches one Stage-2 delta, keyed by
+// (user_id, posting_id, ai_input_hash, ai_version) in PostgreSQL. The surviving
+// gated items are stored as items_json and the net is stored alongside so a read
+// need not re-sum. Re-rating the same posting under the same AI-input hash
+// overwrites the row (refreshing computed_at). The ai_input_hash is the hash of
+// the goal text only (profile.AIInputHash), so a weight/MinScore tweak keeps the
+// cached delta fresh — only a goal edit rotates the key (T1).
 //
 // After the write it prunes the posting's accumulated dead rows, but
 // deliberately NOT to nothing: it keeps (a) ALL rows under the just-written
@@ -30,9 +30,12 @@ import (
 // brings that provider's prior score back without re-rating. Pruning it would
 // make a provider round-trip silently lose the old reading.
 func (s *Store) UpsertAIScore(
-	ctx context.Context, postingID int64, aiInputHash, aiVersion string,
+	ctx context.Context, userID, postingID int64, aiInputHash, aiVersion string,
 	d ai.Delta, computedAt time.Time,
 ) error {
+	if err := validateAIUserID(userID); err != nil {
+		return err
+	}
 	items := d.Items
 	if items == nil {
 		items = []ai.DeltaItem{}
@@ -46,15 +49,27 @@ func (s *Store) UpsertAIScore(
 		return fmt.Errorf("storage: begin upsert ai score: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, s.query(`
+	upsertSQL := `
 INSERT INTO ai_scores
     (posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
 VALUES (?,?,?,?,?,?)
 ON CONFLICT(posting_id, ai_input_hash, ai_version) DO UPDATE SET
     items_json  = excluded.items_json,
     net_delta   = excluded.net_delta,
-    computed_at = excluded.computed_at`),
-		postingID, aiInputHash, aiVersion, string(itemsJSON), d.NetDelta, computedAt.UTC()); err != nil {
+	computed_at = excluded.computed_at`
+	upsertArgs := []any{postingID, aiInputHash, aiVersion, string(itemsJSON), d.NetDelta, computedAt.UTC()}
+	if s.dialect == DialectPostgres {
+		upsertSQL = `
+INSERT INTO ai_scores
+    (user_id, posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
+VALUES (?,?,?,?,?,?,?)
+ON CONFLICT(user_id, posting_id, ai_input_hash, ai_version) DO UPDATE SET
+    items_json  = excluded.items_json,
+    net_delta   = excluded.net_delta,
+    computed_at = excluded.computed_at`
+		upsertArgs = []any{userID, postingID, aiInputHash, aiVersion, string(itemsJSON), d.NetDelta, computedAt.UTC()}
+	}
+	if _, err = tx.ExecContext(ctx, s.query(upsertSQL), upsertArgs...); err != nil {
 		return fmt.Errorf("storage: upsert ai score: %w", err)
 	}
 	// Prune other-version rows for this posting, keeping only the single
@@ -74,16 +89,21 @@ WHERE posting_id = ?
 	if s.dialect == DialectPostgres {
 		pruneSQL = `
 DELETE FROM ai_scores
-WHERE posting_id = ?
+WHERE user_id = ?
+  AND posting_id = ?
   AND ai_version <> ?
   AND ctid NOT IN (
     SELECT ctid FROM ai_scores
-    WHERE posting_id = ? AND ai_version <> ?
+    WHERE user_id = ? AND posting_id = ? AND ai_version <> ?
     ORDER BY computed_at DESC, ctid DESC
     LIMIT 1
   )`
 	}
-	if _, err = tx.ExecContext(ctx, s.query(pruneSQL), postingID, aiVersion, postingID, aiVersion); err != nil {
+	pruneArgs := []any{postingID, aiVersion, postingID, aiVersion}
+	if s.dialect == DialectPostgres {
+		pruneArgs = []any{userID, postingID, aiVersion, userID, postingID, aiVersion}
+	}
+	if _, err = tx.ExecContext(ctx, s.query(pruneSQL), pruneArgs...); err != nil {
 		return fmt.Errorf("storage: prune ai scores: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
@@ -97,13 +117,24 @@ WHERE posting_id = ?
 // the "fresh" lookup: a hit is a delta computed against the current goal text,
 // so the caller leaves Stale=false.
 func (s *Store) AIScore(
-	ctx context.Context, postingID int64, aiInputHash, aiVersion string,
+	ctx context.Context, userID, postingID int64, aiInputHash, aiVersion string,
 ) (ai.Delta, bool, error) {
-	row := s.db.QueryRowContext(ctx, s.query(`
+	if err := validateAIUserID(userID); err != nil {
+		return ai.Delta{}, false, err
+	}
+	query := `
 SELECT items_json, net_delta
 FROM ai_scores
-WHERE posting_id = ? AND ai_input_hash = ? AND ai_version = ?`),
-		postingID, aiInputHash, aiVersion)
+WHERE posting_id = ? AND ai_input_hash = ? AND ai_version = ?`
+	args := []any{postingID, aiInputHash, aiVersion}
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT items_json, net_delta
+FROM ai_scores
+WHERE user_id = ? AND posting_id = ? AND ai_input_hash = ? AND ai_version = ?`
+		args = []any{userID, postingID, aiInputHash, aiVersion}
+	}
+	row := s.db.QueryRowContext(ctx, s.query(query), args...)
 	d, err := scanAIScore(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ai.Delta{}, false, nil
@@ -120,14 +151,28 @@ WHERE posting_id = ? AND ai_input_hash = ? AND ai_version = ?`),
 // caller merges this latest row but marks it Stale ("이전 프로필 기준"). It rides
 // idx_ai_scores_latest.
 func (s *Store) LatestAIScore(
-	ctx context.Context, postingID int64, aiVersion string,
+	ctx context.Context, userID, postingID int64, aiVersion string,
 ) (ai.Delta, bool, error) {
-	row := s.db.QueryRowContext(ctx, s.query(`
+	if err := validateAIUserID(userID); err != nil {
+		return ai.Delta{}, false, err
+	}
+	query := `
 SELECT items_json, net_delta
 FROM ai_scores
 WHERE posting_id = ? AND ai_version = ?
 ORDER BY computed_at DESC
-LIMIT 1`), postingID, aiVersion)
+LIMIT 1`
+	args := []any{postingID, aiVersion}
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT items_json, net_delta
+FROM ai_scores
+WHERE user_id = ? AND posting_id = ? AND ai_version = ?
+ORDER BY computed_at DESC
+LIMIT 1`
+		args = []any{userID, postingID, aiVersion}
+	}
+	row := s.db.QueryRowContext(ctx, s.query(query), args...)
 	d, err := scanAIScore(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ai.Delta{}, false, nil
@@ -143,12 +188,24 @@ LIMIT 1`), postingID, aiVersion)
 // scoring merge (scoreAll) calls it once and looks up by posting id, never N+1.
 // Postings with no fresh row are simply absent from the map.
 func (s *Store) AIScoresByPostingID(
-	ctx context.Context, aiInputHash, aiVersion string,
+	ctx context.Context, userID int64, aiInputHash, aiVersion string,
 ) (map[int64]ai.Delta, error) {
-	rows, err := s.db.QueryContext(ctx, s.query(`
+	if err := validateAIUserID(userID); err != nil {
+		return nil, err
+	}
+	query := `
 SELECT posting_id, items_json, net_delta
 FROM ai_scores
-WHERE ai_input_hash = ? AND ai_version = ?`), aiInputHash, aiVersion)
+WHERE ai_input_hash = ? AND ai_version = ?`
+	args := []any{aiInputHash, aiVersion}
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT posting_id, items_json, net_delta
+FROM ai_scores
+WHERE user_id = ? AND ai_input_hash = ? AND ai_version = ?`
+		args = []any{userID, aiInputHash, aiVersion}
+	}
+	rows, err := s.db.QueryContext(ctx, s.query(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query ai scores: %w", err)
 	}
@@ -171,13 +228,26 @@ WHERE ai_input_hash = ? AND ai_version = ?`), aiInputHash, aiVersion)
 // scoreAll: a posting present here but absent from the fresh map gets its delta
 // merged with Stale=true. Postings with no AI score at all are absent.
 func (s *Store) LatestAIScoresByPostingID(
-	ctx context.Context, aiVersion string,
+	ctx context.Context, userID int64, aiVersion string,
 ) (map[int64]ai.Delta, error) {
-	rows, err := s.db.QueryContext(ctx, s.query(`
+	if err := validateAIUserID(userID); err != nil {
+		return nil, err
+	}
+	query := `
 SELECT posting_id, items_json, net_delta
 FROM ai_scores
 WHERE ai_version = ?
-ORDER BY posting_id, computed_at DESC`), aiVersion)
+ORDER BY posting_id, computed_at DESC`
+	args := []any{aiVersion}
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT posting_id, items_json, net_delta
+FROM ai_scores
+WHERE user_id = ? AND ai_version = ?
+ORDER BY posting_id, computed_at DESC`
+		args = []any{userID, aiVersion}
+	}
+	rows, err := s.db.QueryContext(ctx, s.query(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query latest ai scores: %w", err)
 	}
@@ -207,12 +277,25 @@ ORDER BY posting_id, computed_at DESC`), aiVersion)
 // prefers the current-version row first (LatestAIScoresByPostingID), so this only
 // supplies rows for postings the current provider/model has never rated.
 func (s *Store) LatestAIScoresAnyVersionByPostingID(
-	ctx context.Context,
+	ctx context.Context, userID int64,
 ) (map[int64]ai.Delta, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	if err := validateAIUserID(userID); err != nil {
+		return nil, err
+	}
+	query := `
 SELECT posting_id, items_json, net_delta
 FROM ai_scores
-ORDER BY posting_id, computed_at DESC`)
+ORDER BY posting_id, computed_at DESC`
+	args := []any{}
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT posting_id, items_json, net_delta
+FROM ai_scores
+WHERE user_id = ?
+ORDER BY posting_id, computed_at DESC`
+		args = []any{userID}
+	}
+	rows, err := s.db.QueryContext(ctx, s.query(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query latest ai scores (any version): %w", err)
 	}
@@ -230,6 +313,13 @@ ORDER BY posting_id, computed_at DESC`)
 		out[pid] = d
 	}
 	return out, rows.Err()
+}
+
+func validateAIUserID(userID int64) error {
+	if userID <= 0 {
+		return fmt.Errorf("storage: AI user ID must be positive")
+	}
+	return nil
 }
 
 // scanAIScore reads items_json + net_delta into an ai.Delta. Stale stays false;

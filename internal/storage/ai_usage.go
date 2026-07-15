@@ -14,14 +14,27 @@ import (
 // process restarts and never loses a debit to a read-modify-write race within a
 // single connection. day is the caller's UTC date string so the ledger and the
 // budget agree on the boundary.
-func (s *Store) AddAIUsage(ctx context.Context, day string, inputTokens, outputTokens int) error {
-	_, err := s.db.ExecContext(ctx, s.query(`
+func (s *Store) AddAIUsage(ctx context.Context, userID int64, day string, inputTokens, outputTokens int) error {
+	if err := validateAIUserID(userID); err != nil {
+		return err
+	}
+	query := `
 INSERT INTO ai_usage (day, input_tokens, output_tokens)
 VALUES (?,?,?)
 ON CONFLICT(day) DO UPDATE SET
     input_tokens  = ai_usage.input_tokens  + excluded.input_tokens,
-    output_tokens = ai_usage.output_tokens + excluded.output_tokens`),
-		day, inputTokens, outputTokens)
+	output_tokens = ai_usage.output_tokens + excluded.output_tokens`
+	args := []any{day, inputTokens, outputTokens}
+	if s.dialect == DialectPostgres {
+		query = `
+INSERT INTO ai_usage (user_id, day, input_tokens, output_tokens)
+VALUES (?,?,?,?)
+ON CONFLICT(user_id, day) DO UPDATE SET
+    input_tokens  = ai_usage.input_tokens  + excluded.input_tokens,
+    output_tokens = ai_usage.output_tokens + excluded.output_tokens`
+		args = []any{userID, day, inputTokens, outputTokens}
+	}
+	_, err := s.db.ExecContext(ctx, s.query(query), args...)
 	if err != nil {
 		return fmt.Errorf("storage: add ai usage: %w", err)
 	}
@@ -30,10 +43,17 @@ ON CONFLICT(day) DO UPDATE SET
 
 // AIUsageForDay returns the input and output token totals recorded for the given
 // UTC day. A day with no row reads as (0, 0) — an unused day is not an error.
-func (s *Store) AIUsageForDay(ctx context.Context, day string) (inputTokens, outputTokens int, err error) {
-	err = s.db.QueryRowContext(ctx,
-		s.query(`SELECT input_tokens, output_tokens FROM ai_usage WHERE day = ?`), day).
-		Scan(&inputTokens, &outputTokens)
+func (s *Store) AIUsageForDay(ctx context.Context, userID int64, day string) (inputTokens, outputTokens int, err error) {
+	if err := validateAIUserID(userID); err != nil {
+		return 0, 0, err
+	}
+	query := `SELECT input_tokens, output_tokens FROM ai_usage WHERE day = ?`
+	args := []any{day}
+	if s.dialect == DialectPostgres {
+		query = `SELECT input_tokens, output_tokens FROM ai_usage WHERE user_id = ? AND day = ?`
+		args = []any{userID, day}
+	}
+	err = s.db.QueryRowContext(ctx, s.query(query), args...).Scan(&inputTokens, &outputTokens)
 	if err == nil {
 		return inputTokens, outputTokens, nil
 	}
@@ -46,16 +66,28 @@ func (s *Store) AIUsageForDay(ctx context.Context, day string) (inputTokens, out
 // AIUsageForMonth returns the input and output token totals recorded for a UTC
 // month string ("YYYY-MM"). The ai_usage day key is ISO-like, so a prefix range
 // over day strings is stable across SQLite and PostgreSQL.
-func (s *Store) AIUsageForMonth(ctx context.Context, month string) (inputTokens, outputTokens int, err error) {
+func (s *Store) AIUsageForMonth(ctx context.Context, userID int64, month string) (inputTokens, outputTokens int, err error) {
+	if err := validateAIUserID(userID); err != nil {
+		return 0, 0, err
+	}
 	if len(month) != len("2006-01") {
 		return 0, 0, fmt.Errorf("storage: invalid ai usage month %q", month)
 	}
 	start := month + "-01"
 	end := nextMonthKey(month)
-	err = s.db.QueryRowContext(ctx, s.query(`
+	query := `
 SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
 FROM ai_usage
-WHERE day >= ? AND day < ?`), start, end).Scan(&inputTokens, &outputTokens)
+WHERE day >= ? AND day < ?`
+	args := []any{start, end}
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
+FROM ai_usage
+WHERE user_id = ? AND day >= ? AND day < ?`
+		args = []any{userID, start, end}
+	}
+	err = s.db.QueryRowContext(ctx, s.query(query), args...).Scan(&inputTokens, &outputTokens)
 	if err != nil {
 		return 0, 0, fmt.Errorf("storage: query monthly ai usage: %w", err)
 	}
