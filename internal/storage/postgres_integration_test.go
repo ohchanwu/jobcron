@@ -14,6 +14,7 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 	st, schema := newPostgresTestStoreWithSchema(t)
 
 	for _, table := range []string{
+		"local_data_imports",
 		"users",
 		"user_ai_credentials",
 		"sessions",
@@ -34,6 +35,49 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 		if err != nil || !exists {
 			t.Fatalf("table %s exists=%v err=%v", table, exists, err)
 		}
+	}
+}
+
+func TestLocalDataImportsLedgerConstraints(t *testing.T) {
+	st, _ := newPostgresTestStoreWithSchema(t)
+	ctx := context.Background()
+	firstOwnerID := insertMigrationTestUser(t, st, "first-import-owner@example.invalid")
+	secondOwnerID := insertMigrationTestUser(t, st, "second-import-owner@example.invalid")
+	const fingerprint = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const counts = `{"postings":1}`
+
+	insert := func(userID int64, sourceSHA256 string) error {
+		_, err := st.db.ExecContext(ctx, `
+INSERT INTO local_data_imports (user_id, source_sha256, source_counts, imported_counts)
+VALUES ($1, $2, $3::jsonb, $3::jsonb)`, userID, sourceSHA256, counts)
+		return err
+	}
+
+	if err := insert(firstOwnerID, fingerprint); err != nil {
+		t.Fatalf("insert first owner ledger: %v", err)
+	}
+	if err := insert(secondOwnerID, fingerprint); err != nil {
+		t.Fatalf("insert same fingerprint for second owner: %v", err)
+	}
+	if err := insert(firstOwnerID, fingerprint); err == nil {
+		t.Fatal("duplicate owner/fingerprint ledger insert succeeded")
+	}
+	if err := insert(firstOwnerID, "too-short"); err == nil {
+		t.Fatal("invalid fingerprint ledger insert succeeded")
+	}
+
+	if _, err := st.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, firstOwnerID); err != nil {
+		t.Fatalf("delete first owner: %v", err)
+	}
+	var firstRows, secondRows int
+	if err := st.db.QueryRowContext(ctx, `SELECT count(*) FROM local_data_imports WHERE user_id = $1`, firstOwnerID).Scan(&firstRows); err != nil {
+		t.Fatalf("count cascaded ledger rows: %v", err)
+	}
+	if err := st.db.QueryRowContext(ctx, `SELECT count(*) FROM local_data_imports WHERE user_id = $1`, secondOwnerID).Scan(&secondRows); err != nil {
+		t.Fatalf("count retained ledger rows: %v", err)
+	}
+	if firstRows != 0 || secondRows != 1 {
+		t.Fatalf("ledger rows after owner delete = first:%d second:%d, want first:0 second:1", firstRows, secondRows)
 	}
 }
 
