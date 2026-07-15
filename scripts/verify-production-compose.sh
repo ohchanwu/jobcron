@@ -1,0 +1,115 @@
+#!/bin/sh
+
+set -eu
+
+fail() {
+	printf '%s\n' "production Compose contract failed: $1" >&2
+	exit 1
+}
+
+[ -n "${JOBCRON_IMAGE:-}" ] || fail "required variable JOBCRON_IMAGE"
+[ -n "${DATABASE_URL:-}" ] || fail "required variable DATABASE_URL"
+[ -n "${SESSION_SECRET:-}" ] || fail "required variable SESSION_SECRET"
+[ -n "${JOBCRON_CREDENTIAL_ENCRYPTION_KEY:-}" ] ||
+	fail "required variable JOBCRON_CREDENTIAL_ENCRYPTION_KEY"
+
+command -v docker >/dev/null 2>&1 || fail "docker compose command"
+command -v jq >/dev/null 2>&1 || fail "jq structured Compose inspector"
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+compose_file="$repo_root/deploy/production/compose.yaml"
+[ -f "$compose_file" ] || fail "deploy/production/compose.yaml"
+
+umask 077
+rendered_compose=$(mktemp "${TMPDIR:-/tmp}/jobcron-production-compose.XXXXXX" 2>/dev/null) ||
+	fail "private rendered Compose file"
+legacy_volume_probe=""
+cleanup() {
+	rm -f "$rendered_compose" >/dev/null 2>&1 || :
+	if [ -n "$legacy_volume_probe" ]; then
+		rm -f "$legacy_volume_probe" >/dev/null 2>&1 || :
+	fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+if ! docker compose -f "$compose_file" config --format json 2>/dev/null >"$rendered_compose"; then
+	fail "rendered Compose configuration"
+fi
+
+# Compose drops unused top-level volumes from its normalized model. Reference the
+# retired volume from a private override: a successful render proves the base
+# file still declares it, while an undefined-volume failure proves it is absent.
+legacy_volume_probe=$(mktemp "${TMPDIR:-/tmp}/jobcron-production-compose.legacy.XXXXXX" 2>/dev/null) ||
+	fail "private legacy-volume probe"
+if ! cat 2>/dev/null >"$legacy_volume_probe" <<'EOF'
+services:
+  production_contract_probe:
+    image: scratch
+    volumes:
+      - jobcron_config:/contract-probe
+EOF
+then
+	fail "private legacy-volume probe"
+fi
+if docker compose -f "$compose_file" -f "$legacy_volume_probe" config --quiet \
+	>/dev/null 2>&1; then
+	fail "volumes.jobcron_config must be absent"
+fi
+
+check_contract() {
+	contract=$1
+	filter=$2
+	if ! jq -e "$filter" "$rendered_compose" >/dev/null 2>&1; then
+		fail "$contract"
+	fi
+}
+
+check_contract "services.app" '.services.app | type == "object"'
+check_contract "services.caddy" '.services.caddy | type == "object"'
+check_contract "services.app.volumes must be absent" \
+	'((.services.app.volumes // []) | length) == 0'
+check_contract "services.app.ports must be absent" \
+	'((.services.app.ports // []) | length) == 0'
+check_contract "services.caddy.ports must publish only 80 and 443" '
+	(.services.caddy.ports // []) as $ports |
+	($ports | length) == 2 and
+	any($ports[]; (.published | tostring) == "80" and .target == 80 and .protocol == "tcp") and
+	any($ports[]; (.published | tostring) == "443" and .target == 443 and .protocol == "tcp") and
+	([.services | to_entries[] | select(.key != "caddy") |
+	  (.value.ports // [])[] | .published | tostring |
+	  select(. == "80" or . == "443")] | length) == 0
+'
+
+check_contract "services.app.environment.DATABASE_URL" \
+	'.services.app.environment.DATABASE_URL == env.DATABASE_URL'
+check_contract "services.app.environment.SESSION_SECRET" \
+	'.services.app.environment.SESSION_SECRET == env.SESSION_SECRET'
+check_contract "services.app.environment.JOBCRON_CREDENTIAL_ENCRYPTION_KEY" \
+	'.services.app.environment.JOBCRON_CREDENTIAL_ENCRYPTION_KEY == env.JOBCRON_CREDENTIAL_ENCRYPTION_KEY'
+check_contract "services.app.environment.JOBCRON_ENV must be production" \
+	'.services.app.environment.JOBCRON_ENV == "production"'
+check_contract "services.app.environment.JOBCRON_HOST must be 0.0.0.0" \
+	'.services.app.environment.JOBCRON_HOST == "0.0.0.0"'
+check_contract "services.app.environment.JOBCRON_PORT must be 7777" \
+	'.services.app.environment.JOBCRON_PORT == "7777"'
+check_contract "services.app.environment.JOBCRON_NO_OPEN must be 1" \
+	'.services.app.environment.JOBCRON_NO_OPEN == "1"'
+check_contract "services.app.environment.JOBCRON_DEMO must be absent" \
+	'(.services.app.environment | has("JOBCRON_DEMO")) | not'
+check_contract "services.app.environment.JOBCRON_ADMIN_TOKEN must be absent" \
+	'(.services.app.environment | has("JOBCRON_ADMIN_TOKEN")) | not'
+check_contract "services.app.environment.JOBCRON_WORKNET_KEY must be absent" \
+	'(.services.app.environment | has("JOBCRON_WORKNET_KEY")) | not'
+check_contract "services.app.environment.JOBCRON_PROXY_SECRET must be absent" \
+	'(.services.app.environment | has("JOBCRON_PROXY_SECRET")) | not'
+check_contract "services.app.environment.JOBCRON_SCHEDULER_ENABLED must be 1" \
+	'.services.app.environment.JOBCRON_SCHEDULER_ENABLED == "1"'
+check_contract "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME must be 05:00" \
+	'.services.app.environment.JOBCRON_DAILY_SCRAPE_TIME == "05:00"'
+check_contract "services.app.image must use sha-<12-hex> or sha256 digest" \
+	'(.services.app.image | type == "string") and
+	 (.services.app.image | test("(:sha-[0-9a-f]{12}|@sha256:[0-9a-f]{64})$"))'
+
+printf '%s\n' "production Compose contract verified"
