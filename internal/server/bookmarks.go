@@ -46,6 +46,10 @@ func (s *Server) buildBookmarks(ctx context.Context, now time.Time, userIDOpt ..
 }
 
 func (s *Server) buildBookmarksWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (bookmarksView, error) {
+	snapshot, err := s.loadRenderProfileSnapshot(ctx, userID)
+	if err != nil {
+		return bookmarksView{}, err
+	}
 	postings, err := s.bookmarkedPostings(ctx, userID)
 	if err != nil {
 		return bookmarksView{}, err
@@ -56,7 +60,7 @@ func (s *Server) buildBookmarksWithRuntime(ctx context.Context, now time.Time, u
 			return bookmarksView{}, err
 		}
 	}
-	scores, err := s.scoresByPostingID(ctx, userID)
+	scores, err := s.scoresForRenderSnapshot(ctx, userID, snapshot)
 	if err != nil {
 		return bookmarksView{}, err
 	}
@@ -72,28 +76,26 @@ func (s *Server) buildBookmarksWithRuntime(ctx context.Context, now time.Time, u
 	}
 	view := bookmarksView{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
+		sc, ok := scores[p.ID]
+		if !ok {
+			continue
+		}
 		dp := dashboardPosting{
 			Posting:       p,
 			Bookmarked:    !s.demoMode, // in demo, browser localStorage paints saved rows
 			NotInterested: muted[p.ID],
 			Deadline:      deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 		}
-		if sc, ok := scores[p.ID]; ok {
-			dp.Total = sc.Total
-			dp.Excluded = sc.Total < 0
-			var result scoring.ScoreResult
-			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
-				dp.Explanation = scoring.Explain(result)
-				dp.Breakdown = result.Breakdown
-			}
+		dp.Total = sc.Total
+		dp.Excluded = sc.Total < 0
+		var result scoring.ScoreResult
+		if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
+			dp.Explanation = scoring.Explain(result)
+			dp.Breakdown = result.Breakdown
 		}
 		view.Postings = append(view.Postings, dp)
 	}
-	prof, _, err := s.loadProfile(ctx, userID)
-	if err != nil {
-		return bookmarksView{}, err
-	}
-	view.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "bookmarks", view.Postings)
+	view.Rerate = s.buildRerateInfo(ctx, userID, runtime, snapshot.profile, "bookmarks", view.Postings)
 	return view, nil
 }
 

@@ -62,7 +62,7 @@ func providerFailureMessage(err error) string {
 const rerateWorkers = 6
 
 // callCap bounds how many not-yet-cached rows a single 재평가 press spends a
-// provider call on (the aiPerCallCap legibility knob), safely across the
+// provider call on (the user's AIRuntime.PerCallCap), safely across the
 // worker pool. tryReserve atomically claims a slot when one is free.
 type callCap struct {
 	mu  sync.Mutex
@@ -165,6 +165,14 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "올바르지 않은 화면 기록이에요.", http.StatusBadRequest)
 		return
 	}
+	// Acquire before resolving the runtime. Profile saves share this key, so the
+	// profile, credential, and immutable runtime stay one consistent snapshot for
+	// the complete detached operation.
+	if !s.flight.tryAcquire(scrapeAllKey) {
+		http.Error(w, "이미 작업이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
+		return
+	}
+	defer s.flight.release(scrapeAllKey)
 	runtime, err := s.aiRuntimeForUser(r.Context(), userID)
 	if err != nil || runtime == nil {
 		// No provider configured — there is nothing to re-rate. The button is
@@ -174,14 +182,6 @@ func (s *Server) handleRerateSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "AI가 설정되지 않았어요.", http.StatusServiceUnavailable)
 		return
 	}
-	// Share the scrape lock: a scrape and a re-rate (and two re-rates) must never
-	// run at once — both spend the daily AI budget and mutate scores.
-	if !s.flight.tryAcquire(scrapeAllKey) {
-		http.Error(w, "이미 작업이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
-		return
-	}
-	defer s.flight.release(scrapeAllKey)
-
 	sw, err := newSSEWriter(w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -329,7 +329,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 // 재평가 handler (runRerate) and the scrape's end-of-run auto-rate pass
 // (runScrape), so a fresh briefing shows its AI chips without a manual 재평가.
 // The caller owns the budget — so a scrape and a 재평가 each scope their own run
-// cap — and the scoreAll merge that follows. The per-call cap (aiPerCallCap)
+// cap — and the scoreAll merge that follows. The runtime's per-call cap
 // bounds how many not-yet-cached rows one pass spends on, exactly as a 재평가
 // press does; cached rows are free.
 //

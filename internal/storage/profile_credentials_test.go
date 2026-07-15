@@ -147,7 +147,8 @@ func assertEncryptedCredentialPayload(t *testing.T, got, want EncryptedAICredent
 		!bytes.Equal(got.Ciphertext, want.Ciphertext) ||
 		!bytes.Equal(got.Nonce, want.Nonce) ||
 		got.EncryptionVersion != want.EncryptionVersion {
-		t.Fatalf("credential payload = user %d provider %q ciphertext %x nonce %x version %d",
-			got.UserID, got.Provider, got.Ciphertext, got.Nonce, got.EncryptionVersion)
+		t.Fatalf("credential payload mismatch: user=%d provider=%q ciphertext_equal=%v ciphertext_len=%d nonce_equal=%v nonce_len=%d version=%d",
+			got.UserID, got.Provider, bytes.Equal(got.Ciphertext, want.Ciphertext), len(got.Ciphertext),
+			bytes.Equal(got.Nonce, want.Nonce), len(got.Nonce), got.EncryptionVersion)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -114,6 +115,12 @@ type Server struct {
 
 	credentialCipher credential.Cipher
 	newAIProvider    aiProviderFactory
+	// afterRenderProfileSnapshot is a deterministic concurrency seam used by
+	// render/profile-save regression tests. Production leaves it nil.
+	afterRenderProfileSnapshot func()
+	// afterRenderScoreSnapshot is a deterministic concurrency seam used by
+	// render/profile-save regression tests. Production leaves it nil.
+	afterRenderScoreSnapshot func()
 
 	demoMode       bool   // read-only public demo mode
 	productionMode bool   // require owner login for protected HTTP routes
@@ -124,7 +131,9 @@ type Server struct {
 type aiProviderFactory func(provider, key, model string, rateLimit time.Duration) (ai.Provider, error)
 
 // AIRuntime is immutable AI configuration resolved once for one user's
-// operation. It contains no plaintext credential and is never cached on Server.
+// operation. It has no standalone key field, but Provider owns the decrypted
+// credential for the operation lifetime. The runtime must remain ephemeral and
+// is never cached on Server.
 type AIRuntime struct {
 	UserID          int64
 	Provider        ai.Provider
@@ -283,6 +292,56 @@ func (s *Server) scoresByPostingID(ctx context.Context, userID int64) (map[int64
 		return s.store.ScoresByPostingID(ctx)
 	}
 	return s.store.ScoresByPostingID(ctx, userID)
+}
+
+type renderProfileSnapshot struct {
+	profile profile.Profile
+	hash    string
+	found   bool
+}
+
+// loadRenderProfileSnapshot captures the one profile JSON/hash pair a page
+// render must use for both layout decisions and score freshness filtering.
+func (s *Server) loadRenderProfileSnapshot(ctx context.Context, userID int64) (renderProfileSnapshot, error) {
+	profileJSON, profileHash, found, err := s.profileJSON(ctx, userID)
+	if err != nil {
+		return renderProfileSnapshot{}, err
+	}
+	if !found {
+		return renderProfileSnapshot{}, nil
+	}
+	prof, err := profile.Unmarshal(profileJSON)
+	if err != nil {
+		return renderProfileSnapshot{}, fmt.Errorf("server: decode profile: %w", err)
+	}
+	snapshot := renderProfileSnapshot{profile: prof, hash: profileHash, found: true}
+	if s.afterRenderProfileSnapshot != nil {
+		s.afterRenderProfileSnapshot()
+	}
+	return snapshot, nil
+}
+
+// scoresForRenderSnapshot is the render boundary: a committed profile may be
+// newer than its score rows when best-effort rescoring fails. Never render a
+// score computed for another profile hash, and never re-read the profile after
+// this check because that could pair old scores with a newer profile.
+func (s *Server) scoresForRenderSnapshot(ctx context.Context, userID int64, snapshot renderProfileSnapshot) (map[int64]storage.Score, error) {
+	scores, err := s.scoresByPostingID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !snapshot.found {
+		return map[int64]storage.Score{}, nil
+	}
+	for postingID, score := range scores {
+		if score.ProfileHash != snapshot.hash {
+			delete(scores, postingID)
+		}
+	}
+	if s.afterRenderScoreSnapshot != nil {
+		s.afterRenderScoreSnapshot()
+	}
+	return scores, nil
 }
 
 func (s *Server) bookmarkedIDs(ctx context.Context, userID int64) (map[int64]bool, error) {
@@ -476,7 +535,7 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	// scoreAll (so "visible" reflects real scores), over the today surface only,
 	// through the same worker pool as 재평가. A fresh run budget gives Stage-2 its
 	// own per-run cap; the daily cap still accounts for the scrape's Stage-1 spend
-	// (newAIBudget re-reads the ledger). aiPerCallCap bounds the spend per scrape;
+	// (newAIBudget re-reads the ledger). runtime.PerCallCap bounds the spend per scrape;
 	// the rest stays for a manual 재평가.
 	if freshAI {
 		if vis, verr := s.visibleForRerate(ctx, "today", now, userID, runtime); verr == nil && len(vis) > 0 {
@@ -744,8 +803,9 @@ func (s *Server) loadProfile(ctx context.Context, userIDOpt ...int64) (profile.P
 	return p, true, nil
 }
 
-// RescoreAll re-scores every stored posting against the current profile. The
-// exact-owner startup path calls it so a posting left
+// RescoreAll re-scores every stored posting against the supplied user's current
+// profile. RescoreSoleOwner is the exact-owner startup entry point, resolving
+// that owner and runtime before delegating to scoreAll, so a posting left
 // unscored by an INTERRUPTED scrape is healed on the next boot rather than
 // rendering as a blank card. Fix 2A keeps CLIENT navigation from leaving the
 // unscored state; this covers PROCESS death — a crash / SIGKILL / OOM / deploy
@@ -760,13 +820,17 @@ func (s *Server) RescoreAll(ctx context.Context, userID int64, runtime *AIRuntim
 // RescoreSoleOwner heals cached scores at startup only when ownership is exact.
 // Zero users is a clean no-op; multiple users returns a stable operator error.
 func (s *Server) RescoreSoleOwner(ctx context.Context) (int, error) {
+	if s.store.Dialect() == storage.DialectSQLite {
+		return s.scoreAll(ctx, 0, nil)
+	}
 	userID, ok, err := s.store.SoleOwnerUserID(ctx)
 	if err != nil || !ok {
 		return 0, err
 	}
 	runtime, err := s.aiRuntimeForUser(ctx, userID)
 	if err != nil {
-		return 0, err
+		scored, scoreErr := s.scoreAll(ctx, userID, nil)
+		return scored, errors.Join(err, scoreErr)
 	}
 	return s.scoreAll(ctx, userID, runtime)
 }
@@ -826,7 +890,7 @@ func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime)
 		if err != nil {
 			return 0, err
 		}
-	} else if s.demoMode {
+	} else if s.demoMode && s.store.Dialect() == storage.DialectSQLite {
 		// The public demo runs without a provider runtime, but the uploaded database
 		// already contains tonight's cached Stage-2 deltas. Merge the newest
 		// cached row as current so the first server boot does not erase the

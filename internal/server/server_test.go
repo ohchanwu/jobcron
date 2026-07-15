@@ -25,6 +25,7 @@ type fakeScraper struct {
 	listing      []scraper.Posting
 	details      map[string]scraper.Posting
 	accessErr    error
+	accessPanic  string
 	listingPanic string
 	detailCalls  []string // SourcePostingIDs FetchDetail was called for
 }
@@ -35,8 +36,13 @@ func (f *fakeScraper) Source() string {
 	}
 	return "jumpit"
 }
-func (f *fakeScraper) Kind() scraper.SourceKind              { return scraper.SourceKindAggregator }
-func (f *fakeScraper) CheckAccess(ctx context.Context) error { return f.accessErr }
+func (f *fakeScraper) Kind() scraper.SourceKind { return scraper.SourceKindAggregator }
+func (f *fakeScraper) CheckAccess(ctx context.Context) error {
+	if f.accessPanic != "" {
+		panic(f.accessPanic)
+	}
+	return f.accessErr
+}
 
 func (f *fakeScraper) FetchListing(ctx context.Context, limit int) ([]scraper.Posting, error) {
 	if f.listingPanic != "" {

@@ -368,6 +368,13 @@ git commit -m "refactor(server): resolve AI runtime per user"
 
 ### Task 5: Cut over every AI call site to one operation runtime
 
+> **Execution note (2026-07-15):** Tasks 4 and 5 landed as one buildable
+> cutover. Removing the mutable server-wide provider/model/budget/key-path fields
+> before converting their call sites would not compile, while retaining
+> temporary compatibility shims would preserve the exact global secret/runtime
+> state this slice removes. The single cutover kept every intermediate commit
+> buildable without reintroducing `ai_keys.json` server access.
+
 **Files:**
 
 - Modify: `internal/server/server.go`
@@ -563,8 +570,9 @@ Skip this commit when the tree is already clean.
 
 ## Rollback Boundary
 
-Before any production use, application code may roll back while keeping
-migration `0015`; the new tables are a compatible superset for one owner. Do not
-reverse `0015` by copying rows back when more than one user has written AI
-state. Preserve the credential master key and PostgreSQL backup throughout the
-rollback window.
+Migration `0015` is not compatible with the pre-Slice-2 binary: it requires
+`user_id` and replaces both legacy conflict keys. Rolling the application back
+therefore also requires restoring the pre-`0015` PostgreSQL schema and data from
+the retained backup. Do not reverse `0015` by copying rows back when more than
+one user has written AI state. Preserve the credential master key and
+PostgreSQL backup throughout the rollback window.

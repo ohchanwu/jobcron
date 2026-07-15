@@ -234,8 +234,8 @@ func TestRerateMutuallyExclusiveWithScrape(t *testing.T) {
 		defer srv.flight.release(scrapeAllKey)
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil))
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status = %d, want 503 when local SQLite has no user runtime", rec.Code)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status = %d, want 409 while scrape lock is held", rec.Code)
 		}
 	})
 

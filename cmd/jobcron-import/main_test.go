@@ -107,17 +107,21 @@ VALUES ('existing-user@example.com', 'preexisting', now(), now())`); err != nil 
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_extractions`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_scores`, 1)
 	assertPostgresScalar(t, db, `SELECT count(*) FROM ai_usage`, 1)
-	assertAIUsage(t, db, "2026-07-09", 123, 45)
 	ownerID := lookupUserIDByEmail(t, db, ownerEmail)
+	assertAIUsage(t, db, ownerID, "2026-07-09", 123, 45)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM profiles WHERE user_id = %d`, ownerID), 1)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM scores WHERE posting_id = 1 AND user_id = %d`, ownerID), 1)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM bookmarks WHERE posting_id = 1 AND user_id = %d`, ownerID), 1)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM not_interested WHERE posting_id = 1 AND user_id = %d`, ownerID), 1)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_scores WHERE user_id = %d`, ownerID), 1)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_scores WHERE user_id <> %d`, ownerID), 0)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_usage WHERE user_id = %d`, ownerID), 1)
+	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_usage WHERE user_id <> %d`, ownerID), 0)
 
 	if _, err := db.Exec(`
 UPDATE ai_usage
 SET input_tokens = 200, output_tokens = 60
-WHERE day = '2026-07-09'`); err != nil {
+WHERE user_id = $1 AND day = '2026-07-09'`, ownerID); err != nil {
 		t.Fatalf("raise target ai_usage: %v", err)
 	}
 	var out bytes.Buffer
@@ -129,7 +133,7 @@ WHERE day = '2026-07-09'`); err != nil {
 	}); err != nil {
 		t.Fatalf("runImport after higher live usage: %v\n%s", err, out.String())
 	}
-	assertAIUsage(t, db, "2026-07-09", 200, 60)
+	assertAIUsage(t, db, ownerID, "2026-07-09", 200, 60)
 
 	var title, company, profileJSON, importedOwnerEmail string
 	if err := db.QueryRow(`
@@ -218,7 +222,7 @@ RETURNING id`, ownerEmail, passwordHash).Scan(&ownerID); err != nil {
 	}
 
 	assertPostgresScalar(t, db, `SELECT count(*) FROM users`, 1)
-	for _, table := range []string{"profiles", "scores", "bookmarks", "not_interested"} {
+	for _, table := range []string{"profiles", "scores", "bookmarks", "not_interested", "ai_scores", "ai_usage"} {
 		assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id = %d`, table, ownerID), 1)
 		assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id <> %d`, table, ownerID), 0)
 	}
@@ -345,12 +349,12 @@ func assertPostgresScalar(t *testing.T, db *sql.DB, query string, want int) {
 	}
 }
 
-func assertAIUsage(t *testing.T, db *sql.DB, day string, wantInput, wantOutput int) {
+func assertAIUsage(t *testing.T, db *sql.DB, userID int64, day string, wantInput, wantOutput int) {
 	t.Helper()
 	var gotInput, gotOutput int
-	if err := db.QueryRow(`SELECT input_tokens, output_tokens FROM ai_usage WHERE day = $1`, day).
+	if err := db.QueryRow(`SELECT input_tokens, output_tokens FROM ai_usage WHERE user_id = $1 AND day = $2`, userID, day).
 		Scan(&gotInput, &gotOutput); err != nil {
-		t.Fatalf("query ai_usage for %s: %v", day, err)
+		t.Fatalf("query ai_usage for user %d on %s: %v", userID, day, err)
 	}
 	if gotInput != wantInput || gotOutput != wantOutput {
 		t.Fatalf("ai_usage[%s] = input %d output %d, want input %d output %d", day, gotInput, gotOutput, wantInput, wantOutput)

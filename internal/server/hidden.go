@@ -43,6 +43,10 @@ func (s *Server) handleHidden(w http.ResponseWriter, r *http.Request) {
 // here, mirroring /bookmarks — this is the only place to un-hide them.
 func (s *Server) buildHidden(ctx context.Context, now time.Time, userIDOpt ...int64) (hiddenView, error) {
 	userID := optionalUserID(userIDOpt)
+	snapshot, err := s.loadRenderProfileSnapshot(ctx, userID)
+	if err != nil {
+		return hiddenView{}, err
+	}
 	postings, err := s.notInterestedPostings(ctx, userID)
 	if err != nil {
 		return hiddenView{}, err
@@ -53,7 +57,7 @@ func (s *Server) buildHidden(ctx context.Context, now time.Time, userIDOpt ...in
 			return hiddenView{}, err
 		}
 	}
-	scores, err := s.scoresByPostingID(ctx, userID)
+	scores, err := s.scoresForRenderSnapshot(ctx, userID, snapshot)
 	if err != nil {
 		return hiddenView{}, err
 	}
@@ -66,20 +70,22 @@ func (s *Server) buildHidden(ctx context.Context, now time.Time, userIDOpt ...in
 	}
 	view := hiddenView{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
+		sc, ok := scores[p.ID]
+		if !ok {
+			continue
+		}
 		dp := dashboardPosting{
 			Posting:       p,
 			Bookmarked:    bookmarks[p.ID],
 			NotInterested: !s.demoMode, // demo localStorage decides which rows are hidden
 			Deadline:      deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 		}
-		if sc, ok := scores[p.ID]; ok {
-			dp.Total = sc.Total
-			dp.Excluded = sc.Total < 0 // dealbreaker hits render dimmed with "—"
-			var result scoring.ScoreResult
-			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
-				dp.Explanation = scoring.Explain(result)
-				dp.Breakdown = result.Breakdown
-			}
+		dp.Total = sc.Total
+		dp.Excluded = sc.Total < 0 // dealbreaker hits render dimmed with "—"
+		var result scoring.ScoreResult
+		if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
+			dp.Explanation = scoring.Explain(result)
+			dp.Breakdown = result.Breakdown
 		}
 		view.Postings = append(view.Postings, dp)
 	}

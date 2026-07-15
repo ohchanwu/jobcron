@@ -140,24 +140,24 @@ func (s *Server) handleScrapeSSE(w http.ResponseWriter, r *http.Request) {
 		writeAuthUnauthorized(w)
 		return
 	}
-	var runtime *AIRuntime
-	if userID > 0 {
-		runtime, err = s.aiRuntimeForUser(r.Context(), userID)
-		if err != nil {
-			http.Error(w, "AI 설정을 불러오지 못했어요.", http.StatusServiceUnavailable)
-			return
-		}
-	}
 	if !s.flight.tryAcquire(scrapeAllKey) {
 		http.Error(w, "이미 스크랩이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
 		return
 	}
 	defer s.flight.release(scrapeAllKey)
-
 	sw, err := newSSEWriter(w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	var runtime *AIRuntime
+	if userID > 0 {
+		runtime, err = s.aiRuntimeForUser(r.Context(), userID)
+		if err != nil {
+			log.Printf("jobcron: user %d AI runtime unavailable; continuing scrape with rule-based scoring: %v", userID, err)
+			sw.event("status", "AI 설정을 불러오지 못해 규칙 기반 점수로 계속해요.")
+			runtime = nil
+		}
 	}
 	// Bug 2A: the scrape must NOT run on the request context. If it did,
 	// navigating away from the briefing mid-scrape (which tears down the SSE
@@ -256,11 +256,15 @@ func (s *Server) buildBriefing(ctx context.Context, now time.Time, userIDOpt ...
 }
 
 func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (briefing, error) {
+	snapshot, err := s.loadRenderProfileSnapshot(ctx, userID)
+	if err != nil {
+		return briefing{}, err
+	}
 	postings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return briefing{}, err
 	}
-	scores, err := s.scoresByPostingID(ctx, userID)
+	scores, err := s.scoresForRenderSnapshot(ctx, userID, snapshot)
 	if err != nil {
 		return briefing{}, err
 	}
@@ -282,10 +286,7 @@ func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, us
 	if err != nil {
 		return briefing{}, err
 	}
-	prof, _, err := s.loadProfile(ctx, userID)
-	if err != nil {
-		return briefing{}, err
-	}
+	prof := snapshot.profile
 	disabled := s.disabledSourceSet(prof.DisabledSources)
 	b := briefing{Date: now.In(kstZone).Format("2006 / 01 / 02")}
 	for _, p := range postings {
@@ -301,11 +302,10 @@ func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, us
 		// This is the last line of defense behind two guards that between them
 		// prevent the unscored state reaching render: handleScrapeSSE detaches
 		// the scrape from the request context so client navigation can't cancel
-		// it (Bug 2A), and main calls RescoreAll at startup so a process crash
-		// between insert and scoring is healed on the next boot. (Those two are
-		// what make the other surfaces — /archive, /bookmarks, /hidden — safe
-		// without this skip; here it stays as cheap insurance on the most
-		// visible surface.)
+		// it (Bug 2A), and main calls RescoreSoleOwner at startup so a process crash
+		// between insert and scoring is healed on the next boot. Every scored
+		// surface also omits postings whose score row is still missing, so a
+		// partial operation never fabricates a zero score.
 		sc, ok := scores[p.ID]
 		if !ok {
 			continue
@@ -513,6 +513,14 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		writeAuthUnauthorized(w)
 		return
 	}
+	// Profile changes alter score inputs and AI runtime configuration. Serialize
+	// them with scrape/rerate so one operation cannot resolve an old runtime and
+	// finish scoring against a newly committed profile.
+	if !s.flight.tryAcquire(scrapeAllKey) {
+		http.Error(w, "이미 작업이 진행 중이에요. 잠시만 기다려 주세요.", http.StatusConflict)
+		return
+	}
+	defer s.flight.release(scrapeAllKey)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -623,12 +631,16 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	}
 	runtime, err := s.aiRuntimeForUser(r.Context(), userID)
 	if err != nil {
-		http.Error(w, "AI 설정을 불러오지 못했어요.", http.StatusInternalServerError)
-		return
+		log.Printf("jobcron: user %d profile saved but AI runtime unavailable; rescoring with rules: %v", userID, err)
+		runtime = nil
 	}
 	if _, err := s.scoreAll(r.Context(), userID, runtime); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		log.Printf("jobcron: user %d profile saved but rescore failed: %v", userID, err)
+		if runtime != nil {
+			if _, fallbackErr := s.scoreAll(r.Context(), userID, nil); fallbackErr != nil {
+				log.Printf("jobcron: user %d rule-based rescore fallback failed: %v", userID, fallbackErr)
+			}
+		}
 	}
 	http.Redirect(w, r, "/briefing", http.StatusSeeOther)
 }

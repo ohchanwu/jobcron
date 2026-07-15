@@ -71,6 +71,7 @@ func TestBookmarksPageListsSavedPostings(t *testing.T) {
 	ctx := context.Background()
 	savedID := mustUpsert(t, st, listingPosting("saved", "저장한 공고"))
 	mustUpsert(t, st, listingPosting("unsaved", "저장 안 한 공고"))
+	scoreEach(t, st, map[int64]int{savedID: 50})
 	if err := st.SetBookmark(ctx, savedID, time.Now()); err != nil {
 		t.Fatalf("SetBookmark: %v", err)
 	}
@@ -104,6 +105,7 @@ func TestBookmarksPageEmptyState(t *testing.T) {
 func TestBookmarksPageIncludesHiddenLiveEmptyState(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	id := mustUpsert(t, st, listingPosting("saved-live-empty", "저장한 공고"))
+	scoreEach(t, st, map[int64]int{id: 50})
 	if err := st.SetBookmark(context.Background(), id, time.Now()); err != nil {
 		t.Fatalf("SetBookmark: %v", err)
 	}
@@ -124,7 +126,8 @@ func TestBookmarksPageIncludesHiddenLiveEmptyState(t *testing.T) {
 
 func TestDemoBookmarksPageDoesNotRenderSignedInLiveEmptyState(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
-	mustUpsert(t, st, listingPosting("demo-candidate", "방문자 저장 후보"))
+	id := mustUpsert(t, st, listingPosting("demo-candidate", "방문자 저장 후보"))
+	scoreEach(t, st, map[int64]int{id: 50})
 	srv.SetDemoMode(true)
 
 	rec := httptest.NewRecorder()

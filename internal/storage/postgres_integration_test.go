@@ -147,7 +147,159 @@ SELECT EXISTS (
 			t.Fatalf("%s.user_id is missing", table)
 		}
 	}
+	var hasPostingIndex bool
+	if err := st.db.QueryRow(`
+SELECT EXISTS (
+    SELECT 1
+      FROM pg_indexes
+     WHERE schemaname = current_schema()
+       AND tablename = 'ai_scores'
+       AND indexname = 'idx_ai_scores_posting_id'
+)`).Scan(&hasPostingIndex); err != nil {
+		t.Fatalf("inspect ai_scores posting index: %v", err)
+	}
+	if !hasPostingIndex {
+		t.Fatal("idx_ai_scores_posting_id is missing")
+	}
 	assertMigrationVersionRecorded(t, st, 15, true)
+}
+
+func TestUserScopedAIMigrationLetsEarlierPostingWriterFinishBeforeCopy(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 14)
+	userID := insertMigrationTestUser(t, st, "locked-owner@example.invalid")
+	postingID := insertMigrationTestPosting(t, st, "locks")
+	seedLegacyMigrationScore(t, st, postingID)
+
+	writer, err := st.db.Begin()
+	if err != nil {
+		t.Fatalf("begin legacy writer: %v", err)
+	}
+	defer writer.Rollback()
+	if _, err := writer.Exec(`UPDATE postings SET title = 'writer committed first' WHERE id = $1`, postingID); err != nil {
+		t.Fatalf("legacy writer update posting: %v", err)
+	}
+	if _, err := writer.Exec(`UPDATE ai_scores SET net_delta = 42 WHERE posting_id = $1`, postingID); err != nil {
+		t.Fatalf("legacy writer update AI score: %v", err)
+	}
+
+	migrationDone := make(chan error, 1)
+	go func() { migrationDone <- applyPostgresMigrationVersion(st.db, 15) }()
+	waitForMigrationTableLock(t, st.db, "postings", "ShareRowExclusiveLock", false)
+	assertNoGrantedTableLock(t, st.db, "ai_scores", "AccessExclusiveLock")
+
+	if err := writer.Commit(); err != nil {
+		t.Fatalf("commit legacy writer: %v", err)
+	}
+	select {
+	case err := <-migrationDone:
+		if err != nil {
+			t.Fatalf("apply migration 0015: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("migration did not finish after releasing blocker")
+	}
+
+	assertMigrationVersionRecorded(t, st, 15, true)
+	var gotUserID int64
+	var gotDelta int
+	if err := st.db.QueryRow(`SELECT user_id, net_delta FROM ai_scores`).Scan(&gotUserID, &gotDelta); err != nil {
+		t.Fatalf("read migrated score owner: %v", err)
+	}
+	if gotUserID != userID || gotDelta != 42 {
+		t.Fatalf("migrated score = owner %d delta %d, want owner %d delta 42", gotUserID, gotDelta, userID)
+	}
+}
+
+func TestUserScopedAIMigrationBlocksLaterWriterAtPostingsFirst(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 14)
+	insertMigrationTestUser(t, st, "blocked-owner@example.invalid")
+	postingID := insertMigrationTestPosting(t, st, "blocked-writer")
+	seedLegacyMigrationScore(t, st, postingID)
+
+	blocker, err := st.db.Begin()
+	if err != nil {
+		t.Fatalf("begin schema migration blocker: %v", err)
+	}
+	defer blocker.Rollback()
+	if _, err := blocker.Exec(`LOCK TABLE schema_migrations IN ACCESS EXCLUSIVE MODE`); err != nil {
+		t.Fatalf("lock schema_migrations: %v", err)
+	}
+	migrationDone := make(chan error, 1)
+	go func() { migrationDone <- applyPostgresMigrationVersion(st.db, 15) }()
+	waitForMigrationTableLock(t, st.db, "postings", "ShareRowExclusiveLock", true)
+
+	assertMigrationBlocksWrite(t, st.db, `UPDATE postings SET title = 'must not persist' WHERE id = `+strconv.FormatInt(postingID, 10))
+
+	if err := blocker.Commit(); err != nil {
+		t.Fatalf("release schema migration blocker: %v", err)
+	}
+	select {
+	case err := <-migrationDone:
+		if err != nil {
+			t.Fatalf("apply migration 0015: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("migration did not finish after releasing blocker")
+	}
+	var title string
+	if err := st.db.QueryRow(`SELECT title FROM postings WHERE id = $1`, postingID).Scan(&title); err != nil {
+		t.Fatalf("read posting after blocked writer: %v", err)
+	}
+	if title == "must not persist" {
+		t.Fatal("writer touched posting while migration held ordered locks")
+	}
+}
+
+func waitForMigrationTableLock(t *testing.T, db *sql.DB, table, mode string, granted bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		var locked bool
+		err := db.QueryRow(`
+SELECT EXISTS (
+    SELECT 1
+      FROM pg_locks
+     WHERE relation = to_regclass($1)
+       AND mode = $2
+       AND granted = $3
+)`, table, mode, granted).Scan(&locked)
+		if err != nil {
+			t.Fatalf("inspect migration lock on %s: %v", table, err)
+		}
+		if locked {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("migration did not acquire %s on %s", mode, table)
+}
+
+func assertNoGrantedTableLock(t *testing.T, db *sql.DB, table, mode string) {
+	t.Helper()
+	var locked bool
+	if err := db.QueryRow(`
+SELECT EXISTS (
+    SELECT 1 FROM pg_locks
+     WHERE relation = to_regclass($1) AND mode = $2 AND granted
+)`, table, mode).Scan(&locked); err != nil {
+		t.Fatalf("inspect granted lock on %s: %v", table, err)
+	}
+	if locked {
+		t.Fatalf("migration acquired %s on %s before earlier postings writer finished", mode, table)
+	}
+}
+
+func assertMigrationBlocksWrite(t *testing.T, db *sql.DB, query string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	_, err := db.ExecContext(ctx, query)
+	if err == nil {
+		t.Fatalf("write completed while migration locks were held: %s", query)
+	}
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Fatalf("blocked write error = %v, want deadline exceeded", err)
+	}
 }
 
 func newPostgresTestStoreThroughMigration(t *testing.T, maxVersion int) *Store {

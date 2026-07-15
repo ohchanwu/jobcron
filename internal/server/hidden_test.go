@@ -16,6 +16,7 @@ func TestHiddenPageListsMutedPostings(t *testing.T) {
 	ctx := context.Background()
 	mutedID := mustUpsert(t, st, listingPosting("muted", "숨긴 공고 제목"))
 	mustUpsert(t, st, listingPosting("visible", "안 숨긴 공고 제목"))
+	scoreEach(t, st, map[int64]int{mutedID: 50})
 	if err := st.SetNotInterested(ctx, mutedID, time.Now()); err != nil {
 		t.Fatalf("SetNotInterested: %v", err)
 	}
@@ -40,6 +41,7 @@ func TestHiddenPageRendersEyeOn(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 	id := mustUpsert(t, st, listingPosting("muted", "숨긴 공고 제목"))
+	scoreEach(t, st, map[int64]int{id: 50})
 	if err := st.SetNotInterested(ctx, id, time.Now()); err != nil {
 		t.Fatalf("SetNotInterested: %v", err)
 	}
@@ -58,6 +60,7 @@ func TestHiddenPageMarksBookmarkedRows(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 	id := mustUpsert(t, st, listingPosting("both", "숨기고 저장한 공고"))
+	scoreEach(t, st, map[int64]int{id: 50})
 	if err := st.SetNotInterested(ctx, id, time.Now()); err != nil {
 		t.Fatalf("SetNotInterested: %v", err)
 	}
@@ -107,6 +110,7 @@ func TestHiddenOrdersByMostRecentlyMuted(t *testing.T) {
 	first := mustUpsert(t, st, listingPosting("a", "먼저 숨긴 공고"))
 	second := mustUpsert(t, st, listingPosting("b", "그다음 숨긴 공고"))
 	third := mustUpsert(t, st, listingPosting("c", "마지막에 숨긴 공고"))
+	scoreEach(t, st, map[int64]int{first: 50, second: 50, third: 50})
 	// Mute in ascending time order; expect descending (latest first) in the view.
 	if err := st.SetNotInterested(ctx, first, base); err != nil {
 		t.Fatalf("mute first: %v", err)

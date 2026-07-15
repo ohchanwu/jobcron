@@ -15,9 +15,24 @@ import (
 // scoreEach upserts a Total for each posting id, failing the test on error.
 func scoreEach(t *testing.T, st *storage.Store, totals map[int64]int) {
 	t.Helper()
+	ctx := context.Background()
+	_, profileHash, found, err := st.Profile(ctx)
+	if err != nil {
+		t.Fatalf("Profile: %v", err)
+	}
+	if !found {
+		profileJSON, marshalErr := profile.Marshal(profile.Profile{})
+		if marshalErr != nil {
+			t.Fatalf("profile.Marshal: %v", marshalErr)
+		}
+		profileHash, _, err = st.SaveProfile(ctx, profileJSON)
+		if err != nil {
+			t.Fatalf("SaveProfile: %v", err)
+		}
+	}
 	for id, total := range totals {
-		if err := st.UpsertScore(context.Background(), storage.Score{
-			PostingID: id, ProfileHash: "test", Total: total,
+		if err := st.UpsertScore(ctx, storage.Score{
+			PostingID: id, ProfileHash: profileHash, Total: total,
 			BreakdownJSON: "[]", ComputedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("UpsertScore id=%d: %v", id, err)

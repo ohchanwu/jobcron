@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -78,6 +79,18 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 }
 
 func (s *Server) runScheduledScrape(ctx context.Context) {
+	// Serialize the complete owner/runtime snapshot with profile saves and all
+	// scrape/rerate work. Resolving before this lock could pair an old credential
+	// and budget configuration with a profile committed while waiting.
+	if !s.flight.tryAcquire(scrapeAllKey) {
+		s.recordSkippedScheduledRun(ctx, "skipped: scrape already running")
+		return
+	}
+	defer s.flight.release(scrapeAllKey)
+	if s.store.Dialect() == storage.DialectSQLite {
+		_, _ = s.runScrapeWithHistory(ctx, storage.ScrapeTriggerScheduled, noopSchedulerEmit, 0, nil)
+		return
+	}
 	userID, ok, err := s.store.SoleOwnerUserID(ctx)
 	if err != nil {
 		s.recordSkippedScheduledRun(ctx, "skipped: scheduled owner is ambiguous")
@@ -89,14 +102,9 @@ func (s *Server) runScheduledScrape(ctx context.Context) {
 	}
 	runtime, err := s.aiRuntimeForUser(ctx, userID)
 	if err != nil {
-		s.recordSkippedScheduledRun(ctx, "skipped: scheduled AI runtime is unavailable")
-		return
+		log.Printf("jobcron: user %d scheduled AI runtime unavailable; continuing with rule-based scoring: %v", userID, err)
+		runtime = nil
 	}
-	if !s.flight.tryAcquire(scrapeAllKey) {
-		s.recordSkippedScheduledRun(ctx, "skipped: scrape already running")
-		return
-	}
-	defer s.flight.release(scrapeAllKey)
 	scrapeCtx, cancel := context.WithTimeout(ctx, scrapeMaxDuration)
 	defer cancel()
 	_, _ = s.runScrapeWithHistory(scrapeCtx, storage.ScrapeTriggerScheduled, noopSchedulerEmit, userID, runtime)

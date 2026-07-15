@@ -93,9 +93,11 @@ func main() {
 	// restart between insert and the end-of-run scoring) so it never renders as
 	// a blank card. Exact-owner resolution merges that user's cached AI deltas;
 	// it never calls the provider, so there is no startup cost or token spend.
-	// Non-fatal: a transient error just defers healing to the next scrape/save.
+	// Non-fatal: owner resolution, AI runtime resolution, or rule-score storage
+	// may fail. RescoreSoleOwner still attempts rule-only recovery whenever the
+	// owner is known, and may return a joined error when both paths fail.
 	if _, err := srv.RescoreSoleOwner(context.Background()); err != nil {
-		log.Printf("jobcron: 시작 시 점수 재계산을 건너뛰었어요: %v", err)
+		log.Printf("jobcron: 시작 시 점수 복구를 완료하지 못했어요: %v", err)
 	}
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()

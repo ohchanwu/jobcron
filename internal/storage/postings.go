@@ -290,8 +290,8 @@ WHERE source = ?
   AND id NOT IN (SELECT posting_id FROM bookmarks)
   AND (
     last_seen_at < ?
-    OR (first_seen_at < ? AND always_open = 0)
-  )`), b.source, staleBefore, oldBefore)
+    OR (first_seen_at < ? AND always_open = ?)
+  )`), b.source, staleBefore, oldBefore, false)
 		if err != nil {
 			return total, fmt.Errorf("storage: sweep %s: %w", b.source, err)
 		}

@@ -1,5 +1,13 @@
 -- 0015_user_scoped_ai_state.sql — scope preference-derived AI state to users.
 
+-- Stabilize both the ownership decision and the legacy AI tables for the whole
+-- migration transaction. Without these locks, a legacy writer could commit a
+-- row after the copy verification and have it discarded by the table swap.
+LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE postings IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE ai_scores IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE ai_usage IN ACCESS EXCLUSIVE MODE;
+
 DO $$
 DECLARE
     user_count  BIGINT;
@@ -101,6 +109,8 @@ DROP TABLE ai_scores;
 ALTER TABLE ai_scores_user_scoped RENAME TO ai_scores;
 CREATE INDEX idx_ai_scores_user_latest
     ON ai_scores(user_id, posting_id, ai_version, computed_at DESC);
+CREATE INDEX idx_ai_scores_posting_id
+    ON ai_scores(posting_id);
 
 DROP TABLE ai_usage;
 ALTER TABLE ai_usage_user_scoped RENAME TO ai_usage;

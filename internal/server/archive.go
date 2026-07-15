@@ -123,11 +123,15 @@ func (s *Server) buildArchive(ctx context.Context, now time.Time, userIDOpt ...i
 }
 
 func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (archiveView, error) {
+	snapshot, err := s.loadRenderProfileSnapshot(ctx, userID)
+	if err != nil {
+		return archiveView{}, err
+	}
 	allPostings, err := s.store.CanonicalPostings(ctx)
 	if err != nil {
 		return archiveView{}, err
 	}
-	scores, err := s.scoresByPostingID(ctx, userID)
+	scores, err := s.scoresForRenderSnapshot(ctx, userID, snapshot)
 	if err != nil {
 		return archiveView{}, err
 	}
@@ -149,10 +153,7 @@ func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, use
 	if err != nil {
 		return archiveView{}, err
 	}
-	prof, _, err := s.loadProfile(ctx, userID)
-	if err != nil {
-		return archiveView{}, err
-	}
+	prof := snapshot.profile
 	disabled := s.disabledSourceSet(prof.DisabledSources)
 	minScore := prof.EffectiveMinScore()
 
@@ -160,7 +161,8 @@ func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, use
 	// the briefing — they are not merely demoted into the 관심 밖 collapsible.
 	postings := make([]scraper.Posting, 0, len(allPostings))
 	for _, p := range allPostings {
-		if !disabled[p.Source] && !muted[p.ID] {
+		_, scored := scores[p.ID]
+		if !disabled[p.Source] && !muted[p.ID] && scored {
 			postings = append(postings, p)
 		}
 	}
@@ -178,21 +180,20 @@ func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, use
 			Deadline:         deadlineBadge(p.ClosedAt, p.AlwaysOpen, now),
 			DuplicateSources: dupSources[p.ID],
 		}
-		if sc, ok := scores[p.ID]; ok {
-			dp.Total = sc.Total
-			// Mirror the briefing's split: dealbreaker hits (Total < 0) and
-			// rows below the MinScore threshold drop out of the day-grouped
-			// list into a single "관심 밖으로 분류된 공고" collapsible, instead
-			// of the old inline-dimmed treatment. MinScore = 0 keeps every
-			// non-dealbreaker row in the main list. A bookmarked posting is
-			// exempt from the soft MinScore hide (the user saved it) but not
-			// from the dealbreaker hide — Total < 0 stays unconditional.
-			dp.Excluded = sc.Total < 0 || (sc.Total < minScore && !bookmarks[p.ID])
-			var result scoring.ScoreResult
-			if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
-				dp.Explanation = scoring.Explain(result)
-				dp.Breakdown = result.Breakdown
-			}
+		sc := scores[p.ID]
+		dp.Total = sc.Total
+		// Mirror the briefing's split: dealbreaker hits (Total < 0) and
+		// rows below the MinScore threshold drop out of the day-grouped
+		// list into a single "관심 밖으로 분류된 공고" collapsible, instead
+		// of the old inline-dimmed treatment. MinScore = 0 keeps every
+		// non-dealbreaker row in the main list. A bookmarked posting is
+		// exempt from the soft MinScore hide (the user saved it) but not
+		// from the dealbreaker hide — Total < 0 stays unconditional.
+		dp.Excluded = sc.Total < 0 || (sc.Total < minScore && !bookmarks[p.ID])
+		var result scoring.ScoreResult
+		if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
+			dp.Explanation = scoring.Explain(result)
+			dp.Breakdown = result.Breakdown
 		}
 
 		// Past-deadline postings drop into the 관심 밖 collapsible regardless of

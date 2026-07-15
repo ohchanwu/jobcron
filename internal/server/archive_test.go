@@ -27,9 +27,10 @@ func TestArchivePageListsEveryPosting(t *testing.T) {
 	old.FirstSeenAt = time.Now().Add(-30 * 24 * time.Hour).UTC()
 	old.LastSeenAt = old.FirstSeenAt
 
-	mustUpsert(t, st, today)
-	mustUpsert(t, st, yesterday)
-	mustUpsert(t, st, old)
+	todayID := mustUpsert(t, st, today)
+	yesterdayID := mustUpsert(t, st, yesterday)
+	oldID := mustUpsert(t, st, old)
+	scoreEach(t, st, map[int64]int{todayID: 50, yesterdayID: 50, oldID: 50})
 
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -85,9 +86,10 @@ func TestArchiveGroupsByKSTDay(t *testing.T) {
 	pB := listingPosting("b1", "B1")
 	pB.FirstSeenAt, pB.LastSeenAt = dayB, dayB
 
-	mustUpsert(t, st, pA1)
-	mustUpsert(t, st, pA2)
-	mustUpsert(t, st, pB)
+	pA1ID := mustUpsert(t, st, pA1)
+	pA2ID := mustUpsert(t, st, pA2)
+	pBID := mustUpsert(t, st, pB)
+	scoreEach(t, st, map[int64]int{pA1ID: 50, pA2ID: 50, pBID: 50})
 
 	now := time.Date(2026, 5, 23, 6, 0, 0, 0, time.UTC) // mid-day May 23 KST
 	view, err := srv.buildArchive(ctx, now)
@@ -152,8 +154,9 @@ func TestArchiveSortToggle(t *testing.T) {
 	pB := listingPosting("d2", "공고 B")
 	pB.FirstSeenAt = time.Now().UTC()
 	pB.LastSeenAt = pB.FirstSeenAt
-	mustUpsert(t, st, pA)
-	mustUpsert(t, st, pB)
+	pAID := mustUpsert(t, st, pA)
+	pBID := mustUpsert(t, st, pB)
+	scoreEach(t, st, map[int64]int{pAID: 50, pBID: 50})
 
 	// Date mode (default): toggle present, 날짜순 active, two day headers.
 	recDate := httptest.NewRecorder()
@@ -202,7 +205,8 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 	// TestArchiveRoutesBelowMinScoreToExcluded for that).
 	zero := 0
 	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
-	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+	profileHash, _, err := st.SaveProfile(ctx, profJSON)
+	if err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
@@ -224,7 +228,7 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 
 	for id, total := range map[int64]int{lowID: 15, highID: 80, midID: 40} {
 		if err := st.UpsertScore(ctx, storage.Score{
-			PostingID: id, ProfileHash: "test", Total: total,
+			PostingID: id, ProfileHash: profileHash, Total: total,
 			BreakdownJSON: "[]", ComputedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("UpsertScore id=%d: %v", id, err)
@@ -262,7 +266,8 @@ func TestArchiveRoutesBelowMinScoreToExcluded(t *testing.T) {
 
 	forty := 40
 	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty})
-	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+	profileHash, _, err := st.SaveProfile(ctx, profJSON)
+	if err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
@@ -275,7 +280,7 @@ func TestArchiveRoutesBelowMinScoreToExcluded(t *testing.T) {
 	highID := mustUpsert(t, st, high)
 	for id, total := range map[int64]int{lowID: 35, highID: 50} {
 		if err := st.UpsertScore(ctx, storage.Score{
-			PostingID: id, ProfileHash: "test", Total: total,
+			PostingID: id, ProfileHash: profileHash, Total: total,
 			BreakdownJSON: "[]", ComputedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("UpsertScore id=%d: %v", id, err)
@@ -316,7 +321,8 @@ func TestArchiveRoutesExpiredToExcluded(t *testing.T) {
 
 	zero := 0
 	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
-	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
+	profileHash, _, err := st.SaveProfile(ctx, profJSON)
+	if err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 
@@ -337,7 +343,7 @@ func TestArchiveRoutesExpiredToExcluded(t *testing.T) {
 	pastID := mustUpsert(t, st, past)
 	for id, total := range map[int64]int{openID: 80, pastID: 80} {
 		if err := st.UpsertScore(ctx, storage.Score{
-			PostingID: id, ProfileHash: "test", Total: total,
+			PostingID: id, ProfileHash: profileHash, Total: total,
 			BreakdownJSON: "[]", ComputedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("UpsertScore id=%d: %v", id, err)
@@ -382,8 +388,9 @@ func TestArchiveHidesMutedPostings(t *testing.T) {
 	shown.FirstSeenAt, shown.LastSeenAt = day, day
 	hidden := listingPosting("hidden", "숨긴 공고")
 	hidden.FirstSeenAt, hidden.LastSeenAt = day, day
-	mustUpsert(t, st, shown)
+	shownID := mustUpsert(t, st, shown)
 	hiddenID := mustUpsert(t, st, hidden)
+	scoreEach(t, st, map[int64]int{shownID: 50, hiddenID: 50})
 	if err := st.SetNotInterested(ctx, hiddenID, time.Now()); err != nil {
 		t.Fatalf("SetNotInterested: %v", err)
 	}
@@ -423,6 +430,7 @@ func TestArchiveMarksBookmarkedRows(t *testing.T) {
 	p.FirstSeenAt = time.Now().UTC()
 	p.LastSeenAt = p.FirstSeenAt
 	id := mustUpsert(t, st, p)
+	scoreEach(t, st, map[int64]int{id: 50})
 	if err := st.SetBookmark(ctx, id, time.Now()); err != nil {
 		t.Fatalf("SetBookmark: %v", err)
 	}

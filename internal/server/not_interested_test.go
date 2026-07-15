@@ -124,6 +124,7 @@ func TestMutedBookmarkStaysOnBookmarksPage(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 	id := mustUpsert(t, st, listingPosting("bm", "저장하고 숨긴 공고"))
+	scoreEach(t, st, map[int64]int{id: 50})
 	if err := st.SetBookmark(ctx, id, time.Now()); err != nil {
 		t.Fatalf("SetBookmark: %v", err)
 	}

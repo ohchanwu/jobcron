@@ -158,8 +158,9 @@ func TestDemoPagesRenderDemoState(t *testing.T) {
 func TestDemoBookmarksAndHiddenRenderAllPostingsForLocalStorageFiltering(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	srv.SetDemoMode(true)
-	mustUpsert(t, st, listingPosting("a", "방문자 저장 후보"))
-	mustUpsert(t, st, listingPosting("b", "방문자 숨김 후보"))
+	aID := mustUpsert(t, st, listingPosting("a", "방문자 저장 후보"))
+	bID := mustUpsert(t, st, listingPosting("b", "방문자 숨김 후보"))
+	scoreEach(t, st, map[int64]int{aID: 50, bID: 50})
 
 	for _, tc := range []struct {
 		path string

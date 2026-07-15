@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -10,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -22,6 +25,7 @@ import (
 	"github.com/ohchanwu/jobcron/internal/auth"
 	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
@@ -33,6 +37,7 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 	userA, cookieA := createSessionUser(t, st, "owner-a@example.com", "session-a")
 	userB, cookieB := createSessionUser(t, st, "owner-b@example.com", "session-b")
 	postingID := mustUpsert(t, st, listingPosting("shared-bookmark", "공유 북마크 공고"))
+	seedProductionScoredPosting(t, st, postingID, userA, userB)
 	if err := st.AddBookmark(ctx, userB, postingID); err != nil {
 		t.Fatalf("seed userB bookmark: %v", err)
 	}
@@ -66,6 +71,7 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 	assertPageContains(t, srv, cookieB, "/bookmarks", "공유 북마크 공고")
 
 	userBOnlyPostingID := mustUpsert(t, st, listingPosting("user-b-bookmark", "유저B 전용 북마크"))
+	seedProductionScoredPosting(t, st, userBOnlyPostingID, userA, userB)
 	putBReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/bookmark/%d", userBOnlyPostingID), nil)
 	putBReq.AddCookie(cookieB)
 	addCSRFToRequest(putBReq, srv, cookieB)
@@ -78,6 +84,603 @@ func TestProductionBookmarksUseSessionOwnerState(t *testing.T) {
 	assertBookmarkedForUser(t, st, userB, userBOnlyPostingID, true)
 	assertPageMissing(t, srv, cookieA, "/bookmarks", "유저B 전용 북마크")
 	assertPageContains(t, srv, cookieB, "/bookmarks", "유저B 전용 북마크")
+}
+
+func TestPostgresDemoNeverMergesAnotherUsersAICache(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetDemoMode(true)
+	ctx := context.Background()
+	userA := insertAIRuntimeTestUser(t, st, "demo-cache-a@example.invalid")
+	userB := insertAIRuntimeTestUser(t, st, "demo-cache-b@example.invalid")
+	saveAIRuntimeProfile(t, st, userA, profile.Profile{CareerYears: 0})
+	saveAIRuntimeProfile(t, st, userB, profile.Profile{CareerYears: 0})
+	postingID := mustUpsert(t, st, listingPosting("demo-cache-isolation", "Demo cache isolation"))
+	if err := st.UpsertAIScore(ctx, userA, postingID, "hash-a", "version-a", ai.Delta{
+		Items: []ai.DeltaItem{{Signal: "private-a", Delta: 7, Evidence: "private-a"}}, NetDelta: 7,
+	}, time.Now().UTC()); err != nil {
+		t.Fatalf("seed user A AI score: %v", err)
+	}
+
+	if _, err := srv.RescoreAll(ctx, userB, nil); err != nil {
+		t.Fatalf("RescoreAll user B: %v", err)
+	}
+	scores, err := st.ScoresByPostingID(ctx, userB)
+	if err != nil {
+		t.Fatalf("ScoresByPostingID user B: %v", err)
+	}
+	if strings.Contains(scores[postingID].BreakdownJSON, "AI 분석") || strings.Contains(scores[postingID].BreakdownJSON, "private-a") {
+		t.Fatalf("user B score merged user A demo cache: %s", scores[postingID].BreakdownJSON)
+	}
+}
+
+func TestProductionProfileSaveIsRejectedWhileScoringOperationRuns(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-lock@example.invalid", "profile-lock-session")
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{JobLikes: "unchanged goal"})
+	if !srv.flight.tryAcquire(scrapeAllKey) {
+		t.Fatal("failed to arrange in-flight scoring operation")
+	}
+	defer srv.flight.release(scrapeAllKey)
+
+	form := url.Values{"job_likes": {"must not persist"}}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	addCSRFToRequest(req, srv, cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("profile save status = %d, want 409", rec.Code)
+	}
+	got, _, ok, err := st.ProfileForUser(context.Background(), userID)
+	if err != nil || !ok || !strings.Contains(got, "unchanged goal") || strings.Contains(got, "must not persist") {
+		t.Fatalf("profile changed while lock held: ok=%v err=%v profile=%s", ok, err, got)
+	}
+}
+
+func TestProductionUserASaveLeavesAllUserBStateAndRuntimeUnchanged(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userA, cookieA := createSessionUser(t, st, "save-isolation-a@example.invalid", "save-isolation-a-session")
+	userB := insertAIRuntimeTestUser(t, st, "save-isolation-b@example.invalid")
+	cipher := newAIRuntimeTestCipher(t, 0x62)
+	srv.SetCredentialCipher(cipher)
+	srv.newAIProvider = func(provider, key, _ string, _ time.Duration) (ai.Provider, error) {
+		return &fingerprintProvider{name: provider, keyFingerprint: keyFingerprint(key)}, nil
+	}
+	zero := 0
+	saveAIRuntimeProfile(t, st, userA, profile.Profile{CareerYears: 0, MinScore: &zero, AIProvider: "anthropic", AIModel: "model-a", JobLikes: "goal-a"})
+	saveAIRuntimeProfile(t, st, userB, profile.Profile{CareerYears: 0, MinScore: &zero, AIProvider: "anthropic", AIModel: "model-b", JobLikes: "goal-b"})
+	saveAIRuntimeCredential(t, st, cipher, userA, "anthropic", "synthetic-key-a")
+	saveAIRuntimeCredential(t, st, cipher, userB, "anthropic", "synthetic-key-b")
+	p := listingPosting("save-isolation", "저장 격리 공고")
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	mustUpsert(t, st, p)
+	runtimeB, err := srv.aiRuntimeForUser(context.Background(), userB)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser B before: %v", err)
+	}
+	if _, err := srv.RescoreAll(context.Background(), userB, runtimeB); err != nil {
+		t.Fatalf("RescoreAll B before: %v", err)
+	}
+	profileBBefore, hashBBefore, _, _ := st.ProfileForUser(context.Background(), userB)
+	credentialBBefore, ok, err := st.UserAICredential(context.Background(), userB, "anthropic")
+	if err != nil || !ok {
+		t.Fatalf("UserAICredential B before: ok=%v err=%v", ok, err)
+	}
+	scoresBBefore, err := st.ScoresByPostingID(context.Background(), userB)
+	if err != nil {
+		t.Fatalf("ScoresByPostingID B before: %v", err)
+	}
+	fingerprintBBefore := runtimeB.Provider.(*fingerprintProvider).keyFingerprint
+
+	form := url.Values{
+		"career_years": {"0"}, "min_score": {"0"}, "job_likes": {"goal-a-updated"},
+		"ai_provider": {"anthropic"}, "ai_model": {"model-a-updated"}, "ai_key": {"synthetic-key-a-updated"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookieA)
+	addCSRFToRequest(req, srv, cookieA)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("user A profile save status = %d, want 303; body=%q", rec.Code, rec.Body.String())
+	}
+
+	profileBAfter, hashBAfter, _, _ := st.ProfileForUser(context.Background(), userB)
+	credentialBAfter, ok, err := st.UserAICredential(context.Background(), userB, "anthropic")
+	if err != nil || !ok {
+		t.Fatalf("UserAICredential B after: ok=%v err=%v", ok, err)
+	}
+	scoresBAfter, err := st.ScoresByPostingID(context.Background(), userB)
+	if err != nil {
+		t.Fatalf("ScoresByPostingID B after: %v", err)
+	}
+	runtimeBAfter, err := srv.aiRuntimeForUser(context.Background(), userB)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser B after: %v", err)
+	}
+	if profileBAfter != profileBBefore || hashBAfter != hashBBefore {
+		t.Fatalf("user B profile changed: before=%s/%s after=%s/%s", profileBBefore, hashBBefore, profileBAfter, hashBAfter)
+	}
+	if !bytes.Equal(credentialBAfter.Ciphertext, credentialBBefore.Ciphertext) ||
+		!bytes.Equal(credentialBAfter.Nonce, credentialBBefore.Nonce) ||
+		credentialBAfter.EncryptionVersion != credentialBBefore.EncryptionVersion {
+		t.Fatal("user B encrypted credential bytes/version changed after user A save")
+	}
+	if !reflect.DeepEqual(scoresBAfter, scoresBBefore) {
+		t.Fatalf("user B score rows changed: before=%+v after=%+v", scoresBBefore, scoresBAfter)
+	}
+	if got := runtimeBAfter.Provider.(*fingerprintProvider).keyFingerprint; got != fingerprintBBefore {
+		t.Fatalf("user B runtime fingerprint changed: before=%s after=%s", fingerprintBBefore, got)
+	}
+}
+
+func TestProductionRerateSSEPublishesTerminalStatusAndReusesCache(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "rerate-sse@example.invalid", "rerate-sse-session")
+	cipher := newAIRuntimeTestCipher(t, 0x72)
+	srv.SetCredentialCipher(cipher)
+	stub := rerateStub()
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return stub, nil }
+	zero := 0
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{
+		CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발",
+		AIProvider: "anthropic", AIModel: "test-model",
+	})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "synthetic-rerate-key")
+	now := time.Now().UTC()
+	for _, sourceID := range []string{"rerate-sse-1", "rerate-sse-2"} {
+		p := listingPosting(sourceID, "신입 백엔드 개발자")
+		p.Description = "백엔드 서버 개발자를 찾습니다"
+		p.FirstSeenAt, p.LastSeenAt = now, now
+		if _, _, err := st.UpsertPosting(context.Background(), p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+	runtime, err := srv.aiRuntimeForUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser: %v", err)
+	}
+	if _, err := srv.RescoreAll(context.Background(), userID, runtime); err != nil {
+		t.Fatalf("RescoreAll: %v", err)
+	}
+
+	run := func(wantOutcome rerateOutcome) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry=entry-token-00000001", nil)
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("rerate status = %d, want 200; body=%q", rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "event: run") || !strings.Contains(body, "event: done") {
+			t.Fatalf("rerate SSE lifecycle missing: %s", body)
+		}
+
+		statusReq := httptest.NewRequest(http.MethodGet, "/api/rerate/status?surface=today", nil)
+		statusReq.AddCookie(cookie)
+		statusRec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(statusRec, statusReq)
+		var status rerateStatus
+		if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+			t.Fatalf("decode rerate status: %v", err)
+		}
+		if status.State != rerateStateDone || status.RunID == 0 || status.Outcome != wantOutcome {
+			t.Fatalf("terminal rerate status = %+v, want done/%s", status, wantOutcome)
+		}
+	}
+
+	run(rerateOutcomeChanged)
+	callsAfterFirst := stub.ScoreDeltaCalls
+	run(rerateOutcomeCached)
+	if stub.ScoreDeltaCalls != callsAfterFirst {
+		t.Fatalf("cached rerate provider calls = %d, want unchanged %d", stub.ScoreDeltaCalls, callsAfterFirst)
+	}
+}
+
+func TestRerateSSEEmitsDone(t *testing.T) {
+	srv, cookie, _ := newProductionRerateFixture(t, 2, 0)
+	rec, _ := runAuthenticatedRerate(t, srv, cookie, "entry-token-00000001")
+	if !strings.Contains(rec.Body.String(), "event: done") {
+		t.Fatalf("SSE stream missing terminal done: %s", rec.Body.String())
+	}
+}
+
+func TestRerateSSEPublishesTerminalStatus(t *testing.T) {
+	srv, cookie, _ := newProductionRerateFixture(t, 2, 0)
+	_, status := runAuthenticatedRerate(t, srv, cookie, "entry-token-00000001")
+	if status.State != rerateStateDone || status.RunID == 0 || status.Message == "" || status.Outcome != rerateOutcomeChanged {
+		t.Fatalf("terminal status = %+v, want done/changed", status)
+	}
+}
+
+func TestRerateSSEPublishesCachedAndPartialOutcomes(t *testing.T) {
+	t.Run("cached", func(t *testing.T) {
+		srv, cookie, stub := newProductionRerateFixture(t, 2, 0)
+		_, _ = runAuthenticatedRerate(t, srv, cookie, "entry-token-00000001")
+		calls := stub.ScoreDeltaCalls
+		_, status := runAuthenticatedRerate(t, srv, cookie, "entry-token-00000002")
+		if status.Outcome != rerateOutcomeCached || stub.ScoreDeltaCalls != calls {
+			t.Fatalf("cached status=%+v calls=%d, want cached and %d", status, stub.ScoreDeltaCalls, calls)
+		}
+	})
+	t.Run("partial", func(t *testing.T) {
+		srv, cookie, _ := newProductionRerateFixture(t, 2, 1)
+		_, status := runAuthenticatedRerate(t, srv, cookie, "entry-token-00000001")
+		if status.Outcome != rerateOutcomePartial || !strings.Contains(status.Message, "1/2") {
+			t.Fatalf("partial status = %+v, want partial 1/2", status)
+		}
+	})
+	t.Run("empty", func(t *testing.T) {
+		srv, cookie, _ := newProductionRerateFixture(t, 0, 0)
+		_, status := runAuthenticatedRerate(t, srv, cookie, "entry-token-00000001")
+		if status.Outcome != rerateOutcomeEmpty {
+			t.Fatalf("empty status = %+v, want empty", status)
+		}
+	})
+}
+
+func TestRerateStatusPublishesServerAuthoritativeHistoryOwner(t *testing.T) {
+	srv, cookie, _ := newProductionRerateFixture(t, 1, 0)
+	const entry = "entry-token-1234567890"
+	_, status := runAuthenticatedRerate(t, srv, cookie, entry)
+	if status.RunID == 0 || status.RunToken == "" || status.OwnerEntry != entry {
+		t.Fatalf("server lifecycle identity = %+v", status)
+	}
+}
+
+func newProductionRerateFixture(t *testing.T, postingCount, perCallCap int) (*Server, *http.Cookie, *ai.StubProvider) {
+	t.Helper()
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, fmt.Sprintf("rerate-fixture-%d@example.invalid", rand.Int64()), fmt.Sprintf("rerate-session-%d", rand.Int64()))
+	cipher := newAIRuntimeTestCipher(t, 0x73)
+	srv.SetCredentialCipher(cipher)
+	stub := rerateStub()
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return stub, nil }
+	zero := 0
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{
+		CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발",
+		AIProvider: "anthropic", AIModel: "test-model", AIPerCallCap: perCallCap,
+	})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "synthetic-rerate-fixture-key")
+	now := time.Now().UTC()
+	for i := 0; i < postingCount; i++ {
+		p := listingPosting(fmt.Sprintf("rerate-fixture-%d", i), "신입 백엔드 개발자")
+		p.Description = "백엔드 서버 개발자를 찾습니다"
+		p.FirstSeenAt, p.LastSeenAt = now, now
+		if _, _, err := st.UpsertPosting(context.Background(), p); err != nil {
+			t.Fatalf("UpsertPosting: %v", err)
+		}
+	}
+	runtime, err := srv.aiRuntimeForUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("aiRuntimeForUser: %v", err)
+	}
+	if _, err := srv.RescoreAll(context.Background(), userID, runtime); err != nil {
+		t.Fatalf("RescoreAll: %v", err)
+	}
+	return srv, cookie, stub
+}
+
+func runAuthenticatedRerate(t *testing.T, srv *Server, cookie *http.Cookie, entry string) (*httptest.ResponseRecorder, rerateStatus) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/rerate?surface=today&entry="+entry, nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rerate status = %d, want 200; body=%q", rec.Code, rec.Body.String())
+	}
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/rerate/status?surface=today", nil)
+	statusReq.AddCookie(cookie)
+	statusRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(statusRec, statusReq)
+	var status rerateStatus
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode rerate status: %v", err)
+	}
+	return rec, status
+}
+
+func TestProductionManualScrapeDegradesCredentialFailureToRules(t *testing.T) {
+	f := &fakeScraper{listing: []scraper.Posting{listingPosting("manual-runtime-fallback", "수동 규칙 점수 공고")}}
+	srv, st := newPostgresTestServer(t, f)
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "manual-fallback@example.invalid", "manual-fallback-session")
+	encryptingCipher := newAIRuntimeTestCipher(t, 0x31)
+	srv.SetCredentialCipher(newAIRuntimeTestCipher(t, 0x32))
+	zero := 0
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, MinScore: &zero, AIProvider: "anthropic"})
+	saveAIRuntimeCredential(t, st, encryptingCipher, userID, "anthropic", "synthetic-manual-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/scrape", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("manual scrape status = %d, want 200; body=%q", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "규칙 기반 점수로 계속") || !strings.Contains(body, "event: done") {
+		t.Fatalf("manual fallback SSE missing warning/done: %s", body)
+	}
+	postings, err := st.AllPostings(context.Background())
+	if err != nil || len(postings) != 1 {
+		t.Fatalf("manual fallback postings = %d err=%v, want 1", len(postings), err)
+	}
+	scores, err := st.ScoresByPostingID(context.Background(), userID)
+	if err != nil || len(scores) != 1 {
+		t.Fatalf("manual fallback scores = %d err=%v, want 1", len(scores), err)
+	}
+}
+
+func TestProductionProfileSaveRedirectsAfterPostCommitRuntimeFailure(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-runtime-fallback@example.invalid", "profile-runtime-fallback-session")
+	encryptingCipher := newAIRuntimeTestCipher(t, 0x41)
+	srv.SetCredentialCipher(newAIRuntimeTestCipher(t, 0x42))
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, JobLikes: "old goal", AIProvider: "anthropic"})
+	saveAIRuntimeCredential(t, st, encryptingCipher, userID, "anthropic", "synthetic-old-key")
+	p := listingPosting("profile-runtime-fallback", "프로필 저장 규칙 점수 공고")
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	postingID := mustUpsert(t, st, p)
+
+	form := url.Values{"career_years": {"0"}, "job_likes": {"new committed goal"}, "ai_provider": {"anthropic"}}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	addCSRFToRequest(req, srv, cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("profile save status = %d, want 303; body=%q", rec.Code, rec.Body.String())
+	}
+	gotProfile, gotHash, ok, err := st.ProfileForUser(context.Background(), userID)
+	if err != nil || !ok || !strings.Contains(gotProfile, "new committed goal") {
+		t.Fatalf("committed profile = %s ok=%v err=%v", gotProfile, ok, err)
+	}
+	scores, err := st.ScoresByPostingID(context.Background(), userID)
+	if err != nil || scores[postingID].ProfileHash != gotHash {
+		t.Fatalf("rule fallback score = %+v err=%v, want profile hash %s", scores[postingID], err, gotHash)
+	}
+}
+
+func TestProductionProfileSaveRedirectsAfterPostCommitAIRescoreFailure(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-rescore-fallback@example.invalid", "profile-rescore-fallback-session")
+	cipher := newAIRuntimeTestCipher(t, 0x43)
+	srv.SetCredentialCipher(cipher)
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return rerateStub(), nil }
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, JobLikes: "old goal", AIProvider: "anthropic"})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "synthetic-rescore-key")
+	p := listingPosting("profile-rescore-fallback", "프로필 재점수 복구 공고")
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	postingID := mustUpsert(t, st, p)
+	if _, err := st.SQLDB().Exec(`DROP TABLE ai_extractions`); err != nil {
+		t.Fatalf("drop AI extraction cache: %v", err)
+	}
+
+	form := url.Values{"career_years": {"0"}, "job_likes": {"new rescore goal"}, "ai_provider": {"anthropic"}}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	addCSRFToRequest(req, srv, cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("profile save status = %d, want 303; body=%q", rec.Code, rec.Body.String())
+	}
+	_, gotHash, ok, err := st.ProfileForUser(context.Background(), userID)
+	if err != nil || !ok {
+		t.Fatalf("committed profile ok=%v err=%v", ok, err)
+	}
+	scores, err := st.ScoresByPostingID(context.Background(), userID)
+	if err != nil || scores[postingID].ProfileHash != gotHash {
+		t.Fatalf("rescore fallback score = %+v err=%v, want profile hash %s", scores[postingID], err, gotHash)
+	}
+}
+
+func TestProductionRenderSuppressesStaleProfileHash(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	userID := insertAIRuntimeTestUser(t, st, "stale-render@example.invalid")
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0})
+	p := listingPosting("stale-render", "오래된 점수 공고")
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	postingID := mustUpsert(t, st, p)
+	if err := st.UpsertScoreForUser(context.Background(), userID, storage.Score{
+		PostingID: postingID, ProfileHash: "stale-profile-hash", Total: 99,
+		BreakdownJSON: `{"Total":99}`, ComputedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed stale score: %v", err)
+	}
+
+	b, err := srv.buildBriefing(context.Background(), time.Now(), userID)
+	if err != nil {
+		t.Fatalf("buildBriefing: %v", err)
+	}
+	for _, row := range append(b.Today, b.Excluded...) {
+		if row.Posting.ID == postingID && row.Total == 99 {
+			t.Fatalf("stale score rendered: %+v", row)
+		}
+	}
+}
+
+func TestProductionRenderUsesOneProfileSnapshotForScoreFilteringAndLayout(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "render-snapshot@example.invalid")
+	zero, hundred := 0, 100
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, MinScore: &zero})
+	p := listingPosting("render-snapshot", "동일 스냅샷 공고")
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	postingID := mustUpsert(t, st, p)
+	if _, err := srv.RescoreAll(ctx, userID, nil); err != nil {
+		t.Fatalf("seed current score: %v", err)
+	}
+
+	snapshotReady := make(chan struct{})
+	resumeRender := make(chan struct{})
+	srv.afterRenderScoreSnapshot = func() {
+		close(snapshotReady)
+		<-resumeRender
+	}
+	type renderResult struct {
+		briefing briefing
+		err      error
+	}
+	rendered := make(chan renderResult, 1)
+	go func() {
+		b, err := srv.buildBriefing(ctx, time.Now(), userID)
+		rendered <- renderResult{briefing: b, err: err}
+	}()
+	select {
+	case <-snapshotReady:
+	case <-time.After(2 * time.Second):
+		t.Fatal("render did not reach the score/profile snapshot boundary")
+	}
+
+	// Simulate a committed save whose best-effort rescore then fails. The
+	// in-flight render may use the old snapshot, but must not combine the old
+	// score with this new profile's MinScore.
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, MinScore: &hundred})
+	close(resumeRender)
+	result := <-rendered
+	if result.err != nil {
+		t.Fatalf("buildBriefing: %v", result.err)
+	}
+	if !contains(result.briefing.Today, p.Title) {
+		t.Fatalf("render mixed profile snapshots: today=%+v excluded=%+v posting=%d", result.briefing.Today, result.briefing.Excluded, postingID)
+	}
+	if contains(result.briefing.Excluded, p.Title) {
+		t.Fatalf("old-hash score rendered under the newly committed profile")
+	}
+}
+
+func TestSQLiteRenderRejectsScoresCommittedForANewerProfileSnapshot(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	zero, hundred := 0, 100
+	saveAIRuntimeProfile(t, st, 0, profile.Profile{CareerYears: 0, MinScore: &zero})
+	p := listingPosting("sqlite-render-snapshot", "SQLite 동일 스냅샷 공고")
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	mustUpsert(t, st, p)
+	if _, err := srv.RescoreAll(ctx, 0, nil); err != nil {
+		t.Fatalf("seed current score: %v", err)
+	}
+
+	profileSnapshotReady := make(chan struct{})
+	resumeRender := make(chan struct{})
+	srv.afterRenderProfileSnapshot = func() {
+		close(profileSnapshotReady)
+		<-resumeRender
+	}
+	type renderResult struct {
+		briefing briefing
+		err      error
+	}
+	rendered := make(chan renderResult, 1)
+	go func() {
+		b, err := srv.buildBriefing(ctx, time.Now())
+		rendered <- renderResult{briefing: b, err: err}
+	}()
+	select {
+	case <-profileSnapshotReady:
+	case <-time.After(2 * time.Second):
+		t.Fatal("render did not capture its profile snapshot")
+	}
+
+	// Simulate profile save committing its new rule scores while this render is
+	// still using the old profile snapshot.
+	saveAIRuntimeProfile(t, st, 0, profile.Profile{CareerYears: 0, MinScore: &hundred})
+	if _, err := srv.RescoreAll(ctx, 0, nil); err != nil {
+		t.Fatalf("rescore newer profile: %v", err)
+	}
+	close(resumeRender)
+	result := <-rendered
+	if result.err != nil {
+		t.Fatalf("buildBriefing: %v", result.err)
+	}
+	if contains(result.briefing.Today, p.Title) || contains(result.briefing.Excluded, p.Title) {
+		t.Fatalf("new-profile score rendered with old profile snapshot: %+v", result.briefing)
+	}
+}
+
+func TestProductionScoredSurfacesOmitPostingsWithStaleProfileHash(t *testing.T) {
+	tests := []struct {
+		name   string
+		seed   func(context.Context, *storage.Store, int64, int64) error
+		render func(context.Context, *Server, int64, string) (bool, error)
+	}{
+		{
+			name: "archive",
+			seed: func(context.Context, *storage.Store, int64, int64) error { return nil },
+			render: func(ctx context.Context, srv *Server, userID int64, _ string) (bool, error) {
+				view, err := srv.buildArchive(ctx, time.Now(), userID)
+				if err != nil {
+					return false, err
+				}
+				return view.Total != 0 || len(view.Days) != 0 || len(view.Excluded) != 0, nil
+			},
+		},
+		{
+			name: "bookmarks",
+			seed: func(ctx context.Context, st *storage.Store, userID, postingID int64) error {
+				return st.AddBookmark(ctx, userID, postingID)
+			},
+			render: func(ctx context.Context, srv *Server, userID int64, title string) (bool, error) {
+				view, err := srv.buildBookmarks(ctx, time.Now(), userID)
+				return contains(view.Postings, title), err
+			},
+		},
+		{
+			name: "hidden",
+			seed: func(ctx context.Context, st *storage.Store, userID, postingID int64) error {
+				return st.AddNotInterested(ctx, userID, postingID, time.Now().UTC())
+			},
+			render: func(ctx context.Context, srv *Server, userID int64, title string) (bool, error) {
+				view, err := srv.buildHidden(ctx, time.Now(), userID)
+				return contains(view.Postings, title), err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, st := newPostgresTestServer(t, &fakeScraper{})
+			ctx := context.Background()
+			userID := insertAIRuntimeTestUser(t, st, "stale-"+tt.name+"@example.invalid")
+			zero, hundred := 0, 100
+			saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, MinScore: &zero})
+			p := listingPosting("stale-"+tt.name, "오래된 "+tt.name+" 점수 공고")
+			p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+			postingID := mustUpsert(t, st, p)
+			if err := tt.seed(ctx, st, userID, postingID); err != nil {
+				t.Fatalf("seed %s state: %v", tt.name, err)
+			}
+			if _, err := srv.RescoreAll(ctx, userID, nil); err != nil {
+				t.Fatalf("seed current score: %v", err)
+			}
+			// Commit a new profile without the best-effort rescore succeeding.
+			saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0, MinScore: &hundred})
+
+			rendered, err := tt.render(ctx, srv, userID, p.Title)
+			if err != nil {
+				t.Fatalf("render %s: %v", tt.name, err)
+			}
+			if rendered {
+				t.Fatalf("%s rendered a stale or fabricated zero-score card for posting %d", tt.name, postingID)
+			}
+		})
+	}
 }
 
 type countingCipher struct {
@@ -365,6 +968,7 @@ func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
 	userA, cookieA := createSessionUser(t, st, "owner-a@example.com", "session-a")
 	userB, cookieB := createSessionUser(t, st, "owner-b@example.com", "session-b")
 	postingID := mustUpsert(t, st, listingPosting("shared-hidden", "공유 숨김 공고"))
+	seedProductionScoredPosting(t, st, postingID, userA, userB)
 	mutedAt := time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)
 	if err := st.AddNotInterested(ctx, userB, postingID, mutedAt); err != nil {
 		t.Fatalf("seed userB hidden row: %v", err)
@@ -399,6 +1003,7 @@ func TestProductionHiddenUseSessionOwnerState(t *testing.T) {
 	assertPageContains(t, srv, cookieB, "/hidden", "공유 숨김 공고")
 
 	userBOnlyPostingID := mustUpsert(t, st, listingPosting("user-b-hidden", "유저B 전용 숨김"))
+	seedProductionScoredPosting(t, st, userBOnlyPostingID, userA, userB)
 	putBReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/not-interested/%d", userBOnlyPostingID), nil)
 	putBReq.AddCookie(cookieB)
 	addCSRFToRequest(putBReq, srv, cookieB)
@@ -549,6 +1154,30 @@ RETURNING id`, email, passwordHash).Scan(&userID); err != nil {
 		t.Fatalf("CreateSession %s: %v", email, err)
 	}
 	return userID, &http.Cookie{Name: sessionCookieName, Value: rawToken}
+}
+
+func seedProductionScoredPosting(t *testing.T, st *storage.Store, postingID int64, userIDs ...int64) {
+	t.Helper()
+	ctx := context.Background()
+	for _, userID := range userIDs {
+		_, hash, found, err := st.ProfileForUser(ctx, userID)
+		if err != nil {
+			t.Fatalf("ProfileForUser(%d): %v", userID, err)
+		}
+		if !found {
+			saveAIRuntimeProfile(t, st, userID, profile.Profile{CareerYears: 0})
+			_, hash, found, err = st.ProfileForUser(ctx, userID)
+			if err != nil || !found {
+				t.Fatalf("seed ProfileForUser(%d): found=%v err=%v", userID, found, err)
+			}
+		}
+		if err := st.UpsertScoreForUser(ctx, userID, storage.Score{
+			PostingID: postingID, ProfileHash: hash, Total: 50,
+			BreakdownJSON: `{"Total":50}`, ComputedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("seed score user=%d posting=%d: %v", userID, postingID, err)
+		}
+	}
 }
 
 func addCSRFToRequest(req *http.Request, srv *Server, sessionCookie *http.Cookie) {

@@ -40,7 +40,8 @@ system considers it done and has nothing more to say.
 
 The analysis did **not** complete: a provider error (timeout, 5xx, 429/529
 overload, malformed JSON that fails parsing), a failed cache write, OR the listing
-was never reached this press because the per-call cap (`aiPerCallCap`) or the
+was never reached this press because the user's per-call cap
+(`AIRuntime.PerCallCap`) or the
 token budget halted first.
 
 None of these write an `ai_scores` row (`rerateOne` returns before the upsert).
