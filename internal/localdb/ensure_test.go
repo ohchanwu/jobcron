@@ -198,7 +198,7 @@ func TestEnsureHonorsCallerCancellation(t *testing.T) {
 	}
 }
 
-func TestEnsureRequiresPostUpTCPReachabilityBeforeReturningURL(t *testing.T) {
+func TestManagedLocalStartupRequiresHostTCPReachability(t *testing.T) {
 	runner := &fakeCommandRunner{}
 	dialed := false
 	dial := func(ctx context.Context, network, address string) (net.Conn, error) {

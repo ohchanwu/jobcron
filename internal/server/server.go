@@ -368,8 +368,9 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 	return newServer(store, 0, sources...)
 }
 
-// NewForLocalUser builds a non-production PostgreSQL server whose request
-// state is permanently scoped to one resolved positive local owner.
+// NewForLocalUser builds a PostgreSQL server with a verified positive sole
+// owner. Non-production state uses it directly; production still resolves each
+// authenticated request's user after SetProductionMode(true).
 func NewForLocalUser(store *storage.Store, userID int64, sources ...scraper.Scraper) *Server {
 	if userID <= 0 {
 		panic("server.NewForLocalUser: user ID must be positive")

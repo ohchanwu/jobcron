@@ -71,7 +71,7 @@ func listingPosting(sourceID, title string) scraper.Posting {
 
 func newTestServer(t *testing.T, f *fakeScraper) (*Server, *storage.Store) {
 	t.Helper()
-	st, err := storage.OpenAt(filepath.Join(t.TempDir(), "jobs.db"))
+	st, err := storage.OpenSQLiteAt(filepath.Join(t.TempDir(), "jobs.db"))
 	if err != nil {
 		t.Fatalf("OpenAt: %v", err)
 	}
@@ -246,7 +246,7 @@ func saveTestProfile(t *testing.T, st *storage.Store, p profile.Profile) {
 }
 
 func TestProfileFormDefaultsDemodayOffOnlyBeforeFirstSave(t *testing.T) {
-	st, err := storage.OpenAt(filepath.Join(t.TempDir(), "jobs.db"))
+	st, err := storage.OpenSQLiteAt(filepath.Join(t.TempDir(), "jobs.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

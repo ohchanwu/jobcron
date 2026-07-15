@@ -21,7 +21,7 @@ func TestLegacySQLiteRenderAndRescoreNeverReadOrModifyAIKeysFile(t *testing.T) {
 	if err := os.WriteFile(keyPath, sentinel, 0o600); err != nil {
 		t.Fatalf("write legacy key sentinel: %v", err)
 	}
-	st, err := storage.OpenAt(filepath.Join(dir, "jobs.db"))
+	st, err := storage.OpenSQLiteAt(filepath.Join(dir, "jobs.db"))
 	if err != nil {
 		t.Fatalf("OpenAt: %v", err)
 	}

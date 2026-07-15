@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ func stubRuntimeDependencies(
 	})
 }
 
-func TestResolveRuntimeExplicitURLBypassesLocalEnsure(t *testing.T) {
+func TestExplicitDatabaseURLNeverInvokesDocker(t *testing.T) {
 	const explicitURL = "postgres://explicit.example.invalid/jobcron"
 	ensureCalls := 0
 	openedURL := ""
@@ -237,12 +238,11 @@ func TestResolveRuntimeLocalLoadsProtectedMasterKey(t *testing.T) {
 func TestResolveRuntimeProductionNeverCreatesLocalMasterKey(t *testing.T) {
 	configuredKey := bytes.Repeat([]byte{0x44}, credential.MasterKeyBytes)
 	keyCalls := 0
+	store := &fakeRuntimeUserStore{soleID: 73, soleOK: true}
 	stubRuntimeDependencies(t,
 		func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
 		func() ([]byte, error) { keyCalls++; return nil, errors.New("unexpected local key load") },
-		func(string) (runtimeUserStore, error) {
-			return nil, errors.New("production must not resolve a local user")
-		},
+		func(string) (runtimeUserStore, error) { return store, nil },
 	)
 
 	runtime, err := resolvePostgresRuntime(context.Background(), config.Config{
@@ -259,13 +259,59 @@ func TestResolveRuntimeProductionNeverCreatesLocalMasterKey(t *testing.T) {
 	if len(runtime.CredentialEncryptionKey) != credential.MasterKeyBytes {
 		t.Fatalf("master-key length = %d, want %d", len(runtime.CredentialEncryptionKey), credential.MasterKeyBytes)
 	}
-	if runtime.UserID != 0 || runtime.ManagedLocal {
-		t.Fatalf("production runtime user ID = %d managed = %v, want authenticated user resolution",
+	if runtime.UserID != 73 || runtime.ManagedLocal {
+		t.Fatalf("production runtime user ID = %d managed = %v, want verified sole owner",
 			runtime.UserID, runtime.ManagedLocal)
+	}
+	if store.soleCalls != 1 || store.managedCalls != 0 {
+		t.Fatalf("production owner calls = sole %d managed %d, want 1 and 0", store.soleCalls, store.managedCalls)
 	}
 }
 
-func TestResolveRuntimeManagedLocalCreatesStablePositiveUser(t *testing.T) {
+func TestProductionExplicitURLRefusesMissingOrAmbiguousOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		store   *fakeRuntimeUserStore
+		wantErr string
+	}{
+		{name: "zero users", store: &fakeRuntimeUserStore{}, wantErr: "exactly one existing user"},
+		{name: "multiple users", store: &fakeRuntimeUserStore{soleErr: errors.New("multiple users exist")}, wantErr: "multiple users"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stubRuntimeDependencies(t,
+				func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
+				func() ([]byte, error) { return nil, errors.New("unexpected local key load") },
+				func(string) (runtimeUserStore, error) { return tc.store, nil },
+			)
+			_, err := resolvePostgresRuntime(context.Background(), config.Config{
+				Production:              true,
+				DatabaseURL:             "postgres://production.example.invalid/jobcron",
+				CredentialEncryptionKey: bytes.Repeat([]byte{0x45}, credential.MasterKeyBytes),
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("resolvePostgresRuntime error = %v, want %q", err, tc.wantErr)
+			}
+			if tc.store.soleCalls != 1 || tc.store.managedCalls != 0 {
+				t.Fatalf("production owner calls = sole %d managed %d, want 1 and 0", tc.store.soleCalls, tc.store.managedCalls)
+			}
+		})
+	}
+}
+
+func TestMainHasNoZeroUserServerFallback(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(source, []byte("server.New(store")) {
+		t.Fatal("normal PostgreSQL startup retains the zero-user server.New fallback")
+	}
+	if !bytes.Contains(source, []byte("server.NewForLocalUser(store, resolved.UserID")) {
+		t.Fatal("normal startup does not unconditionally use the resolved positive owner")
+	}
+}
+
+func TestManagedLocalStartupUsesStablePositiveUserID(t *testing.T) {
 	store := &fakeRuntimeUserStore{managedID: 74}
 	stubRuntimeDependencies(t,
 		func(context.Context) (string, error) { return localdb.DatabaseURL, nil },
@@ -289,7 +335,7 @@ func TestResolveRuntimeManagedLocalCreatesStablePositiveUser(t *testing.T) {
 	}
 }
 
-func TestResolveRuntimeExplicitURLRequiresSolePositiveUser(t *testing.T) {
+func TestExplicitURLRefusesAmbiguousUsers(t *testing.T) {
 	tests := []struct {
 		name    string
 		store   *fakeRuntimeUserStore
@@ -370,99 +416,103 @@ func TestListenUsesConfiguredHost(t *testing.T) {
 	}
 }
 
-func TestOpenConfiguredStoreProductionUsesPostgresPath(t *testing.T) {
-	_, err := openConfiguredStore(config.Config{
-		Production:  true,
-		DatabaseURL: "://not-a-valid-postgres-url",
-	})
-	if err == nil {
-		t.Fatal("openConfiguredStore succeeded with an invalid PostgreSQL URL")
-	}
-	if got, want := err.Error(), "storage: open postgres"; len(got) < len(want) || got[:len(want)] != want {
-		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
-	}
-}
-
-func TestOpenConfiguredStoreDatabaseURLUsesPostgresOutsideProduction(t *testing.T) {
-	_, err := openConfiguredStore(config.Config{
-		DatabaseURL: "://not-a-valid-postgres-url",
-	})
-	if err == nil {
-		t.Fatal("openConfiguredStore succeeded with an invalid PostgreSQL URL")
-	}
-	if got, want := err.Error(), "storage: open postgres"; len(got) < len(want) || got[:len(want)] != want {
-		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
-	}
-}
-
-func TestConfiguredStoreCredentialCipherUsesConfiguredKey(t *testing.T) {
-	masterKey := bytes.Repeat([]byte{0x31}, credential.MasterKeyBytes)
-	cipher, err := credentialCipherForConfig(config.Config{CredentialEncryptionKey: masterKey})
-	if err != nil {
-		t.Fatalf("credentialCipherForConfig: %v", err)
-	}
-	ciphertext, nonce, version, err := cipher.Seal(7, "anthropic", "synthetic-configured-key")
-	if err != nil {
-		t.Fatalf("Seal: %v", err)
-	}
-	opened, err := cipher.Open(7, "anthropic", ciphertext, nonce, version)
-	if err != nil || opened != "synthetic-configured-key" {
-		t.Fatalf("configured cipher round trip opened=%v err=%v", opened == "synthetic-configured-key", err)
-	}
-}
-
-func TestConfiguredStoreCredentialCipherRequiresProductionKey(t *testing.T) {
-	if _, err := credentialCipherForConfig(config.Config{Production: true}); err == nil {
-		t.Fatal("credentialCipherForConfig accepted production without a master key")
-	}
-}
-
-func TestConfiguredStoreCredentialCipherCreatesProtectedLocalKey(t *testing.T) {
+func TestOpenConfiguredStoreAlwaysUsesPostgres(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
-
-	cipher, err := credentialCipherForConfig(config.Config{})
-	if err != nil {
-		t.Fatalf("credentialCipherForConfig: %v", err)
+	if store, err := openConfiguredStore(config.Config{}); err == nil {
+		_ = store.Close()
+		t.Fatal("openConfiguredStore selected SQLite without a PostgreSQL URL")
 	}
-	ciphertext, nonce, version, err := cipher.Seal(8, "anthropic", "synthetic-local-key")
-	if err != nil {
-		t.Fatalf("Seal: %v", err)
-	}
-	if _, err := cipher.Open(8, "anthropic", ciphertext, nonce, version); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	path, err := credential.DefaultMasterKeyPath()
-	if err != nil {
-		t.Fatalf("DefaultMasterKeyPath: %v", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat local master key: %v", err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("local master key mode = %o, want 600", perm)
+	_, err := openConfiguredStore(config.Config{DatabaseURL: "://not-a-valid-postgres-url"})
+	if err == nil || !strings.HasPrefix(err.Error(), "storage: open postgres") {
+		t.Fatalf("openConfiguredStore error = %v, want PostgreSQL open path error", err)
 	}
 }
 
-func TestPrepareApplicationDataMigratesLegacyDirectory(t *testing.T) {
+func TestNormalLocalStartupDoesNotCreateSQLite(t *testing.T) {
 	root := t.TempDir()
-	legacyFile := filepath.Join(appdata.LegacyDir(root), "jobs.db")
-	if err := os.MkdirAll(filepath.Dir(legacyFile), 0o700); err != nil {
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
+	stubRuntimeDependencies(t,
+		func(context.Context) (string, error) { return localdb.DatabaseURL, nil },
+		func() ([]byte, error) { return bytes.Repeat([]byte{0x72}, credential.MasterKeyBytes), nil },
+		func(string) (runtimeUserStore, error) { return &fakeRuntimeUserStore{managedID: 81}, nil },
+	)
+	if _, err := resolvePostgresRuntime(context.Background(), config.Config{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(legacyFile, []byte("database"), 0o600); err != nil {
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
 		t.Fatal(err)
 	}
+	for _, suffix := range []string{"", "-journal", "-wal", "-shm"} {
+		path := filepath.Join(appdata.Dir(configRoot), "jobs.db"+suffix)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("normal local startup created legacy SQLite artifact %s: %v", path, err)
+		}
+	}
+}
 
-	if err := prepareApplicationData(root); err != nil {
-		t.Fatalf("prepareApplicationData: %v", err)
+func TestHelpPrintsFlagsAndDoesNotStartRuntime(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
+	t.Setenv("JOBCRON_ENV", "production")
+	runtimeCalls := 0
+	stubRuntimeDependencies(t,
+		func(context.Context) (string, error) { runtimeCalls++; return "", errors.New("unexpected Ensure") },
+		func() ([]byte, error) { runtimeCalls++; return nil, errors.New("unexpected key load") },
+		func(string) (runtimeUserStore, error) {
+			runtimeCalls++
+			return nil, errors.New("unexpected store open")
+		},
+	)
+
+	oldArgs := os.Args
+	oldStdout := os.Stdout
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(appdata.Dir(root), "jobs.db"))
-	if err != nil || string(got) != "database" {
-		t.Fatalf("migrated database = %q, err = %v", got, err)
+	os.Args = []string{"jobcron", "--help"}
+	os.Stdout = writeEnd
+	t.Cleanup(func() {
+		os.Args = oldArgs
+		os.Stdout = oldStdout
+		_ = readEnd.Close()
+		_ = writeEnd.Close()
+	})
+	main()
+	if err := writeEnd.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = oldStdout
+	helpBytes, err := io.ReadAll(readEnd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	help := string(helpBytes)
+	for _, want := range []string{"Usage: jobcron [flags]", "-port", "-no-open", "-worknet-api-key"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("help missing %q:\n%s", want, help)
+		}
+	}
+	if strings.Contains(help, "-db") {
+		t.Fatalf("help advertises removed database flag:\n%s", help)
+	}
+	if runtimeCalls != 0 {
+		t.Fatalf("runtime dependency calls during help = %d, want 0", runtimeCalls)
+	}
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(appdata.Dir(configRoot)); !os.IsNotExist(err) {
+		t.Fatalf("help touched application data: %v", err)
 	}
 }
 

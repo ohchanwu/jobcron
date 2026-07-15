@@ -94,7 +94,7 @@ func TestEnsureManagedLocalOwnerCreatesAndReusesSyntheticPositiveUser(t *testing
 	}
 }
 
-func TestEnsureManagedLocalOwnerReusesSoleExistingPositiveUser(t *testing.T) {
+func TestManagedLocalStartupReusesImportedOwner(t *testing.T) {
 	st := newPostgresTestStore(t)
 	ctx := context.Background()
 	created, err := st.CreateOwnerUser(ctx, "imported-owner@example.invalid", "imported-password-hash")

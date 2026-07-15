@@ -34,7 +34,7 @@ func makePosting(source, sourceID, title, company, location string, firstSeen ti
 // data — they seed postings directly through the store.
 func newServerWithStore(t *testing.T) *Server {
 	t.Helper()
-	st, err := storage.OpenAt(filepath.Join(t.TempDir(), "jobs.db"))
+	st, err := storage.OpenSQLiteAt(filepath.Join(t.TempDir(), "jobs.db"))
 	if err != nil {
 		t.Fatalf("OpenAt: %v", err)
 	}

@@ -301,13 +301,19 @@ The `--apply` path must:
 3. copy profile, rule scores, bookmarks, hidden jobs, global extractions,
    user-scoped AI scores, and user-scoped usage;
 4. upsert the optional encrypted credential;
-5. reset only required PostgreSQL sequences;
+5. reset only the required postings sequence with transactional
+   `ALTER SEQUENCE ... RESTART WITH max(id)+1` (empty postings restart at 1);
 6. compare transaction-visible counts and representative values;
 7. insert `local_data_imports`; and
 8. commit once.
 
 Do not use `GREATEST` merging for one-time usage import; the clean-target plan
 must prove no ambiguous collision, then copy exact source totals.
+
+Do not use PostgreSQL `setval` for the sequence reset. It is not rolled back
+with the import transaction, so a later failure would leak sequence state even
+though every imported row rolled back. `ALTER SEQUENCE ... RESTART` is
+transactional and is regression-tested for both rollback and an empty source.
 
 - [ ] **Step 5: Run apply tests and commit**
 
@@ -463,8 +469,9 @@ and key, non-production mode with scheduling disabled, exact manual cleanup when
 - [ ] **Step 4: Run runtime and documentation checks**
 
 ```sh
-go run ./cmd/jobcron --help 2>&1 | tee /tmp/jobcron-help.txt
-! rg -- '--db' /tmp/jobcron-help.txt
+go run ./cmd/jobcron --help | tee /tmp/jobcron-help.txt
+rg -- '-port|-no-open|-worknet-api-key' /tmp/jobcron-help.txt
+! rg -- '(^|[[:space:]])-{1,2}db([[:space:]]|$)' /tmp/jobcron-help.txt
 rg -n 'OpenSQLiteAt' cmd internal | sort
 rg -n 'SQLite|sqlite|--db|JOBCRON_DB' README.md README.ko.md deploy/local \
   cmd/jobcron internal/config

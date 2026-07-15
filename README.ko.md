@@ -136,25 +136,19 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 - **macOS Gatekeeper**가 서명되지 않은 바이너리를 차단할 수 있습니다. 파일을 우클릭 →
   Open을 선택하거나, `xattr -d com.apple.quarantine ./jobcron`을 실행하세요.
 - **Windows SmartScreen**: **More info → Run anyway**를 선택하세요.
-- **`job-scraper`에서 업그레이드하는 경우:** 처음으로 `jobcron`을 정상 실행하기 전에
-  기존 `job-scraper` 프로세스를 모두 완전히 종료하세요. 첫 정상 실행은 데이터베이스,
-  SQLite 보조 파일, 백업, AI 키를 함께 보존하도록 애플리케이션 데이터 디렉터리 전체를
-  `jobcron`으로 원자적으로 이름 변경합니다.
-- 이전 디렉터리와 새 디렉터리가 모두 있으면 `jobcron`은 둘 중 어느 것도 변경하지 않고
-  시작을 거부합니다. 두 앱을 모두 종료한 상태에서 두 디렉터리를 각각 백업하고, 어느 쪽에
-  최신 데이터가 있는지 확인한 다음, 사용할 디렉터리만 남도록 다른 쪽을 별도 위치로
-  옮긴 후 다시 실행하세요. 롤백하려면 `jobcron`을 종료하고 데이터베이스를 사용 중인
-  프로세스가 없는지 확인한 뒤, `jobcron` 디렉터리 이름을 `job-scraper`로 되돌리고 기존
-  바이너리를 실행하세요.
+- **기존 SQLite 앱에서 업그레이드하는 경우:** 앱을 완전히 종료하고 `jobs.db`, `-wal`
+  보조 파일, 선택적 `ai_keys.json`을 보존한 뒤
+  [deploy/local/README.md](deploy/local/README.md)의 검증된 가져오기 절차를 따르세요.
+  일반 시작 경로는 기존 데이터베이스를 열거나 이동하지 않습니다.
 
 플래그(flag): `--port` (기본값 `7777`), `--no-open` (브라우저를 열지 않음),
-`--db` (데이터베이스 경로 재지정), `--worknet-api-key` (워크넷 출처 활성화 —
-[data.go.kr](https://www.data.go.kr)에서 발급하는 무료 키이며, `JOBCRON_WORKNET_KEY`
-환경 변수에서도 읽습니다), `--version`.
+`--worknet-api-key` (워크넷 출처 활성화 — [data.go.kr](https://www.data.go.kr)에서
+발급하는 무료 키이며 `JOBCRON_WORKNET_KEY` 환경 변수에서도 읽습니다), `--version`.
 
-당신의 데이터는 OS 설정 디렉터리 아래 하나의 SQLite 파일에 저장됩니다
-(macOS는 `~/Library/Application Support/jobcron/`, Linux는 `~/.config/jobcron/`,
-Windows는 `%APPDATA%\jobcron\`).
+쓰기 가능한 앱 데이터는 PostgreSQL에 저장됩니다. `DATABASE_URL`이 없으면 일반 로컬
+시작이 Docker Compose로 PostgreSQL 18을 관리하고 `jobcron-postgres18-cluster` 볼륨에
+보존합니다. 기존 SQLite는 명시적인 `jobcron-import --sqlite` 마이그레이션 도구만
+읽습니다.
 
 ### 로컬 대화형 미리보기 (Interactive localhost preview)
 
@@ -187,18 +181,17 @@ CGO나 Node.js 런타임에 의존하지 않습니다.
 관리형 로컬 생명주기는 Docker 프로젝트 `jobcron-local`,
 `postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable`의 PostgreSQL 18,
 이름이 고정된 볼륨 `jobcron-postgres18-cluster`를 사용합니다. Docker Engine,
-`docker compose` 플러그인, 실행 중인 Docker 데몬이 필요합니다. 미리보기는 이 서비스를
-자동으로 시작하며, Slice 4의 검증된 SQLite 가져오기가 최종 쓰기 전환을 활성화한 뒤에는
-같은 관리형 경로가 일반 로컬 시작 경로가 됩니다.
+`docker compose` 플러그인, 실행 중인 Docker 데몬이 필요합니다. URL 없는 일반 시작과
+미리보기 모두 이 서비스를 자동으로 시작하거나 재사용합니다.
 
 ```sh
 scripts/preview-interactive.sh
 ```
 
 명시적 `DATABASE_URL`을 설정하면 관리형 Docker 시작을 건너뛰며, 대상 데이터베이스에는
-기존 사용자가 정확히 한 명 있어야 합니다. Slice 3에서는 URL 없는 일반 실행이 아직
-기존 SQLite 경로를 사용하고 `--db`도 유지됩니다. Slice 4 가져오기 도구가 SQLite
-마이그레이션을 검증하기 전에는 PostgreSQL 최종 쓰기 전환이 완료되었다고 간주하지 마세요.
+기존 사용자가 정확히 한 명 있어야 합니다. 관리형 로컬 시작은 사용자 테이블이 비었을 때만
+고정된 로그인 불가 소유자를 만들고, 검증된 가져오기 소유자 한 명은 변경 없이 재사용하며,
+여러 사용자가 있는 모호한 상태는 거부합니다.
 
 Compose 상태 검사나 컨테이너 메타데이터만으로는 충분하지 않습니다. 시작하려면
 `127.0.0.1:55432`에 실제 TCP로 연결할 수 있어야 합니다. 실패하면 컨테이너와 볼륨을

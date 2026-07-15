@@ -6,10 +6,9 @@ PostgreSQL 18 on `127.0.0.1:55432`, and the named volume
 PostgreSQL volume. PostgreSQL 18 mounts it at `/var/lib/postgresql`, allowing the
 image to keep major-version-specific data directories internally.
 
-This lifecycle is implemented in Slice 3 and starts automatically for the
-interactive preview. Ordinary no-URL `jobcron` startup still uses SQLite until
-Slice 4 completes and verifies the import before activating PostgreSQL as the
-only writable runtime. Until then, `--db` and the SQLite import warning remain.
+PostgreSQL is the only writable application database. Ordinary no-URL `jobcron`
+startup and the interactive preview both start or reuse this managed service.
+Legacy SQLite is accepted only by the explicit one-time importer.
 
 ## Prerequisites and startup
 
@@ -113,17 +112,37 @@ state. The shared Compose service and named volume stay running. With
 exact manual `dropdb` and `rm -rf` commands. Run those commands after inspecting
 the printed names; never use Compose `down` to clean up a preview.
 
-## SQLite migration boundary
+## Verified SQLite import
 
-The future `jobcron-import` command lands in Slice 4 and is not available yet.
-After it ships, its planned syntax for importing an old SQLite `jobs.db` will be:
+Stop the legacy app first. Keep the durable SQLite database, its `-wal` file,
+and the optional plaintext key file unchanged through browser verification. The
+importer independently takes a no-wait writer lock, snapshots through SQLite's
+online backup API, and refuses a concurrent writer. It never raw-copies the
+database. SQLite's rebuildable `-shm` WAL index is not byte-stability evidence.
 
-```text
-jobcron-import \
-  --sqlite "$HOME/Library/Application Support/jobcron/jobs.db" \
-  --postgres 'postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable'
+Start PostgreSQL, create the sole target owner if needed, and export the same
+credential master key that the app will use. Then run the importer without
+`--apply` and review the fingerprint, category counts, providers, and collisions:
+
+```sh
+export DATABASE_URL='postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable'
+export OWNER_EMAIL='<owner-email>'
+export JOBCRON_CREDENTIAL_ENCRYPTION_KEY='<base64-encoded-32-byte-key>'
+
+go run ./cmd/jobcron-user create-owner \
+  --database-url "$DATABASE_URL" --email "$OWNER_EMAIL"
+
+go run ./cmd/jobcron-import \
+  --sqlite '<legacy-jobs.db>' \
+  --postgres "$DATABASE_URL" \
+  --owner-email "$OWNER_EMAIL" \
+  --ai-keys '<optional-legacy-ai_keys.json>'
 ```
 
-Do not run that future example or treat the writable cutover as complete yet.
-Avoid a raw `sqlite3 .dump | psql` transfer: SQLite-only details such as FTS5
-virtual tables and type differences need project-aware conversion.
+When the dry run is clean, repeat the identical importer command with `--apply`.
+The import is one transaction, preserves the existing owner password, never
+imports sessions or passwords, encrypts any legacy credential, records its
+fingerprint, and reconnects for exact readback. A repeat of the same fingerprint
+verifies without writes; a different fingerprint is refused. Avoid a raw
+`sqlite3 .dump | psql` transfer because FTS5 and SQLite types require
+project-aware conversion.

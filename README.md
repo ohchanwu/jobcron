@@ -137,25 +137,20 @@ curl -L https://github.com/ohchanwu/jobcron/releases/latest/download/jobcron_lin
 - **macOS Gatekeeper** may block an unsigned binary. Right-click the file → Open,
   or run `xattr -d com.apple.quarantine ./jobcron`.
 - **Windows SmartScreen**: choose **More info → Run anyway**.
-- **Upgrading from `job-scraper`:** fully stop every old `job-scraper` process
-  before the first normal `jobcron` launch. That launch atomically renames the
-  whole application-data directory to `jobcron`, keeping the database, SQLite
-  sidecar files, backups, and AI keys together.
-- If both the old and new application-data directories exist, `jobcron` refuses
-  to start and modifies neither. With both apps stopped, back up both directories,
-  determine which contains the current data, and move the other aside so only the
-  intended directory remains before retrying. To roll back, stop `jobcron`, confirm
-  no process has the database open, rename the `jobcron` directory back to
-  `job-scraper`, and then start the old binary.
+- **Upgrading from the legacy SQLite app:** fully stop it, preserve `jobs.db`,
+  its `-wal` sidecar, and the optional `ai_keys.json`, then follow the verified
+  import procedure in [deploy/local/README.md](deploy/local/README.md). Normal
+  startup never opens or moves the legacy database.
 
 Flags: `--port` (default `7777`), `--no-open` (do not open a browser),
-`--db` (override the database path), `--worknet-api-key` (enable the 워크넷
-source — a free key from [data.go.kr](https://www.data.go.kr); also read from
-`JOBCRON_WORKNET_KEY`), `--version`.
+`--worknet-api-key` (enable the 워크넷 source — a free key from
+[data.go.kr](https://www.data.go.kr); also read from `JOBCRON_WORKNET_KEY`),
+`--version`.
 
-Your data lives in one SQLite file under the OS config directory
-(`~/Library/Application Support/jobcron/` on macOS, `~/.config/jobcron/`
-on Linux, `%APPDATA%\jobcron\` on Windows).
+Writable application data lives in PostgreSQL. With no `DATABASE_URL`, ordinary
+local startup manages PostgreSQL 18 through Docker Compose and preserves it in
+the named `jobcron-postgres18-cluster` volume. Legacy SQLite is read only by the
+explicit `jobcron-import --sqlite` migration tool.
 
 ### Interactive localhost preview
 
@@ -188,19 +183,17 @@ with no CGO or Node.js runtime dependency.
 The managed local lifecycle uses Docker project `jobcron-local`, PostgreSQL 18
 at `postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable`, and the
 named volume `jobcron-postgres18-cluster`. Docker Engine, the `docker compose`
-plugin, and a running Docker daemon are required. The preview starts this service
-automatically; the same managed path becomes ordinary local startup after the
-Slice 4 verified SQLite import activates the final writable cutover.
+plugin, and a running Docker daemon are required. Both ordinary no-URL startup
+and the preview start or reuse this service automatically.
 
 ```sh
 scripts/preview-interactive.sh
 ```
 
 An explicit `DATABASE_URL` bypasses managed Docker startup and must point to a
-database with exactly one existing user. During Slice 3, an ordinary launch with
-no URL still uses the legacy SQLite path, and `--db` remains available. Do not
-treat PostgreSQL as the final writable cutover until Slice 4's importer has
-verified the SQLite migration.
+database with exactly one existing user. Managed local startup creates its fixed
+no-login owner only when the users table is empty, reuses one verified imported
+owner unchanged, and refuses ambiguous multi-user state.
 
 Compose health or container metadata alone is not enough: startup also requires
 real TCP reachability at `127.0.0.1:55432`. Failures preserve containers and

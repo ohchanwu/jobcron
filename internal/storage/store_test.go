@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/ai"
-	"github.com/ohchanwu/jobcron/internal/appdata"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
@@ -31,9 +30,9 @@ var requiredObjects = []string{
 // newTestStore opens a fresh, migrated database in a temp directory.
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	st, err := OpenAt(filepath.Join(t.TempDir(), "jobs.db"))
+	st, err := OpenSQLiteAt(filepath.Join(t.TempDir(), "jobs.db"))
 	if err != nil {
-		t.Fatalf("OpenAt: %v", err)
+		t.Fatalf("OpenSQLiteAt: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
 	return st
@@ -98,12 +97,12 @@ func assertPosting(t *testing.T, got, want scraper.Posting) {
 	}
 }
 
-func TestOpenAtAppliesSchema(t *testing.T) {
+func TestOpenSQLiteAtAppliesSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "jobs.db")
 
-	st, err := OpenAt(path)
+	st, err := OpenSQLiteAt(path)
 	if err != nil {
-		t.Fatalf("OpenAt: %v", err)
+		t.Fatalf("OpenSQLiteAt: %v", err)
 	}
 	for _, name := range requiredObjects {
 		var got string
@@ -118,10 +117,10 @@ func TestOpenAtAppliesSchema(t *testing.T) {
 	}
 }
 
-func TestOpenAtIsIdempotent(t *testing.T) {
+func TestOpenSQLiteAtIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "jobs.db")
 
-	st1, err := OpenAt(path)
+	st1, err := OpenSQLiteAt(path)
 	if err != nil {
 		t.Fatalf("first OpenAt: %v", err)
 	}
@@ -131,29 +130,17 @@ func TestOpenAtIsIdempotent(t *testing.T) {
 
 	// Re-opening an already-migrated database must succeed without
 	// re-applying migration 0001.
-	st2, err := OpenAt(path)
+	st2, err := OpenSQLiteAt(path)
 	if err != nil {
 		t.Fatalf("second OpenAt: %v", err)
 	}
 	defer st2.Close()
 }
 
-func TestOpenAtUsesSQLiteDialect(t *testing.T) {
+func TestOpenSQLiteAtUsesSQLiteDialect(t *testing.T) {
 	st := newTestStore(t)
 	if st.Dialect() != DialectSQLite {
 		t.Fatalf("Dialect = %v, want sqlite", st.Dialect())
-	}
-}
-
-func TestDefaultDBPathUsesCanonicalApplicationDirectory(t *testing.T) {
-	root := t.TempDir()
-	got, err := defaultDBPath(func() (string, error) { return root, nil })
-	if err != nil {
-		t.Fatalf("defaultDBPath: %v", err)
-	}
-	want := filepath.Join(appdata.Dir(root), "jobs.db")
-	if got != want {
-		t.Fatalf("defaultDBPath = %q, want %q", got, want)
 	}
 }
 
@@ -190,8 +177,8 @@ func TestOpenPostgresAppliesSchema(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version); err != nil && err != sql.ErrNoRows {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
-	if version != 15 {
-		t.Fatalf("schema version = %d, want 15", version)
+	if version != 16 {
+		t.Fatalf("schema version = %d, want 16", version)
 	}
 }
 

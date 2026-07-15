@@ -20,7 +20,6 @@ import (
 
 	"github.com/pkg/browser"
 
-	"github.com/ohchanwu/jobcron/internal/appdata"
 	"github.com/ohchanwu/jobcron/internal/config"
 	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/localdb"
@@ -64,28 +63,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("jobcron: %v", err)
 	}
+	if cfg.ShowHelp {
+		config.WriteHelp(os.Stdout)
+		return
+	}
 	if cfg.ShowVersion {
 		fmt.Println("jobcron", version)
 		return
 	}
-	configRoot, err := os.UserConfigDir()
+	resolved, err := resolvePostgresRuntime(context.Background(), cfg)
 	if err != nil {
-		log.Fatalf("jobcron: locate user config dir: %v", err)
-	}
-	if err := prepareApplicationData(configRoot); err != nil {
 		log.Fatalf("jobcron: %v", err)
 	}
-
-	var resolved runtimeStorage
-	var store *storage.Store
-	if cfg.UsesPostgresRuntime() {
-		resolved, err = resolvePostgresRuntime(context.Background(), cfg)
-		if err == nil {
-			store, err = openPostgresRuntime(resolved)
-		}
-	} else {
-		store, err = openConfiguredStore(cfg)
-	}
+	store, err := openPostgresRuntime(resolved)
 	if err != nil {
 		log.Fatalf("jobcron: %v", err)
 	}
@@ -109,23 +99,13 @@ func main() {
 			"(점핏·랠릿·데모데이·그리팅·당근·크래프톤·몰로코·센드버드는 켜져 있어요).",
 			"워크넷도 보려면 --worknet-api-key 플래그나 JOBCRON_WORKNET_KEY 환경변수를 설정하세요.")
 	}
-	var srv *server.Server
-	if resolved.UserID > 0 {
-		srv = server.NewForLocalUser(store, resolved.UserID, sources...)
-	} else {
-		srv = server.New(store, sources...)
-	}
+	srv := server.NewForLocalUser(store, resolved.UserID, sources...)
 	srv.SetSessionSecret(cfg.SessionSecret)
 	srv.SetDemoMode(cfg.Demo)
 	srv.SetProductionMode(cfg.Production)
 	srv.SetAdminToken(cfg.AdminToken)
 	srv.SetProxySecret(cfg.ProxySecret)
-	var credentialCipher credential.Cipher
-	if cfg.UsesPostgresRuntime() {
-		credentialCipher, err = credentialCipherForRuntime(resolved)
-	} else {
-		credentialCipher, err = credentialCipherForConfig(cfg)
-	}
+	credentialCipher, err := credentialCipherForRuntime(resolved)
 	if err != nil {
 		log.Fatalf("jobcron: credential encryption: %v", err)
 	}
@@ -184,30 +164,12 @@ func main() {
 	}
 }
 
-func credentialCipherForConfig(cfg config.Config) (credential.Cipher, error) {
-	masterKey := append([]byte(nil), cfg.CredentialEncryptionKey...)
-	if len(masterKey) == 0 {
-		if cfg.Production {
-			return nil, fmt.Errorf("JOBCRON_CREDENTIAL_ENCRYPTION_KEY is required in production")
-		}
-		var err error
-		masterKey, err = credential.LoadOrCreateLocalMasterKey()
-		if err != nil {
-			return nil, err
-		}
-	}
-	cipher, err := credential.NewAESGCMCipher(masterKey)
-	if err != nil {
-		return nil, err
-	}
-	return cipher, nil
-}
-
 func credentialCipherForRuntime(runtime runtimeStorage) (credential.Cipher, error) {
 	return credential.NewAESGCMCipher(runtime.CredentialEncryptionKey)
 }
 
 func resolvePostgresRuntime(ctx context.Context, cfg config.Config) (resolved runtimeStorage, retErr error) {
+	var masterKey []byte
 	if cfg.Production {
 		if cfg.DatabaseURL == "" {
 			return runtimeStorage{}, fmt.Errorf("production requires DATABASE_URL")
@@ -215,26 +177,23 @@ func resolvePostgresRuntime(ctx context.Context, cfg config.Config) (resolved ru
 		if len(cfg.CredentialEncryptionKey) != credential.MasterKeyBytes {
 			return runtimeStorage{}, fmt.Errorf("production requires JOBCRON_CREDENTIAL_ENCRYPTION_KEY with exactly %d decoded bytes", credential.MasterKeyBytes)
 		}
-		return runtimeStorage{
-			DatabaseURL:             cfg.DatabaseURL,
-			CredentialEncryptionKey: append([]byte(nil), cfg.CredentialEncryptionKey...),
-		}, nil
-	}
-
-	masterKey := append([]byte(nil), cfg.CredentialEncryptionKey...)
-	if len(masterKey) == 0 {
-		var err error
-		masterKey, err = loadLocalMasterKey()
-		if err != nil {
-			return runtimeStorage{}, fmt.Errorf("load protected local master key: %w", err)
+		masterKey = append([]byte(nil), cfg.CredentialEncryptionKey...)
+	} else {
+		masterKey = append([]byte(nil), cfg.CredentialEncryptionKey...)
+		if len(masterKey) == 0 {
+			var err error
+			masterKey, err = loadLocalMasterKey()
+			if err != nil {
+				return runtimeStorage{}, fmt.Errorf("load protected local master key: %w", err)
+			}
 		}
-	}
-	if len(masterKey) != credential.MasterKeyBytes {
-		return runtimeStorage{}, fmt.Errorf("local credential master key must be exactly %d bytes", credential.MasterKeyBytes)
+		if len(masterKey) != credential.MasterKeyBytes {
+			return runtimeStorage{}, fmt.Errorf("local credential master key must be exactly %d bytes", credential.MasterKeyBytes)
+		}
 	}
 
 	databaseURL := cfg.DatabaseURL
-	managedLocal := databaseURL == ""
+	managedLocal := !cfg.Production && databaseURL == ""
 	if managedLocal {
 		var err error
 		databaseURL, err = ensureLocalPostgres(ctx)
@@ -286,20 +245,13 @@ func openPostgresRuntime(runtime runtimeStorage) (*storage.Store, error) {
 	return storage.OpenPostgres(runtime.DatabaseURL)
 }
 
-// openConfiguredStore opens the database from DATABASE_URL in production, or
-// from the local DB path/default location outside production.
+// openConfiguredStore is retained as a narrow test seam. Runtime resolution
+// supplies either an explicit or managed-local PostgreSQL URL before opening.
 func openConfiguredStore(cfg config.Config) (*storage.Store, error) {
-	if cfg.DatabaseURL != "" {
-		return storage.OpenPostgres(cfg.DatabaseURL)
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("PostgreSQL runtime requires a database URL")
 	}
-	if cfg.DBPath != "" {
-		return storage.OpenAt(cfg.DBPath)
-	}
-	return storage.Open()
-}
-
-func prepareApplicationData(configRoot string) error {
-	return appdata.Prepare(configRoot)
+	return storage.OpenPostgres(cfg.DatabaseURL)
 }
 
 // listen binds host on the preferred port, falling back to the next ten

@@ -1,3 +1,4 @@
-// Package storage is the persistence layer: a single concrete *Store backed
-// by SQLite (modernc.org/sqlite), with embedded SQL migrations.
+// Package storage implements jobcron's PostgreSQL persistence layer. Explicit
+// legacy-import and compatibility fixtures may open SQLite through
+// OpenSQLiteAt; normal application startup never does.
 package storage

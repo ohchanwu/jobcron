@@ -3,6 +3,7 @@ package config_test
 import (
 	"bytes"
 	"encoding/base64"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -127,25 +128,6 @@ func TestLoadDefaultsSchedulerOffOutsideProduction(t *testing.T) {
 	}
 }
 
-func TestUsesPostgresRuntimeOnlyForProductionOrExplicitURL(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  config.Config
-		want bool
-	}{
-		{name: "ordinary local remains inactive until Slice 4", cfg: config.Config{}, want: false},
-		{name: "explicit URL", cfg: config.Config{DatabaseURL: "postgres://db.example.invalid/jobcron"}, want: true},
-		{name: "production", cfg: config.Config{Production: true}, want: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.cfg.UsesPostgresRuntime(); got != tt.want {
-				t.Fatalf("UsesPostgresRuntime() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestLoadUsesExplicitDefaults(t *testing.T) {
 	cfg, err := config.Load(nil, map[string]string{})
 	if err != nil {
@@ -224,7 +206,6 @@ func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 		"--port", "8888",
 		"--no-open",
 		"--demo=false",
-		"--db", "/tmp/jobs.db",
 		"--worknet-api-key", "flag-key",
 	}, env)
 	if err != nil {
@@ -242,14 +223,53 @@ func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	if cfg.Demo {
 		t.Fatal("Demo = true, want false")
 	}
-	if cfg.DBPath != "/tmp/jobs.db" {
-		t.Fatalf("DBPath = %q, want /tmp/jobs.db", cfg.DBPath)
-	}
 	if cfg.ProxySecret != "proxy-secret" {
 		t.Fatalf("ProxySecret = %q, want proxy-secret", cfg.ProxySecret)
 	}
 	if cfg.WorknetKey != "flag-key" {
 		t.Fatalf("WorknetKey = %q, want flag-key", cfg.WorknetKey)
+	}
+}
+
+func TestLoadRejectsDBFlag(t *testing.T) {
+	_, err := config.Load([]string{"--db", "/tmp/legacy.db"}, map[string]string{})
+	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined") {
+		t.Fatalf("Load --db error = %v, want unknown-flag refusal", err)
+	}
+}
+
+func TestHelpListsRegisteredFlagsAndExcludesDB(t *testing.T) {
+	cfg, err := config.Load([]string{"--help"}, map[string]string{"JOBCRON_ENV": "production"})
+	if err != nil {
+		t.Fatalf("Load --help: %v", err)
+	}
+	if !cfg.ShowHelp {
+		t.Fatal("ShowHelp = false")
+	}
+	var out bytes.Buffer
+	config.WriteHelp(&out)
+	help := out.String()
+	for _, want := range []string{"Usage: jobcron [flags]", "-port", "-no-open", "-worknet-api-key", "-version"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("help missing %q:\n%s", want, help)
+		}
+	}
+	if strings.Contains(help, "-db") {
+		t.Fatalf("help advertises removed database flag:\n%s", help)
+	}
+}
+
+func TestLoadIgnoresNoLegacyDatabaseEnvironment(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{"JOBCRON_DB": "/tmp/legacy.db"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline, err := config.Load(nil, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(cfg, baseline) {
+		t.Fatalf("JOBCRON_DB changed config: got %+v, baseline %+v", cfg, baseline)
 	}
 }
 

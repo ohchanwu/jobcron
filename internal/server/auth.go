@@ -78,7 +78,13 @@ func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error
 		return s.localUserID, nil
 	}
 	if s.demoMode {
-		return 0, nil
+		if s.store.Dialect() == storage.DialectSQLite {
+			return 0, nil
+		}
+		if s.localUserID <= 0 {
+			return 0, fmt.Errorf("server: production PostgreSQL demo requires a positive resolved user ID")
+		}
+		return s.localUserID, nil
 	}
 	userID, ok := s.userFromRequest(ctx, r)
 	if !ok {

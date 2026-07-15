@@ -10,8 +10,7 @@ import (
 	"strconv"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // pure-Go PostgreSQL driver, registered as "pgx"
-	"github.com/ohchanwu/jobcron/internal/appdata"
-	_ "modernc.org/sqlite" // pure-Go SQLite driver, registered as "sqlite"
+	_ "modernc.org/sqlite"             // pure-Go SQLite driver, registered as "sqlite"
 )
 
 //go:embed migrations/*.sql
@@ -27,24 +26,10 @@ type Store struct {
 	dialect Dialect
 }
 
-// Open opens (creating if needed) the jobcron database under the user's
-// OS config directory and applies any pending migrations.
-func Open() (*Store, error) {
-	path, err := DefaultDBPath()
-	if err != nil {
-		return nil, err
-	}
-	return OpenAt(path)
-}
-
-// OpenSQLiteAt opens a SQLite database at an explicit path.
+// OpenSQLiteAt opens an explicit legacy SQLite source for the one-time importer
+// and isolated compatibility fixtures. Normal application startup never calls
+// this function.
 func OpenSQLiteAt(path string) (*Store, error) {
-	return OpenAt(path)
-}
-
-// OpenAt opens the database at an explicit path — creating the parent
-// directory and the file if needed — and applies any pending migrations.
-func OpenAt(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("storage: create db directory: %w", err)
 	}
@@ -88,20 +73,6 @@ func (s *Store) Dialect() Dialect { return s.dialect }
 // SQLDB returns the underlying database handle for command-line maintenance
 // tools that need table-level operations outside the app's runtime methods.
 func (s *Store) SQLDB() *sql.DB { return s.db }
-
-// DefaultDBPath is the database path under the user's OS config directory,
-// e.g. ~/Library/Application Support/jobcron/jobs.db on macOS.
-func DefaultDBPath() (string, error) {
-	return defaultDBPath(os.UserConfigDir)
-}
-
-func defaultDBPath(userConfigDir func() (string, error)) (string, error) {
-	root, err := userConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("storage: locate user config dir: %w", err)
-	}
-	return filepath.Join(appdata.Dir(root), "jobs.db"), nil
-}
 
 // migrate applies every embedded migration whose version is newer than the
 // database's current PRAGMA user_version, in ascending order. Each migration

@@ -34,15 +34,8 @@ type Config struct {
 	StrictPort              bool
 	NoOpen                  bool
 	Demo                    bool
-	DBPath                  string
+	ShowHelp                bool
 	ShowVersion             bool
-}
-
-// UsesPostgresRuntime reports whether the current Slice 3 startup path should
-// resolve PostgreSQL now. Ordinary no-URL local startup remains on the legacy
-// SQLite path until Slice 4 activates the managed database after import.
-func (c Config) UsesPostgresRuntime() bool {
-	return c.Production || c.DatabaseURL != ""
 }
 
 // Load parses jobcron configuration. Existing CLI flags override matching
@@ -63,7 +56,6 @@ func Load(args []string, env map[string]string) (Config, error) {
 		StrictPort:       envBool(envValue(env, "JOBCRON_STRICT_PORT")),
 		NoOpen:           envBool(envValue(env, "JOBCRON_NO_OPEN")),
 		Demo:             envBool(envValue(env, "JOBCRON_DEMO")),
-		DBPath:           envValue(env, "JOBCRON_DB"),
 	}
 	if v := envValue(env, "JOBCRON_PORT"); v != "" {
 		port, err := strconv.Atoi(v)
@@ -73,20 +65,11 @@ func Load(args []string, env map[string]string) (Config, error) {
 		cfg.Port = port
 	}
 
-	fs := flag.NewFlagSet("jobcron", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.IntVar(&cfg.Port, "port", cfg.Port, "preferred port; the next ten are tried if it is busy")
-	fs.StringVar(&cfg.Host, "host", cfg.Host, "host/interface to bind")
-	fs.BoolVar(&cfg.NoOpen, "no-open", cfg.NoOpen, "do not open a browser window on startup")
-	fs.BoolVar(&cfg.Demo, "demo", cfg.Demo, "run in read-only public demo mode")
-	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "database file path (default: under the OS config dir)")
-	fs.StringVar(&cfg.WorknetKey, "worknet-api-key", cfg.WorknetKey,
-		"워크넷 OpenAPI key (free at data.go.kr). Disables the 워크넷 source when empty.")
-	fs.BoolVar(&cfg.ShowVersion, "version", cfg.ShowVersion, "print the version and exit")
+	fs := newFlagSet(&cfg, io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
-	if cfg.ShowVersion {
+	if cfg.ShowHelp || cfg.ShowVersion {
 		return cfg, nil
 	}
 	if encodedCredentialEncryptionKey != "" {
@@ -109,6 +92,30 @@ func Load(args []string, env map[string]string) (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func newFlagSet(cfg *Config, output io.Writer) *flag.FlagSet {
+	fs := flag.NewFlagSet("jobcron", flag.ContinueOnError)
+	fs.SetOutput(output)
+	fs.IntVar(&cfg.Port, "port", cfg.Port, "preferred port; the next ten are tried if it is busy")
+	fs.StringVar(&cfg.Host, "host", cfg.Host, "host/interface to bind")
+	fs.BoolVar(&cfg.NoOpen, "no-open", cfg.NoOpen, "do not open a browser window on startup")
+	fs.BoolVar(&cfg.Demo, "demo", cfg.Demo, "run in read-only public demo mode")
+	fs.StringVar(&cfg.WorknetKey, "worknet-api-key", cfg.WorknetKey,
+		"워크넷 OpenAPI key (free at data.go.kr). Disables the 워크넷 source when empty.")
+	fs.BoolVar(&cfg.ShowHelp, "help", false, "print this help and exit")
+	fs.BoolVar(&cfg.ShowHelp, "h", false, "print this help and exit")
+	fs.BoolVar(&cfg.ShowVersion, "version", cfg.ShowVersion, "print the version and exit")
+	return fs
+}
+
+// WriteHelp prints the real registered command flags without resolving any
+// runtime dependencies.
+func WriteHelp(w io.Writer) {
+	cfg := Config{Host: defaultHost, Port: defaultPort, DailyScrapeTime: defaultDailyScrapeTime}
+	fs := newFlagSet(&cfg, w)
+	fmt.Fprintln(w, "Usage: jobcron [flags]")
+	fs.PrintDefaults()
 }
 
 func envValue(env map[string]string, name string) string {

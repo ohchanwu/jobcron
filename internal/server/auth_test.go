@@ -137,6 +137,22 @@ func TestNonProductionPostgresDemoUsesInjectedPositiveUser(t *testing.T) {
 	}
 }
 
+func TestProductionPostgresDemoUsesResolvedPositiveOwner(t *testing.T) {
+	_, st := newPostgresTestServer(t, &fakeScraper{})
+	const resolvedOwnerID int64 = 83
+	srv := NewForLocalUser(st, resolvedOwnerID, &fakeScraper{})
+	srv.SetProductionMode(true)
+	srv.SetDemoMode(true)
+
+	got, err := srv.stateUserID(context.Background(), httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("stateUserID: %v", err)
+	}
+	if got != resolvedOwnerID {
+		t.Fatalf("production PostgreSQL demo stateUserID = %d, want %d", got, resolvedOwnerID)
+	}
+}
+
 func TestNonProductionPostgresDemoRefusesNonpositiveLocalUser(t *testing.T) {
 	_, st := newPostgresTestServer(t, &fakeScraper{})
 	for _, localUserID := range []int64{0, -1} {
