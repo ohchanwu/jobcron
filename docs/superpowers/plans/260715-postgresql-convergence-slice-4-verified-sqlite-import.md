@@ -389,7 +389,9 @@ func TestOpenConfiguredStoreAlwaysUsesPostgres(t *testing.T)
 func TestNormalLocalStartupDoesNotCreateSQLite(t *testing.T)
 func TestExplicitDatabaseURLNeverInvokesDocker(t *testing.T)
 func TestManagedLocalStartupUsesStablePositiveUserID(t *testing.T)
+func TestManagedLocalStartupReusesImportedOwner(t *testing.T)
 func TestExplicitURLRefusesAmbiguousUsers(t *testing.T)
+func TestManagedLocalStartupRequiresHostTCPReachability(t *testing.T)
 ```
 
 Use a temporary OS config root and assert no `jobs.db`, SQLite journal, WAL, or
@@ -403,8 +405,24 @@ Delete `Config.DBPath`, the `--db` flag, `JOBCRON_DB` handling,
 fixtures. Stop moving or preparing legacy application data during normal app
 startup. Activate Slice 3's `resolvePostgresRuntime` for the ordinary no-URL
 local launch in this same commit and pass its positive local owner ID into the
-server. The managed helper may create only the fixed synthetic local owner; an
-explicit URL must already contain exactly one user.
+server. For the fixed managed database, inspect `users` after migrations: create
+the fixed synthetic local owner only when the table is empty; reuse one existing
+positive owner unchanged (especially the verified imported owner); and refuse
+multiple users. An explicit URL must already contain exactly one user and may
+never create one.
+
+The managed startup gate must prove a real host TCP connection to
+`127.0.0.1:55432`; Compose health, container labels, or Docker `HostConfig` are
+not sufficient. Preserve state and print actionable `ps` and `logs postgres`
+diagnostics on failure. The startup helper itself must never run `down`, remove
+or recreate a container, or remove a volume.
+
+If the first Compose create ran while `55432` was occupied, the canonical
+`jobcron-local-postgres-1` container may exist without a usable published port.
+After the port is free, the documented operator remediation must recreate only
+`jobcron-local-postgres-1`. It must preserve the older `local-postgres-1`
+container, `jobscraper-postgres18-cluster`, and
+`jobcron-postgres18-cluster`.
 
 After this cutover, no PostgreSQL-backed `Server` path may use the transitional
 `userID == 0` SQLite compatibility branch. Keep that branch reachable only from
@@ -415,7 +433,10 @@ the importer's legacy-source storage path until its fixtures no longer need it.
 English and Korean docs must state that PostgreSQL is the writable database,
 ordinary local startup manages PostgreSQL 18, and legacy SQLite is accepted
 only by `jobcron-import --sqlite`. Remove instructions that describe SQLite as
-the fallback or preview backend.
+the fallback or preview backend. Keep the preview lifecycle accurate: an atomic
+per-user/per-port lock, unrelated-listener refusal, a unique disposable database
+and key, non-production mode with scheduling disabled, exact manual cleanup when
+`JOBCRON_PREVIEW_KEEP=1`, and no shared Compose `down`.
 
 - [ ] **Step 4: Run runtime and documentation checks**
 

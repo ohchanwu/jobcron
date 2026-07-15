@@ -161,11 +161,15 @@ on Linux, `%APPDATA%\jobcron\` on Windows).
 
 Run `scripts/preview-interactive.sh [port]` (default `17778`) to try the normal,
 writable app at `http://127.0.0.1:17778` without touching your usual app data.
-The preview uses a temporary home directory and SQLite database, so you can edit
-a profile, run real scrapes, and test an Anthropic API key. The key is written
-only inside that temporary preview directory, which is removed when the launcher
-exits. Set `JOBCRON_PREVIEW_KEEP=1` to keep the printed state directory for
-inspection.
+The launcher takes an atomic lock scoped to your user and HTTP port, refuses an
+unrelated listener, and starts the shared `jobcron-local` PostgreSQL service. It
+then creates a unique disposable database, private state directory, and
+encryption key. The preview runs in non-production mode with scheduling disabled.
+
+On exit it drops only that preview database and removes its private state; it
+never runs Compose `down` against the shared service. Set
+`JOBCRON_PREVIEW_KEEP=1` to retain both and print their exact manual cleanup
+commands. Use those commands instead of bringing down the shared Compose project.
 
 ### Build from source
 
@@ -181,17 +185,29 @@ with no CGO or Node.js runtime dependency.
 
 ### Local PostgreSQL development
 
-For production-app development, run the app against local PostgreSQL 18:
+The managed local lifecycle uses Docker project `jobcron-local`, PostgreSQL 18
+at `postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable`, and the
+named volume `jobcron-postgres18-cluster`. Docker Engine, the `docker compose`
+plugin, and a running Docker daemon are required. The preview starts this service
+automatically; the same managed path becomes ordinary local startup after the
+Slice 4 verified SQLite import activates the final writable cutover.
 
 ```sh
-docker compose -f deploy/local/compose.yaml up -d
-DATABASE_URL='postgres://postgres@localhost:55432/jobcron_dev?sslmode=disable' go run ./cmd/jobcron --no-open
+scripts/preview-interactive.sh
 ```
 
-When `DATABASE_URL` is set, jobcron opens PostgreSQL and applies the embedded
-PostgreSQL migrations. If `DATABASE_URL` is absent, the app still uses its legacy
-local SQLite database so release binaries and demo commands continue to work.
-More local PostgreSQL commands live in [deploy/local/README.md](deploy/local/README.md).
+An explicit `DATABASE_URL` bypasses managed Docker startup and must point to a
+database with exactly one existing user. During Slice 3, an ordinary launch with
+no URL still uses the legacy SQLite path, and `--db` remains available. Do not
+treat PostgreSQL as the final writable cutover until Slice 4's importer has
+verified the SQLite migration.
+
+Compose health or container metadata alone is not enough: startup also requires
+real TCP reachability at `127.0.0.1:55432`. Failures preserve containers and
+volumes and print `ps` and `logs postgres` diagnostics; startup never removes
+state automatically. Ordinary app shutdown also leaves PostgreSQL running.
+Explicit stop, reset, and narrowly scoped malformed-container recovery commands
+live in [deploy/local/README.md](deploy/local/README.md).
 
 ## Contributing
 

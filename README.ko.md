@@ -160,10 +160,15 @@ Windows는 `%APPDATA%\jobcron\`).
 
 `scripts/preview-interactive.sh [포트]`를 실행하면(기본값 `17778`) 평소 앱 데이터를
 건드리지 않고 `http://127.0.0.1:17778`에서 쓰기 가능한 일반 모드를 시험할 수
-있습니다. 미리보기는 임시 홈 디렉터리와 SQLite 데이터베이스를 사용하므로 프로필
-수정, 실제 스크랩, Anthropic API 키 설정을 안전하게 시험할 수 있습니다. 키는 임시
-미리보기 디렉터리에만 저장되며 실행기가 끝나면 함께 삭제됩니다. 출력된 상태
-디렉터리를 점검하려면 `JOBCRON_PREVIEW_KEEP=1`로 실행하세요.
+있습니다. 실행기는 사용자와 HTTP 포트별 원자적 잠금을 잡고, 관련 없는 리스너가 있으면
+실행을 거부한 뒤 공유 `jobcron-local` PostgreSQL 서비스를 시작합니다. 그다음 고유한
+일회용 데이터베이스, 비공개 상태 디렉터리, 암호화 키를 만듭니다. 미리보기는
+비프로덕션 모드이며 스케줄러가 꺼져 있습니다.
+
+종료할 때는 해당 미리보기 데이터베이스와 비공개 상태만 제거하며, 공유 서비스에
+Compose `down`을 실행하지 않습니다. `JOBCRON_PREVIEW_KEEP=1`을 설정하면 둘 다
+보존하고 정확한 수동 정리 명령을 출력합니다. 공유 Compose 프로젝트를 내리지 말고
+출력된 명령을 사용하세요.
 
 ### 소스에서 빌드하기 (Build from source)
 
@@ -179,17 +184,28 @@ CGO나 Node.js 런타임에 의존하지 않습니다.
 
 ### 로컬 PostgreSQL 개발
 
-프로덕션 앱을 개발할 때는 로컬 PostgreSQL 18에 연결해 실행할 수 있습니다.
+관리형 로컬 생명주기는 Docker 프로젝트 `jobcron-local`,
+`postgres://postgres@127.0.0.1:55432/jobcron_dev?sslmode=disable`의 PostgreSQL 18,
+이름이 고정된 볼륨 `jobcron-postgres18-cluster`를 사용합니다. Docker Engine,
+`docker compose` 플러그인, 실행 중인 Docker 데몬이 필요합니다. 미리보기는 이 서비스를
+자동으로 시작하며, Slice 4의 검증된 SQLite 가져오기가 최종 쓰기 전환을 활성화한 뒤에는
+같은 관리형 경로가 일반 로컬 시작 경로가 됩니다.
 
 ```sh
-docker compose -f deploy/local/compose.yaml up -d
-DATABASE_URL='postgres://postgres@localhost:55432/jobcron_dev?sslmode=disable' go run ./cmd/jobcron --no-open
+scripts/preview-interactive.sh
 ```
 
-`DATABASE_URL`이 설정되면 jobcron은 PostgreSQL을 열고 내장된 PostgreSQL
-마이그레이션을 적용합니다. 설정하지 않으면 릴리스 바이너리와 데모 명령이 계속
-동작하도록 기존 로컬 SQLite 데이터베이스를 사용합니다. 더 많은 로컬 PostgreSQL
-명령은 [deploy/local/README.md](deploy/local/README.md)에 있습니다.
+명시적 `DATABASE_URL`을 설정하면 관리형 Docker 시작을 건너뛰며, 대상 데이터베이스에는
+기존 사용자가 정확히 한 명 있어야 합니다. Slice 3에서는 URL 없는 일반 실행이 아직
+기존 SQLite 경로를 사용하고 `--db`도 유지됩니다. Slice 4 가져오기 도구가 SQLite
+마이그레이션을 검증하기 전에는 PostgreSQL 최종 쓰기 전환이 완료되었다고 간주하지 마세요.
+
+Compose 상태 검사나 컨테이너 메타데이터만으로는 충분하지 않습니다. 시작하려면
+`127.0.0.1:55432`에 실제 TCP로 연결할 수 있어야 합니다. 실패하면 컨테이너와 볼륨을
+보존하고 `ps` 및 `logs postgres` 진단 명령을 출력하며, 시작 경로는 상태를 자동으로
+삭제하지 않습니다. 앱을 일반적으로 종료해도 PostgreSQL은 계속 실행됩니다. 명시적 중지,
+초기화, 범위를 좁힌 잘못 생성된 컨테이너 복구 명령은
+[deploy/local/README.md](deploy/local/README.md)에 있습니다.
 
 ## 기여하기 (Contributing)
 
