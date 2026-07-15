@@ -2,7 +2,12 @@ package storage
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
@@ -29,6 +34,284 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 		if err != nil || !exists {
 			t.Fatalf("table %s exists=%v err=%v", table, exists, err)
 		}
+	}
+}
+
+func TestUserScopedAIMigrationAssignsGlobalRowsToSoleOwner(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 14)
+	ctx := context.Background()
+	userID := insertMigrationTestUser(t, st, "sole-owner@example.invalid")
+	postingID := insertMigrationTestPosting(t, st, "sole-owner")
+	computedAt := time.Date(2026, 7, 15, 1, 2, 3, 456000000, time.UTC)
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO ai_scores (posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
+VALUES ($1, $2, $3, $4, $5, $6)`, postingID, "input-hash", "model-v1", `[{"signal":"stack","delta":7}]`, 7, computedAt); err != nil {
+		t.Fatalf("seed ai score: %v", err)
+	}
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO ai_usage (day, input_tokens, output_tokens)
+VALUES ('2026-07-15', 1234, 321)`); err != nil {
+		t.Fatalf("seed ai usage: %v", err)
+	}
+
+	if err := applyPostgresMigrationVersion(st.db, 15); err != nil {
+		t.Fatalf("apply migration 0015: %v", err)
+	}
+
+	var gotUserID, gotPostingID int64
+	var gotHash, gotVersion, gotItems string
+	var gotDelta int
+	var gotComputedAt time.Time
+	if err := st.db.QueryRowContext(ctx, `
+SELECT user_id, posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at
+  FROM ai_scores`).Scan(&gotUserID, &gotPostingID, &gotHash, &gotVersion, &gotItems, &gotDelta, &gotComputedAt); err != nil {
+		t.Fatalf("read migrated ai score: %v", err)
+	}
+	if gotUserID != userID || gotPostingID != postingID || gotHash != "input-hash" ||
+		gotVersion != "model-v1" || gotItems != `[{"signal":"stack","delta":7}]` ||
+		gotDelta != 7 || !gotComputedAt.Equal(computedAt) {
+		t.Fatalf("migrated ai score = user=%d posting=%d hash=%q version=%q items=%q delta=%d computed=%s",
+			gotUserID, gotPostingID, gotHash, gotVersion, gotItems, gotDelta, gotComputedAt)
+	}
+
+	var gotUsageUserID int64
+	var gotDay string
+	var gotInput, gotOutput int64
+	if err := st.db.QueryRowContext(ctx, `
+SELECT user_id, day::text, input_tokens, output_tokens
+  FROM ai_usage`).Scan(&gotUsageUserID, &gotDay, &gotInput, &gotOutput); err != nil {
+		t.Fatalf("read migrated ai usage: %v", err)
+	}
+	if gotUsageUserID != userID || gotDay != "2026-07-15" || gotInput != 1234 || gotOutput != 321 {
+		t.Fatalf("migrated ai usage = user=%d day=%q input=%d output=%d",
+			gotUsageUserID, gotDay, gotInput, gotOutput)
+	}
+	assertMigrationVersionRecorded(t, st, 15, true)
+}
+
+func TestUserScopedAIMigrationRejectsRowsWithNoOwner(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 14)
+	postingID := insertMigrationTestPosting(t, st, "no-owner")
+	seedLegacyMigrationScore(t, st, postingID)
+
+	err := applyPostgresMigrationVersion(st.db, 15)
+	if err == nil {
+		t.Fatal("migration 0015 succeeded with legacy AI rows and no owner")
+	}
+	assertLegacyMigrationStateIntact(t, st, postingID)
+	assertMigrationVersionRecorded(t, st, 15, false)
+}
+
+func TestUserScopedAIMigrationRejectsRowsWithMultipleOwners(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 14)
+	insertMigrationTestUser(t, st, "first-owner@example.invalid")
+	insertMigrationTestUser(t, st, "second-owner@example.invalid")
+	postingID := insertMigrationTestPosting(t, st, "multiple-owners")
+	seedLegacyMigrationScore(t, st, postingID)
+
+	err := applyPostgresMigrationVersion(st.db, 15)
+	if err == nil {
+		t.Fatal("migration 0015 succeeded with legacy AI rows and multiple owners")
+	}
+	assertLegacyMigrationStateIntact(t, st, postingID)
+	assertMigrationVersionRecorded(t, st, 15, false)
+}
+
+func TestUserScopedAIMigrationAllowsEmptyTablesWithoutOwner(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 14)
+
+	if err := applyPostgresMigrationVersion(st.db, 15); err != nil {
+		t.Fatalf("apply migration 0015 to empty database: %v", err)
+	}
+
+	for _, table := range []string{"ai_scores", "ai_usage"} {
+		var count int
+		if err := st.db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&count); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("%s row count = %d, want 0", table, count)
+		}
+		var hasUserID bool
+		if err := st.db.QueryRow(`
+SELECT EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = current_schema()
+       AND table_name = $1
+       AND column_name = 'user_id'
+)`, table).Scan(&hasUserID); err != nil {
+			t.Fatalf("inspect %s.user_id: %v", table, err)
+		}
+		if !hasUserID {
+			t.Fatalf("%s.user_id is missing", table)
+		}
+	}
+	assertMigrationVersionRecorded(t, st, 15, true)
+}
+
+func newPostgresTestStoreThroughMigration(t *testing.T, maxVersion int) *Store {
+	t.Helper()
+	databaseURL := os.Getenv("JOBCRON_TEST_POSTGRES_URL")
+	if databaseURL == "" {
+		t.Skip("JOBCRON_TEST_POSTGRES_URL not set")
+	}
+	schema := postgresTestSchemaName(t)
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open postgres admin: %v", err)
+	}
+	if _, err := admin.Exec(`CREATE SCHEMA ` + schema); err != nil {
+		admin.Close()
+		t.Fatalf("create postgres test schema %s: %v", schema, err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.Exec(`DROP SCHEMA IF EXISTS ` + schema + ` CASCADE`)
+		_ = admin.Close()
+	})
+
+	db, err := sql.Open("pgx", databaseURLWithSearchPath(databaseURL, schema))
+	if err != nil {
+		t.Fatalf("open postgres test store: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`
+CREATE TABLE schema_migrations (
+    version    integer PRIMARY KEY,
+    applied_at timestamptz NOT NULL DEFAULT now()
+)`); err != nil {
+		t.Fatalf("create schema_migrations: %v", err)
+	}
+	entries, err := postgresMigrationsFS.ReadDir("postgres_migrations")
+	if err != nil {
+		t.Fatalf("read postgres migrations: %v", err)
+	}
+	for _, entry := range entries {
+		version, err := strconv.Atoi(entry.Name()[:4])
+		if err != nil {
+			t.Fatalf("parse migration version %q: %v", entry.Name(), err)
+		}
+		if version > maxVersion {
+			continue
+		}
+		if err := applyPostgresMigrationVersion(db, version); err != nil {
+			t.Fatalf("apply migration %04d: %v", version, err)
+		}
+	}
+	return &Store{db: db, dialect: DialectPostgres}
+}
+
+func applyPostgresMigrationVersion(db *sql.DB, version int) error {
+	entries, err := postgresMigrationsFS.ReadDir("postgres_migrations")
+	if err != nil {
+		return err
+	}
+	var name string
+	for _, entry := range entries {
+		got, err := strconv.Atoi(entry.Name()[:4])
+		if err != nil {
+			return err
+		}
+		if got == version {
+			name = entry.Name()
+			break
+		}
+	}
+	if name == "" {
+		return fmt.Errorf("postgres migration %04d does not exist", version)
+	}
+	sqlBytes, err := postgresMigrationsFS.ReadFile("postgres_migrations/" + name)
+	if err != nil {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(string(sqlBytes)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO schema_migrations (version, applied_at) VALUES ($1, now())`, version); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func insertMigrationTestUser(t *testing.T, st *Store, email string) int64 {
+	t.Helper()
+	var userID int64
+	if err := st.db.QueryRow(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES ($1, 'synthetic-password-hash', now(), now())
+RETURNING id`, email).Scan(&userID); err != nil {
+		t.Fatalf("insert migration test user: %v", err)
+	}
+	return userID
+}
+
+func insertMigrationTestPosting(t *testing.T, st *Store, suffix string) int64 {
+	t.Helper()
+	posting := samplePosting()
+	posting.SourcePostingID = "migration-0015-" + suffix
+	posting.ID = 0
+	id, _, err := st.UpsertPosting(context.Background(), posting)
+	if err != nil {
+		t.Fatalf("insert migration test posting: %v", err)
+	}
+	return id
+}
+
+func seedLegacyMigrationScore(t *testing.T, st *Store, postingID int64) {
+	t.Helper()
+	if _, err := st.db.Exec(`
+INSERT INTO ai_scores (posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)
+VALUES ($1, 'legacy-hash', 'legacy-version', '[{"signal":"legacy","delta":-3}]', -3,
+        '2026-07-15T04:05:06Z')`, postingID); err != nil {
+		t.Fatalf("seed legacy ai score: %v", err)
+	}
+	if _, err := st.db.Exec(`
+INSERT INTO ai_usage (day, input_tokens, output_tokens)
+VALUES ('2026-07-15', 99, 11)`); err != nil {
+		t.Fatalf("seed legacy ai usage: %v", err)
+	}
+}
+
+func assertLegacyMigrationStateIntact(t *testing.T, st *Store, postingID int64) {
+	t.Helper()
+	var gotPostingID int64
+	var gotHash, gotVersion, gotItems string
+	var gotDelta int
+	var gotComputedAt time.Time
+	if err := st.db.QueryRow(`
+SELECT posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at
+  FROM ai_scores`).Scan(&gotPostingID, &gotHash, &gotVersion, &gotItems, &gotDelta, &gotComputedAt); err != nil {
+		t.Fatalf("read legacy ai score after rejected migration: %v", err)
+	}
+	wantComputedAt := time.Date(2026, 7, 15, 4, 5, 6, 0, time.UTC)
+	if gotPostingID != postingID || gotHash != "legacy-hash" || gotVersion != "legacy-version" ||
+		gotItems != `[{"signal":"legacy","delta":-3}]` || gotDelta != -3 || !gotComputedAt.Equal(wantComputedAt) {
+		t.Fatalf("legacy ai score changed after rejected migration: posting=%d hash=%q version=%q items=%q delta=%d computed=%s",
+			gotPostingID, gotHash, gotVersion, gotItems, gotDelta, gotComputedAt)
+	}
+	var day string
+	var inputTokens, outputTokens int
+	if err := st.db.QueryRow(`SELECT day, input_tokens, output_tokens FROM ai_usage`).Scan(&day, &inputTokens, &outputTokens); err != nil {
+		t.Fatalf("read legacy ai usage after rejected migration: %v", err)
+	}
+	if day != "2026-07-15" || inputTokens != 99 || outputTokens != 11 {
+		t.Fatalf("legacy ai usage changed after rejected migration: day=%q input=%d output=%d", day, inputTokens, outputTokens)
+	}
+}
+
+func assertMigrationVersionRecorded(t *testing.T, st *Store, version int, want bool) {
+	t.Helper()
+	var exists bool
+	if err := st.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, version).Scan(&exists); err != nil {
+		t.Fatalf("check migration version %d: %v", version, err)
+	}
+	if exists != want {
+		t.Fatalf("migration version %d recorded = %v, want %v", version, exists, want)
 	}
 }
 
