@@ -42,18 +42,67 @@ after launch.
 
 Verified against `main` on 2026-07-14.
 
-| Surface            | Current behavior                                                                                                                                                                                            | Gap                                                                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Runtime selection  | `cmd/jobcron/main.go:144-153` opens PostgreSQL only when `DATABASE_URL` is set; `--db` and the default path open SQLite.                                                                                    | A normal writable launch silently remains on SQLite.                                                                           |
-| Local database     | `deploy/local/compose.yaml:1-13` provides PostgreSQL 18 on port `55432`, but the operator must start it and export the URL manually.                                                                        | Local startup is not automatic and has no health check.                                                                        |
-| Local preview      | `scripts/preview-interactive.sh:12-39` creates a temporary SQLite database.                                                                                                                                 | Preview does not exercise the production persistence backend.                                                                  |
-| User state         | PostgreSQL migration `0006_user_scoped_state.sql` scopes profiles, scores, bookmarks, and hidden state by `user_id`.                                                                                        | The older global AI tables were not included.                                                                                  |
-| AI credentials     | `internal/ai/keys.go:16-86` stores a provider-to-key JSON map on disk. `internal/server/handlers.go:617-635` writes it without a user ID.                                                                   | Every account on one server would share and overwrite the same key.                                                            |
-| AI runtime         | `internal/server/server.go:114-149` keeps one mutable provider, model, version, and budget configuration on `Server`.                                                                                       | Saving one user's profile changes the AI runtime for every request.                                                            |
-| AI score cache     | `internal/storage/ai_scores.go:14-92` keys cached deltas by posting, goal hash, and AI version, and prunes without `user_id`.                                                                               | One user's stale fallback or pruning can expose or delete another user's profile-derived result.                               |
-| AI usage           | `internal/storage/ai_usage.go:11-62` aggregates usage by day only.                                                                                                                                          | Token and cost limits are server-global rather than account-scoped.                                                            |
-| Existing importer  | `cmd/jobcron-import/main.go` copies eight SQLite data categories in one PostgreSQL transaction; integration tests cover representative data, rollback, idempotent upserts, and owner-password preservation. | It does not create a consistent source snapshot, record a completed import, migrate credentials, or verify post-commit counts. |
-| Production Compose | `deploy/production/compose.yaml:29-30,47-48` mounts the named `jobcron_config` volume.                                                                                                                      | Credential durability is host-local and not account-scoped.                                                                    |
+### Runtime selection
+
+- **Current:** `cmd/jobcron/main.go:144-153` opens PostgreSQL only when
+  `DATABASE_URL` is set; `--db` and the default path open SQLite.
+- **Gap:** A normal writable launch silently remains on SQLite.
+
+### Local database
+
+- **Current:** `deploy/local/compose.yaml:1-13` provides PostgreSQL 18 on port
+  `55432`, but the operator must start it and export the URL manually.
+- **Gap:** Local startup is not automatic and has no health check.
+
+### Local preview
+
+- **Current:** `scripts/preview-interactive.sh:12-39` creates a temporary SQLite
+  database.
+- **Gap:** Preview does not exercise the production persistence backend.
+
+### User state
+
+- **Current:** PostgreSQL migration `0006_user_scoped_state.sql` scopes profiles,
+  scores, bookmarks, and hidden state by `user_id`.
+- **Gap:** The older global AI tables were not included.
+
+### AI credentials
+
+- **Current:** `internal/ai/keys.go:16-86` stores a provider-to-key JSON map on
+  disk. `internal/server/handlers.go:617-635` writes it without a user ID.
+- **Gap:** Every account on one server would share and overwrite the same key.
+
+### AI runtime
+
+- **Current:** `internal/server/server.go:114-149` keeps one mutable provider,
+  model, version, and budget configuration on `Server`.
+- **Gap:** Saving one user's profile changes the AI runtime for every request.
+
+### AI score cache
+
+- **Current:** `internal/storage/ai_scores.go:14-92` keys cached deltas by posting,
+  goal hash, and AI version, and prunes without `user_id`.
+- **Gap:** One user's stale fallback or pruning can expose or delete another
+  user's profile-derived result.
+
+### AI usage
+
+- **Current:** `internal/storage/ai_usage.go:11-62` aggregates usage by day only.
+- **Gap:** Token and cost limits are server-global rather than account-scoped.
+
+### Existing importer
+
+- **Current:** `cmd/jobcron-import/main.go` copies eight SQLite data categories in
+  one PostgreSQL transaction. Integration tests cover representative data,
+  rollback, idempotent upserts, and owner-password preservation.
+- **Gap:** It does not create a consistent source snapshot, record a completed
+  import, migrate credentials, or verify post-commit counts.
+
+### Production Compose
+
+- **Current:** `deploy/production/compose.yaml:29-30,47-48` mounts the named
+  `jobcron_config` volume.
+- **Gap:** Credential durability is host-local and not account-scoped.
 
 No similar open GitHub issue was found using the terms `PostgreSQL SQLite AI
 credentials`.
@@ -108,13 +157,14 @@ recover an API key without the separately protected master key.
 
 ### 1. Make PostgreSQL The Writable Runtime
 
-`openConfiguredStore` must use this decision table:
+`openConfiguredStore` must use these rules. The `--db` flag is removed in every
+mode.
 
-| Mode | `DATABASE_URL` | `--db` | Result |
-|---|---:|---:|---|
-| Production | Required | Removed | Open the supplied PostgreSQL URL. |
-| Normal local | Present | Removed | Open the supplied PostgreSQL URL; never invoke Docker. |
-| Normal local | Absent | Removed | Start/verify the embedded PostgreSQL Compose service, then open the fixed local URL. |
+- **Production:** `DATABASE_URL` is required. Open the supplied PostgreSQL URL.
+- **Normal local with `DATABASE_URL`:** Open the supplied PostgreSQL URL and
+  never invoke Docker.
+- **Normal local without `DATABASE_URL`:** Start or verify the embedded
+  PostgreSQL Compose service, then open the fixed local URL.
 
 The normal local URL is:
 
@@ -427,22 +477,34 @@ Neither Compose nor the importer automatically deletes the old volume.
 
 ## Failure Modes And Required Behavior
 
-| Failure                                                           | Required behavior                                                                                        |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Docker CLI or daemon missing locally                              | Exit before app startup with installation and `DATABASE_URL` bypass guidance.                            |
-| Port `55432` already belongs to another process                   | Do not attach to it blindly; identify the conflict and refuse managed startup.                           |
-| PostgreSQL health check times out                                 | Leave diagnostic container state intact and return the Compose service/status commands.                  |
-| Legacy SQLite source is live or inconsistent                      | Refuse import; do not modify source or target.                                                           |
-| Import copy/count check fails                                     | Roll back the entire PostgreSQL transaction; do not write the import ledger row.                         |
-| Import post-commit verification fails                             | Stop. Preserve source and target; restore the pre-import PostgreSQL snapshot/volume.                     |
-| Existing global AI rows have ambiguous ownership                  | Abort schema migration before changing the old tables.                                                   |
-| Encryption master key missing or malformed                        | Production startup fails closed; local startup creates a protected local key only outside production.    |
-| Credential ciphertext, nonce, version, user, or provider is wrong | Disable paid AI for that user, preserve the row, and surface a non-secret error.                         |
-| Credential save succeeds but profile save fails                   | Roll back both database changes.                                                                         |
-| Provider returns unauthorized                                     | Keep the encrypted credential, show a safe re-entry message, and do not expose provider response bodies. |
-| One user changes provider/model/key                               | Invalidate only that user's runtime and caches; other users are unchanged.                               |
-| Old Docker volume is absent                                       | Continue if the credential table already verifies; otherwise require key re-entry.                       |
-| EC2 is lost but RDS survives                                      | Restore the separately protected master key or require users to replace credentials.                     |
+- **Docker CLI or daemon missing locally:** Exit before app startup with
+  installation and `DATABASE_URL` bypass guidance.
+- **Port `55432` already belongs to another process:** Do not attach to it
+  blindly; identify the conflict and refuse managed startup.
+- **PostgreSQL health check times out:** Leave diagnostic container state intact
+  and return the Compose service and status commands.
+- **Legacy SQLite source is live or inconsistent:** Refuse import; do not modify
+  source or target.
+- **Import copy or count check fails:** Roll back the entire PostgreSQL
+  transaction; do not write the import ledger row.
+- **Import post-commit verification fails:** Stop. Preserve source and target;
+  restore the pre-import PostgreSQL snapshot or volume.
+- **Existing global AI rows have ambiguous ownership:** Abort schema migration
+  before changing the old tables.
+- **Encryption master key is missing or malformed:** Production startup fails
+  closed; local startup creates a protected local key only outside production.
+- **Credential ciphertext, nonce, version, user, or provider is wrong:** Disable
+  paid AI for that user, preserve the row, and surface a non-secret error.
+- **Credential save succeeds but profile save fails:** Roll back both database
+  changes.
+- **Provider returns unauthorized:** Keep the encrypted credential, show a safe
+  re-entry message, and do not expose provider response bodies.
+- **One user changes provider, model, or key:** Invalidate only that user's
+  runtime and caches; other users are unchanged.
+- **Old Docker volume is absent:** Continue if the credential table already
+  verifies; otherwise require key re-entry.
+- **EC2 is lost but RDS survives:** Restore the separately protected master key
+  or require users to replace credentials.
 
 ## Dependency Graph
 
@@ -523,15 +585,52 @@ credential row and rollback evidence exist.
 
 ## Testing Plan
 
-| Layer              | Minimum new coverage | Required cases                                                                                                                                             |
-| ------------------ | -------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit               |             18 tests | Cipher round trip, nonce uniqueness, wrong key/user/provider/version, invalid key size, config validation, local startup decision table.                   |
-| Storage            |             12 tests | Credential CRUD/isolation, AI-score isolation/pruning, usage isolation/month queries, one-owner migration, ambiguous-owner rejection.                      |
-| Import integration |              8 tests | Dry run, full copy, credential copy, password preservation, transaction rollback, same-fingerprint verification, different-source refusal, count mismatch. |
-| Server             |             10 tests | Two-user key isolation, transactional profile save, no-key fallback, decrypt failure, provider failure, user-scoped rerate/scrape/score/budgets.           |
-| Compose/process    |              4 tests | Automatic start, explicit-URL bypass, health timeout, preview database cleanup/isolation.                                                                  |
-| Browser            |           4 journeys | Migrated state, key save and masked state, container recreation durability, two-session account isolation using seeded users.                              |
-| Regression         |      Existing suites | Full Go tests with race detector, build all shipped commands, production/local Compose render, English/Korean doc checks.                                  |
+### Unit
+
+- **Minimum new coverage:** 18 tests.
+- **Required cases:** Cipher round trip, nonce uniqueness, wrong key, wrong user,
+  wrong provider, wrong version, invalid key size, config validation, and the
+  local-startup decision rules.
+
+### Storage
+
+- **Minimum new coverage:** 12 tests.
+- **Required cases:** Credential CRUD and isolation, AI-score isolation and
+  pruning, usage isolation and monthly queries, one-owner migration, and
+  ambiguous-owner rejection.
+
+### Import integration
+
+- **Minimum new coverage:** 8 tests.
+- **Required cases:** Dry run, full copy, credential copy, password preservation,
+  transaction rollback, same-fingerprint verification, different-source refusal,
+  and count mismatch.
+
+### Server
+
+- **Minimum new coverage:** 10 tests.
+- **Required cases:** Two-user key isolation, transactional profile save, no-key
+  fallback, decrypt failure, provider failure, and user-scoped rerate, scrape,
+  score, and budget behavior.
+
+### Compose and process
+
+- **Minimum new coverage:** 4 tests.
+- **Required cases:** Automatic start, explicit-URL bypass, health timeout, and
+  preview-database cleanup and isolation.
+
+### Browser
+
+- **Minimum new coverage:** 4 journeys.
+- **Required cases:** Migrated state, key save and masked state, durability after
+  container recreation, and two-session account isolation with seeded users.
+
+### Regression
+
+- **Minimum new coverage:** Existing suites.
+- **Required cases:** Full Go tests with the race detector, builds of all shipped
+  commands, production and local Compose renders, and English and Korean doc
+  checks.
 
 Integration tests must use disposable PostgreSQL schemas or databases. They must
 never reset the developer's normal `jobcron_dev`, production RDS, or the retained
@@ -567,52 +666,101 @@ Compose project or delete the source snapshot automatically.
 
 This is epic-sized and should land in dependency order through reviewable commits.
 
-| Slice     | Work                                                           |    Human estimate | AI-agent estimate |
-| --------- | -------------------------------------------------------------- | ----------------: | ----------------: |
-| 1         | PostgreSQL migrations, credential cipher, config, storage APIs |        1.5-2 days |         3-5 hours |
-| 2         | User-scoped AI runtime, scores, usage, and server tests        |          2-3 days |        6-10 hours |
-| 3         | Local Compose bootstrap and PostgreSQL preview                 |        1-1.5 days |         3-5 hours |
-| 4         | Import snapshot, ledger, credential migration, verification    |        1.5-2 days |         4-7 hours |
-| 5         | Production cutover, browser QA, docs, security review          |        1.5-2 days |         4-7 hours |
-| **Total** |                                                                | **7.5-10.5 days** |   **20-34 hours** |
+Slice work:
+
+1. PostgreSQL migrations, credential cipher, configuration, and storage APIs.
+2. User-scoped AI runtime, scores, usage, and server tests.
+3. Local Compose bootstrap and PostgreSQL preview.
+4. Import snapshot, ledger, credential migration, and verification.
+5. Production cutover, browser QA, documentation, and security review.
+
+| Slice | Human estimate | AI-agent estimate |
+| ----: | -------------- | ----------------- |
+| 1 | 1.5-2 days | 3-5 hours |
+| 2 | 2-3 days | 6-10 hours |
+| 3 | 1-1.5 days | 3-5 hours |
+| 4 | 1.5-2 days | 4-7 hours |
+| 5 | 1.5-2 days | 4-7 hours |
+| **Total** | **7.5-10.5 days** | **20-34 hours** |
 
 ## Files Reference
 
-| File                                                                 | Required change                                                                                              |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `cmd/jobcron/main.go`                                                | Remove normal SQLite fallback; resolve local PostgreSQL; remove startup global AI configuration.             |
-| `cmd/jobcron/main_test.go`                                           | Replace SQLite-default expectations with the runtime decision table.                                         |
-| `internal/config/config.go`                                          | Validate writable PostgreSQL and credential-encryption configuration; restrict `--db`.                       |
-| `internal/config/config_test.go`                                     | Cover production key requirement and mode combinations.                                                      |
-| `internal/localdb/ensure.go`                                         | New automatic Compose startup and health-check package.                                                      |
-| `internal/localdb/compose.yaml`                                      | New embedded canonical local PostgreSQL 18 service.                                                          |
-| `deploy/local/compose.yaml`                                          | Add stable volume name and health check; remain contract-equivalent to embedded Compose.                     |
-| `scripts/preview-interactive.sh`                                     | Replace temporary SQLite with a disposable PostgreSQL database and temporary master key.                     |
-| `scripts/preview_interactive_test.go`                                | Prove PostgreSQL preview isolation and cleanup.                                                              |
-| `internal/storage/postgres_migrations/0014_user_ai_credentials.sql`  | Add encrypted per-user credential table.                                                                     |
-| `internal/storage/postgres_migrations/0015_user_scoped_ai_state.sql` | Scope AI scores and usage to one user and safely migrate global rows.                                        |
-| `internal/storage/postgres_migrations/0016_local_data_imports.sql`   | Record verified one-time imports by owner and source fingerprint.                                            |
-| `internal/storage/ai_credentials.go`                                 | New encrypted credential CRUD.                                                                               |
-| `internal/storage/ai_scores.go`                                      | Require user ID in every cache and prune operation.                                                          |
-| `internal/storage/ai_usage.go`                                       | Require user ID for every read and debit.                                                                    |
-| `internal/credential/cipher.go`                                      | New AES-256-GCM implementation and versioned metadata.                                                       |
-| `internal/credential/key.go`                                         | Production environment and protected local master-key loading.                                               |
-| `internal/server/server.go`                                          | Replace global AI fields with per-user runtime resolution.                                                   |
-| `internal/server/handlers.go`                                        | Transactionally save profile and encrypted credential for the authenticated user.                            |
-| `internal/server/rerate.go`                                          | Pass per-user runtime through rerate and cache operations.                                                   |
-| `internal/server/scheduler.go`                                       | Resolve the sole owner explicitly and fail safely on ambiguous ownership.                                    |
-| `cmd/jobcron-import/main.go`                                         | Add immutable snapshot, default dry-run, `--apply`, credential import, ledger, and post-commit verification. |
-| `cmd/jobcron-import/main_test.go`                                    | Expand PostgreSQL import and failure-path coverage.                                                          |
-| `internal/ai/keys.go`                                                | Remove from runtime; retain only a narrowly scoped legacy reader if the importer needs it.                   |
-| `deploy/production/Dockerfile`                                       | Ship `jobcron-import` beside the app binary.                                                                 |
-| `deploy/production/compose.yaml`                                     | Remove `jobcron_config`; require the master key.                                                             |
-| `deploy/production/compose.migrate.yaml`                             | New one-time read-only legacy-volume migration service.                                                      |
-| `deploy/production/.env.example`                                     | Add a placeholder for the encryption master key.                                                             |
-| `deploy/production/README.md`                                        | Document final durability and recovery boundaries.                                                           |
-| `deploy/production/HUMAN_DEPLOY_GUIDE.md`                            | Replace key-volume steps with migration, verification, and rollback sequence.                                |
-| `README.md`, `README.ko.md`                                          | Make PostgreSQL the writable local database and document Docker prerequisite.                                |
-| `.goreleaser.yml`                                                    | Ship the importer and any local Compose artifact required by release users.                                  |
-| `.github/workflows/ci.yml`                                           | Run PostgreSQL-backed unit/integration, race, Compose, and import gates.                                     |
+- `cmd/jobcron/main.go`
+  - Remove the normal SQLite fallback, resolve local PostgreSQL, and remove the
+    startup global AI configuration.
+- `cmd/jobcron/main_test.go`
+  - Replace SQLite-default expectations with the runtime decision rules.
+- `internal/config/config.go`
+  - Validate writable PostgreSQL and credential-encryption configuration, and
+    restrict `--db`.
+- `internal/config/config_test.go`
+  - Cover the production key requirement and mode combinations.
+- `internal/localdb/ensure.go`
+  - Add the automatic Compose startup and health-check package.
+- `internal/localdb/compose.yaml`
+  - Add the embedded canonical local PostgreSQL 18 service.
+- `deploy/local/compose.yaml`
+  - Add a stable volume name and health check while remaining
+    contract-equivalent to the embedded Compose definition.
+- `scripts/preview-interactive.sh`
+  - Replace temporary SQLite with a disposable PostgreSQL database and temporary
+    master key.
+- `scripts/preview_interactive_test.go`
+  - Prove PostgreSQL preview isolation and cleanup.
+- `internal/storage/postgres_migrations/0014_user_ai_credentials.sql`
+  - Add the encrypted per-user credential table.
+- `internal/storage/postgres_migrations/0015_user_scoped_ai_state.sql`
+  - Scope AI scores and usage to one user and safely migrate global rows.
+- `internal/storage/postgres_migrations/0016_local_data_imports.sql`
+  - Record verified one-time imports by owner and source fingerprint.
+- `internal/storage/ai_credentials.go`
+  - Add encrypted credential CRUD.
+- `internal/storage/ai_scores.go`
+  - Require a user ID in every cache and prune operation.
+- `internal/storage/ai_usage.go`
+  - Require a user ID for every read and debit.
+- `internal/credential/cipher.go`
+  - Add the AES-256-GCM implementation and versioned metadata.
+- `internal/credential/key.go`
+  - Add production-environment and protected local master-key loading.
+- `internal/server/server.go`
+  - Replace global AI fields with per-user runtime resolution.
+- `internal/server/handlers.go`
+  - Transactionally save the profile and encrypted credential for the
+    authenticated user.
+- `internal/server/rerate.go`
+  - Pass the per-user runtime through rerate and cache operations.
+- `internal/server/scheduler.go`
+  - Resolve the sole owner explicitly and fail safely on ambiguous ownership.
+- `cmd/jobcron-import/main.go`
+  - Add an immutable snapshot, default dry-run, `--apply`, credential import,
+    ledger, and post-commit verification.
+- `cmd/jobcron-import/main_test.go`
+  - Expand PostgreSQL import and failure-path coverage.
+- `internal/ai/keys.go`
+  - Remove it from runtime; retain only a narrowly scoped legacy reader if the
+    importer needs it.
+- `deploy/production/Dockerfile`
+  - Ship `jobcron-import` beside the app binary.
+- `deploy/production/compose.yaml`
+  - Remove `jobcron_config` and require the master key.
+- `deploy/production/compose.migrate.yaml`
+  - Add the one-time read-only legacy-volume migration service.
+- `deploy/production/.env.example`
+  - Add a placeholder for the encryption master key.
+- `deploy/production/README.md`
+  - Document final durability and recovery boundaries.
+- `deploy/production/HUMAN_DEPLOY_GUIDE.md`
+  - Replace key-volume steps with the migration, verification, and rollback
+    sequence.
+- `README.md` and `README.ko.md`
+  - Make PostgreSQL the writable local database and document the Docker
+    prerequisite.
+- `.goreleaser.yml`
+  - Ship the importer and any local Compose artifact required by release users.
+- `.github/workflows/ci.yml`
+  - Run PostgreSQL-backed unit and integration tests, race checks, Compose checks,
+    and import gates.
 
 ## Security And Publication Requirements
 
