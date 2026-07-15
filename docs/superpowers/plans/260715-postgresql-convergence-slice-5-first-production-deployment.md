@@ -374,6 +374,12 @@ access-controlled deployment log.
 
 - [ ] **Step 4: Run and approve dry-run**
 
+Stop the legacy local app and confirm it has exited before invoking the
+importer. Retain the durable SQLite database and `-wal` plus the optional legacy
+key file unchanged through verification. The importer independently takes a
+no-wait write lock and refuses a concurrent writer; `-shm` is rebuildable WAL
+index metadata and is not byte-identity evidence.
+
 ```sh
 go run ./cmd/jobcron-import \
   --sqlite '<immutable-sqlite-snapshot>' \

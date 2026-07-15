@@ -34,6 +34,14 @@ after those gates pass does the normal `jobcron` command become PostgreSQL-only.
   behavior. This slice changes persistence activation, not those contracts.
 - The source SQLite database and optional `ai_keys.json` are read-only inputs.
   Never modify, rename, truncate, or delete them.
+- The operator must stop the legacy app before invoking the importer. The
+  importer independently takes a no-wait SQLite write lock and refuses a
+  concurrent writer rather than trusting the operator sequence.
+- Preserve byte hashes for the durable SQLite database and `-wal` plus the
+  optional legacy key file, and verify source schema and rows are unchanged.
+  Do not require `-shm` byte identity: SQLite documents it as the
+  non-persistent, rebuildable WAL index, and readers maintain coordination
+  bytes there.
 - The importer is dry-run by default. Only `--apply` may write PostgreSQL.
 - Preserve the pre-created owner's ID and password hash. Never import sessions,
   passwords, or a replacement owner.
@@ -127,11 +135,13 @@ func TestCreateRejectsActiveWriter(t *testing.T)
 func TestCreateIncludesCommittedWALRows(t *testing.T)
 func TestCreateProducesStableFingerprintForSameLogicalSource(t *testing.T)
 func TestCreateSnapshotPassesQuickCheck(t *testing.T)
-func TestCreateNeverChangesSourceFiles(t *testing.T)
+func TestCreatePreservesDurableSourceFilesSchemaAndRows(t *testing.T)
 func TestCreateRemovesPartialSnapshotOnFailure(t *testing.T)
 ```
 
-Capture source database, `-wal`, and `-shm` hashes before and after each call.
+Capture source database and `-wal` hashes before and after each call, and
+compare source schema plus representative rows. Do not compare `-shm` bytes;
+SQLite readers legitimately maintain the rebuildable WAL index there.
 
 - [ ] **Step 3: Implement a locked online backup**
 
@@ -345,6 +355,11 @@ func TestImportDoesNotModifySourceOrLegacyKeyFile(t *testing.T)
 The same-fingerprint path must emit `already imported`, perform readback only,
 and preserve target row timestamps. The different-fingerprint path must fail
 before any copy call.
+
+The source-safety test must hash the durable SQLite database and `-wal` plus
+the optional legacy key file before and after import, then compare source schema
+and rows. It must explicitly exclude `-shm` byte identity because that file is
+SQLite's non-persistent, rebuildable WAL index.
 
 - [ ] **Step 3: Implement ledger decision rules**
 

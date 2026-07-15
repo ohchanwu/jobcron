@@ -398,7 +398,8 @@ CREATE TABLE local_data_imports (
 
 The importer workflow is:
 
-1. Refuse to proceed while the legacy local app process holds the source open.
+1. Require the operator to stop the legacy local app, then independently take a
+   no-wait SQLite write lock and refuse any concurrent writer.
 2. Create a consistent SQLite snapshot with SQLite's own backup/VACUUM mechanism;
    do not copy only `jobs.db` while WAL data may exist.
 3. Compute SHA-256 over that immutable snapshot. Never store its private path.
@@ -419,6 +420,14 @@ The importer workflow is:
 10. A different snapshot targeting an owner who already has imported state is
     refused unless the target has been explicitly reset. There is no `--force`
     overwrite flag.
+
+Source-safety verification preserves byte hashes for the durable SQLite
+database and `-wal` plus the optional legacy key file, and compares source
+schema and rows before and after import. It deliberately does not require
+`-shm` byte identity: SQLite documents `-shm` as the non-persistent,
+rebuildable WAL index, and readers maintain coordination bytes there. The
+importer still uses SQLite's online backup API only; raw file copying is not a
+fallback.
 
 Required command shape:
 
