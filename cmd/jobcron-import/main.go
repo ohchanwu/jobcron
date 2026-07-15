@@ -139,14 +139,6 @@ func runImport(ctx context.Context, opts importOptions) error {
 		return nil
 	}
 
-	var cipher credential.Cipher
-	if len(legacyKeys) > 0 {
-		cipher, err = loadImporterCredentialCipher(opts)
-		if err != nil {
-			return err
-		}
-	}
-
 	tx, err := targetDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("import: begin postgres transaction: %w", err)
@@ -159,7 +151,14 @@ func runImport(ctx context.Context, opts importOptions) error {
 	if err != nil {
 		return err
 	}
+	var cipher credential.Cipher
 	if alreadyImported {
+		if len(legacyKeys) > 0 {
+			cipher, err = loadImporterCredentialCipher(opts)
+			if err != nil {
+				return err
+			}
+		}
 		if err := tx.Rollback(); err != nil {
 			return fmt.Errorf("import: release verification transaction: %w", err)
 		}
@@ -181,6 +180,12 @@ func runImport(ctx context.Context, opts importOptions) error {
 	}
 	if lockedTargetCounts != (categoryCounts{}) || lockedCollisions != (categoryCounts{}) {
 		return errors.New("import: apply requires a clean target with no collisions")
+	}
+	if len(legacyKeys) > 0 {
+		cipher, err = loadImporterCredentialCipher(opts)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := copyPostings(ctx, sourceDB, tx); err != nil {
@@ -1229,19 +1234,19 @@ VALUES ($1, $2, $3::jsonb, $3::jsonb)`, ownerID, sourceSHA256, string(countsJSON
 }
 
 func resetPostgresSequences(ctx context.Context, tx *sql.Tx) error {
-	for _, item := range []struct {
-		sequence string
-		table    string
-		column   string
-	}{
-		{"postings_id_seq", "postings", "id"},
-	} {
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf(
-			`SELECT setval(pg_get_serial_sequence('%s', '%s'), COALESCE((SELECT MAX(%s) FROM %s), 1), true)`,
-			item.table, item.column, item.column, item.table,
-		)); err != nil {
-			return fmt.Errorf("import: reset %s: %w", item.sequence, err)
-		}
+	var nextPostingID int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(id), 0) + 1 FROM postings`).Scan(&nextPostingID); err != nil {
+		return fmt.Errorf("import: calculate postings sequence restart: %w", err)
+	}
+	if nextPostingID <= 0 {
+		return errors.New("import: invalid postings sequence restart value")
+	}
+	// ALTER SEQUENCE participates in the surrounding transaction. PostgreSQL's
+	// setval does not, so a later rollback would otherwise leak sequence state.
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(
+		`ALTER SEQUENCE postings_id_seq RESTART WITH %d`, nextPostingID,
+	)); err != nil {
+		return fmt.Errorf("import: reset postings_id_seq: %w", err)
 	}
 	return nil
 }

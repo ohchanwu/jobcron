@@ -545,6 +545,117 @@ func TestImportRollbackAtEveryApplyBoundary(t *testing.T) {
 	}
 }
 
+func TestImportRollbackRestoresPostingsSequence(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "sequence-rollback-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	err := runImport(context.Background(), importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		apply: true, out: io.Discard,
+		failAt: func(stage string) error {
+			if stage == "before_ledger_insert" {
+				return errors.New("rollback after sequence reset")
+			}
+			return nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "rollback after sequence reset") {
+		t.Fatalf("runImport error = %v, want injected rollback", err)
+	}
+	db, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var nextID int64
+	if err := db.QueryRow(`SELECT nextval('postings_id_seq')`).Scan(&nextID); err != nil {
+		t.Fatal(err)
+	}
+	if nextID != 1 {
+		t.Fatalf("postings sequence next ID after rollback = %d, want 1", nextID)
+	}
+}
+
+func TestImportApplyEmptyPostingsRestartsSequenceAtOne(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	source, err := sql.Open("sqlite", sqlitePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{
+		"scores", "bookmarks", "not_interested", "ai_extractions", "ai_scores", "postings",
+	} {
+		if _, err := source.Exec(`DELETE FROM ` + table); err != nil {
+			_ = source.Close()
+			t.Fatalf("empty %s: %v", table, err)
+		}
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ownerEmail := "empty-postings-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	if err := runImport(context.Background(), importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		apply: true, out: io.Discard,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	target, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Close()
+	var nextID int64
+	if err := target.QueryRow(`SELECT nextval('postings_id_seq')`).Scan(&nextID); err != nil {
+		t.Fatal(err)
+	}
+	if nextID != 1 {
+		t.Fatalf("empty import postings sequence next ID = %d, want 1", nextID)
+	}
+}
+
+func TestImportRefusalDoesNotLoadOrCreateLocalMasterKey(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ownerEmail := "refused-key-owner@example.invalid"
+	targetURL, owners := prepareImportTarget(t, postgresURL, ownerEmail)
+	target, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.Exec(`
+INSERT INTO profiles (user_id, profile_json, profile_hash, updated_at)
+VALUES ($1, '{}', 'existing', now())`, owners[ownerEmail]); err != nil {
+		_ = target.Close()
+		t.Fatal(err)
+	}
+	if err := target.Close(); err != nil {
+		t.Fatal(err)
+	}
+	keysPath := filepath.Join(t.TempDir(), "ai_keys.json")
+	if err := os.WriteFile(keysPath, []byte(`{"anthropic":"must-not-load-key"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaderCalls := 0
+	err = runImport(context.Background(), importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		aiKeysPath: keysPath, apply: true, out: io.Discard,
+		loadLocalMasterKey: func() ([]byte, error) {
+			loaderCalls++
+			return bytes.Repeat([]byte{0x71}, credential.MasterKeyBytes), nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "clean target") {
+		t.Fatalf("runImport error = %v, want clean-target refusal", err)
+	}
+	if loaderCalls != 0 {
+		t.Fatalf("local key loader calls on refused apply = %d, want 0", loaderCalls)
+	}
+}
+
 func TestImportSameFingerprintVerifiesWithoutWrites(t *testing.T) {
 	postgresURL := requireImportPostgres(t)
 	sqlitePath := seedSQLiteImportFixture(t)

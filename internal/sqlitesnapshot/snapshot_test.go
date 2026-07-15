@@ -176,7 +176,7 @@ func TestCreateRemovesPartialSnapshotOnFailure(t *testing.T) {
 	if _, err := Create(context.Background(), sourcePath, workDir); err == nil {
 		t.Fatal("Create succeeded for corrupt SQLite source")
 	}
-	matches, err := filepath.Glob(filepath.Join(workDir, "jobcron-sqlite-snapshot-*.db"))
+	matches, err := filepath.Glob(filepath.Join(workDir, "jobcron-sqlite-snapshot-*"))
 	if err != nil {
 		t.Fatal(err)
 	}
