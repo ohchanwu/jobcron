@@ -6,7 +6,7 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
+- [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
 - [Multi-user account expansion follow-up](specs/260715-multi-user-account-expansion.md)
