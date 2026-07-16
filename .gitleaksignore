@@ -1,0 +1,8 @@
+# Verified historical false positive: Claude Haiku model identifier in an AI test.
+0ad9b30c3cc7fa3078f19a985dae488150544476:internal/ai/spike_test.go:generic-api-key:172
+
+# Verified public Demoday Supabase anon JWT, not a private or service-role key.
+# The same public value appears in the current lineage and two old release-tag lineages.
+0ad9b30c3cc7fa3078f19a985dae488150544476:internal/scraper/demoday/demoday.go:generic-api-key:52
+83fad306d1fd1c26e0fb7aa1781dd54c70d3eb10:internal/scraper/demoday/demoday.go:generic-api-key:52
+41378bf91764637b278fdf7bfe21a9dda2cb9a14:internal/scraper/demoday/demoday.go:generic-api-key:41
