@@ -505,6 +505,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-005: share exact-token matching below scoring and AI
 
 - Candidate: PONY-001.
+- Plan: `docs/superpowers/plans/260717-ponytail-token-match-reduction.md`.
+- Status: `planned`.
 - Behavior owner: new narrow `internal/tokenmatch/tokenmatch.go`.
 - Production files: `internal/tokenmatch/tokenmatch.go`, `internal/scoring/match.go`, and
   `internal/ai/score_delta.go`.
