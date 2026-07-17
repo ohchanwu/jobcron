@@ -24,6 +24,8 @@ HTTP construction, hosts, headers, errors, retries, robots policy, and response 
 - Do not convert Jumpit, Rallit, or Worknet; dependent batch `PT4-009` owns them.
 - Keep each caller's current spacing value, constructor input, and zero-spacing test behavior.
 - Keep the foundation net-negative while adding the owner; target at least 45 fewer lines.
+- Treat that target as an arithmetic check, never permission for broader cleanup; correct the
+  plan and ledger if the exact scoped implementation remains net-negative but misses it.
 - Add no interface, callback, generic, configuration, dependency, or HTTP abstraction.
 - Compare binary deltas by building both SHAs sequentially at one checkout path with the same
   Go toolchain and environment and explicit temporary `-o` outputs.

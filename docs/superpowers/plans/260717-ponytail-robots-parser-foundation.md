@@ -24,6 +24,8 @@ packages call it; Rallit remains local until dependent batch `PT4-007`.
 - Do not change robots fetches, status handling, cache TTLs, cache keys, hosts, paths, or errors.
 - Do not convert Rallit; `PT4-007` owns that final consumer.
 - Keep the foundation net-negative while adding the owner; target at least 100 fewer lines.
+- Treat that target as an arithmetic check, never permission for broader cleanup; correct the
+  plan and ledger if the exact scoped implementation remains net-negative but misses it.
 - Add no dependency, interface, generic, callback, configuration, or catch-all HTTP helper.
 - Compare binary deltas by building both SHAs sequentially at one checkout path with the same
   Go toolchain and environment and explicit temporary `-o` outputs.

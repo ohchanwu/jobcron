@@ -673,6 +673,10 @@ Delete or consolidate only the approved cluster. Reuse the existing owner; do
 not expand the change into neighboring cleanup discovered along the way. Add new
 findings to the ledger for later triage.
 
+Numeric line targets validate child-plan arithmetic; they never authorize broader deletion. If
+the exact scoped edit remains net-negative but misses its estimate, correct the plan and ledger
+with the measured math before continuing.
+
 - [ ] **Step 4: Run the targeted tests and static checks**
 
 Run the child plan's package tests, `gofmt`, `go vet`, and any focused database,

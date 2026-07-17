@@ -23,6 +23,8 @@ parser call and duplicate parser implementation change.
 - Do not edit, move, or redefine the owner created by `PT4-006`.
 - Do not change Rallit fetches, status handling, cache TTL, cache key, host, path, or errors.
 - Target at least 40 fewer production lines and add no dependency or abstraction.
+- Treat that target as an arithmetic check, never permission for broader cleanup; correct the
+  plan and ledger if the exact scoped implementation remains net-negative but misses it.
 - Compare binary deltas by building both SHAs sequentially at one checkout path with the same
   Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring cleanup, or combine this batch with another reduction.
