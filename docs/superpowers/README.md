@@ -11,6 +11,7 @@ decision records needed for the current task.
 - [Ponytail AI key path reduction](plans/260717-ponytail-ai-key-path-reduction.md)
 - [Ponytail server source reduction](plans/260717-ponytail-server-source-reduction.md)
 - [Ponytail AI model input reduction](plans/260717-ponytail-ai-model-input-reduction.md)
+- [Ponytail storage row scan reduction](plans/260717-ponytail-storage-row-scan-reduction.md)
 - [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)

@@ -492,6 +492,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-004: reuse one storage posting-row collector
 
 - Candidate: PONY-004.
+- Plan: `docs/superpowers/plans/260717-ponytail-storage-row-scan-reduction.md`.
+- Status: `planned`.
 - Behavior owner: `internal/storage/postings.go` beside `scanPosting`.
 - Production files: `internal/storage/postings.go`, `internal/storage/bookmarks.go`, and
   `internal/storage/not_interested.go`.
