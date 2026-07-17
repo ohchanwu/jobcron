@@ -15,8 +15,9 @@ an approved candidate ledger, then implements one semantic cluster per child
 plan and reversible commit.
 
 **Tech Stack:** Go 1.26, PostgreSQL 18, embedded HTML/CSS/JavaScript, Ponytail
-for Codex, `dupl` v1.1.0, `golang.org/x/tools/cmd/deadcode` v0.47.0, existing Go
-tests, and gstack `/browse`.
+for Codex and Claude Code, `dupl` v1.1.0,
+`golang.org/x/tools/cmd/deadcode` v0.47.0, existing Go tests, and gstack
+`/browse`.
 
 ## Global Constraints
 
@@ -24,8 +25,9 @@ tests, and gstack `/browse`.
   polecat, merge-queue, or convoy work.
 - Ponytail is a candidate generator, not proof that code is safe to delete.
 - Use Ponytail `full`. Do not use `ultra` for this campaign.
-- Keep Ponytail's global default `off`; activate `full` only in Jobcron
-  campaign threads.
+- Keep Ponytail's global default `off` during the Jobcron pilot; activate `full`
+  only in Jobcron campaign threads. Promote `full` to the global default only
+  after the human accepts the completed pilot in Task 7.
 - Preserve every supported feature and all user-visible behavior.
 - Never reduce trust-boundary validation, data-loss prevention, authentication,
   authorization, encryption, CSRF protection, rate limiting, concurrency
@@ -41,9 +43,14 @@ tests, and gstack `/browse`.
 - Keep `scraper.Scraper`, `ai.Provider`, the concrete `*storage.Store`, and the
   documented package boundaries unless a separate architecture decision says
   otherwise.
-- Keep the deliberately duplicated tokenization behavior in
-  `internal/scoring/match.go` and `internal/ai/score_delta.go`. Their import
-  boundary and parity tests are intentional.
+- Never make `internal/ai` import `internal/scoring`; that would create a Go
+  import cycle because `scoring` already imports `ai`.
+- Treat their identical tokenizer and exact-token phrase matcher as a candidate
+  for a narrow lower-level package. Share only that stable primitive; keep
+  scoring policy and AI evidence-gate policy in their owning packages.
+  - **OF — Resolved:** The import cycle blocks direct sharing, but not a narrow
+    third package. The new potential-easy-win section records that option and
+    the later ledger no longer rejects it in advance.
 - Keep raw audit output in ignored `.superpowers/sdd/`. Track only reviewed
   conclusions and executable plans under `docs/superpowers/`.
 - Each implementation commit covers one semantic cluster and is independently
@@ -69,6 +76,32 @@ The provisional 2026-07-17 inventory is:
 These numbers describe scale, not targets. Large files and duplicate-detector
 matches are leads, not evidence of bad design.
 
+## Potential Easy Wins
+
+These are seeded candidates, not preapproved edits. Each must still pass the
+same caller analysis, behavior-locking tests, net-reduction check, and human
+review as findings discovered by Ponytail, `dupl`, or `deadcode`.
+
+### 1. Share the exact-token matching primitive
+
+`internal/scoring/match.go` and `internal/ai/score_delta.go` currently duplicate
+the same low-level operations: NFC normalization, Unicode letter/digit token
+splitting, lowercasing, and exact contiguous token-sequence matching.
+
+Evaluate extracting only those operations into a narrowly named lower-level
+package such as `internal/textmatch`. Keep these policies outside it:
+
+- `scoring`: dealbreaker matching, intern classification, and title-similarity
+  deduplication;
+- `ai`: minimum evidence length, minimum evidence token count, sent-text versus
+  full-description selection, and fail-safe presence/absence handling.
+
+The child plan must prove identical observable behavior, preserve focused tests
+for both consumers, avoid an import cycle, and reduce net production code. It
+must also update the documented package-boundary guidance if the candidate is
+accepted. Future linguistic matching changes may remain in `scoring` without
+weakening the stricter AI evidence gate.
+
 ## Success Criteria
 
 1. The clean baseline and final commit pass the same unit, integration, race,
@@ -81,7 +114,8 @@ matches are leads, not evidence of bad design.
    documentation lines are reported separately.
 5. No accepted batch introduces a catch-all helper package, speculative
    abstraction, or dependency.
-6. Every accepted and rejected Ponytail finding has a recorded reason.
+6. Every accepted, rejected, and separate-decision Ponytail finding has a
+   recorded reason.
 7. If the evidence finds no safe cuts, `Lean already. Ship.` is a successful
    outcome. The campaign must not force a deletion quota.
 
@@ -219,19 +253,24 @@ empty before proceeding.
 
 ---
 
-### Task 2: Install and Scope Ponytail for Codex
+### Task 2: Install and Scope Ponytail for Codex and Claude Code
 
 **Files:**
 
 - Modify repository files: none
-- External tool state: the Codex Ponytail plugin and its two lifecycle hooks
+- External tool state: the Codex and Claude Code Ponytail plugins and lifecycle
+  hooks
 - External configuration: `~/.config/ponytail/config.json`
+
+- **OF — Resolved:** Install and verify Ponytail in both Codex and Claude Code.
 
 **Interfaces:**
 
-- Consumes: Node.js on the non-interactive `PATH` and a current Codex CLI.
-- Produces: `@ponytail`, `@ponytail-audit`, and `@ponytail-review` in a fresh
-  Codex thread without making Ponytail active in unrelated projects.
+- Consumes: Node.js on the non-interactive `PATH` plus current Codex and Claude
+  Code CLIs.
+- Produces: Ponytail's mode, audit, and review commands in fresh Codex and Claude
+  Code threads without making Ponytail active in unrelated projects during the
+  Jobcron pilot.
 
 - [ ] **Step 1: Verify the hook runtime**
 
@@ -240,10 +279,15 @@ Run:
 ```bash
 node --version
 codex plugin list
+claude plugin list
 ```
 
-Expected: Node.js is available. Record whether Ponytail is already installed so
-the setup stays idempotent.
+Expected: Node.js is available. Ponytail was verified absent from both hosts
+while this plan was revised on 2026-07-17. Check again at execution time so a
+resumed or partially completed setup remains idempotent.
+
+- **OF — Resolved:** The current absence is recorded, while the runtime check is
+  retained because a resumable plan must tolerate prior partial installation.
 
 - [ ] **Step 2: Install the official plugin when absent**
 
@@ -254,10 +298,17 @@ codex plugin marketplace add DietrichGebert/ponytail
 codex plugin add ponytail@ponytail
 ```
 
-Expected: the official marketplace and plugin are registered without changing
-the Jobcron repository.
+In Claude Code, send these as two separate prompts:
 
-- [ ] **Step 3: Keep the global default off**
+```text
+/plugin marketplace add DietrichGebert/ponytail
+/plugin install ponytail@ponytail
+```
+
+Expected: the official marketplace and plugin are registered in both hosts
+without changing the Jobcron repository.
+
+- [ ] **Step 3: Keep the global default off during the Jobcron pilot**
 
 Inspect `~/.config/ponytail/config.json`. Preserve any existing fields and set:
 
@@ -268,20 +319,29 @@ Inspect `~/.config/ponytail/config.json`. Preserve any existing fields and set:
 ```
 
 Expected: Ponytail remains available but does not silently govern unrelated
-repositories.
+repositories while Jobcron establishes the baseline.
+
+- **OF — Resolved:** Jobcron is the explicit pilot. Task 7 changes
+  `defaultMode` to `full` only after the human accepts the pilot, making
+  Ponytail the default for later work in other repositories.
 
 - [ ] **Step 4: Trust the hooks and start a fresh thread**
 
 Start Codex, open `/hooks`, review Ponytail's two lifecycle hooks, and trust them
-only after confirming they come from the installed plugin. Start a new Jobcron
-thread so hook activation is deterministic.
+only after confirming they come from the installed plugin. Confirm the plugin
+is enabled in Claude Code. Start fresh Jobcron threads in the host or hosts that
+will execute the campaign so hook activation is deterministic.
 
 - [ ] **Step 5: Select the campaign mode**
 
-Invoke:
+Invoke the command for the active host:
 
 ```text
+# Codex
 @ponytail full
+
+# Claude Code
+/ponytail full
 ```
 
 Expected: `full` is active. Do not use `ultra`; the campaign values verified
@@ -314,16 +374,22 @@ behavior preservation over the maximum possible deletion count.
 
 - [ ] **Step 1: Run Ponytail's whole-repository audit**
 
-Invoke `@ponytail-audit` from the clean repository root. Ask it to scan tracked
-production Go, web assets, scripts, and direct dependencies while excluding
-generated files, `dist/`, archives, and vendored content.
+Invoke `@ponytail-audit` in Codex or `/ponytail-audit` in Claude Code from the
+clean repository root. Ask it to scan tracked production Go, web assets,
+scripts, and direct dependencies while excluding generated files, `dist/`,
+archives, and vendored content.
 
 Record its complete ranked output in the ignored audit file. Preserve its
 `delete`, `stdlib`, `native`, `yagni`, and `shrink` tags.
 
 - [ ] **Step 2: Detect production Go clones mechanically**
 
-Run the pinned AST clone detector on non-test Go files:
+Run the pinned abstract syntax tree (AST) clone detector on non-test Go files.
+An AST represents code as structural nodes such as functions, calls, loops, and
+expressions rather than as raw text:
+
+- **OF — Resolved:** AST is expanded and defined above. Structural comparison
+  can find clones whose variable names or literal values differ.
 
 ```bash
 git ls-files 'cmd/**/*.go' 'internal/**/*.go' \
@@ -412,9 +478,11 @@ Every candidate entry must record:
 - risk level and rollback boundary; and
 - `accepted`, `rejected`, or `separate decision`, with the reason.
 
-Seed the rejected section with the intentional cross-package tokenizer
-duplication documented in the repository instructions. This proves that the
-ledger can reject a tempting finding instead of optimizing blindly.
+Seed `PONY-001` in the separate-decision section with the shared exact-token
+matching candidate from Potential Easy Wins. Record the current package
+guidance, import graph, all callers, policy-specific behavior, tests, estimated
+net production-line reduction, and rollback boundary. Task 4 may move it to the
+accepted or rejected section only after applying the full acceptance gate.
 
 - [ ] **Step 7: Index and commit the evidence synthesis**
 
@@ -462,8 +530,11 @@ Use exactly these classes:
 1. same policy and same behavior: consolidate under the existing owning package;
 2. same shape but different policy: keep separate and record why;
 3. existing helper already owns the behavior: reuse it and delete the duplicate;
-4. intentional boundary duplication: keep it and preserve parity tests; or
-5. test-only setup duplication: consolidate only if individual scenarios remain
+4. same stable primitive but different surrounding policies: consider a narrow
+   lower-level owner while keeping policy in each consumer;
+5. intentional boundary duplication: keep it and preserve behavior-locking
+   tests; or
+6. test-only setup duplication: consolidate only if individual scenarios remain
    clearer after the change.
 
 - [ ] **Step 3: Apply the acceptance gate**
@@ -473,9 +544,10 @@ Accept a candidate only when all of these are true:
 - the behavior contract is named;
 - all consumers are known;
 - coverage exists or a characterization test can lock the behavior;
-- the owner package is obvious;
+- the existing owner is obvious, or a narrow new owner is justified by multiple
+  current consumers with the same stable contract;
 - the result removes production code or a dependency;
-- no new abstraction or import cycle is required; and
+- no speculative or catch-all abstraction or import cycle is introduced; and
 - the change can be reverted in one commit.
 
 Reject it otherwise. Move feature removals and architectural changes to the
@@ -592,9 +664,10 @@ scraper, AI, web, or deployment contract tests.
 
 - [ ] **Step 5: Run Ponytail and correctness reviews on the diff**
 
-Invoke `@ponytail-review` to check whether the diff can shrink further. Then run
-the normal correctness/security review because Ponytail explicitly excludes
-correctness, security, and performance findings.
+Invoke `@ponytail-review` in Codex or `/ponytail-review` in Claude Code to check
+whether the diff can shrink further. Then run the normal correctness/security
+review because Ponytail explicitly excludes correctness, security, and
+performance findings.
 
 Reject a suggested reduction when it crosses any Global Constraint.
 
@@ -651,6 +724,8 @@ Repeat Task 6 only for the next approved child plan.
   workstream after human acceptance.
 - Update: `docs/superpowers/README.md`
 - Update: `docs/README.md`
+- External configuration after human acceptance:
+  `~/.config/ponytail/config.json`
 
 **Interfaces:**
 
@@ -720,15 +795,32 @@ production identifiers, and raw operational output.
 
 Report:
 
-- accepted and rejected finding counts;
+- accepted, rejected, and separate-decision finding counts;
 - production lines and dependencies removed;
 - behavior gates executed;
 - any intentional duplication retained; and
 - local commit list.
 
-The human reviews the result before the campaign is archived or pushed.
+The human reviews the result before Ponytail becomes the global default and
+before the campaign is archived or pushed.
 
-- [ ] **Step 6: Archive completed campaign records**
+- [ ] **Step 6: Promote the accepted pilot to the global default**
+
+Only after the human accepts the Jobcron result, preserve the other fields in
+`~/.config/ponytail/config.json` and set:
+
+```json
+{
+  "defaultMode": "full"
+}
+```
+
+Start fresh Codex and Claude Code threads outside Jobcron. Confirm Ponytail
+reports `full` without a per-thread activation command and confirm each host can
+still switch to `off`. This is a machine-wide agent configuration change, not a
+Jobcron repository change.
+
+- [ ] **Step 7: Archive completed campaign records**
 
 After acceptance, move the completed parent plan, child plans, and candidate
 ledger into one dated archive workstream. Move sanitized raw evidence to the
@@ -737,6 +829,9 @@ security gate, and commit the lifecycle update locally.
 
 ## Source Notes
 
+- Ponytail's official README documents the separate Codex and Claude Code
+  installation commands plus the shared global default-mode configuration:
+  <https://github.com/DietrichGebert/ponytail#install>
 - Ponytail's core ladder prioritizes existing code, standard library, native
   platform behavior, and minimal working changes while preserving security,
   validation, data-loss handling, and accessibility:
