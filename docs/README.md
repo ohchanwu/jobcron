@@ -23,6 +23,7 @@ Use this index instead of recursively loading the entire documentation tree.
 - [Active Superpowers work and context policy](superpowers/README.md)
 - [Ponytail codebase reduction campaign](superpowers/plans/260717-ponytail-codebase-reduction.md)
 - [Ponytail reduction candidate ledger][ponytail-ledger]
+- [Ponytail AI key path reduction](superpowers/plans/260717-ponytail-ai-key-path-reduction.md)
 - [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](superpowers/plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
 - [Multi-user account expansion follow-up](superpowers/specs/260715-multi-user-account-expansion.md)

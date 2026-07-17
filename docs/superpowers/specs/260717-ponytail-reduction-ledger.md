@@ -456,6 +456,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-001: remove the unused default AI-key path wrapper
 
 - Candidate: PONY-007.
+- Plan: `docs/superpowers/plans/260717-ponytail-ai-key-path-reduction.md`.
+- Status: `planned`.
 - Behavior owner: private `defaultKeysPath` plus explicit importer path wiring.
 - Production files: `internal/ai/keys.go`.
 - Behavior lock: `TestDefaultKeysPathUsesCanonicalApplicationDirectory`.
