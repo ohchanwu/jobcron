@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ohchanwu/jobcron/internal/pacing"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
@@ -117,10 +118,7 @@ type Scraper struct {
 	siteURL    string
 	apiBaseURL string
 	anonKey    string
-	rateLimit  time.Duration
-
-	mu          sync.Mutex
-	lastRequest time.Time
+	pacer      *pacing.Pacer
 
 	robotsMu     sync.Mutex
 	robotsCache  *robotsEntry
@@ -144,7 +142,7 @@ func newScraper(siteURL, apiBaseURL string, rateLimit time.Duration) *Scraper {
 		siteURL:    siteURL,
 		apiBaseURL: apiBaseURL,
 		anonKey:    resolveAnonKey(),
-		rateLimit:  rateLimit,
+		pacer:      pacing.New(rateLimit),
 	}
 }
 
@@ -259,7 +257,7 @@ func (s *Scraper) FetchDetail(_ context.Context, p scraper.Posting) (scraper.Pos
 // `Accept-Profile: public` header that pins the request to the public
 // PostgREST schema.
 func (s *Scraper) get(ctx context.Context, path string) ([]byte, error) {
-	if err := s.waitForRateLimit(ctx); err != nil {
+	if err := s.pacer.Wait(ctx); err != nil {
 		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.apiBaseURL+path, nil)
@@ -295,27 +293,6 @@ func (s *Scraper) get(ctx context.Context, path string) ([]byte, error) {
 		return nil, fmt.Errorf("demoday: GET %s: status %d", path, resp.StatusCode)
 	}
 	return body, nil
-}
-
-func (s *Scraper) waitForRateLimit(ctx context.Context) error {
-	s.mu.Lock()
-	var wait time.Duration
-	if !s.lastRequest.IsZero() {
-		if elapsed := time.Since(s.lastRequest); elapsed < s.rateLimit {
-			wait = s.rateLimit - elapsed
-		}
-	}
-	s.lastRequest = time.Now().Add(wait)
-	s.mu.Unlock()
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // --- Parsing ---------------------------------------------------------------

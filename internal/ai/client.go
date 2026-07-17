@@ -8,8 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
+
+	"github.com/ohchanwu/jobcron/internal/pacing"
 )
 
 // providerSpec captures the per-provider differences (endpoint, auth header,
@@ -39,9 +40,7 @@ type httpProvider struct {
 	baseURL string
 	http    *http.Client
 
-	rateLimit   time.Duration
-	mu          sync.Mutex
-	lastRequest time.Time
+	pacer *pacing.Pacer
 }
 
 // newHTTPProvider builds a provider against baseURL (defaulting to the spec's
@@ -60,12 +59,12 @@ func newHTTPProvider(spec providerSpec, apiKey, model, baseURL string, rateLimit
 		return nil, fmt.Errorf("ai: %s base url %q has no host", spec.name, baseURL)
 	}
 	return &httpProvider{
-		spec:      spec,
-		apiKey:    apiKey,
-		model:     model,
-		baseURL:   baseURL,
-		http:      newPinnedHTTPClient(host, 60*time.Second),
-		rateLimit: rateLimit,
+		spec:    spec,
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: baseURL,
+		http:    newPinnedHTTPClient(host, 60*time.Second),
+		pacer:   pacing.New(rateLimit),
 	}, nil
 }
 
@@ -75,37 +74,13 @@ func (p *httpProvider) Name() string { return p.spec.name }
 // Extract is implemented in extract.go (the prompt + JSON/range gate on top
 // of complete).
 
-// waitForRateLimit blocks until at least rateLimit has elapsed since the
-// previous request began, reserving the next slot under the mutex so
-// concurrent callers stay correctly paced (mirrors jumpit's client).
-func (p *httpProvider) waitForRateLimit(ctx context.Context) error {
-	p.mu.Lock()
-	var wait time.Duration
-	if !p.lastRequest.IsZero() {
-		if elapsed := time.Since(p.lastRequest); elapsed < p.rateLimit {
-			wait = p.rateLimit - elapsed
-		}
-	}
-	p.lastRequest = time.Now().Add(wait)
-	p.mu.Unlock()
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // complete performs one paced, pinned request: it sends a system+user prompt
 // and returns the assistant's text output and token usage. The body is
 // expected to be JSON-only; parsing/validating that JSON is the caller's job
 // (T2's extraction gate). It is the load-bearing request/response helper the
 // real providers share.
 func (p *httpProvider) complete(ctx context.Context, system, user string) (string, Usage, error) {
-	if err := p.waitForRateLimit(ctx); err != nil {
+	if err := p.pacer.Wait(ctx); err != nil {
 		return "", Usage{}, err
 	}
 	body, err := json.Marshal(p.spec.buildBody(p.model, system, user))

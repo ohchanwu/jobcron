@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ohchanwu/jobcron/internal/pacing"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
@@ -42,16 +43,13 @@ const (
 // Scraper is the 그리팅 implementation of scraper.Scraper. One instance
 // covers the whole curated tenant list.
 type Scraper struct {
-	tenants   []tenant
-	client    *http.Client
-	rateLimit time.Duration
+	tenants []tenant
+	client  *http.Client
+	pacer   *pacing.Pacer
 
 	// origin returns the scheme://host base for a tenant's board. Default
 	// is https://{slug}.career.greetinghr.com; overridable in tests.
 	origin func(tenant) string
-
-	mu          sync.Mutex
-	lastRequest time.Time
 
 	robotsMu    sync.Mutex
 	robotsCache map[string]robotsEntry // keyed by origin
@@ -74,7 +72,7 @@ func newScraper(tenants []tenant, rateLimit time.Duration) *Scraper {
 	return &Scraper{
 		tenants:     tenants,
 		client:      &http.Client{Timeout: requestTimeout},
-		rateLimit:   rateLimit,
+		pacer:       pacing.New(rateLimit),
 		origin:      func(t tenant) string { return "https://" + t.host() },
 		robotsCache: make(map[string]robotsEntry),
 	}
@@ -167,7 +165,7 @@ func (s *Scraper) FetchDetail(_ context.Context, p scraper.Posting) (scraper.Pos
 // the final URL after redirects — needed to resolve each tenant's landing
 // path and custom domain for building job URLs.
 func (s *Scraper) get(ctx context.Context, rawURL string) ([]byte, int, string, error) {
-	if err := s.waitForRateLimit(ctx); err != nil {
+	if err := s.pacer.Wait(ctx); err != nil {
 		return nil, 0, "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
@@ -204,27 +202,6 @@ func (s *Scraper) fetch(ctx context.Context, rawURL string) ([]byte, int, error)
 		return body, status, nil
 	}
 	return body, status, err
-}
-
-func (s *Scraper) waitForRateLimit(ctx context.Context) error {
-	s.mu.Lock()
-	var wait time.Duration
-	if !s.lastRequest.IsZero() {
-		if elapsed := time.Since(s.lastRequest); elapsed < s.rateLimit {
-			wait = s.rateLimit - elapsed
-		}
-	}
-	s.lastRequest = time.Now().Add(wait)
-	s.mu.Unlock()
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // originOf returns the scheme://host origin of a final (post-redirect) URL,
