@@ -1,8 +1,6 @@
 package demoday
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -208,7 +206,7 @@ func (s *Scraper) checkRobotsHost(
 	body, _ := io.ReadAll(resp.Body)
 	allowed := true
 	if resp.StatusCode == http.StatusOK {
-		allowed = robotsAllows(body, path)
+		allowed = scraper.RobotsAllows(body, path)
 	}
 	cacheRobots(mu, cache, allowed)
 	if !allowed {
@@ -558,58 +556,4 @@ func stripHTML(s string) string {
 	noTags := htmlTagPattern.ReplaceAllString(s, " ")
 	collapsed := htmlWhitespacePattern.ReplaceAllString(noTags, " ")
 	return strings.TrimSpace(collapsed)
-}
-
-// --- robots.txt ------------------------------------------------------------
-
-// robotsAllows is the same pragmatic subset of RFC 9309 used by every
-// other scraper in this project — wildcard user-agent, prefix-match,
-// longest-match-wins.
-func robotsAllows(content []byte, path string) bool {
-	var disallow, allow []string
-	inStar := false
-	sc := bufio.NewScanner(bytes.NewReader(content))
-	for sc.Scan() {
-		line := sc.Text()
-		if i := strings.IndexByte(line, '#'); i >= 0 {
-			line = line[:i]
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		key = strings.ToLower(strings.TrimSpace(key))
-		value = strings.TrimSpace(value)
-		switch key {
-		case "user-agent":
-			inStar = value == "*"
-		case "disallow":
-			if inStar && value != "" {
-				disallow = append(disallow, value)
-			}
-		case "allow":
-			if inStar && value != "" {
-				allow = append(allow, value)
-			}
-		}
-	}
-	blocked := longestPrefix(disallow, path)
-	if blocked == 0 {
-		return true
-	}
-	return longestPrefix(allow, path) >= blocked
-}
-
-func longestPrefix(rules []string, path string) int {
-	best := 0
-	for _, r := range rules {
-		if len(r) > best && strings.HasPrefix(path, r) {
-			best = len(r)
-		}
-	}
-	return best
 }

@@ -33,8 +33,11 @@ Two instructions interacted badly:
 2. Autonomous mode expects agents to decide routine implementation details and report them after
    the fact.
 
-The agent followed the first rule mechanically without applying the second rule's distinction
-between a product decision and a routine corrective implementation choice.
+This was an autonomous-mode classification bug. Routine, reversible corrective work inside
+existing authorization must not trigger brainstorming's stop/question gate; changes to product
+scope or unresolved product trade-offs still must. The agent followed the first rule mechanically
+without applying the second rule's distinction between a product decision and a routine corrective
+implementation choice.
 
 ## Required Behavior
 

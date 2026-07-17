@@ -80,30 +80,6 @@ func TestClientGetErrorsOnNon200(t *testing.T) {
 	}
 }
 
-func TestRobotsAllows(t *testing.T) {
-	cases := []struct {
-		name    string
-		robots  string
-		path    string
-		allowed bool
-	}{
-		{"empty file", "", "/api/positions", true},
-		{"unrelated disallow", "User-agent: *\nDisallow: /admin\n", "/api/positions", true},
-		{"disallowed prefix", "User-agent: *\nDisallow: /api\n", "/api/positions", false},
-		{"empty disallow allows all", "User-agent: *\nDisallow:\n", "/api/positions", true},
-		{"rule for another UA ignored", "User-agent: EvilBot\nDisallow: /\n", "/api/positions", true},
-		{"allow overrides disallow", "User-agent: *\nDisallow: /api\nAllow: /api/positions\n", "/api/positions", true},
-		{"comments ignored", "# hello\nUser-agent: *\nDisallow: /api # nope\n", "/api/positions", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := robotsAllows([]byte(tc.robots), tc.path); got != tc.allowed {
-				t.Errorf("robotsAllows = %v, want %v", got, tc.allowed)
-			}
-		})
-	}
-}
-
 func TestCheckAccessAllowsWhenRobotsAbsent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r) // a 404 robots.txt means unrestricted (RFC 9309)

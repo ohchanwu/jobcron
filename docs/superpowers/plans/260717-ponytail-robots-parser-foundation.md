@@ -64,9 +64,10 @@ Rallit consumer. The reviewed Daangn prerequisite is an ancestor, and the live G
 passes before parser edits. No template, JavaScript, SQL, migration, reflection, or configuration
 caller.
 
-- [ ] **Step 2: Copy the Jumpit parser table into owner-level tests**
+- [ ] **Step 2: Copy the complete Jumpit parser table into owner-level tests**
 
-Create a table-driven `TestRobotsAllows` in package `scraper` covering:
+The prior five-case list was incomplete. Create a table-driven `TestRobotsAllows` in package
+`scraper` that preserves all seven base Jumpit cases:
 
 ```go
 tests := []struct {
@@ -75,9 +76,11 @@ tests := []struct {
 }{
 	{"empty", "", "/api/positions", true},
 	{"other agent", "User-agent: bot\nDisallow: /", "/api/positions", true},
+	{"unrelated disallow", "User-agent: *\nDisallow: /admin", "/api/positions", true},
 	{"wildcard disallow", "User-agent: *\nDisallow: /api", "/api/positions", false},
 	{"longer allow", "User-agent: *\nDisallow: /\nAllow: /api", "/api/x", true},
 	{"empty disallow", "User-agent: *\nDisallow:", "/api/x", true},
+	{"inline comment", "User-agent: *\nDisallow: /api # nope", "/api/positions", false},
 }
 ```
 

@@ -1,15 +1,14 @@
 package jumpit
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
 const (
@@ -170,65 +169,10 @@ func (c *client) hostAllows(ctx context.Context, host string) (bool, error) {
 	}
 	allowed := true
 	if status == http.StatusOK {
-		allowed = robotsAllows(body, robotsCheckPath)
+		allowed = scraper.RobotsAllows(body, robotsCheckPath)
 	}
 	c.robotsMu.Lock()
 	c.robotsCache[host] = robotsEntry{allowed: allowed, expiresAt: time.Now().Add(robotsTTL)}
 	c.robotsMu.Unlock()
 	return allowed, nil
-}
-
-// robotsAllows reports whether path is allowed for our scraper by the given
-// robots.txt content. It honors the "User-agent: *" group with prefix-match
-// Disallow/Allow rules and longest-match-wins. This is a pragmatic subset of
-// RFC 9309 — sufficient for v1's single, well-understood source.
-func robotsAllows(content []byte, path string) bool {
-	var disallow, allow []string
-	inStar := false
-	sc := bufio.NewScanner(bytes.NewReader(content))
-	for sc.Scan() {
-		line := sc.Text()
-		if i := strings.IndexByte(line, '#'); i >= 0 {
-			line = line[:i]
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		key = strings.ToLower(strings.TrimSpace(key))
-		value = strings.TrimSpace(value)
-		switch key {
-		case "user-agent":
-			inStar = value == "*"
-		case "disallow":
-			if inStar && value != "" {
-				disallow = append(disallow, value)
-			}
-		case "allow":
-			if inStar && value != "" {
-				allow = append(allow, value)
-			}
-		}
-	}
-	blocked := longestPrefixMatch(disallow, path)
-	if blocked == 0 {
-		return true
-	}
-	return longestPrefixMatch(allow, path) >= blocked
-}
-
-// longestPrefixMatch returns the length of the longest rule that is a prefix
-// of path, or 0 when none match.
-func longestPrefixMatch(rules []string, path string) int {
-	best := 0
-	for _, r := range rules {
-		if len(r) > best && strings.HasPrefix(path, r) {
-			best = len(r)
-		}
-	}
-	return best
 }

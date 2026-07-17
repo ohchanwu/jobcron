@@ -573,13 +573,25 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-002.
 - Plan: `docs/superpowers/plans/260717-ponytail-robots-parser-foundation.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Implementation: the exact delivery SHA is recorded in the ignored implementation report;
+  this tracked commit cannot embed its own final hash.
+- Reviewed source: frozen WIP `35871f49664d43b35fafc8774a35be2d4042f09d`.
 - Behavior owner: new `internal/scraper/robots.go`, limited to parsing and path matching.
 - Production files: `internal/scraper/robots.go`, `internal/scraper/demoday/demoday.go`,
   `internal/scraper/greenhouse/greenhouse.go`, `internal/scraper/greeting/greeting.go`, and
   `internal/scraper/jumpit/client.go`.
-- Behavior lock: shared parser characterization plus each converted source's access tests.
-- Estimated delta: at least minus 100 production lines; zero dependencies.
+- Behavior lock: the complete seven-case shared characterization is preserved, plus each
+  converted source's access tests.
+- Actual delta: exactly 164 production lines removed; 2 test lines added; zero direct-dependency
+  change. Controlled shipped-binary delta: `jobcron` minus 16,768 bytes; importer and user tool
+  unchanged.
+- Verification: focused and full unit/race/coverage, static, build, four live scraper contracts,
+  four CGO-free cross-target builds, exact-SHA binaries, scoped Gitleaks, publication review, and
+  independent adversarial review gates passed.
+- Ponytail: one scraper-owned stdlib parser replaces four byte-equivalent copies. Fetch, cache,
+  host, path, status, failure, pacing, and error policies remain source-local.
+- Rollback: revert the exact delivery commit recorded in the ignored implementation report.
 - Rollback boundary: one parser-owner commit restores the four local copies.
 - Reversibility: it is self-contained at its ordered checkpoint; after `PT4-007`, full rollback
   reverts `PT4-007` first and then this single commit.
