@@ -1,7 +1,8 @@
 # Ponytail Reduction Candidate Ledger
 
-This ledger records evidence only. An entry in Accepted Candidates is accepted for Task 4
-triage, not approved for implementation. Task 4 must still apply the campaign acceptance gate.
+Task 3 recorded the independent evidence set. Task 4 rechecked every candidate at Mayor base
+`2b3046c170cb1667c880bf5c3b889aaafe8a1469`, applied every acceptance condition, and approved
+only the ordered batches recorded below.
 
 ## Baseline
 
@@ -51,7 +52,7 @@ each target environment. The ignored evidence records the binary module metadata
 
 No direct dependency has a smaller safe standard-library or native replacement.
 
-## Accepted Candidates
+## Task 3 Accepted-for-Triage Candidates
 
 These findings are admitted to Task 4 for full semantic tracing and acceptance review.
 
@@ -176,7 +177,7 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Status: `accepted` for Task 4 evidence because the similarly named template binding is a
   different live symbol.
 
-## Rejected Candidates
+## Task 3 Rejected Candidates
 
 ### PONY-009: Merge bookmark and not-interested HTTP handlers
 
@@ -250,7 +251,7 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Status: `rejected` because the campaign forbids manufacturing reduction from tests and the
   duplicated setup keeps failures local and legible.
 
-## Needs Separate Product or Architecture Decision
+## Task 3 Separate-Decision Candidate
 
 ### PONY-001: Share the exact-token matching primitive
 
@@ -281,25 +282,298 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Status: `separate decision` because creating a new lower-level package changes ownership even
   though the primitive is stable and already duplicated.
 
-## Batch Order
+## Task 4 Semantic Triage
 
-Task 4 has not approved implementation batches. The evidence-first order is:
+The recheck covered definitions, Go callers, templates, JavaScript, SQL and migrations,
+reflection and registration, build tags, configuration, tests, and focused Git history.
+No consumer beyond the Task 3 inventory was found. The six semantic classes below are the
+classes defined by the campaign plan; reachability-only PONY-005 is not a duplicate candidate.
 
-1. PONY-006, PONY-007, and PONY-008 as independent unreachable-code checks.
-2. PONY-005 as a scheduler API simplification.
-3. PONY-004 as storage-owned row-loop reuse.
-4. PONY-002 and PONY-003 only after cross-consumer characterization.
-5. PONY-001 only after the separate ownership decision.
+The gate labels are: contract, consumers, coverage, owner, reduction, design, and rollback.
+`Design` passes only when the change avoids a speculative or catch-all abstraction and an
+import cycle. Batch-shape constraints are applied after the seven-condition gate.
 
-Rejected candidates do not enter a batch.
+### PONY-001 gate: approved
 
-## Final Comparison
+- Semantic class: 4, one stable primitive with separate scoring and AI policies.
+- Contract: pass — exact contiguous matching over normalized Unicode letter/digit tokens.
+- Consumers: pass — scoring, deduplication, AI citation gates, FTS5, and docs are traced.
+- Coverage: pass — tokenizer, phrase, citation, scoring, and deduplication tests lock behavior.
+- Owner: pass — `internal/tokenmatch` is a narrow owner justified by two current packages.
+- Reduction: pass — about 25 net production lines and no dependency change.
+- Design: pass — both packages import down to the owner; neither imports the other.
+- Rollback: pass — one three-production-file semantic commit restores both local copies.
+- Decision: approve as `PT4-005`; the Task 3 ownership question is resolved narrowly.
 
-Task 3 records a possible ceiling, not an achieved reduction:
+### PONY-002 gate: approved in two batches
 
-- production lines removed: 0;
-- direct dependencies removed: 0;
-- accepted-for-triage findings: 7;
+- Semantic class: 4, one parser primitive with source-owned fetch and failure policies.
+- Contract: pass — all five copies implement the same RFC 9309 subset.
+- Consumers: pass — five source access checks are the only consumers.
+- Coverage: pass — source access tests exist and shared characterization is practical.
+- Owner: pass — the existing `internal/scraper` package owns cross-source primitives.
+- Reduction: pass — about 140 production lines and no dependency change.
+- Design: pass — only parsing moves; hosts, caches, paths, and error policy remain local.
+- Rollback: pass — each ordered conversion is one commit; full rollback runs in reverse order.
+- Decision: approve as `PT4-006` and `PT4-007`. The first batch adds the owner and converts
+  four consumers with a negative delta; the remaining one-file conversion is also negative.
+
+### PONY-003 gate: approved in two batches
+
+- Semantic class: 4, one request-start primitive with caller-owned timing and error policy.
+- Contract: pass — all seven copies reserve starts under a mutex and honor cancellation.
+- Consumers: pass — one AI provider and six scraper clients are the only consumers.
+- Coverage: pass — existing timing tests plus concurrent characterization can lock behavior.
+- Owner: pass — seven current consumers justify a narrow `internal/pacing` owner.
+- Reduction: pass — about 95 production lines and no dependency change.
+- Design: pass — a concrete pacer needs no interface, callback, or catch-all helper.
+- Rollback: pass — each ordered conversion is one commit; full rollback runs in reverse order.
+- Decision: approve as `PT4-008` and `PT4-009`. The first batch adds the owner and converts
+  four consumers with a negative delta; the remaining three-file conversion is also negative.
+
+### PONY-004 gate: approved
+
+- Semantic class: 3, the existing storage scanner already owns row decoding.
+- Contract: pass — scan rows in order, stop on scan failure, then return `rows.Err()`.
+- Consumers: pass — four bookmark and not-interested listing loops are traced.
+- Coverage: pass — ordered-list and PostgreSQL user-scope tests lock the behavior.
+- Owner: pass — `internal/storage/postings.go` already owns `scanPosting`.
+- Reduction: pass — about 30 production lines and no dependency change.
+- Design: pass — SQL, table names, timestamps, and error policy stay in each domain.
+- Rollback: pass — one three-production-file storage commit is self-contained.
+- Decision: approve as `PT4-004`.
+
+### PONY-005 gate: approved
+
+- Semantic class: not applicable; this is a reachability and API-surface candidate.
+- Contract: pass — start validation and the background scheduler loop are preserved.
+- Consumers: pass — the command and two scheduler tests ignore the returned handle.
+- Coverage: pass — scheduled-run and busy-lock tests exercise the live behavior.
+- Owner: pass — `internal/server` owns scheduler startup and lifecycle.
+- Reduction: pass — about 10 production lines and no dependency change.
+- Design: pass — deletion removes an unused wrapper instead of adding an abstraction.
+- Rollback: pass — one two-production-file commit restores the old signature and handle.
+- Decision: approve as `PT4-010`.
+
+### PONY-006 gate: approved
+
+- Semantic class: 3, `ModelInput` already owns text assembly, truncation, and hashing.
+- Contract: pass — callers receive identical model text while ignoring the extra hash.
+- Consumers: pass — only two `aispike`-tagged test calls use `buildModelText`.
+- Coverage: pass — `TestBuildModelTextTruncationAndHashStability` locks the owner.
+- Owner: pass — `internal/ai.ModelInput` is the existing behavior owner.
+- Reduction: pass — about 13 production lines and no dependency change.
+- Design: pass — reuse deletes a duplicate wrapper without new plumbing.
+- Rollback: pass — one production file plus tagged tests forms one reversible AI commit.
+- Decision: approve as `PT4-003`.
+
+### PONY-007 gate: approved
+
+- Semantic class: 3, the private `defaultKeysPath` seam already owns path construction.
+- Contract: pass — the exported wrapper only supplies `os.UserConfigDir`.
+- Consumers: pass — no Go, non-Go, reflection, configuration, or migration consumer exists.
+- Coverage: pass — the private path-builder test locks the canonical directory contract.
+- Owner: pass — explicit importer wiring and the private test seam remain authoritative.
+- Reduction: pass — about six production lines and no dependency change.
+- Design: pass — deletion removes an unreachable wrapper and adds nothing.
+- Rollback: pass — one production-file commit restores the wrapper.
+- Decision: approve as `PT4-001`.
+
+### PONY-008 gate: approved
+
+- Semantic class: 3, `Server.sources` and `allRegisteredSources` already own live behavior.
+- Contract: pass — the dead method returns the internal scraper slice unchanged.
+- Consumers: pass — no caller exists; the same-named template binding uses another method.
+- Coverage: pass — a narrow function-map binding assertion can lock the name distinction.
+- Owner: pass — the field owns internal iteration and `allRegisteredSources` owns templates.
+- Reduction: pass — about four production lines and no dependency change.
+- Design: pass — deletion adds no abstraction and preserves registration order.
+- Rollback: pass — one production-file server commit restores the method.
+- Decision: approve as `PT4-002`.
+
+### PONY-009 gate: rejected
+
+- Semantic class: 2, the HTTP handlers share shape but enforce different user policy.
+- Contract: fail — bookmark visibility and mute filtering are not one behavior contract.
+- Consumers: pass — routes, JavaScript, templates, storage calls, and tests are traced.
+- Coverage: pass — bookmark, hidden, archive, and user-scope suites lock both policies.
+- Owner: fail — each user-state domain is the clear owner; no shared owner exists.
+- Reduction: pass — callbacks could remove fewer than 15 production lines.
+- Design: fail — a generic callback handler would hide JSON and visibility differences.
+- Rollback: pass — a two-production-file server change could be reverted in one commit.
+- Decision: reject; preserve the separate handlers.
+
+### PONY-010 gate: rejected
+
+- Semantic class: 2, storage methods share shape but own different state policy.
+- Contract: fail — tables, timestamps, errors, visibility, and public methods differ.
+- Consumers: pass — server surfaces, SQLite, PostgreSQL, and migrations are traced.
+- Coverage: pass — storage, isolation, sweep, and PostgreSQL tests lock both domains.
+- Owner: fail — each table domain owns its operations; only PONY-004 has a shared owner.
+- Reduction: fail — dynamic SQL plumbing offsets an uncertain deletion.
+- Design: fail — identifier parameterization weakens query clarity and safety.
+- Rollback: pass — a two-production-file storage change could be reverted in one commit.
+- Decision: reject; share only row consumption through PONY-004.
+
+### PONY-011 gate: rejected
+
+- Semantic class: 5, explicit duplication preserves the import transaction boundary.
+- Contract: fail — the two categories own different tables, timestamps, and verification.
+- Consumers: pass — apply, rollback, fingerprint, and post-commit paths are traced.
+- Coverage: pass — representative and every-boundary rollback tests lock import safety.
+- Owner: fail — each migration category is intentionally explicit.
+- Reduction: pass — dynamic identifiers could remove about 15 production lines.
+- Design: fail — generic migration plumbing weakens a no-reduction safety boundary.
+- Rollback: pass — the importer change could be reverted in one commit.
+- Decision: reject; retain the explicit copies.
+
+### PONY-012 gate: rejected
+
+- Semantic class: 2, HTTP helpers share shape but enforce source-specific policy.
+- Contract: fail — hosts, headers, status handling, failure posture, and cache keys differ.
+- Consumers: pass — every concrete scraper and source test is traced.
+- Coverage: pass — client and integration suites lock the source policies.
+- Owner: fail — each concrete scraper owns its network policy.
+- Reduction: fail — configuration and callbacks offset the apparent clone deletion.
+- Design: fail — a complete shared helper would be a catch-all network abstraction.
+- Rollback: pass — a semantic scraper commit could restore the local helpers.
+- Decision: reject; PONY-002 and PONY-003 already isolate the only stable primitives.
+
+### PONY-013 gate: rejected
+
+- Semantic class: 6, test-only setup duplication across distinct scenarios.
+- Contract: pass — each test clearly names its user action and failure surface.
+- Consumers: pass — only the test runner consumes the setup.
+- Coverage: pass — the duplicated tests are the behavior locks.
+- Owner: fail — each behavior suite is clearer as its own owner.
+- Reduction: fail — the proposal removes no production code or dependency.
+- Design: fail — a shared test helper would hide scenario-specific setup and failures.
+- Rollback: pass — a test-only commit could be reverted independently.
+- Decision: reject; test deletion cannot manufacture campaign reduction.
+
+## Approved Ordered Batches
+
+### PT4-001: remove the unused default AI-key path wrapper
+
+- Candidate: PONY-007.
+- Behavior owner: private `defaultKeysPath` plus explicit importer path wiring.
+- Production files: `internal/ai/keys.go`.
+- Behavior lock: `TestDefaultKeysPathUsesCanonicalApplicationDirectory`.
+- Estimated delta: minus six production lines; zero dependencies.
+- Rollback boundary: one AI-key-path commit restoring one wrapper.
+- Reversibility: no later batch depends on the exported wrapper or this deletion.
+
+### PT4-002: remove the unused registered-source method
+
+- Candidate: PONY-008.
+- Behavior owner: `Server.sources` and `Server.allRegisteredSources`.
+- Production files: `internal/server/sources.go`.
+- Behavior lock: a function-map binding assertion plus existing profile rendering tests.
+- Estimated delta: minus four production lines; zero dependencies.
+- Rollback boundary: one server-source commit restoring one private method.
+- Reversibility: no consumer or later batch depends on the deleted method.
+
+### PT4-003: replace `buildModelText` with `ModelInput`
+
+- Candidate: PONY-006.
+- Behavior owner: `internal/ai.ModelInput`.
+- Production files: `internal/ai/extract.go`.
+- Behavior lock: `TestBuildModelTextTruncationAndHashStability` and `aispike` compilation.
+- Estimated delta: minus 13 production lines; zero dependencies.
+- Rollback boundary: one AI model-input commit with its tagged-test call-site updates.
+- Reversibility: no other approved batch changes model-input assembly.
+
+### PT4-004: reuse one storage posting-row collector
+
+- Candidate: PONY-004.
+- Behavior owner: `internal/storage/postings.go` beside `scanPosting`.
+- Production files: `internal/storage/postings.go`, `internal/storage/bookmarks.go`, and
+  `internal/storage/not_interested.go`.
+- Behavior lock: ordered bookmark and mute tests plus PostgreSQL user-scope tests.
+- Estimated delta: minus 30 production lines; zero dependencies.
+- Rollback boundary: one storage-row-consumption commit; SQL remains untouched.
+- Reversibility: no other approved batch changes storage queries or row scanning.
+
+### PT4-005: share exact-token matching below scoring and AI
+
+- Candidate: PONY-001.
+- Behavior owner: new narrow `internal/tokenmatch/tokenmatch.go`.
+- Production files: `internal/tokenmatch/tokenmatch.go`, `internal/scoring/match.go`, and
+  `internal/ai/score_delta.go`.
+- Behavior lock: tokenizer, phrase, citation, score, and deduplication tests.
+- Estimated delta: minus 25 net production lines; zero dependencies.
+- Rollback boundary: one token-primitive commit restores both policy-local copies.
+- Reversibility: no other approved batch imports or changes `internal/tokenmatch`.
+
+### PT4-006: add the shared robots parser and convert four sources
+
+- Candidate: PONY-002.
+- Behavior owner: new `internal/scraper/robots.go`, limited to parsing and path matching.
+- Production files: `internal/scraper/robots.go`, `internal/scraper/demoday/demoday.go`,
+  `internal/scraper/greenhouse/greenhouse.go`, `internal/scraper/greeting/greeting.go`, and
+  `internal/scraper/jumpit/client.go`.
+- Behavior lock: shared parser characterization plus each converted source's access tests.
+- Estimated delta: at least minus 100 production lines; zero dependencies.
+- Rollback boundary: one parser-owner commit restores the four local copies.
+- Reversibility: it is self-contained at its ordered checkpoint; after `PT4-007`, full rollback
+  reverts `PT4-007` first and then this single commit.
+
+### PT4-007: convert the remaining robots parser consumer
+
+- Candidate: PONY-002.
+- Behavior owner: `internal/scraper/robots.go` from `PT4-006`.
+- Production files: `internal/scraper/rallit/client.go`.
+- Behavior lock: the shared characterization and Rallit access tests.
+- Estimated delta: about minus 40 production lines; zero dependencies.
+- Rollback boundary: one Rallit commit restores its local parser and removes its shared call.
+- Reversibility: reverting it does not change the owner or the first four consumers.
+
+### PT4-008: add the shared request pacer and convert four consumers
+
+- Candidate: PONY-003.
+- Behavior owner: new concrete `internal/pacing/pacing.go`; callers retain timing policy.
+- Production files: `internal/pacing/pacing.go`, `internal/ai/client.go`,
+  `internal/scraper/demoday/demoday.go`, `internal/scraper/greenhouse/greenhouse.go`, and
+  `internal/scraper/greeting/greeting.go`.
+- Behavior lock: new concurrent-start and cancellation characterization plus current client
+  timing tests.
+- Estimated delta: about minus 45 production lines; zero dependencies.
+- Rollback boundary: one pacer-owner commit restores the four local implementations.
+- Reversibility: it is self-contained at its ordered checkpoint; after `PT4-009`, full rollback
+  reverts `PT4-009` first and then this single commit.
+
+### PT4-009: convert the remaining request-pacer consumers
+
+- Candidate: PONY-003.
+- Behavior owner: `internal/pacing/pacing.go` from `PT4-008`.
+- Production files: `internal/scraper/jumpit/client.go`,
+  `internal/scraper/rallit/client.go`, and `internal/scraper/worknet/client.go`.
+- Behavior lock: Jumpit concurrency timing plus Rallit and Worknet client tests.
+- Estimated delta: about minus 50 production lines; zero dependencies.
+- Rollback boundary: one three-client commit restores their local pacers.
+- Reversibility: reverting it does not change the owner or the first four consumers.
+
+### PT4-010: remove the unused scheduler handle
+
+- Candidate: PONY-005.
+- Behavior owner: `internal/server` scheduler startup.
+- Production files: `internal/server/scheduler.go` and `cmd/jobcron/main.go`.
+- Behavior lock: `TestStartSchedulerRunsScheduledScrapeAfterSleep` and
+  `TestStartSchedulerRecordsSkippedRunWhenScrapeLockBusy`.
+- Estimated delta: minus 10 production lines; zero dependencies.
+- Rollback boundary: one scheduler-API commit restores the return type and ignored handle.
+- Reversibility: no other approved batch changes scheduler startup or lifecycle.
+
+All batches cover one domain, touch at most five production files, target negative production
+lines, and have no direct-dependency change. The two split clusters have explicit ordered
+rollback. Estimated approved total: minus 323 production lines across ten reversible batches.
+
+## Task 4 Final Comparison
+
+- approved findings: 8;
 - rejected findings: 5;
-- separate-decision findings: 1; and
-- source or user-visible behavior changes: none.
+- separate-decision findings: 0;
+- approved batches: 10;
+- estimated production-line delta: minus 323;
+- direct-dependency delta: 0; and
+- source or user-visible behavior changes in Task 4: none.
