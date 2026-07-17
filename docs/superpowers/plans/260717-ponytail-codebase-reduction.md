@@ -327,10 +327,12 @@ repositories while Jobcron establishes the baseline.
 
 - [ ] **Step 4: Trust the hooks and start a fresh thread**
 
-Start Codex, open `/hooks`, review Ponytail's two lifecycle hooks, and trust them
-only after confirming they come from the installed plugin. Confirm the plugin
-is enabled in Claude Code. Start fresh Jobcron threads in the host or hosts that
-will execute the campaign so hook activation is deterministic.
+Start Codex, open `/hooks`, and review Ponytail's `SessionStart`,
+`SubagentStart`, and `UserPromptSubmit` hook event groups. Trust them only after
+confirming they come from the installed plugin and inspecting every script they
+invoke. Confirm the plugin is enabled in Claude Code. Start fresh Jobcron
+threads in the host or hosts that will execute the campaign so hook activation
+is deterministic.
 
 - [ ] **Step 5: Select the campaign mode**
 
