@@ -574,6 +574,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-010: remove the unused scheduler handle
 
 - Candidate: PONY-005.
+- Plan: `docs/superpowers/plans/260717-ponytail-scheduler-api-reduction.md`.
+- Status: `planned`.
 - Behavior owner: `internal/server` scheduler startup.
 - Production files: `internal/server/scheduler.go` and `cmd/jobcron/main.go`.
 - Behavior lock: `TestStartSchedulerRunsScheduledScrapeAfterSleep` and

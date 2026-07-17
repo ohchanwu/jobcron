@@ -17,6 +17,7 @@ decision records needed for the current task.
 - [Ponytail robots parser completion](plans/260717-ponytail-robots-parser-completion.md)
 - [Ponytail request pacer foundation](plans/260717-ponytail-request-pacer-foundation.md)
 - [Ponytail request pacer completion](plans/260717-ponytail-request-pacer-completion.md)
+- [Ponytail scheduler API reduction](plans/260717-ponytail-scheduler-api-reduction.md)
 - [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
