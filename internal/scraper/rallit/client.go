@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ohchanwu/jobcron/internal/pacing"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
@@ -28,12 +29,9 @@ const (
 
 // client is the low-level 랠릿 HTTP client — rate-limited and robots-aware.
 type client struct {
-	http      *http.Client
-	baseURL   string
-	rateLimit time.Duration
-
-	mu          sync.Mutex
-	lastRequest time.Time
+	http    *http.Client
+	baseURL string
+	pacer   *pacing.Pacer
 
 	robotsMu    sync.Mutex
 	robotsCache *robotsEntry
@@ -48,41 +46,16 @@ type robotsEntry struct {
 // minimum spacing enforced between requests; pass 0 in tests.
 func newClient(baseURL string, rateLimit time.Duration) *client {
 	return &client{
-		http:      &http.Client{Timeout: 30 * time.Second},
-		baseURL:   baseURL,
-		rateLimit: rateLimit,
-	}
-}
-
-// waitForRateLimit blocks until at least rateLimit has elapsed since the
-// previous request began, or ctx is cancelled. Reserves the next slot
-// under the mutex so callers stay correctly paced.
-func (c *client) waitForRateLimit(ctx context.Context) error {
-	c.mu.Lock()
-	var wait time.Duration
-	if !c.lastRequest.IsZero() {
-		if elapsed := time.Since(c.lastRequest); elapsed < c.rateLimit {
-			wait = c.rateLimit - elapsed
-		}
-	}
-	c.lastRequest = time.Now().Add(wait)
-	c.mu.Unlock()
-
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+		http:    &http.Client{Timeout: 30 * time.Second},
+		baseURL: baseURL,
+		pacer:   pacing.New(rateLimit),
 	}
 }
 
 // get fetches path (e.g. "/api/v1/position?pageNumber=1") and requires a
 // 200 response.
 func (c *client) get(ctx context.Context, path string) ([]byte, error) {
-	if err := c.waitForRateLimit(ctx); err != nil {
+	if err := c.pacer.Wait(ctx); err != nil {
 		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)

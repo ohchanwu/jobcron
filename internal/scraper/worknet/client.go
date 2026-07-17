@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ohchanwu/jobcron/internal/pacing"
 )
 
 const (
@@ -32,13 +34,10 @@ const (
 // and key-redacted. The authKey lives only inside this client so other
 // packages cannot accidentally log it.
 type client struct {
-	http      *http.Client
-	baseURL   string
-	authKey   string
-	rateLimit time.Duration
-
-	mu          sync.Mutex
-	lastRequest time.Time
+	http    *http.Client
+	baseURL string
+	authKey string
+	pacer   *pacing.Pacer
 
 	robotsMu    sync.Mutex
 	robotsCache *robotsEntry
@@ -55,35 +54,10 @@ type robotsEntry struct {
 // tests to disable pacing.
 func newClient(baseURL, authKey string, rateLimit time.Duration) *client {
 	return &client{
-		http:      &http.Client{Timeout: 30 * time.Second},
-		baseURL:   baseURL,
-		authKey:   authKey,
-		rateLimit: rateLimit,
-	}
-}
-
-// waitForRateLimit blocks until at least rateLimit has elapsed since the
-// previous request began, or ctx is cancelled. Reserves the next slot under
-// the mutex so callers stay correctly paced.
-func (c *client) waitForRateLimit(ctx context.Context) error {
-	c.mu.Lock()
-	var wait time.Duration
-	if !c.lastRequest.IsZero() {
-		if elapsed := time.Since(c.lastRequest); elapsed < c.rateLimit {
-			wait = c.rateLimit - elapsed
-		}
-	}
-	c.lastRequest = time.Now().Add(wait)
-	c.mu.Unlock()
-
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+		http:    &http.Client{Timeout: 30 * time.Second},
+		baseURL: baseURL,
+		authKey: authKey,
+		pacer:   pacing.New(rateLimit),
 	}
 }
 
@@ -92,7 +66,7 @@ func (c *client) waitForRateLimit(ctx context.Context) error {
 // appears in caller-built strings (and therefore never in error messages
 // or logs). errors redact the key from the URL.
 func (c *client) call(ctx context.Context, params url.Values) ([]byte, error) {
-	if err := c.waitForRateLimit(ctx); err != nil {
+	if err := c.pacer.Wait(ctx); err != nil {
 		return nil, err
 	}
 	q := url.Values{}

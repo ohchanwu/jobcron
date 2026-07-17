@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -65,6 +66,47 @@ func TestClientGetRateLimits(t *testing.T) {
 	}
 	if gap := times[1].Sub(times[0]); gap < 80*time.Millisecond {
 		t.Errorf("request spacing = %v, want >= ~100ms (rate limited)", gap)
+	}
+}
+
+func TestClientGetRateLimitsConcurrent(t *testing.T) {
+	const spacing = 40 * time.Millisecond
+	var (
+		mu    sync.Mutex
+		times []time.Time
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		times = append(times, time.Now())
+		mu.Unlock()
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := newClient(srv.URL, spacing)
+	start := make(chan struct{})
+	errs := make(chan error, 3)
+	for range 3 {
+		go func() {
+			<-start
+			_, err := c.get(context.Background(), "/api/positions")
+			errs <- err
+		}()
+	}
+	close(start)
+	for range 3 {
+		if err := <-errs; err != nil {
+			t.Fatalf("get: %v", err)
+		}
+	}
+
+	mu.Lock()
+	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+	mu.Unlock()
+	for i := 1; i < len(times); i++ {
+		if gap := times[i].Sub(times[i-1]); gap < 30*time.Millisecond {
+			t.Fatalf("concurrent request gap %d = %v, want at least 30ms", i, gap)
+		}
 	}
 }
 

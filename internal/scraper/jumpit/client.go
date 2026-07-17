@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ohchanwu/jobcron/internal/pacing"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 )
 
@@ -40,12 +41,9 @@ var defaultRobotsHosts = []string{
 // client is the low-level 점핏 HTTP client. It paces requests so consecutive
 // calls are at least rateLimit apart and caches robots.txt verdicts per host.
 type client struct {
-	http      *http.Client
-	baseURL   string
-	rateLimit time.Duration
-
-	mu          sync.Mutex
-	lastRequest time.Time
+	http    *http.Client
+	baseURL string
+	pacer   *pacing.Pacer
 
 	robotsHosts []string
 	robotsMu    sync.Mutex
@@ -64,41 +62,16 @@ func newClient(baseURL string, rateLimit time.Duration) *client {
 	return &client{
 		http:        &http.Client{Timeout: 30 * time.Second},
 		baseURL:     baseURL,
-		rateLimit:   rateLimit,
+		pacer:       pacing.New(rateLimit),
 		robotsHosts: defaultRobotsHosts,
 		robotsCache: map[string]robotsEntry{},
-	}
-}
-
-// waitForRateLimit blocks until at least rateLimit has elapsed since the
-// previous request began, or ctx is cancelled. It reserves the next slot
-// under the mutex so callers stay correctly paced.
-func (c *client) waitForRateLimit(ctx context.Context) error {
-	c.mu.Lock()
-	var wait time.Duration
-	if !c.lastRequest.IsZero() {
-		if elapsed := time.Since(c.lastRequest); elapsed < c.rateLimit {
-			wait = c.rateLimit - elapsed
-		}
-	}
-	c.lastRequest = time.Now().Add(wait)
-	c.mu.Unlock()
-
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 }
 
 // fetch performs a rate-limited GET of fullURL with the polite 점핏 headers
 // and returns the response body and HTTP status code.
 func (c *client) fetch(ctx context.Context, fullURL string) ([]byte, int, error) {
-	if err := c.waitForRateLimit(ctx); err != nil {
+	if err := c.pacer.Wait(ctx); err != nil {
 		return nil, 0, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
