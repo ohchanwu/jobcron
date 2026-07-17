@@ -18,10 +18,16 @@ Use this index instead of recursively loading the entire documentation tree.
 - [Job-platform comparison](research/job-platforms-comparison.md)
 - [채용 플랫폼 비교](research/job-platforms-comparison.ko.md)
 
+## Learnings
+
+- [Brainstorming skill and autonomous-mode question gates][brainstorming-autonomous-gate]
+
 ## Implementation Work
 
 - [Active Superpowers work and context policy](superpowers/README.md)
 - [Ponytail codebase reduction campaign](superpowers/plans/260717-ponytail-codebase-reduction.md)
+- [Daangn canonical role URLs](superpowers/specs/260717-daangn-canonical-role-urls.md)
+- [Daangn canonical role URL implementation][daangn-canonical-plan]
 - [Ponytail reduction candidate ledger][ponytail-ledger]
 - [Ponytail AI key path reduction](superpowers/plans/260717-ponytail-ai-key-path-reduction.md)
 - [Ponytail server source reduction](superpowers/plans/260717-ponytail-server-source-reduction.md)
@@ -63,6 +69,8 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 - `assets/screenshots/` contains images embedded by the root README files.
 
 [ponytail-ledger]: superpowers/specs/260717-ponytail-reduction-ledger.md
+[brainstorming-autonomous-gate]: learnings/260717-brainstorming-autonomous-mode-question-gate.md
+[daangn-canonical-plan]: superpowers/plans/260717-daangn-canonical-role-urls.md
 [ponytail-storage-row-scan]: superpowers/plans/260717-ponytail-storage-row-scan-reduction.md
 [ponytail-robots-completion]: superpowers/plans/260717-ponytail-robots-parser-completion.md
 [ponytail-request-pacer-foundation]: superpowers/plans/260717-ponytail-request-pacer-foundation.md

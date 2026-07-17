@@ -7,6 +7,8 @@ decision records needed for the current task.
 ## Active Work
 
 - [Ponytail codebase reduction campaign](plans/260717-ponytail-codebase-reduction.md)
+- [Daangn canonical role URLs](specs/260717-daangn-canonical-role-urls.md)
+- [Daangn canonical role URL implementation](plans/260717-daangn-canonical-role-urls.md)
 - [Ponytail reduction candidate ledger](specs/260717-ponytail-reduction-ledger.md)
 - [Ponytail AI key path reduction](plans/260717-ponytail-ai-key-path-reduction.md)
 - [Ponytail server source reduction](plans/260717-ponytail-server-source-reduction.md)
