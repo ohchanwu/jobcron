@@ -41,7 +41,7 @@ and robots cache; only pacing state and calls move to the existing owner.
 **Files:**
 
 - Test: `internal/scraper/jumpit/client_test.go`
-- Create: `internal/scraper/rallit/client_test.go`
+- Modify: `internal/scraper/rallit/client_test.go`
 - Modify: `internal/scraper/worknet/client_test.go`
 - Evidence: `.superpowers/sdd/260717-ponytail/PT4-009-before.md`
 
@@ -117,20 +117,9 @@ This is the approved Jumpit concurrency lock; the older sequential timing test r
 
 - [ ] **Step 3: Add Rallit's passing timing characterization**
 
-Create `internal/scraper/rallit/client_test.go` with the complete file:
+Add `sync` and `time` to the existing `internal/scraper/rallit/client_test.go`, then add:
 
 ```go
-package rallit
-
-import (
-	"context"
-	"net/http"
-	"net/http/httptest"
-	"sync"
-	"testing"
-	"time"
-)
-
 func TestClientGetRateLimits(t *testing.T) {
 	var (
 		mu    sync.Mutex
