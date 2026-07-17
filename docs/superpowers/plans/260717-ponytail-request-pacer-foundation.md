@@ -25,6 +25,8 @@ HTTP construction, hosts, headers, errors, retries, robots policy, and response 
 - Keep each caller's current spacing value, constructor input, and zero-spacing test behavior.
 - Keep the foundation net-negative while adding the owner; target at least 45 fewer lines.
 - Add no interface, callback, generic, configuration, dependency, or HTTP abstraction.
+- Compare binary deltas by building both SHAs sequentially at one checkout path with the same
+  Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring cleanup, or combine this batch with another reduction.
 
 ---

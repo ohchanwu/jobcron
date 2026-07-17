@@ -25,6 +25,8 @@ configuration, starts the existing context-owned goroutine, and returns `error`;
 - Preserve scheduler enablement, logging, scrape serialization, owner resolution, and AI policy.
 - Remove the handle; do not replace it with another type, channel, callback, or interface.
 - Target at least 10 fewer production lines and add no dependency or configuration.
+- Compare binary deltas by building both SHAs sequentially at one checkout path with the same
+  Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring cleanup, or combine this batch with another reduction.
 
 ---

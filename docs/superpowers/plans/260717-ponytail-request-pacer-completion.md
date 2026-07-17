@@ -25,6 +25,8 @@ and robots cache; only pacing state and calls move to the existing owner.
 - Do not edit, move, widen, or redefine the owner created by `PT4-008`.
 - Preserve each client's spacing input, zero-spacing tests, cancellation, and request policy.
 - Target at least 50 fewer production lines and add no dependency or abstraction.
+- Compare binary deltas by building both SHAs sequentially at one checkout path with the same
+  Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring cleanup, or combine this batch with another reduction.
 
 ---

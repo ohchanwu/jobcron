@@ -19,11 +19,14 @@ not need rather than retaining a second production wrapper.
 - Batch: `PT4-003`; candidate: `PONY-006`.
 - Start from the human-reviewed Task 5 tip supplied by Mayor, with clean porcelain.
 - The reviewed base must contain this plan and the ledger entry marked `planned`.
-- Production scope is only `internal/ai/extract.go`.
+- Production scope is `internal/ai/extract.go` plus the owner reference in
+  `internal/ai/doc.go`.
 - Test scope is only `internal/ai/spike_test.go`; do not run its paid live benchmark.
 - Preserve NFC normalization, rune-boundary truncation, the 12-character pre-truncation hash,
   prompts, parsers, citation gates, and provider behavior.
 - Target at least 13 fewer production lines and zero dependency change.
+- Compare binary deltas by building both SHAs sequentially at one checkout path with the same
+  Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring cleanup, or combine this batch with another reduction.
 
 ---
@@ -89,12 +92,13 @@ Expected: all commands pass; record exact results in the ignored before file.
 **Files:**
 
 - Modify: `internal/ai/extract.go:93-107`
+- Modify: `internal/ai/doc.go:12`
 - Test: `internal/ai/spike_test.go:196,422`
 
 **Interfaces:**
 
 - Consumes: `ModelInput(p scraper.Posting) (text, contentHash string, truncated bool)`.
-- Produces: identical `modelText` values in both spike loops.
+- Produces: identical `modelText` values in both spike loops and an accurate package comment.
 
 - [ ] **Step 1: Replace both tagged call sites**
 
@@ -112,7 +116,10 @@ modelText, _, _ := ModelInput(p)
 
 The ignored values are the stable content hash and truncation flag; the spike used neither.
 
-- [ ] **Step 2: Delete `buildModelText` exactly**
+- [ ] **Step 2: Update the owner reference and delete `buildModelText` exactly**
+
+In `internal/ai/doc.go`, replace the stale `buildModelText` reference with `ModelInput`. This is
+the package-level import-layer explanation for the same `scraper.Posting` dependency.
 
 Remove its comment and function body from `internal/ai/extract.go`. Keep `rawModelText`,
 `ModelInput`, `maxModelTextRunes`, SHA-256 hashing, and all imports used by them unchanged.
@@ -120,7 +127,7 @@ Remove its comment and function body from `internal/ai/extract.go`. Keep `rawMod
 - [ ] **Step 3: Run targeted green checks**
 
 ```sh
-gofmt -w internal/ai/extract.go internal/ai/spike_test.go
+gofmt -w internal/ai/doc.go internal/ai/extract.go internal/ai/spike_test.go
 go test ./internal/ai -run '^TestBuildModelTextTruncationAndHashStability$' -count=1
 go test -tags aispike ./internal/ai -run '^$' -count=1
 ! rg -n 'buildModelText' internal/ai
@@ -168,6 +175,7 @@ regress.
 **Files:**
 
 - Modify: `internal/ai/extract.go`
+- Modify: `internal/ai/doc.go`
 - Test: `internal/ai/spike_test.go`
 
 **Interfaces:**
@@ -178,18 +186,19 @@ regress.
 - [ ] **Step 1: Run Ponytail and correctness/security review**
 
 ```sh
-git diff -- internal/ai/extract.go internal/ai/spike_test.go
+git diff -- internal/ai/doc.go internal/ai/extract.go internal/ai/spike_test.go
 git diff --check
 git status --short
 ```
 
-Expected: one wrapper deletion and two three-value calls. Confirm prompts, model text, hashes,
-truncation, provider egress, secret handling, and ordinary tests are unchanged.
+Expected: one wrapper deletion, one owner-reference update, and two three-value calls. Confirm
+prompts, model text, hashes, truncation, provider egress, secret handling, and ordinary tests are
+unchanged.
 
 - [ ] **Step 2: Commit exactly this batch**
 
 ```sh
-git add internal/ai/extract.go internal/ai/spike_test.go
+git add internal/ai/doc.go internal/ai/extract.go internal/ai/spike_test.go
 git diff --cached --check
 git commit -m "refactor(ai): reuse model input builder"
 ```

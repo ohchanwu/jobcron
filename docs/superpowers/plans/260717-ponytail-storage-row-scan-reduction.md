@@ -24,6 +24,8 @@ and `rows.Err`; bookmark and not-interested methods continue to own their querie
 - Preserve SQLite fallback, PostgreSQL user validation, ordering, and `rows.Close` ownership.
 - Do not add a storage interface or dependency.
 - Target at least 30 fewer production lines and zero dependency change.
+- Compare binary deltas by building both SHAs sequentially at one checkout path with the same
+  Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring loop cleanup, or combine this batch with another reduction.
 
 ---

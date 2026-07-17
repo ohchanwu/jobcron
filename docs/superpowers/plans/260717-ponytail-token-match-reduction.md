@@ -25,6 +25,8 @@ AI keeps `gateTokenize` and `tokenSubsequence` as one-line gate-facing delegates
 - Preserve NFC, maximal letter/digit runs, lowercase, contiguity, order, and empty-phrase false.
 - Never make `internal/ai` import `internal/scoring` or the reverse.
 - Target at least 25 net fewer production lines and zero dependency change.
+- Compare binary deltas by building both SHAs sequentially at one checkout path with the same
+  Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring cleanup, or combine this batch with another reduction.
 
 ---

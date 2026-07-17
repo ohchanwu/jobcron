@@ -142,9 +142,10 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Owner: `internal/ai.ModelInput`.
 - Behavior locks: `TestBuildModelTextTruncationAndHashStability`; optional spike tests can
   ignore the extra `ModelInput` result.
-- Expected reduction: about 13 production lines; zero dependencies.
+- Actual reduction: 14 production lines; test-line count and direct dependencies unchanged;
+  controlled shipped-binary delta zero.
 - Risk and rollback: low. One reversible AI commit with tagged-test compilation.
-- Status: `accepted` for Task 4 evidence because the existing owner is behavior-equivalent.
+- Status: `implemented` after independent review approval.
 
 ### PONY-007: Remove `DefaultKeysPath`
 
@@ -490,7 +491,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 - Behavior lock: `TestProfileFormRegisteredSourcesPreservesRegistrationOrder` plus existing
   profile rendering tests.
 - Actual delta: five production lines deleted; 24 test lines added; zero direct-dependency
-  change; shipped binary total decreased by 148,608 bytes.
+  change; controlled shipped-binary delta zero. A previously recorded 148,608-byte decrease
+  was build-environment drift and did not reproduce under identical-path measurement.
 - Verification: focused behavior and race tests, static, build, unit, race, coverage, arm64
   cross-build, and desktop/mobile browser gates passed.
 - Ponytail: `Lean already. Ship.` No in-scope follow-up was rejected.
@@ -501,12 +503,17 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-006.
 - Plan: `docs/superpowers/plans/260717-ponytail-ai-model-input-reduction.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Implementation: `99f395ac8d1a7daf25b993346604465670ca8d41`.
 - Behavior owner: `internal/ai.ModelInput`.
-- Production files: `internal/ai/extract.go`.
+- Production files: `internal/ai/doc.go` and `internal/ai/extract.go`.
 - Behavior lock: `TestBuildModelTextTruncationAndHashStability` and `aispike` compilation.
-- Estimated delta: minus 13 production lines; zero dependencies.
-- Rollback boundary: one AI model-input commit with its tagged-test call-site updates.
+- Actual delta: 14 production lines deleted; test-line count and direct dependencies
+  unchanged; controlled shipped-binary delta zero.
+- Verification: focused behavior test, tagged compile-only test, static, build, unit, race,
+  coverage, and independent exact-SHA review gates passed. No paid provider call ran.
+- Ponytail: `Lean already. Ship.` No in-scope follow-up was rejected.
+- Rollback: `git revert 99f395ac8d1a7daf25b993346604465670ca8d41`.
 - Reversibility: no other approved batch changes model-input assembly.
 
 ### PT4-004: reuse one storage posting-row collector

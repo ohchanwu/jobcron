@@ -797,6 +797,10 @@ Record baseline versus final:
 
 No test-count or coverage decrease is silently accepted. Explain any metric
 movement in the ledger and require human review when the evidence is ambiguous.
+For binary deltas, check out the baseline and final SHAs sequentially at one
+path and build both with the same Go toolchain, environment, tags, and explicit
+temporary `-o` outputs. Absolute sizes from different paths or runs are not
+comparable evidence.
 
 - [ ] **Step 4: Run the final security and publication gate**
 
