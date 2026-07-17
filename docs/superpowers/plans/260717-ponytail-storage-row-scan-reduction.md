@@ -20,6 +20,8 @@ and `rows.Err`; bookmark and not-interested methods continue to own their querie
 - Start from the human-reviewed Task 5 tip supplied by Mayor, with clean porcelain.
 - The reviewed base must contain this plan and the ledger entry marked `planned`.
 - Production scope is exactly `postings.go`, `bookmarks.go`, and `not_interested.go`.
+- Test scope adds only `internal/storage/postings_test.go` for the collector's scan-error and
+  terminal-iterator-error contracts.
 - Do not parameterize SQL identifiers, table names, timestamp columns, or error strings.
 - Preserve SQLite fallback, PostgreSQL user validation, ordering, and `rows.Close` ownership.
 - Do not add a storage interface or dependency.
@@ -87,10 +89,13 @@ mkdir -p .superpowers/sdd/260717-ponytail
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
-ponytail_metrics_dir=$(mktemp -d)
+ponytail_evidence_dir=.superpowers/sdd/260717-ponytail
 go test ./internal/storage \
-  -coverprofile="$ponytail_metrics_dir/storage-before.cover" -count=1
-go tool cover -func="$ponytail_metrics_dir/storage-before.cover"
+  -coverprofile="$ponytail_evidence_dir/PT4-004-storage-before.cover" -count=1
+go tool cover -func="$ponytail_evidence_dir/PT4-004-storage-before.cover"
+awk 'NR > 1 { total += $2; if ($3 > 0) covered += $2 } END {
+  printf "covered_statements=%d total_statements=%d\n", covered, total
+}' "$ponytail_evidence_dir/PT4-004-storage-before.cover"
 ```
 
 Expected: all commands pass; record exact output in the ignored before file.
@@ -102,6 +107,7 @@ Expected: all commands pass; record exact output in the ignored before file.
 - Modify: `internal/storage/postings.go` beside `scanPosting`
 - Modify: `internal/storage/bookmarks.go:182-237`
 - Modify: `internal/storage/not_interested.go:185-240`
+- Create: `internal/storage/postings_test.go`
 
 **Interfaces:**
 
@@ -137,11 +143,24 @@ return scanPostings(rows)
 Apply this only to `BookmarkedPostings`, `BookmarkedPostingsForUser`,
 `NotInterestedPostings`, and `NotInterestedPostingsForUser`.
 
-- [ ] **Step 3: Run targeted green checks**
+- [ ] **Step 3: Permanently lock both collector error contracts**
+
+Add `TestScanPostingsReturnsScanError` and `TestScanPostingsReturnsRowsError` using the existing
+migrated SQLite test store. The first must provide a projection that makes `scanPosting` fail
+and assert a nil result plus the scan error. The second must make iteration terminate with a
+context error and assert that exact error is returned. Do not add a rows interface or dependency.
+
+Run both tests at least 20 times so context cancellation is demonstrably deterministic:
+
+```sh
+go test ./internal/storage -run '^TestScanPostingsReturns(Scan|Rows)Error$' -count=20
+```
+
+- [ ] **Step 4: Run targeted green checks**
 
 ```sh
 gofmt -w internal/storage/postings.go internal/storage/bookmarks.go \
-  internal/storage/not_interested.go
+  internal/storage/not_interested.go internal/storage/postings_test.go
 go test ./internal/storage \
   -run '^TestBookmarkedPostingsOrderedByBookmarkedAtDesc$' -count=1
 go test ./internal/storage \
@@ -191,9 +210,10 @@ deployment gates are not proportional because queries and external behavior do n
 
 - [ ] **Step 3: Repeat Task 1 source, dependency, and coverage metrics after the edit**
 
-Repeat Task 1 Step 4 with `storage-after.cover`. Expected: production lines decrease by exactly
-20; tests and dependencies remain stable; coverage movement is recorded without being treated
-as reduction.
+Repeat Task 1 Step 4 with `PT4-004-storage-after.cover`. Preserve both profiles and their raw
+covered/total statement counts in ignored evidence. Expected: production lines decrease by
+exactly 20; direct dependencies remain stable; the permanent error locks explain any test or
+coverage movement without treating it as source reduction.
 
 ### Task 4: Review and commit the implementation batch
 
@@ -202,6 +222,7 @@ as reduction.
 - Modify: `internal/storage/postings.go`
 - Modify: `internal/storage/bookmarks.go`
 - Modify: `internal/storage/not_interested.go`
+- Create: `internal/storage/postings_test.go`
 
 **Interfaces:**
 
@@ -224,7 +245,7 @@ timestamp, error string, user check, `defer rows.Close`, and migration remains b
 
 ```sh
 git add internal/storage/postings.go internal/storage/bookmarks.go \
-  internal/storage/not_interested.go
+  internal/storage/not_interested.go internal/storage/postings_test.go
 git diff --cached --check
 git commit -m "refactor(storage): share posting row collector"
 ```
