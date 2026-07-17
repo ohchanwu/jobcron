@@ -91,20 +91,6 @@ func rawModelText(p scraper.Posting) string {
 	return norm.NFC.String(b.String())
 }
 
-// buildModelText returns the (possibly truncated) text sent to the model and
-// whether truncation occurred. Truncation is the LAST step and on a rune
-// boundary, so it never splits a multi-byte Korean character — and so the
-// pre-truncation string (what ModelInput hashes) is well-defined. One shared
-// assembler (D6) keeps the prompt input and the future citation gate in sync.
-func buildModelText(p scraper.Posting) (text string, truncated bool) {
-	full := rawModelText(p)
-	runes := []rune(full)
-	if len(runes) > maxModelTextRunes {
-		return string(runes[:maxModelTextRunes]), true
-	}
-	return full, false
-}
-
 // ModelInput is the server's single entry point for the scrape wiring (T4):
 // the text to send the model, the content_hash that keys the extraction cache
 // (sha256 of the PRE-truncation normalized text, [:12]), and whether the sent

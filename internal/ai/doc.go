@@ -9,7 +9,7 @@
 // the spec.)
 //
 // Layering: ai imports only the standard library, golang.org/x/text, and
-// internal/scraper (for the Posting domain type that buildModelText reads).
+// internal/scraper (for the Posting domain type that ModelInput reads).
 // It MUST NOT import internal/scoring — scoring imports ai (Score takes
 // *ai.Extraction / *ai.Delta), so the reverse would be an import cycle.
 //

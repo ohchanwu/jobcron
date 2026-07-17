@@ -193,7 +193,7 @@ func TestLocalVsHaikuSpike(t *testing.T) {
 
 	for i := range posts {
 		p := posts[i]
-		modelText, _ := buildModelText(p)
+		modelText, _, _ := ModelInput(p)
 
 		// ---- Stage-1 ----
 		var localExt, haikuExt Extraction
@@ -419,7 +419,7 @@ func TestGateRejectionDiagnosis(t *testing.T) {
 
 	for i := range posts {
 		p := posts[i]
-		modelText, _ := buildModelText(p)
+		modelText, _, _ := ModelInput(p)
 		out, err := ollamaChat(ctx, model, sysPrompt, buildScoreDeltaUser(modelText, spikeProfileText))
 		if err != nil {
 			t.Logf("[%02d] transport error: %v", i, err)
