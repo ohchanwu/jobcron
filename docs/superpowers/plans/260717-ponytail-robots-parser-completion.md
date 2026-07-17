@@ -147,17 +147,12 @@ go test -tags integration ./internal/scraper/rallit/ -count=1
 Expected: the reachable live contract passes. An upstream outage blocks this batch rather than
 being waived. PostgreSQL, AI, browser, and deployment gates are not proportional.
 
-- [ ] **Step 3: Capture after metrics and scope**
+- [ ] **Step 3: Capture after source, dependency, coverage, and scope metrics**
 
 ```sh
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git diff --numstat
 git diff --name-only
 ```
@@ -204,6 +199,14 @@ test file if characterization was already sufficient and it remained unchanged.
 This commit is independently reversible while `PT4-006` remains. To roll back the whole robots
 cluster, revert `PT4-007` first and then the exact reviewed `PT4-006` implementation commit.
 Never revert the foundation first while Rallit imports its owner.
+
+- [ ] **Step 4: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, use the same-checkout procedure from `PT4-004` Task 4 Step 3.
+Substitute the exact reviewed `PT4-006` implementation SHA as this batch's base, keep the same
+Go environment and explicit temporary `-o` outputs, and record per-binary and total deltas.
+Restore and verify the implementation branch before handoff; never compare binaries from
+different paths or runs.
 
 ## Completion Criteria
 

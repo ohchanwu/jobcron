@@ -79,10 +79,6 @@ git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
 ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 go test ./internal/scoring ./internal/ai \
   -coverprofile="$ponytail_metrics_dir/token-before.cover" -count=1
 go tool cover -func="$ponytail_metrics_dir/token-before.cover"
@@ -228,7 +224,7 @@ go tool cover -func=/tmp/jobcron-ponytail-PT4-005.cover
 Expected: every command passes. PostgreSQL, scraper, browser, and deployment gates are not
 proportional because storage, HTTP, templates, and configuration do not change.
 
-- [ ] **Step 2: Cross-build and repeat Task 1 measurements**
+- [ ] **Step 2: Cross-build and repeat Task 1 source, dependency, and coverage metrics**
 
 ```sh
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./...
@@ -238,7 +234,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
 ```
 
 Repeat Task 1 Step 3 with `token-after.cover`. Expected: net production lines decrease by at
-least 25; direct dependencies stay fixed; tests, coverage, hashes, and binaries do not regress.
+least 25; direct dependencies stay fixed; tests, coverage, and hashes do not regress.
 
 ### Task 5: Review and commit the implementation batch
 
@@ -274,3 +270,10 @@ git commit -m "refactor(text): share exact token matching"
 ```
 
 Expected: one commit. Rollback is `git revert <PT4-005-commit>` and restores both local copies.
+
+- [ ] **Step 3: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, use the same-checkout procedure from `PT4-004` Task 4 Step 3.
+Substitute this batch's exact Mayor-supplied base SHA, keep the same Go environment and explicit
+temporary `-o` outputs, and record per-binary and total deltas. Restore and verify the
+implementation branch before handoff; never compare binaries from different paths or runs.

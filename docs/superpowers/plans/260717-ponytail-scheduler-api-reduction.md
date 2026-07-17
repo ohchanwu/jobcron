@@ -79,18 +79,13 @@ sufficient because both tests drive the live goroutine through injected `Now` an
 ```sh
 go test ./... -coverprofile=/tmp/jobcron-ponytail-PT4-010-before.cover -count=1
 go tool cover -func=/tmp/jobcron-ponytail-PT4-010-before.cover
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
 ```
 
-Expected: record source/test lines, direct dependencies, three shipped binary sizes, and
-coverage in the ignored before file.
+Expected: record source/test lines, direct dependencies, and coverage in the ignored before
+file.
 
 ### Task 2: Delete the handle and narrow the startup API
 
@@ -266,14 +261,9 @@ go tool cover -func=/tmp/jobcron-ponytail-PT4-010.cover
 Expected: every command passes. Scheduler startup and goroutine behavior are fully local; live
 scraper, paid AI, PostgreSQL, browser, deployment, and cross-build gates are not proportional.
 
-- [ ] **Step 2: Compare complete measurements and API scope**
+- [ ] **Step 2: Compare source, dependency, coverage, and API scope metrics**
 
 ```sh
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
@@ -328,6 +318,13 @@ Expected: one commit and no unrelated path staged.
 Reverting this one commit restores the old exported return signature, wrapper type, done
 channel, command discard, and test assignments together. No other approved batch depends on
 the narrowed scheduler API.
+
+- [ ] **Step 4: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, use the same-checkout procedure from `PT4-004` Task 4 Step 3.
+Substitute this batch's exact Mayor-supplied base SHA, keep the same Go environment and explicit
+temporary `-o` outputs, and record per-binary and total deltas. Restore and verify the
+implementation branch before handoff; never compare binaries from different paths or runs.
 
 ## Completion Criteria
 

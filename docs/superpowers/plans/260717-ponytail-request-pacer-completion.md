@@ -189,18 +189,13 @@ go test ./internal/scraper/rallit -run '^TestClientGetRateLimits$' -count=10
 go test ./internal/scraper/worknet -run '^TestCallRateLimits$' -count=10
 go test ./... -coverprofile=/tmp/jobcron-ponytail-PT4-009-before.cover -count=1
 go tool cover -func=/tmp/jobcron-ponytail-PT4-009-before.cover
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
 ```
 
 Expected: all tests pass against the reviewed owner or current local implementations. Record
-the exact base, timings, source/test lines, dependencies, binary sizes, and coverage.
+the exact base, timings, source/test lines, dependencies, and coverage.
 
 ### Task 2: Convert exactly three remaining consumers
 
@@ -303,14 +298,9 @@ Expected: both Task 1 live contracts pass. Worknet was not in the Task 1 live ba
 it requires an optional data.go.kr key; its deterministic HTTP client test is mandatory.
 PostgreSQL, AI, browser, deployment, and cross-build gates are not proportional.
 
-- [ ] **Step 3: Capture after metrics and scope**
+- [ ] **Step 3: Capture after source, dependency, coverage, and scope metrics**
 
 ```sh
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
@@ -319,7 +309,7 @@ git diff --name-only
 ```
 
 Expected: at least 50 fewer production lines, no dependency drift, and only approved source,
-test, and ignored evidence paths change. Record binary and coverage differences.
+test, and ignored evidence paths change. Record coverage differences.
 
 ### Task 4: Review, commit, and preserve reverse rollback
 
@@ -360,6 +350,14 @@ Expected: one commit and no unrelated path staged.
 This commit is independently reversible while `PT4-008` remains. To roll back the whole pacing
 cluster, revert `PT4-009` first and then the exact reviewed `PT4-008` implementation commit.
 Never revert the foundation first while these clients import its owner.
+
+- [ ] **Step 4: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, use the same-checkout procedure from `PT4-004` Task 4 Step 3.
+Substitute the exact reviewed `PT4-008` implementation SHA as this batch's base, keep the same
+Go environment and explicit temporary `-o` outputs, and record per-binary and total deltas.
+Restore and verify the implementation branch before handoff; never compare binaries from
+different paths or runs.
 
 ## Completion Criteria
 

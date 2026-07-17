@@ -313,14 +313,9 @@ go test -tags integration ./internal/scraper/greeting/ -count=1
 Expected: local AI HTTP contracts and reachable live source contracts pass. Do not make a paid
 provider call. PostgreSQL, browser, deployment, and cross-build gates are not proportional.
 
-- [ ] **Step 3: Compare complete measurements**
+- [ ] **Step 3: Compare source, test, dependency, coverage, and scope metrics**
 
 ```sh
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
@@ -328,7 +323,7 @@ git diff --numstat
 ```
 
 Expected: at least 45 fewer production lines, unchanged direct dependencies, and recorded test
-lines, binary sizes, and coverage.
+lines, coverage, and scope.
 
 ### Task 5: Review and commit the foundation
 
@@ -369,6 +364,13 @@ git commit -m 'refactor: add shared request pacer'
 
 Expected: one commit. `PT4-009` must name this reviewed commit as its base. Full rollback after
 both batches reverts `PT4-009` first, then this foundation commit.
+
+- [ ] **Step 3: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, use the same-checkout procedure from `PT4-004` Task 4 Step 3.
+Substitute this batch's exact Mayor-supplied base SHA, keep the same Go environment and explicit
+temporary `-o` outputs, and record per-binary and total deltas. Restore and verify the
+implementation branch before handoff; never compare binaries from different paths or runs.
 
 ## Completion Criteria
 

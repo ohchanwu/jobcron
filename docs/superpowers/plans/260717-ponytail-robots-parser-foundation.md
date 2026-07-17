@@ -221,21 +221,16 @@ go test -tags integration ./internal/scraper/jumpit/ -count=1
 Expected: each reachable live contract passes. An upstream outage blocks this batch rather than
 being waived. PostgreSQL, AI, browser, and deployment gates are not proportional.
 
-- [ ] **Step 3: Compare complete measurements**
+- [ ] **Step 3: Compare source, test, dependency, and coverage measurements**
 
 ```sh
-ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
 ```
 
 Expected: this foundation is net-negative by at least 100 production lines despite adding the
-owner. Dependencies stay fixed; test movement, binary noise, and coverage are recorded.
+owner. Dependencies stay fixed; test movement and coverage are recorded.
 
 ### Task 5: Review and commit the foundation
 
@@ -274,3 +269,10 @@ git commit -m "refactor(scraper): add shared robots parser"
 
 Expected: one commit. `PT4-007` must name this reviewed commit as its base. Full rollback after
 both batches reverts `PT4-007` first, then this foundation commit.
+
+- [ ] **Step 3: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, use the same-checkout procedure from `PT4-004` Task 4 Step 3.
+Substitute this batch's exact Mayor-supplied base SHA, keep the same Go environment and explicit
+temporary `-o` outputs, and record per-binary and total deltas. Restore and verify the
+implementation branch before handoff; never compare binaries from different paths or runs.
