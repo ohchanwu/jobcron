@@ -1,5 +1,11 @@
 # Daangn Canonical Role URLs Implementation Plan
 
+> **Completed 2026-07-17.** Source commit
+> `0fd9295ef19fa8b5391a216be41cad809ec7cb81` has parent
+> `bb29695851169ce8b866476fed2336c1214683fb`, a documentation-only descendant of the planned
+> base. Review `jobs-o3g` found no issues after live-browser, integration, race, coverage,
+> Gitleaks, and clean-tree gates. Mayor integrated the exact source commit.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`)

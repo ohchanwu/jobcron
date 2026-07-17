@@ -17,8 +17,9 @@ packages call it; Rallit remains local until dependent batch `PT4-007`.
 ## Global Constraints
 
 - Batch: `PT4-006`; candidate: `PONY-002`.
-- Start from the human-reviewed Task 5 tip supplied by Mayor, with clean porcelain.
-- The reviewed base must contain this plan and the ledger entry marked `planned`.
+- Start from the exact reviewed tip supplied by Mayor, with clean porcelain.
+- The reviewed base must contain canonical Daangn URL repair
+  `0fd9295ef19fa8b5391a216be41cad809ec7cb81`, this amended plan, and the current progress ledger.
 - Production scope is exactly the new owner plus four approved source files.
 - Test scope is the new owner test and converted source tests.
 - Do not change robots fetches, status handling, cache TTLs, cache keys, hosts, paths, or errors.
@@ -51,13 +52,17 @@ packages call it; Rallit remains local until dependent batch `PT4-007`.
 ```sh
 git status --short --branch
 git log -1 --format='%H %cI %s'
+git merge-base --is-ancestor 0fd9295ef19fa8b5391a216be41cad809ec7cb81 HEAD
 rg -n 'func robotsAllows|func longestPrefix|robotsAllows\(' \
   internal/scraper/demoday internal/scraper/greenhouse \
   internal/scraper/greeting internal/scraper/jumpit internal/scraper/rallit
+go test -tags integration ./internal/scraper/greenhouse -count=1
 ```
 
 Expected: five parser/longest-prefix pairs; four approved foundation consumers and one deferred
-Rallit consumer. No template, JavaScript, SQL, migration, reflection, or configuration caller.
+Rallit consumer. The reviewed Daangn prerequisite is an ancestor, and the live Greenhouse gate
+passes before parser edits. No template, JavaScript, SQL, migration, reflection, or configuration
+caller.
 
 - [ ] **Step 2: Copy the Jumpit parser table into owner-level tests**
 

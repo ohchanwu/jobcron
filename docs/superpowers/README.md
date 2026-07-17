@@ -7,8 +7,6 @@ decision records needed for the current task.
 ## Active Work
 
 - [Ponytail codebase reduction campaign](plans/260717-ponytail-codebase-reduction.md)
-- [Daangn canonical role URLs](specs/260717-daangn-canonical-role-urls.md)
-- [Daangn canonical role URL implementation](plans/260717-daangn-canonical-role-urls.md)
 - [Ponytail reduction candidate ledger](specs/260717-ponytail-reduction-ledger.md)
 - [Ponytail AI key path reduction](plans/260717-ponytail-ai-key-path-reduction.md)
 - [Ponytail server source reduction](plans/260717-ponytail-server-source-reduction.md)
@@ -27,6 +25,8 @@ decision records needed for the current task.
 
 ## Recently Archived
 
+- [Daangn canonical role URLs][daangn-canonical-spec]
+- [Daangn canonical role URL implementation][daangn-canonical-plan]
 - [PostgreSQL convergence Slice 4 plan](archive/2026-07-16-postgresql-convergence-slice-4/260715-postgresql-convergence-slice-4-verified-sqlite-import.md)
 - [PostgreSQL convergence Slice 4 verification](archive/2026-07-16-postgresql-convergence-slice-4/260715-postgresql-convergence-slice-4-verification.md)
 - [PostgreSQL convergence Slice 3 plan](archive/2026-07-15-postgresql-convergence-slice-3/260715-postgresql-convergence-slice-3-local-postgresql-bootstrap.md)
@@ -67,3 +67,8 @@ decision records needed for the current task.
   artifacts to `.superpowers/archive/`.
 - Git history is the authoritative fallback for old detail. Do not keep verbose
   completed reports active merely for discoverability.
+
+[daangn-canonical-spec]:
+  archive/2026-07-17-daangn-canonical-role-urls/260717-daangn-canonical-role-urls.md
+[daangn-canonical-plan]:
+  archive/2026-07-17-daangn-canonical-role-urls/260717-daangn-canonical-role-urls-plan.md
