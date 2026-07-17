@@ -109,7 +109,8 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Owner: `internal/storage/postings.go`, beside `scanPosting`; do not parameterize table names.
 - Behavior locks: ordered-list tests in `internal/storage/bookmarks_test.go` and
   `internal/storage/not_interested_test.go`, plus PostgreSQL user-scope tests.
-- Expected reduction: about 30 production lines; zero dependencies.
+- Expected reduction: exactly 20 production lines; zero dependencies. Four one-line returns
+  replace four nine-line loops (minus 32), while the collector adds 12 lines.
 - Risk and rollback: low if queries and error text stay local. One reversible storage commit.
 - Status: `accepted` for Task 4 evidence because the repeated row-consumption policy is exact.
 
@@ -525,7 +526,7 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 - Production files: `internal/storage/postings.go`, `internal/storage/bookmarks.go`, and
   `internal/storage/not_interested.go`.
 - Behavior lock: ordered bookmark and mute tests plus PostgreSQL user-scope tests.
-- Estimated delta: minus 30 production lines; zero dependencies.
+- Estimated delta: exactly minus 20 production lines; zero dependencies.
 - Rollback boundary: one storage-row-consumption commit; SQL remains untouched.
 - Reversibility: no other approved batch changes storage queries or row scanning.
 

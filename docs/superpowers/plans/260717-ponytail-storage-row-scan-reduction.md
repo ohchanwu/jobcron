@@ -23,7 +23,8 @@ and `rows.Err`; bookmark and not-interested methods continue to own their querie
 - Do not parameterize SQL identifiers, table names, timestamp columns, or error strings.
 - Preserve SQLite fallback, PostgreSQL user validation, ordering, and `rows.Close` ownership.
 - Do not add a storage interface or dependency.
-- Target at least 30 fewer production lines and zero dependency change.
+- Target exactly 20 fewer production lines and zero dependency change. Four one-line returns
+  replace four nine-line loops (minus 32), while the collector adds 12 lines.
 - Compare binary deltas by building both SHAs sequentially at one checkout path with the same
   Go toolchain and environment and explicit temporary `-o` outputs.
 - Never push, perform neighboring loop cleanup, or combine this batch with another reduction.
@@ -190,8 +191,8 @@ deployment gates are not proportional because queries and external behavior do n
 
 - [ ] **Step 3: Repeat Task 1 source, dependency, and coverage metrics after the edit**
 
-Repeat Task 1 Step 4 with `storage-after.cover`. Expected: production lines decrease by at least
-30; tests and dependencies remain stable; coverage movement is recorded without being treated
+Repeat Task 1 Step 4 with `storage-after.cover`. Expected: production lines decrease by exactly
+20; tests and dependencies remain stable; coverage movement is recorded without being treated
 as reduction.
 
 ### Task 4: Review and commit the implementation batch
