@@ -17,8 +17,11 @@ configuration, starts the existing context-owned goroutine, and returns `error`;
 ## Global Constraints
 
 - Batch: `PT4-010`; candidate: `PONY-005`.
-- Start from the human-reviewed Task 5 tip supplied by Mayor, with clean porcelain.
-- The reviewed base must contain this plan and the ledger entry marked `planned`.
+- Start from the exact Mayor checkpoint supplied for this batch, with clean porcelain.
+- Record both that checkpoint and its reviewed `PT4-009` implementation ancestor.
+- The checkpoint must contain this plan, the completed `PT4-009` ledger record, and the
+  `PT4-010` ledger entry marked `planned`. No production code may intervene between the
+  reviewed implementation and the checkpoint.
 - Production scope is exactly `internal/server/scheduler.go` and `cmd/jobcron/main.go`.
 - Test scope is exactly `internal/server/scheduler_test.go` unless evidence proves a gap.
 - Preserve startup validation, KST calculation, injectable clock/sleep, loop, and cancellation.
