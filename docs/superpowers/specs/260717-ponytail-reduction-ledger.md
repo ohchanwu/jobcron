@@ -623,14 +623,26 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-003.
 - Plan: `docs/superpowers/plans/260717-ponytail-request-pacer-foundation.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval with an evidence correction.
+- Reviewed source: `f02ec37dee50fe7b52272f166454cef99f54f30e`.
+- Integrated source: patch-identical commit
+  `6619d50113376ea3dcefd518152dbec15a496b83`.
 - Behavior owner: new concrete `internal/pacing/pacing.go`; callers retain timing policy.
 - Production files: `internal/pacing/pacing.go`, `internal/ai/client.go`,
   `internal/scraper/demoday/demoday.go`, `internal/scraper/greenhouse/greenhouse.go`, and
   `internal/scraper/greeting/greeting.go`.
 - Behavior lock: new concurrent-start and cancellation characterization plus current client
   timing tests.
-- Estimated delta: about minus 45 production lines; zero dependencies.
+- Actual delta: 56 production lines removed; 55 test lines added; zero direct-dependency
+  change. Controlled shipped-binary delta: `jobcron` minus 176 bytes; importer and user tool
+  unchanged.
+- Verification: exact topology and patch identity, static, build, focused and full
+  unit/race/coverage, local AI HTTP, live Demoday, Greenhouse, and Greeting, ownership,
+  dependency stability, range Gitleaks, Markdown width, and independent adversarial review
+  gates passed.
+- Ponytail: one concrete reservation-before-sleep pacer replaces four copies without adding
+  an interface, callback, generic, configuration surface, or HTTP abstraction.
+- Rollback: `git revert 6619d50113376ea3dcefd518152dbec15a496b83`.
 - Rollback boundary: one pacer-owner commit restores the four local implementations.
 - Reversibility: it is self-contained at its ordered checkpoint; after `PT4-009`, full rollback
   reverts `PT4-009` first and then this single commit.
@@ -663,9 +675,9 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 All batches cover one domain, touch at most five production files, target negative production
 lines, and have no direct-dependency change. The two split clusters have explicit ordered
-rollback. The first five batches have removed 71 production lines. Using measured results for
-those batches and current estimates for the remaining five, the projected approved total is
-minus 316 production lines across ten reversible batches.
+rollback. The first eight batches have removed 347 production lines. Using measured results
+for those batches and current estimates for the remaining two, the projected approved total
+is minus 407 production lines across ten reversible batches.
 
 ## Task 4 Final Comparison
 
