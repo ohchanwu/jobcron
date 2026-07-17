@@ -480,6 +480,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-003: replace `buildModelText` with `ModelInput`
 
 - Candidate: PONY-006.
+- Plan: `docs/superpowers/plans/260717-ponytail-ai-model-input-reduction.md`.
+- Status: `planned`.
 - Behavior owner: `internal/ai.ModelInput`.
 - Production files: `internal/ai/extract.go`.
 - Behavior lock: `TestBuildModelTextTruncationAndHashStability` and `aispike` compilation.
