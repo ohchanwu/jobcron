@@ -574,9 +574,9 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 - Candidate: PONY-002.
 - Plan: `docs/superpowers/plans/260717-ponytail-robots-parser-foundation.md`.
 - Status: `implemented` after independent review approval.
-- Implementation: the exact delivery SHA is recorded in the ignored implementation report;
-  this tracked commit cannot embed its own final hash.
-- Reviewed source: frozen WIP `35871f49664d43b35fafc8774a35be2d4042f09d`.
+- Reviewed source: `5bd926311b1ab89420427736165e23eee297b1ef`.
+- Integrated source: patch-identical commit
+  `c8905de5095002d493576afd5379e9260b2b9fbc`.
 - Behavior owner: new `internal/scraper/robots.go`, limited to parsing and path matching.
 - Production files: `internal/scraper/robots.go`, `internal/scraper/demoday/demoday.go`,
   `internal/scraper/greenhouse/greenhouse.go`, `internal/scraper/greeting/greeting.go`, and
@@ -600,11 +600,22 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-002.
 - Plan: `docs/superpowers/plans/260717-ponytail-robots-parser-completion.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Reviewed source: `d6bb57f4383f0ccbdb715fac111171787c82229d`.
+- Integrated source: patch-identical commit
+  `8541429b22e54f495f24cd2a4e7bc827f90dd8c9`.
 - Behavior owner: `internal/scraper/robots.go` from `PT4-006`.
 - Production files: `internal/scraper/rallit/client.go`.
 - Behavior lock: the shared characterization and Rallit access tests.
-- Estimated delta: about minus 40 production lines; zero dependencies.
+- Actual delta: 56 production lines removed; 24 test lines added; zero direct-dependency
+  change. Controlled shipped-binary delta: `jobcron` minus 80 bytes; importer and user tool
+  unchanged.
+- Verification: exact topology and patch identity, focused and full unit/race/coverage,
+  static, build, live Rallit, parser ownership, dependency stability, full-history Gitleaks,
+  Markdown width, and independent adversarial review gates passed.
+- Ponytail: Rallit now reuses the byte-equivalent scraper-owned parser. Its fetch, cache,
+  host, path, status, failure, pacing, and error policies remain local.
+- Rollback: `git revert 8541429b22e54f495f24cd2a4e7bc827f90dd8c9`.
 - Rollback boundary: one Rallit commit restores its local parser and removes its shared call.
 - Reversibility: reverting it does not change the owner or the first four consumers.
 
