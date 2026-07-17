@@ -107,12 +107,12 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Callers and non-Go consumers: bookmark and hidden-posting list methods for SQLite and
   PostgreSQL; SQL remains in each method. No non-Go consumer.
 - Owner: `internal/storage/postings.go`, beside `scanPosting`; do not parameterize table names.
-- Behavior locks: ordered-list tests in `internal/storage/bookmarks_test.go` and
-  `internal/storage/not_interested_test.go`, plus PostgreSQL user-scope tests.
-- Expected reduction: exactly 20 production lines; zero dependencies. Four one-line returns
-  replace four nine-line loops (minus 32), while the collector adds 12 lines.
+- Behavior locks: ordered-list tests, PostgreSQL user-scope tests, and permanent SQLite locks
+  for immediate scan failure and terminal `rows.Err()` propagation.
+- Actual reduction: exactly 20 production lines; 75 test lines added; zero dependencies. Four
+  one-line returns replace four nine-line loops (minus 32), while the collector adds 12 lines.
 - Risk and rollback: low if queries and error text stay local. One reversible storage commit.
-- Status: `accepted` for Task 4 evidence because the repeated row-consumption policy is exact.
+- Status: `implemented` after independent review approval.
 
 ### PONY-005: Remove the unused scheduler handle
 
@@ -347,11 +347,12 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 - Semantic class: 3, the existing storage scanner already owns row decoding.
 - Contract: pass — scan rows in order, stop on scan failure, then return `rows.Err()`.
 - Consumers: pass — four bookmark and not-interested listing loops are traced.
-- Coverage: pass — ordered-list and PostgreSQL user-scope tests lock the behavior.
+- Coverage: pass — ordered-list, PostgreSQL user-scope, immediate scan-error, and terminal
+  iterator-error tests lock the behavior.
 - Owner: pass — `internal/storage/postings.go` already owns `scanPosting`.
-- Reduction: pass — about 30 production lines and no dependency change.
+- Reduction: pass — exactly 20 production lines and no dependency change.
 - Design: pass — SQL, table names, timestamps, and error policy stay in each domain.
-- Rollback: pass — one three-production-file storage commit is self-contained.
+- Rollback: pass — one four-file storage commit is self-contained.
 - Decision: approve as `PT4-004`.
 
 ### PONY-005 gate: approved
@@ -521,13 +522,26 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-004.
 - Plan: `docs/superpowers/plans/260717-ponytail-storage-row-scan-reduction.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Implementation: `6f2f19ce64b0bce6065df79d0ac1d9140c19cb26`.
+- Reviewed source: `38e13aee04c66bf98900a264f098aea06de04620`; its stable patch ID is
+  identical to the integrated commit.
 - Behavior owner: `internal/storage/postings.go` beside `scanPosting`.
 - Production files: `internal/storage/postings.go`, `internal/storage/bookmarks.go`, and
   `internal/storage/not_interested.go`.
-- Behavior lock: ordered bookmark and mute tests plus PostgreSQL user-scope tests.
-- Estimated delta: exactly minus 20 production lines; zero dependencies.
-- Rollback boundary: one storage-row-consumption commit; SQL remains untouched.
+- Behavior lock: ordered bookmark and mute tests, PostgreSQL user-scope tests, and permanent
+  real-SQLite scan-error and terminal-iterator-error tests.
+- Actual delta: exactly 20 production lines removed; 75 test lines added; zero dependency
+  change. Controlled shipped-binary delta: `jobcron` plus 64 bytes; importer and user tool
+  unchanged.
+- Coverage: storage moved from 896 of 1,177 statements (76.1%) to 884 of 1,160 statements
+  (76.2%). A retained count profile executes both protected error returns exactly 20 times.
+- Verification: deterministic terminal test passed 100 runs; the paired error locks passed 20
+  normal, race, and count-coverage runs. Static, build, full unit/race/coverage, PostgreSQL 18
+  zero-skip and proportional unit/race, exact-SHA binary, Gitleaks, and two independent
+  adversarial review gates passed.
+- Ponytail: `Lean already. Ship.` No in-scope follow-up was accepted.
+- Rollback: `git revert 6f2f19ce64b0bce6065df79d0ac1d9140c19cb26`.
 - Reversibility: no other approved batch changes storage queries or row scanning.
 
 ### PT4-005: share exact-token matching below scoring and AI
@@ -614,7 +628,9 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 All batches cover one domain, touch at most five production files, target negative production
 lines, and have no direct-dependency change. The two split clusters have explicit ordered
-rollback. Estimated approved total: minus 323 production lines across ten reversible batches.
+rollback. The first four batches have removed 46 production lines. Using measured results for
+those batches and current estimates for the remaining six, the projected approved total is
+minus 316 production lines across ten reversible batches.
 
 ## Task 4 Final Comparison
 
@@ -622,6 +638,7 @@ rollback. Estimated approved total: minus 323 production lines across ten revers
 - rejected findings: 5;
 - separate-decision findings: 0;
 - approved batches: 10;
-- estimated production-line delta: minus 323;
+- actual implemented production-line delta: minus 46;
+- projected final production-line delta: minus 316;
 - direct-dependency delta: 0; and
 - source or user-visible behavior changes in Task 4: none.
