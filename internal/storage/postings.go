@@ -529,6 +529,18 @@ func scanPosting(row rowScanner) (scraper.Posting, error) {
 	return p, nil
 }
 
+func scanPostings(rows *sql.Rows) ([]scraper.Posting, error) {
+	var postings []scraper.Posting
+	for rows.Next() {
+		p, err := scanPosting(rows)
+		if err != nil {
+			return nil, err
+		}
+		postings = append(postings, p)
+	}
+	return postings, rows.Err()
+}
+
 // utcPtr returns t normalized to UTC, or nil when t is nil.
 func utcPtr(t *time.Time) *time.Time {
 	if t == nil {

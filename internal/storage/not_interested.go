@@ -199,15 +199,7 @@ ORDER BY n.muted_at DESC, p.id DESC`)
 		return nil, fmt.Errorf("storage: query not-interested postings: %w", err)
 	}
 	defer rows.Close()
-	var postings []scraper.Posting
-	for rows.Next() {
-		p, err := scanPosting(rows)
-		if err != nil {
-			return nil, err
-		}
-		postings = append(postings, p)
-	}
-	return postings, rows.Err()
+	return scanPostings(rows)
 }
 
 func (s *Store) NotInterestedPostingsForUser(ctx context.Context, userID int64) ([]scraper.Posting, error) {
@@ -227,13 +219,5 @@ ORDER BY n.muted_at DESC, p.id DESC`), userID)
 		return nil, fmt.Errorf("storage: query user not-interested postings: %w", err)
 	}
 	defer rows.Close()
-	var postings []scraper.Posting
-	for rows.Next() {
-		p, err := scanPosting(rows)
-		if err != nil {
-			return nil, err
-		}
-		postings = append(postings, p)
-	}
-	return postings, rows.Err()
+	return scanPostings(rows)
 }
