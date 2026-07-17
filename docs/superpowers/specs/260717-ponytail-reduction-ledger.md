@@ -545,6 +545,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-008: add the shared request pacer and convert four consumers
 
 - Candidate: PONY-003.
+- Plan: `docs/superpowers/plans/260717-ponytail-request-pacer-foundation.md`.
+- Status: `planned`.
 - Behavior owner: new concrete `internal/pacing/pacing.go`; callers retain timing policy.
 - Production files: `internal/pacing/pacing.go`, `internal/ai/client.go`,
   `internal/scraper/demoday/demoday.go`, `internal/scraper/greenhouse/greenhouse.go`, and
