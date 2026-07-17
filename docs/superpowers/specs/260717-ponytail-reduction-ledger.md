@@ -548,12 +548,24 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-001.
 - Plan: `docs/superpowers/plans/260717-ponytail-token-match-reduction.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Implementation: `d944eb20d0825f055c9225bc912ed19910417f72`.
 - Behavior owner: new narrow `internal/tokenmatch/tokenmatch.go`.
 - Production files: `internal/tokenmatch/tokenmatch.go`, `internal/scoring/match.go`, and
   `internal/ai/score_delta.go`.
-- Behavior lock: tokenizer, phrase, citation, score, and deduplication tests.
-- Estimated delta: minus 25 net production lines; zero dependencies.
+- Behavior lock: owner tokenizer and phrase tables plus scoring dealbreaker/deduplication and AI
+  citation-gate suites. Independent review initially rejected the batch because the new owner
+  suite lacked the ordered-but-noncontiguous negative case; the amended commit adds that exact
+  lock and passed a fresh review with no findings.
+- Actual delta: exactly 25 net production lines removed; 51 test lines added; zero dependency
+  change. Same-path reproducible builds of all three shipped commands were byte-identical to the
+  batch base.
+- Verification: focused owner/scoring/AI tests, static, build, full unit/race/coverage, four
+  CGO-free cross-target builds, import-direction, scoped Gitleaks, cumulative diff, and two-stage
+  independent review gates passed.
+- Ponytail: the shared package owns only tokenization and contiguous exact-token matching.
+  Scoring policy and AI citation policy remain separate; no broader abstraction was accepted.
+- Rollback: `git revert d944eb20d0825f055c9225bc912ed19910417f72`.
 - Rollback boundary: one token-primitive commit restores both policy-local copies.
 - Reversibility: no other approved batch imports or changes `internal/tokenmatch`.
 
@@ -628,8 +640,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 All batches cover one domain, touch at most five production files, target negative production
 lines, and have no direct-dependency change. The two split clusters have explicit ordered
-rollback. The first four batches have removed 46 production lines. Using measured results for
-those batches and current estimates for the remaining six, the projected approved total is
+rollback. The first five batches have removed 71 production lines. Using measured results for
+those batches and current estimates for the remaining five, the projected approved total is
 minus 316 production lines across ten reversible batches.
 
 ## Task 4 Final Comparison
@@ -638,7 +650,7 @@ minus 316 production lines across ten reversible batches.
 - rejected findings: 5;
 - separate-decision findings: 0;
 - approved batches: 10;
-- actual implemented production-line delta: minus 46;
+- actual implemented production-line delta: minus 71;
 - projected final production-line delta: minus 316;
 - direct-dependency delta: 0; and
 - source or user-visible behavior changes in Task 4: none.
