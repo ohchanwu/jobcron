@@ -16,13 +16,6 @@ import (
 // user's paid API credential readable only by the owner.
 const keysFileMode = 0o600
 
-// DefaultKeysPath is the legacy BYOK key-store path under the user's OS config
-// directory. Normal runtime credentials now live encrypted in PostgreSQL; this
-// path remains only for explicit legacy import and compatibility code.
-func DefaultKeysPath() (string, error) {
-	return defaultKeysPath(os.UserConfigDir)
-}
-
 func defaultKeysPath(userConfigDir func() (string, error)) (string, error) {
 	root, err := userConfigDir()
 	if err != nil {
