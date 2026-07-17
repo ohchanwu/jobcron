@@ -468,6 +468,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-002: remove the unused registered-source method
 
 - Candidate: PONY-008.
+- Plan: `docs/superpowers/plans/260717-ponytail-server-source-reduction.md`.
+- Status: `planned`.
 - Behavior owner: `Server.sources` and `Server.allRegisteredSources`.
 - Production files: `internal/server/sources.go`.
 - Behavior lock: a function-map binding assertion plus existing profile rendering tests.
