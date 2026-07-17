@@ -14,6 +14,7 @@ decision records needed for the current task.
 - [Ponytail storage row scan reduction](plans/260717-ponytail-storage-row-scan-reduction.md)
 - [Ponytail token match reduction](plans/260717-ponytail-token-match-reduction.md)
 - [Ponytail robots parser foundation](plans/260717-ponytail-robots-parser-foundation.md)
+- [Ponytail robots parser completion](plans/260717-ponytail-robots-parser-completion.md)
 - [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)

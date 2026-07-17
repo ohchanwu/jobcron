@@ -29,6 +29,7 @@ Use this index instead of recursively loading the entire documentation tree.
 - [Ponytail storage row scan reduction][ponytail-storage-row-scan]
 - [Ponytail token match reduction](superpowers/plans/260717-ponytail-token-match-reduction.md)
 - [Ponytail robots parser foundation](superpowers/plans/260717-ponytail-robots-parser-foundation.md)
+- [Ponytail robots parser completion][ponytail-robots-completion]
 - [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](superpowers/plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
 - [Multi-user account expansion follow-up](superpowers/specs/260715-multi-user-account-expansion.md)
@@ -60,3 +61,4 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 
 [ponytail-ledger]: superpowers/specs/260717-ponytail-reduction-ledger.md
 [ponytail-storage-row-scan]: superpowers/plans/260717-ponytail-storage-row-scan-reduction.md
+[ponytail-robots-completion]: superpowers/plans/260717-ponytail-robots-parser-completion.md

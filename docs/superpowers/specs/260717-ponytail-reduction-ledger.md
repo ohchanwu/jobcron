@@ -533,6 +533,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-007: convert the remaining robots parser consumer
 
 - Candidate: PONY-002.
+- Plan: `docs/superpowers/plans/260717-ponytail-robots-parser-completion.md`.
+- Status: `planned`.
 - Behavior owner: `internal/scraper/robots.go` from `PT4-006`.
 - Production files: `internal/scraper/rallit/client.go`.
 - Behavior lock: the shared characterization and Rallit access tests.
