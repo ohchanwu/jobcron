@@ -417,22 +417,32 @@ production duplication and is accepted when it keeps each scenario legible.
 
 - [ ] **Step 4: Find unreachable Go functions across supported targets**
 
-Run `deadcode` with tests for each shipped target:
+Build the pinned analyzer once for the host, then run that same native binary
+with each shipped target's environment:
 
 ```bash
+deadcode_dir="$(mktemp -d "${TMPDIR:-/tmp}/jobcron-deadcode.XXXXXX")"
+deadcode_bin="$deadcode_dir/deadcode"
+CGO_ENABLED=0 go build -trimpath -o "$deadcode_bin" \
+  golang.org/x/tools/cmd/deadcode@v0.47.0
+
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
-  go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+  "$deadcode_bin" -test ./...
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+  "$deadcode_bin" -test ./...
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-  go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+  "$deadcode_bin" -test ./...
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-  go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+  "$deadcode_bin" -test ./...
+
+rm "$deadcode_bin"
+rmdir "$deadcode_dir"
 ```
 
 Record each target separately. Only findings shared by all relevant targets are
 eligible, and even that intersection still requires reflection, template,
-interface, build-tag, and migration review.
+interface, build-tag, and migration review. Do not use `GOOS=... go run` here:
+that cross-compiles the analyzer itself, which the host cannot execute.
 
 - [ ] **Step 5: Check module and standard-library opportunities**
 
