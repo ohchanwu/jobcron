@@ -28,6 +28,10 @@ for Codex and Claude Code, `dupl` v1.1.0,
 - Keep Ponytail's global default `off` during the Jobcron pilot; activate `full`
   only in Jobcron campaign threads. Promote `full` to the global default only
   after the human accepts the completed pilot in Task 7.
+- When a fresh Codex helper process is needed to switch Ponytail modes, invoke
+  it only from a clean worktree. Keep `full` active through the intended commit
+  and switch to `off` afterward; a helper started while changes are staged may
+  create an automatic checkpoint commit.
 - Preserve every supported feature and all user-visible behavior.
 - Never reduce trust-boundary validation, data-loss prevention, authentication,
   authorization, encryption, CSRF protection, rate limiting, concurrency
