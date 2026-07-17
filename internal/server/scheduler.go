@@ -11,14 +11,6 @@ import (
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
-// Scheduler runs the optional daily scheduled scrape loop.
-type Scheduler struct {
-	done chan struct{}
-}
-
-// Done closes when the scheduler loop exits.
-func (s *Scheduler) Done() <-chan struct{} { return s.done }
-
 // SchedulerConfig contains the dependencies for the daily scrape scheduler.
 type SchedulerConfig struct {
 	Server          *Server
@@ -31,9 +23,9 @@ type SchedulerConfig struct {
 }
 
 // StartScheduler starts the daily scheduled scrape loop.
-func StartScheduler(ctx context.Context, cfg SchedulerConfig) (*Scheduler, error) {
+func StartScheduler(ctx context.Context, cfg SchedulerConfig) error {
 	if cfg.Server == nil {
-		return nil, fmt.Errorf("scheduler: server is required")
+		return fmt.Errorf("scheduler: server is required")
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -42,12 +34,10 @@ func StartScheduler(ctx context.Context, cfg SchedulerConfig) (*Scheduler, error
 		cfg.Sleep = sleepContext
 	}
 	if _, err := nextScheduledRun(cfg.Now(), cfg.DailyScrapeTime); err != nil {
-		return nil, err
+		return err
 	}
 
-	s := &Scheduler{done: make(chan struct{})}
 	go func() {
-		defer close(s.done)
 		for {
 			now := cfg.Now()
 			next, err := nextScheduledRun(now, cfg.DailyScrapeTime)
@@ -64,7 +54,7 @@ func StartScheduler(ctx context.Context, cfg SchedulerConfig) (*Scheduler, error
 			cfg.Server.runScheduledScrape(ctx)
 		}
 	}()
-	return s, nil
+	return nil
 }
 
 func sleepContext(ctx context.Context, d time.Duration) error {

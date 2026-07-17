@@ -123,7 +123,7 @@ func main() {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 	if cfg.SchedulerEnabled {
-		if _, err := server.StartScheduler(appCtx, server.SchedulerConfig{
+		if err := server.StartScheduler(appCtx, server.SchedulerConfig{
 			Server:          srv,
 			DailyScrapeTime: cfg.DailyScrapeTime,
 		}); err != nil {

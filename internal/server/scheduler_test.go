@@ -72,7 +72,7 @@ func TestStartSchedulerRunsScheduledScrapeAfterSleep(t *testing.T) {
 	schedulerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sleepCalls := 0
-	_, err := StartScheduler(schedulerCtx, SchedulerConfig{
+	err := StartScheduler(schedulerCtx, SchedulerConfig{
 		Server:          srv,
 		DailyScrapeTime: "08:00",
 		Now: func() time.Time {
@@ -137,7 +137,7 @@ func TestStartSchedulerRecordsSkippedRunWhenScrapeLockBusy(t *testing.T) {
 	schedulerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sleepCalls := 0
-	_, err := StartScheduler(schedulerCtx, SchedulerConfig{
+	err := StartScheduler(schedulerCtx, SchedulerConfig{
 		Server:          srv,
 		DailyScrapeTime: "08:00",
 		Now: func() time.Time {
