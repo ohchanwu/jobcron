@@ -157,10 +157,15 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Owner: explicit legacy import wiring and private `defaultKeysPath` test seam.
 - Behavior locks: `TestDefaultKeysPathUsesCanonicalApplicationDirectory` covers the private
   path builder.
-- Expected reduction: six production lines; zero dependencies.
+- Implemented by `03c8fd4d9870580fca6ab042aa5874a6f54d7b60`: seven production lines
+  deleted; zero test-line and direct-dependency change; all three shipped binaries remained
+  byte-identical.
+- Verification: focused behavior lock, `gofmt`, `go vet`, build, full unit, race, and coverage
+  gates passed, as did CGO-free darwin/arm64, linux/amd64, linux/arm64, and windows/amd64 builds.
+- Ponytail: `Lean already. Ship.` No in-scope follow-up was rejected.
 - Risk and rollback: low because `internal/ai` cannot be imported outside the parent module.
-  One reversible AI commit.
-- Status: `accepted` for Task 4 evidence because the wrapper has no reachable consumer.
+  Roll back with `git revert 03c8fd4d9870580fca6ab042aa5874a6f54d7b60`.
+- Status: `implemented` after independent review approval.
 
 ### PONY-008: Remove `Server.registeredSources`
 
@@ -457,12 +462,17 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-007.
 - Plan: `docs/superpowers/plans/260717-ponytail-ai-key-path-reduction.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Implementation: `03c8fd4d9870580fca6ab042aa5874a6f54d7b60`.
 - Behavior owner: private `defaultKeysPath` plus explicit importer path wiring.
 - Production files: `internal/ai/keys.go`.
 - Behavior lock: `TestDefaultKeysPathUsesCanonicalApplicationDirectory`.
-- Estimated delta: minus six production lines; zero dependencies.
-- Rollback boundary: one AI-key-path commit restoring one wrapper.
+- Actual delta: seven production lines deleted; zero test-line and direct-dependency change;
+  shipped binary bytes unchanged.
+- Verification: focused behavior lock, static, build, unit, race, coverage, and four CGO-free
+  platform builds passed.
+- Ponytail: `Lean already. Ship.` No in-scope follow-up was rejected.
+- Rollback: `git revert 03c8fd4d9870580fca6ab042aa5874a6f54d7b60`.
 - Reversibility: no later batch depends on the exported wrapper or this deletion.
 
 ### PT4-002: remove the unused registered-source method

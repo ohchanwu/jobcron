@@ -48,8 +48,10 @@ not need rather than retaining a second production wrapper.
 git status --short --branch
 git log -1 --format='%H %cI %s'
 rg -n 'buildModelText|ModelInput|go:build aispike' internal/ai
-go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./... | \
-  rg 'internal/ai/extract.go.*buildModelText'
+deadcode_output=$(
+  GOTOOLCHAIN=go1.26.3 go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+) &&
+  printf '%s\n' "$deadcode_output" | rg 'internal/ai/extract.go.*buildModelText'
 ```
 
 Expected: `buildModelText` is found only in production declaration and two `aispike` calls;

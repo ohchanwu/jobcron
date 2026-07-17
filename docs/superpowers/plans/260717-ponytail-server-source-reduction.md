@@ -48,8 +48,10 @@ resolve `registeredSources` through the explicit function-map entry bound to
 git status --short --branch
 git log -1 --format='%H %cI %s'
 rg -n 'registeredSources|allRegisteredSources' internal/server web
-go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./... | \
-  rg 'internal/server/sources.go.*registeredSources'
+deadcode_output=$(
+  GOTOOLCHAIN=go1.26.3 go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+) &&
+  printf '%s\n' "$deadcode_output" | rg 'internal/server/sources.go.*registeredSources'
 ```
 
 Expected: the private method is one deadcode finding; `server.go` binds the same template name
@@ -130,8 +132,10 @@ go test ./internal/server \
 go test ./internal/server \
   -run '^TestProfileFormDefaultsDemodayOffOnlyBeforeFirstSave$' -count=1
 ! rg -n 'func \(s \*Server\) registeredSources' internal/server/sources.go
-! go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./... | \
-  rg 'internal/server/sources.go.*registeredSources'
+deadcode_output=$(
+  GOTOOLCHAIN=go1.26.3 go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+) &&
+  ! printf '%s\n' "$deadcode_output" | rg 'internal/server/sources.go.*registeredSources'
 ```
 
 Expected: both tests pass and the dead method disappears from source and deadcode output.

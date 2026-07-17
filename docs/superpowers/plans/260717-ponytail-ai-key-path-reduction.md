@@ -55,8 +55,10 @@ the private seam appears in `keys.go` and `keys_test.go`.
 - [ ] **Step 2: Run the deletion signal before editing**
 
 ```sh
-go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./... | \
-  rg 'internal/ai/keys.go.*DefaultKeysPath'
+deadcode_output=$(
+  GOTOOLCHAIN=go1.26.3 go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+) &&
+  printf '%s\n' "$deadcode_output" | rg 'internal/ai/keys.go.*DefaultKeysPath'
 ```
 
 Expected: one `DefaultKeysPath` finding. This is the red reachability signal.
@@ -121,8 +123,10 @@ Keep the `os` import because `LoadKeys`, `SaveKeys`, and file-mode code still us
 test -z "$(gofmt -l internal/ai/keys.go)"
 go test ./internal/ai -run '^TestDefaultKeysPathUsesCanonicalApplicationDirectory$' -count=1
 ! rg -n 'func DefaultKeysPath' internal/ai/keys.go
-! go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./... | \
-  rg 'internal/ai/keys.go.*DefaultKeysPath'
+deadcode_output=$(
+  GOTOOLCHAIN=go1.26.3 go run golang.org/x/tools/cmd/deadcode@v0.47.0 -test ./...
+) &&
+  ! printf '%s\n' "$deadcode_output" | rg 'internal/ai/keys.go.*DefaultKeysPath'
 ```
 
 Expected: formatting and the test pass; both absence checks succeed.
