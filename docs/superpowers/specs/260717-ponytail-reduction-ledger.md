@@ -518,6 +518,8 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 ### PT4-006: add the shared robots parser and convert four sources
 
 - Candidate: PONY-002.
+- Plan: `docs/superpowers/plans/260717-ponytail-robots-parser-foundation.md`.
+- Status: `planned`.
 - Behavior owner: new `internal/scraper/robots.go`, limited to parsing and path matching.
 - Production files: `internal/scraper/robots.go`, `internal/scraper/demoday/demoday.go`,
   `internal/scraper/greenhouse/greenhouse.go`, `internal/scraper/greeting/greeting.go`, and
