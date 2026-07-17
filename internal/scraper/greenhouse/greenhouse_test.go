@@ -54,7 +54,7 @@ func TestParseDaangnMetadataKeepsFourShinip(t *testing.T) {
 		if !p.newcomer {
 			t.Errorf("daangn id=%s: Newcomer=false, want true", id)
 		}
-		want := "https://team.daangn.com/jobs/" + id + "/"
+		want := "https://careers.daangn.com/jobs/role/" + id + "/"
 		if p.url != want {
 			t.Errorf("daangn id=%s: URL=%q, want %q", id, p.url, want)
 		}

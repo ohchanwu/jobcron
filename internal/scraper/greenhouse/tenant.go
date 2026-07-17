@@ -30,7 +30,7 @@ const (
 	// whose absolute_url points at the hosted job page
 	// (job-boards.greenhouse.io/{token}/jobs/{id}) — krafton, moloco.
 	LinkAbsolute LinkStrategy = iota
-	// LinkSite builds {SiteURL}/jobs/{id}/ and ignores absolute_url. For
+	// LinkSite builds {SiteURL}/jobs/role/{id}/ and ignores absolute_url. For
 	// 당근, whose absolute_url is a dead about.daangn.com marketing link.
 	LinkSite
 	// LinkBoard builds the canonical hosted board URL
@@ -68,7 +68,7 @@ const (
 func (t Tenant) link(id, absoluteURL string) string {
 	switch t.Link {
 	case LinkSite:
-		return trimSlash(t.SiteURL) + "/jobs/" + id + "/"
+		return trimSlash(t.SiteURL) + "/jobs/role/" + id + "/"
 	case LinkBoard:
 		return "https://job-boards.greenhouse.io/" + t.Token + "/jobs/" + id
 	case LinkSiteJob:
@@ -102,7 +102,7 @@ func Daangn() *Scraper {
 		Source:  "daangn",
 		Token:   "daangn",
 		Company: "당근",
-		SiteURL: "https://team.daangn.com",
+		SiteURL: "https://careers.daangn.com",
 		Link:    LinkSite,
 		Detect:  DetectMetadata,
 	})

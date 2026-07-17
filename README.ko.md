@@ -9,7 +9,7 @@ _[Read this in English 🇬🇧](README.md)_
 Jobcron은 한국 채용 플랫폼 [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
 [랠릿 (Rallit)](https://www.rallit.com), [데모데이](https://demoday.co.kr),
 [그리팅 (Greeting)](https://greetinghr.com)과 기업 채용 페이지
-[당근 (Daangn)](https://team.daangn.com), 크래프톤, 몰로코, 센드버드(Greenhouse 경유)를
+[당근 (Daangn)](https://careers.daangn.com), 크래프톤, 몰로코, 센드버드(Greenhouse 경유)를
 스크랩합니다. 모든 신입 IT 공고를 사용자 프로필 기준으로 점수화한 뒤, 각 매칭에 대한
 설명과 함께 한 페이지짜리 일일 브리핑을 보여줍니다. (워크넷은 무료 정부 API 키로
 켤 수 있습니다 — *사용법* 참고.)

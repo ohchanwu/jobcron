@@ -9,7 +9,7 @@ then let Jobcron gather and rank the day's openings into one calm page.
 Jobcron scrapes Korean job boards — the aggregators [점핏 (Jumpit)](https://jumpit.saramin.co.kr),
 [랠릿 (Rallit)](https://www.rallit.com), [데모데이](https://demoday.co.kr), and
 [그리팅 (Greeting)](https://greetinghr.com), plus the company career boards
-[당근 (Daangn)](https://team.daangn.com), 크래프톤, 몰로코, and 센드버드 (via Greenhouse) —
+[당근 (Daangn)](https://careers.daangn.com), 크래프톤, 몰로코, and 센드버드 (via Greenhouse) —
 scores every new-grad IT posting against your profile, and shows a one-page daily
 briefing with every match explained. (워크넷 also turns on with a free government
 API key — see *Usage*.)
