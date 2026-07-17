@@ -170,13 +170,13 @@ not proportional because no data, network, or AI policy changes.
 - [ ] **Step 2: Walk the affected user path in a real headless browser**
 
 ```sh
-ponytail_state_dir=$(mktemp -d)
-go run ./cmd/jobcron --db "$ponytail_state_dir/jobs.db" --no-open
+scripts/preview-interactive.sh 7777
 ```
 
 Use gstack `/browse` against `http://127.0.0.1:7777/profile`. Verify the Jumpit and Demoday
 source controls both render in registration order on desktop and mobile, and record zero console
-errors. Do not use `curl`, the user's browser, production data, or a paid provider.
+errors. The preview script creates and cleans up a disposable PostgreSQL database. Do not use
+`curl`, the user's browser, production data, or a paid provider.
 
 - [ ] **Step 3: Compare source, test, dependency, binary, and coverage metrics**
 

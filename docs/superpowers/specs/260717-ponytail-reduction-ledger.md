@@ -175,12 +175,16 @@ These findings are admitted to Task 4 for full semantic tracing and acceptance r
 - Callers and non-Go consumers: none. The template function named `registeredSources` binds
   to `Server.allRegisteredSources`, not this method.
 - Owner: `Server.allRegisteredSources` for template options and `Server.sources` internally.
-- Behavior locks: server template rendering and source-filter tests; Task 4 should add a
-  narrow name-binding assertion if needed.
-- Expected reduction: four production lines; zero dependencies.
-- Risk and rollback: low. One reversible server commit.
-- Status: `accepted` for Task 4 evidence because the similarly named template binding is a
-  different live symbol.
+- Behavior lock: `TestProfileFormRegisteredSourcesPreservesRegistrationOrder` renders the live
+  profile path and preserves registration order.
+- Implemented by `26083aa8e26c65cc10ff910208118d350fe29438`: five production lines
+  deleted; 24 test lines added; zero direct-dependency change.
+- Verification: focused behavior and race tests, `gofmt`, `go vet`, build, full unit, race,
+  coverage, arm64 cross-build, and desktop/mobile browser gates passed.
+- Ponytail: `Lean already. Ship.` No in-scope follow-up was rejected.
+- Risk and rollback: low. Roll back with
+  `git revert 26083aa8e26c65cc10ff910208118d350fe29438`.
+- Status: `implemented` after independent review approval.
 
 ## Task 3 Rejected Candidates
 
@@ -479,12 +483,18 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-008.
 - Plan: `docs/superpowers/plans/260717-ponytail-server-source-reduction.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Implementation: `26083aa8e26c65cc10ff910208118d350fe29438`.
 - Behavior owner: `Server.sources` and `Server.allRegisteredSources`.
 - Production files: `internal/server/sources.go`.
-- Behavior lock: a function-map binding assertion plus existing profile rendering tests.
-- Estimated delta: minus four production lines; zero dependencies.
-- Rollback boundary: one server-source commit restoring one private method.
+- Behavior lock: `TestProfileFormRegisteredSourcesPreservesRegistrationOrder` plus existing
+  profile rendering tests.
+- Actual delta: five production lines deleted; 24 test lines added; zero direct-dependency
+  change; shipped binary total decreased by 148,608 bytes.
+- Verification: focused behavior and race tests, static, build, unit, race, coverage, arm64
+  cross-build, and desktop/mobile browser gates passed.
+- Ponytail: `Lean already. Ship.` No in-scope follow-up was rejected.
+- Rollback: `git revert 26083aa8e26c65cc10ff910208118d350fe29438`.
 - Reversibility: no consumer or later batch depends on the deleted method.
 
 ### PT4-003: replace `buildModelText` with `ModelInput`

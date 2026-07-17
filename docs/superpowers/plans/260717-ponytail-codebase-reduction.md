@@ -699,6 +699,10 @@ go test ./... -count=1
 go test -race ./... -count=1
 ```
 
+When cross-building one `cmd/...` main package, always pass `-o` with a path under a temporary
+directory. A single-package `go build` without `-o` emits a binary in the repository root, where
+an automatic checkpoint can capture it. Pattern builds such as `go build ./...` do not emit one.
+
 Also run every proportional Task 1 integration and browser gate named by the
 child plan. UI-affecting edits require desktop and mobile browser verification
 with zero console errors.
