@@ -17,9 +17,12 @@ and robots cache; only pacing state and calls move to the existing owner.
 ## Global Constraints
 
 - Batch: `PT4-009`; candidate: `PONY-003`.
-- Start from the exact human-reviewed `PT4-008` implementation commit supplied by Mayor.
-- Record that commit SHA and require `internal/pacing/pacing.go` before editing.
-- The reviewed base must contain this plan and its ledger entry marked `planned`.
+- Start from the exact Mayor checkpoint supplied for this batch.
+- Record both that checkpoint and its reviewed `PT4-008` implementation ancestor, then
+  require `internal/pacing/pacing.go` before editing.
+- The checkpoint must contain this plan, the completed `PT4-008` ledger record, and the
+  `PT4-009` ledger entry marked `planned`. No production code may intervene between the
+  reviewed implementation and the checkpoint.
 - Production scope is exactly Jumpit, Rallit, and Worknet client files.
 - Test scope is Jumpit's timing test and focused Rallit and Worknet client tests.
 - Do not edit, move, widen, or redefine the owner created by `PT4-008`.
@@ -59,8 +62,9 @@ rg -n 'waitForRateLimit|rateLimit|lastRequest' \
   internal/scraper/worknet/client.go
 ```
 
-Expected: Mayor's reviewed `PT4-008` commit is the exact parent, its owner is unchanged, and
-the three approved clients are the only local pacing definitions.
+Expected: Mayor's supplied checkpoint is the exact parent, the reviewed `PT4-008`
+implementation is its production-code ancestor, the owner is unchanged, and the three
+approved clients are the only local pacing definitions.
 
 - [ ] **Step 2: Add Jumpit's missing concurrent-start characterization**
 
