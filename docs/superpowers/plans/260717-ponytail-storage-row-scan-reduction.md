@@ -87,10 +87,6 @@ git ls-files '*.go' ':(exclude)**/*_test.go' | xargs wc -l
 git ls-files '**/*_test.go' | xargs wc -l
 go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all
 ponytail_metrics_dir=$(mktemp -d)
-go build -o "$ponytail_metrics_dir/jobcron" ./cmd/jobcron
-go build -o "$ponytail_metrics_dir/jobcron-import" ./cmd/jobcron-import
-go build -o "$ponytail_metrics_dir/jobcron-user" ./cmd/jobcron-user
-wc -c "$ponytail_metrics_dir"/*
 go test ./internal/storage \
   -coverprofile="$ponytail_metrics_dir/storage-before.cover" -count=1
 go tool cover -func="$ponytail_metrics_dir/storage-before.cover"
@@ -192,11 +188,11 @@ go test -race ./internal/storage ./cmd/jobcron-import ./cmd/jobcron-user -count=
 Expected: all PostgreSQL-backed tests execute and pass. Scraper, AI, browser, cross-build, and
 deployment gates are not proportional because queries and external behavior do not change.
 
-- [ ] **Step 3: Repeat Task 1 metrics after the edit**
+- [ ] **Step 3: Repeat Task 1 source, dependency, and coverage metrics after the edit**
 
 Repeat Task 1 Step 4 with `storage-after.cover`. Expected: production lines decrease by at least
-30; tests and dependencies remain stable; binary-size noise and coverage movement are recorded
-without being treated as reduction.
+30; tests and dependencies remain stable; coverage movement is recorded without being treated
+as reduction.
 
 ### Task 4: Review and commit the implementation batch
 
@@ -234,3 +230,29 @@ git commit -m "refactor(storage): share posting row collector"
 
 Expected: one commit. Rollback is `git revert <PT4-004-commit>` and restores all four local
 loops without affecting another batch.
+
+- [ ] **Step 3: Measure the exact base and implementation binaries at one path**
+
+After the implementation commit, store its branch and SHA. Switch the same clean checkout to
+the exact Mayor-supplied base, build all three binaries to explicit temporary outputs, restore
+the implementation branch, verify its SHA, and repeat with the same Go environment:
+
+```sh
+ponytail_metrics_dir=$(mktemp -d)
+implementation_branch=$(git branch --show-current)
+implementation_sha=$(git rev-parse HEAD)
+test -n "$implementation_branch"
+git switch --detach <exact-base-sha>
+go build -o "$ponytail_metrics_dir/base-jobcron" ./cmd/jobcron
+go build -o "$ponytail_metrics_dir/base-jobcron-import" ./cmd/jobcron-import
+go build -o "$ponytail_metrics_dir/base-jobcron-user" ./cmd/jobcron-user
+git switch "$implementation_branch"
+test "$(git rev-parse HEAD)" = "$implementation_sha"
+go build -o "$ponytail_metrics_dir/final-jobcron" ./cmd/jobcron
+go build -o "$ponytail_metrics_dir/final-jobcron-import" ./cmd/jobcron-import
+go build -o "$ponytail_metrics_dir/final-jobcron-user" ./cmd/jobcron-user
+wc -c "$ponytail_metrics_dir"/*jobcron*
+```
+
+Expected: both SHAs build sequentially at the same checkout path. Record per-binary and total
+deltas; do not compare these sizes with binaries from another path or run.
