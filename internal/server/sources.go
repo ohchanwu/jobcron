@@ -88,11 +88,6 @@ func (s *Server) disabledSourceSet(disabled []string) map[string]bool {
 	return out
 }
 
-// registeredSources exposes the source identifiers in registration order —
-// used by tests and any caller that needs to enumerate without going
-// through the full Scraper interface.
-func (s *Server) registeredSources() []scraper.Scraper { return s.sources }
-
 // allRegisteredSources returns one sourceOption per registered scraper, in
 // registration order. Exposed to templates as `registeredSources` so the
 // dashboard/archive/bookmarks pages can render the full source-filter

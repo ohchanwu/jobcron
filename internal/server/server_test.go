@@ -277,6 +277,30 @@ func TestProfileFormDefaultsDemodayOffOnlyBeforeFirstSave(t *testing.T) {
 	}
 }
 
+func TestProfileFormRegisteredSourcesPreservesRegistrationOrder(t *testing.T) {
+	st, err := storage.OpenSQLiteAt(filepath.Join(t.TempDir(), "jobs.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv := New(st,
+		&fakeScraper{source: "jumpit"},
+		&fakeScraper{source: "demoday"},
+	)
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /profile = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	jumpit := strings.Index(body, `name="source_jumpit"`)
+	demoday := strings.Index(body, `name="source_demoday"`)
+	if jumpit < 0 || demoday < 0 || jumpit >= demoday {
+		t.Fatalf("registered source order: jumpit=%d demoday=%d", jumpit, demoday)
+	}
+}
+
 func TestApplicationPagesUseSharedPrimaryNav(t *testing.T) {
 	for _, name := range []string{"index.html", "archive.html", "bookmarks.html", "hidden.html", "profile.html"} {
 		t.Run(name, func(t *testing.T) {
