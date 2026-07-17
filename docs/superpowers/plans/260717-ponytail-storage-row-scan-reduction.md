@@ -147,13 +147,21 @@ Apply this only to `BookmarkedPostings`, `BookmarkedPostingsForUser`,
 
 Add `TestScanPostingsReturnsScanError` and `TestScanPostingsReturnsRowsError` using the existing
 migrated SQLite test store. The first must provide a projection that makes `scanPosting` fail
-and assert a nil result plus the scan error. The second must make iteration terminate with a
-context error and assert that exact error is returned. Do not add a rows interface or dependency.
+and assert a nil result plus the scan error. The second must yield one valid row and then a
+deterministic SQLite query error from `rows.Next`, asserting both the accumulated posting and
+the terminal error. Do not pre-cancel a query context: cancellation may surface from either
+`rows.Scan` or `rows.Err`, so that setup does not prove the post-loop return path. Do not add a
+rows interface or dependency.
 
-Run both tests at least 20 times so context cancellation is demonstrably deterministic:
+Run both tests repeatedly in normal, race, and count-coverage modes so the terminal-path lock
+is demonstrably deterministic under instrumentation:
 
 ```sh
 go test ./internal/storage -run '^TestScanPostingsReturns(Scan|Rows)Error$' -count=20
+go test -race ./internal/storage \
+  -run '^TestScanPostingsReturns(Scan|Rows)Error$' -count=20
+go test ./internal/storage -run '^TestScanPostingsReturns(Scan|Rows)Error$' \
+  -count=20 -coverprofile=/tmp/jobcron-ponytail-PT4-004-errors.cover
 ```
 
 - [ ] **Step 4: Run targeted green checks**
