@@ -45,3 +45,22 @@ screenshots/
 # Local implementation artifacts and human-only handoff notes.
 /.superpowers/archive/
 /.worktrees/
+
+# Terraform local artifacts. State, variable values, plans, and crash output can
+# contain secrets or production identifiers; keep provider lock files tracked.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+crash.log
+crash.*.log
+
+# Local Terraform overrides and per-user CLI configuration.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc

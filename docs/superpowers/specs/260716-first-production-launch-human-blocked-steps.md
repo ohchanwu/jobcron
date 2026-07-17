@@ -16,8 +16,9 @@ The repository-only production preparation is complete:
 - Production Compose requires an immutable image, `DATABASE_URL`,
   `SESSION_SECRET`, and `JOBCRON_CREDENTIAL_ENCRYPTION_KEY`.
 - Production has no app filesystem credential mount or migration container.
-- The verified importer runs from a trusted local checkout through a
-  localhost-only SSH tunnel.
+- The verified importer runs from a clean checkout of the approved release
+  commit on the operator-controlled Mac. Verify its full commit SHA and clean
+  worktree before running the reviewed CLI through a localhost-only SSH tunnel.
 - Light and dark dashboard screenshots have been refreshed with score sorting,
   applied AI deltas, and visible AI-delta details.
 
@@ -35,8 +36,10 @@ JOBCRON_NO_OPEN=1
 JOBCRON_DAILY_SCRAPE_TIME=05:00
 ```
 
-Only `JOBCRON_IMAGE` and `JOBCRON_CREDENTIAL_ENCRYPTION_KEY` need to be added
-before first startup.
+`JOBCRON_IMAGE` and `JOBCRON_CREDENTIAL_ENCRYPTION_KEY` are present in the
+existing `.env` with placeholder values. Before first startup, replace those
+placeholders with the approved immutable image tag and the generated production
+master key; placeholder presence is not deployment readiness.
 
 The convergence specification remains active until the production import,
 authenticated browser verification, paid AI check, container-recreation check,
@@ -68,22 +71,28 @@ handle undisclosed secrets, approve spending, or close the rollback window.
   private terminal. Clear temporary shell variables after use.
 - Keep RDS private. Operator access uses a tunnel bound to
   `127.0.0.1:15432`; do not expose PostgreSQL publicly.
-- Do not copy the SQLite source or optional legacy key file to EC2.
+- Do not copy the SQLite source to EC2.
 - Do not print rendered Compose output because it contains expanded secrets.
 - Keep exact deployment evidence in an access-controlled operator log.
 
 ## Private Inputs To Prepare
 
-- Approved release commit SHA
-- Registry repository and registry credentials
-- EC2 host identity and SSH key
-- Existing EC2 `.env`
-- Owner email and a newly chosen owner password
-- Base64-encoded credential master key that decodes to exactly 32 bytes
-- Immutable SQLite snapshot and durable `-wal` file
-- Optional retained legacy AI key file
-- RDS snapshot authority and an access-controlled operator log
-- Anthropic API key and approval for one minimal paid verification
+- [ ] Approved release commit SHA
+- [ ] Docker-compatible OCI registry repository plus the credentials needed to
+      push the image from the trusted Mac and pull it from EC2
+- [x] EC2 host identity and SSH key
+- [x] Existing EC2 `.env`, with placeholders still requiring replacement
+- [ ] Owner email and a newly chosen owner password; the reviewed
+      `jobcron-user create-owner` CLI is ready and reads the password from its
+      secure prompt rather than a flag or shell history
+- [x] Base64-encoded credential master key that decodes to exactly 32 bytes
+- [ ] Immutable SQLite snapshot and durable `-wal` file
+- [ ] AWS permission to create a manual pre-import RDS snapshot, providing a
+      restore point if import validation fails before production use
+- [ ] Access-controlled operator-log location for exact resource identifiers,
+      snapshot ID, command outcomes, and rollback evidence that must not enter
+      this public repository
+- [x] Anthropic API key and approval for one minimal paid verification
 
 ## Human Execution Checklist
 
@@ -109,7 +118,7 @@ the published image cannot be tied to the approved commit.
 
 ### 2. Verify AWS And DNS, Then Prepare EC2
 
-- [ ] The expected EC2 instance and private PostgreSQL 18 RDS instance are
+- [x] The expected EC2 instance and private PostgreSQL 18 RDS instance are
       healthy.
 - [ ] RDS public access is disabled and PostgreSQL ingress is limited to the EC2
       security group.
@@ -132,7 +141,7 @@ private tunnel.
 - [ ] Its existing database URL, session secret, environment, host, port,
       no-open, and daily-scrape values are unchanged.
 - [ ] `JOBCRON_IMAGE` is set to the immutable image from step 1.
-- [ ] `JOBCRON_CREDENTIAL_ENCRYPTION_KEY` is generated on a trusted machine,
+- [x] `JOBCRON_CREDENTIAL_ENCRYPTION_KEY` is generated on a trusted machine,
       decodes to exactly 32 bytes, and has a separate secure backup.
 - [ ] The production Compose render passes the value-blind verifier using a
       private temporary file.
@@ -165,8 +174,10 @@ ciphertext unreadable, so its protected backup is part of production recovery.
 - [ ] Private shell variables are cleared and the SSH tunnel is closed after
       verification.
 
-Retain the SQLite snapshot, durable `-wal`, optional legacy key file, master-key
-backup, and RDS snapshot through the rollback window.
+Retain the SQLite snapshot, durable `-wal`, master-key backup, and RDS snapshot
+through the rollback window. This launch does not use the importer's optional
+legacy `--ai-keys` source; the prepared Anthropic key is entered through the
+production application after import for the paid verification.
 
 ### 5. Start Production And Walk The Real User Path
 
@@ -207,8 +218,6 @@ the user's normal browser.
       of Done and move to the tracked archive with both documentation indexes
       updated.
 - [ ] The human explicitly closes the rollback window.
-- [ ] Only after that approval, the optional plaintext legacy key is removed
-      through the human's secure process.
 
 ## Rollback Boundaries
 
