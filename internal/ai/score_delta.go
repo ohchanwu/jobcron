@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
-	"unicode"
 
-	"golang.org/x/text/unicode/norm"
+	"github.com/ohchanwu/jobcron/internal/tokenmatch"
 )
 
 // Stage-2 delta kinds. A presence item cites a verbatim span the posting HAS;
@@ -230,51 +228,13 @@ func absenceEvidence(forms []string) string {
 	return "'" + strings.Join(forms, "/") + "' 등 관련 언급 없음 (코드 확인)"
 }
 
-// gateTokenize mirrors scoring/match.go's unexported tokenize: NFC-normalize,
-// split into maximal letter/digit runs (every other rune is a separator),
-// lowercase each run. The citation gate must match Korean text the same way the
-// rest of the project does (so "개발" and "개발자" stay distinct tokens), but
-// internal/ai must NOT import internal/scoring — scoring imports ai, so the
-// reverse would cycle. This is a deliberate, faithful copy; gate_test.go locks
-// its behavior to the same invariants match_test.go asserts. Change both or
-// neither.
-func gateTokenize(text string) []string {
-	text = norm.NFC.String(text)
-	var tokens []string
-	var b strings.Builder
-	flush := func() {
-		if b.Len() > 0 {
-			tokens = append(tokens, strings.ToLower(b.String()))
-			b.Reset()
-		}
-	}
-	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-		} else {
-			flush()
-		}
-	}
-	flush()
-	return tokens
-}
+// gateTokenize keeps the citation gate behind its policy-facing local name.
+func gateTokenize(text string) []string { return tokenmatch.Tokenize(text) }
 
 // tokenSubsequence reports whether phrase occurs in text as a contiguous run of
 // tokens — the same token-exact, phrase-ordered semantics as scoring's
 // textContains and an FTS5 quoted-phrase MATCH. An empty phrase matches nothing.
-func tokenSubsequence(text, phrase string) bool {
-	needle := gateTokenize(phrase)
-	if len(needle) == 0 {
-		return false
-	}
-	haystack := gateTokenize(text)
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		if slices.Equal(haystack[i:i+len(needle)], needle) {
-			return true
-		}
-	}
-	return false
-}
+func tokenSubsequence(text, phrase string) bool { return tokenmatch.Contains(text, phrase) }
 
 // buildScoreDeltaUser assembles the single user message for the ScoreDelta call:
 // the posting text (already truncated/normalized by the caller) and the
