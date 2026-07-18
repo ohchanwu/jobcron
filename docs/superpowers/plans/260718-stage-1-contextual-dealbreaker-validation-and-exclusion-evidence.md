@@ -636,6 +636,8 @@ git commit -m "feat(scoring): persist contextual exclusion reasons"
 
 - Consumes Tasks 1 through 4.
 - Produces cache-only inputs for `scoreAll` and paid Stage 1B work only in scrape and `AI 평가`.
+- Scheduled scrape may use paid Stage 1B only when `ScheduledAIEnabled` is true. The existing
+  default-off behavior remains unchanged.
 - Preserves the existing sole-owner scheduler and authenticated-user boundaries.
 
 - [ ] **Step 1: Write failing runtime-version and user-isolation tests**
@@ -668,9 +670,11 @@ Add tests proving this sequence for each detailed posting:
 Stage 1A -> deterministic candidates -> Stage 1B -> scoreAll -> Stage 2
 ```
 
-Verify a current Stage 1B cache row makes zero provider calls and spends zero tokens. Verify a
-provider error, malformed response, invalid quote, missing credential, and exhausted budget each
-retain the deterministic exclusion and do not abort the scrape.
+Verify a current Stage 1B cache row makes zero provider calls and spends zero tokens. An exact hit
+must match `(user_id, posting_id, content_hash, dealbreaker_version, keyword_hash)`. Verify that a
+provider, model, or prompt-version change misses the cache. Verify a provider error, malformed
+response, invalid quote, missing credential, and exhausted budget each retain the deterministic
+exclusion and do not abort the scrape.
 
 - [ ] **Step 3: Implement the focused Stage 1B runner**
 
@@ -691,9 +695,10 @@ func (s *Server) validateDealbreakers(
 
 For each posting, compute `ai.ModelInput`, obtain every deterministic candidate, discard exact
 cache hits, and send all unresolved candidates for that posting in one provider request. Before
-each paid call, verify runtime user, budget, and call cap. Debit usage for every completed call,
-including `uncertain`; persist only citation-gated results. Do not cache transport, budget, or
-invalid-evidence failures.
+each paid call, verify runtime user, budget, and call cap. Scrape and re-rate must share the same
+operation budget and call cap with their later paid work; Stage 1B must not create a second
+allowance. Debit usage for every completed call, including `uncertain`; persist only citation-gated
+results. Do not cache transport, budget, or invalid-evidence failures.
 
 - [ ] **Step 4: Merge cached validations in `scoreAll`**
 
@@ -708,12 +713,14 @@ it through the existing user-scoped score method.
 - [ ] **Step 5: Put Stage 1B before Stage 2 in both paid flows**
 
 During scrape, run the focused validator after Stage 1A and before the final score merge and
-automatic Stage 2 selection.
+automatic Stage 2 selection. A scheduled scrape runs the paid validator only when
+`ScheduledAIEnabled` is true. When it is false, use cached validations only and make zero provider
+calls. Add enabled and disabled scheduler tests.
 
 During user-triggered `GET /api/rerate`, load all candidate postings, including rows currently
 stored as `Total = -1`; run Stage 1B, re-score all postings, rebuild the eligible `Today` set, then
 run the existing Stage 2 work. Share the operation's `aiBudget` and `callCap` so Stage 1B cannot
-bypass existing spend controls.
+bypass existing spend controls. Scrape must use the same sharing rule.
 
 - [ ] **Step 6: Make profile changes cache-aware and provider-free**
 
@@ -736,8 +743,9 @@ JOBCRON_TEST_POSTGRES_URL="$DATABASE_URL" \
   go test -race ./internal/server -count=1
 ```
 
-Expected: scrape order, cache hits, conservative fallback, per-user isolation, re-entry into
-`Today`, provider-free save/startup, scheduler, and existing Stage 2 behavior all pass.
+Expected: scrape order, exact cache identity, conservative fallback, per-user isolation, re-entry
+into `Today`, provider-free save/startup, scheduler opt-in and opt-out, and existing Stage 2
+behavior all pass.
 
 - [ ] **Step 8: Commit Task 5**
 
