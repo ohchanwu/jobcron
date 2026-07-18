@@ -623,6 +623,7 @@ git commit -m "feat(scoring): persist contextual exclusion reasons"
 - Modify: `internal/server/rerate.go`
 - Modify: `internal/server/rerate_status.go`
 - Modify: `internal/server/handlers.go`
+- Modify: `internal/server/archive.go`
 - Modify: `internal/server/ai_runtime_test.go`
 - Modify: `internal/server/ai_config_test.go`
 - Modify: `internal/server/ai_scrape_test.go`
