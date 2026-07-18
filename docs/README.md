@@ -27,6 +27,7 @@ Use this index instead of recursively loading the entire documentation tree.
 - [Brainstorming skill and autonomous-mode question gates][brainstorming-autonomous-gate]
 - [Campaign scope must outlive slice completion][campaign-scope-outlives-slice]
 - [Caller-managed convoys require Mayor closeout][caller-managed-convoy-closeout]
+- [Local-only polecat work must not use an auto-submit formula][local-only-submit-formula]
 
 ## Implementation Work
 
@@ -67,6 +68,7 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 [brainstorming-autonomous-gate]: learnings/260717-brainstorming-autonomous-mode-question-gate.md
 [campaign-scope-outlives-slice]: learnings/260718-campaign-scope-outlives-slice-completion.md
 [caller-managed-convoy-closeout]: learnings/260718-caller-managed-convoy-closeout.md
+[local-only-submit-formula]: learnings/260719-local-only-polecat-submit-formula.md
 [ponytail-campaign-plan]:
   superpowers/archive/2026-07-18-ponytail-codebase-reduction/260717-campaign-plan.md
 [ponytail-campaign-ledger]:
