@@ -770,6 +770,7 @@ git commit -m "feat(server): run contextual validation before scoring"
 - Modify: `internal/server/ai_injection_test.go`
 - Modify: `web/index.html`
 - Modify: `web/archive.html`
+- Modify: `web/_rerate.html`
 - Modify: `web/styles.css`
 - Modify: `docs/assets/screenshots/dashboard.png`
 - Modify: `docs/assets/screenshots/dashboard-dark.png`
@@ -789,6 +790,7 @@ func TestExclusionReasonViewShowsEveryReasonInOrder(t *testing.T)
 func TestExclusionReasonViewSplitsMarkedKeywordWithoutHTML(t *testing.T)
 func TestExcludedReasonEscapesProviderOutput(t *testing.T)
 func TestDailyAndArchiveRenderExclusionReasons(t *testing.T)
+func TestRerateHintCoversPendingContextualValidation(t *testing.T)
 ```
 
 Use evidence containing `<script>alert(1)</script>` and assert it renders as escaped text. Verify
@@ -831,6 +833,11 @@ Define one `exclusion-reasons` template in `web/exclusion_reason.html` and call 
 rows in `web/index.html` and `web/archive.html`. Each row must show the `제외 이유` heading, reason
 label, optional verbatim evidence, and visible status text. Keep disclosure summaries, bookmark,
 mute, source, deadline, and outbound-link markup unchanged.
+
+Update the shared rerate hint because `StaleCount` now includes excluded rows with missing current
+Stage 1B validation, not only rows made stale by a profile edit. Replace the stale-only phrase
+`프로필이 바뀐 공고 N개` with `AI 문맥 확인이 필요한 공고 N개`. Verify an excluded row with a
+missing current validation renders the new copy.
 
 - [ ] **Step 4: Add semantic danger styling and restore row contrast**
 
