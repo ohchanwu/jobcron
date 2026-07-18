@@ -719,9 +719,10 @@ automatic Stage 2 selection. A scheduled scrape runs the paid validator only whe
 calls. Add enabled and disabled scheduler tests.
 
 During user-triggered `GET /api/rerate`, load all candidate postings, including rows currently
-stored as `Total = -1`; run Stage 1B, re-score all postings, rebuild the eligible `Today` set, then
-run the existing Stage 2 work. Share the operation's `aiBudget` and `callCap` so Stage 1B cannot
-bypass existing spend controls. Scrape must use the same sharing rule.
+stored as `Total = -1`. Backfill Stage 1A eligibility extraction across that full candidate set
+before generating deterministic candidates. Then run Stage 1B, re-score all postings, rebuild the
+eligible `Today` set, and run the existing Stage 2 work. Share the operation's `aiBudget` and
+`callCap` so Stage 1B cannot bypass existing spend controls. Scrape must use the same sharing rule.
 
 - [ ] **Step 6: Make profile changes cache-aware and provider-free**
 
@@ -744,9 +745,9 @@ JOBCRON_TEST_POSTGRES_URL="$DATABASE_URL" \
   go test -race ./internal/server -count=1
 ```
 
-Expected: scrape order, exact cache identity, conservative fallback, per-user isolation, re-entry
-into `Today`, provider-free save/startup, scheduler opt-in and opt-out, and existing Stage 2
-behavior all pass.
+Expected: scrape and rerate ordering, exact cache identity, conservative fallback, per-user
+isolation, re-entry into `Today`, provider-free save/startup, scheduler opt-in and opt-out, and
+existing Stage 2 behavior all pass.
 
 - [ ] **Step 8: Commit Task 5**
 
