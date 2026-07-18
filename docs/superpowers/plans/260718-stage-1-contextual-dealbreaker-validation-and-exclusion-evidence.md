@@ -489,6 +489,7 @@ git commit -m "feat(storage): persist contextual dealbreaker verdicts"
 - Modify: `internal/scoring/qa_test.go`
 - Modify: `internal/profile/profile.go`
 - Modify: `internal/profile/profile_test.go`
+- Modify: `internal/server/server.go`
 
 **Interfaces:**
 
@@ -496,6 +497,8 @@ git commit -m "feat(storage): persist contextual dealbreaker verdicts"
 - Produces `DealbreakerCandidates`, `ExclusionReasons`, and the normalized dealbreaker hash used by
   Task 5.
 - Keeps `DealbreakerHit` so existing JSON and compact explanations remain readable.
+- Keeps the production server compiling by passing `nil` validations until Task 5 wires the real
+  per-user cache and provider results.
 
 - [ ] **Step 1: Write failing candidate and fallback tests**
 
@@ -578,7 +581,9 @@ func Score(
 Map candidate IDs to verdicts. Suppress only `not_applicable`; retain every other hit with
 `confirmed`, `uncertain`, or `unverified` confidence. Then append education, career, and MinScore
 reasons in the approved priority order. Never attach a Stage 2 line to a retained hard
-dealbreaker, and never fabricate evidence for the generic MinScore reason.
+dealbreaker, and never fabricate evidence for the generic MinScore reason. Update the existing
+`internal/server/server.go` caller to pass `nil` for the new validations argument; Task 5 replaces
+that temporary compile bridge with the actual user-scoped verdict map.
 
 - [ ] **Step 5: Add the normalized profile hash**
 
@@ -605,7 +610,7 @@ Expected: all prior weights and matching tests pass alongside the contextual and
 - [ ] **Step 7: Commit Task 4**
 
 ```sh
-git add internal/scoring internal/profile
+git add internal/scoring internal/profile internal/server/server.go
 git diff --cached --check
 git commit -m "feat(scoring): persist contextual exclusion reasons"
 ```
