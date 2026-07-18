@@ -23,7 +23,7 @@ new provider is constructed.
 - Start from completed Slice 1, including migration `0014`,
   `credential.Cipher`, master-key validation, and encrypted credential CRUD.
 - Follow the approved
-  [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
+  [convergence specification](../../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - Do not add plaintext credential fields to storage structs, logs, errors,
   templates, fixtures, or snapshots.
 - Keep `ai_extractions` global. It contains posting-derived facts, not user

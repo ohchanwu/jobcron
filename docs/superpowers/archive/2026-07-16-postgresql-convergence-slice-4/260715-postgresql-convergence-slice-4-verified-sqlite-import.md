@@ -31,7 +31,7 @@ after those gates pass does the normal `jobcron` command become PostgreSQL-only.
   report the exact tip and verification evidence, then defer so Mayor can fetch
   the clone and integrate without pushing.
 - Follow the approved
-  [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
+  [convergence specification](../../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - Preserve Slice 2's operation-scoped AI runtime, scheduler lock ordering,
   single render snapshot, missing-score omission, and rule-only recovery
   behavior. This slice changes persistence activation, not those contracts.

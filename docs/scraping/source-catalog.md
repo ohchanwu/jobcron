@@ -478,7 +478,7 @@ deferred), the remaining high-value candidates are mid-size dev-friendly
 companies:
 
 1. **토스** (toss.im) — careers.toss.im — high 신입 demand, JSON-friendly
-2. **당근** (daangn.com) — about.daangn.com/jobs — fast hiring
+2. **당근** (daangn.com) — careers.daangn.com/jobs/role — fast hiring
 3. **우아한형제들** (woowahan.com) — career.woowahan.com — 배민
 
 Note: companies on 공채 (batch hiring) cycles publish less continuously

@@ -28,7 +28,7 @@ them.
   report the exact tip and verification evidence, then defer so Mayor can fetch
   the clone and integrate without pushing.
 - Follow the approved
-  [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
+  [convergence specification](../../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - PostgreSQL AI score, usage, and runtime paths now require a positive user ID.
   The temporary `userID == 0` compatibility path belongs only to retained
   SQLite reads. Resolve the stable local owner before a PostgreSQL-backed

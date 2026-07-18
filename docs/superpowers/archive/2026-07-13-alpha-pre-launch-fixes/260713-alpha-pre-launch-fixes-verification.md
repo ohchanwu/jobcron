@@ -56,6 +56,6 @@
 
 ## Remaining Human Boundary
 
-The [active human-blocked launch checklist](../../specs/260713-alpha-launch-human-blocked-steps.md)
+The [active human-blocked launch checklist](../../specs/260716-first-production-launch-human-blocked-steps.md)
 owns AWS, DNS, Docker Hub, production secrets, owner identity, import approval,
 API-key entry, go-live, and rollback. None of those actions were executed.

@@ -2,7 +2,7 @@
 
 **Status:** Ready for implementation<br>
 **Verified:** 2026-07-13 against the working tree based on `241f499`<br>
-**Human handoff:** [Alpha launch human-blocked steps](260713-alpha-launch-human-blocked-steps.md)
+**Human handoff:** [First production launch human-blocked steps](../../specs/260716-first-production-launch-human-blocked-steps.md)
 
 ## Context
 

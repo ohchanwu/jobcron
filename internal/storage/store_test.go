@@ -463,7 +463,7 @@ func TestUpsertPostingRefreshesListingFieldsOnConflict(t *testing.T) {
 	// Same posting on a later scrape — listing now reports a corrected URL
 	// (scraper bug fix) and a slightly reworded title/company/location.
 	again := samplePosting()
-	again.URL = "https://team.daangn.com/jobs/123/"
+	again.URL = "https://careers.daangn.com/jobs/role/123/"
 	again.Title = "Backend Engineer (Platform)"
 	again.Company = "당근마켓"
 	again.Location = "서울 관악구 봉천동"

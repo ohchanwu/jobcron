@@ -26,7 +26,7 @@ const postingColumns = `source, source_posting_id, url, title, company, location
 // On the already-seen path we refresh url, title, company, and location —
 // every scrape re-fetches the listing for these fields, so they're always
 // fresh. If a source changes its URL scheme (as 당근 did when its scraper
-// moved from `about.daangn.com` to `team.daangn.com`) or rewords a posting
+// moved from `about.daangn.com` to `careers.daangn.com`) or rewords a posting
 // title, the next scrape picks up the change without needing a one-shot
 // data-migration. Fields that only arrive via FetchDetail (description,
 // stack tags, education, raw JSON) are NOT touched on this path — the

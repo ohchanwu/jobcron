@@ -1346,13 +1346,13 @@ Update the human checklist status to Ready for human execution and change its
 implementation-prerequisite link to:
 
 ~~~markdown
-**Implementation prerequisite:** [Verified alpha pre-launch fixes](../archive/2026-07-13-alpha-pre-launch-fixes/260713-alpha-pre-launch-fixes-verification.md)
+**Implementation prerequisite:** [Verified alpha pre-launch fixes](260713-alpha-pre-launch-fixes-verification.md)
 ~~~
 
 Update docs/superpowers/README.md so Active Work contains only:
 
 ~~~markdown
-- [Alpha launch human-blocked steps](specs/260713-alpha-launch-human-blocked-steps.md)
+- [First production launch human-blocked steps](../../specs/260716-first-production-launch-human-blocked-steps.md)
 ~~~
 
 Add the archived spec, plan, and verification under Recently Archived. Update
