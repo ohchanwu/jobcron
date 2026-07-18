@@ -327,6 +327,7 @@ git commit -m "feat(ai): validate contextual dealbreaker matches"
 - Modify: `internal/storage/ai_extractions.go`
 - Modify: `internal/storage/ai_extractions_test.go`
 - Modify: `internal/storage/postgres_integration_test.go`
+- Modify: `internal/storage/store_test.go`
 - Modify: `cmd/jobcron-import/main.go`
 - Modify: `cmd/jobcron-import/main_test.go`
 
@@ -352,7 +353,8 @@ func TestAIDealbreakerValidationsUseOneBatchQuery(t *testing.T)
 Seed migration `0016` with one extraction row, apply `0017`, and assert the prior quote moved to
 `career_evidence` while `education_evidence` is empty. In cache tests, use two users and the same
 posting, then verify neither user can read or overwrite the other's row. Delete the posting and one
-user to prove both cascades.
+user to prove both cascades. Update the store's latest-schema assertion from migration `0016` to
+`0017` so the full-suite migration contract remains explicit.
 
 - [ ] **Step 2: Add the PostgreSQL migration**
 
