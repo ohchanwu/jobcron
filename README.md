@@ -80,15 +80,16 @@ Run it once a day. That is the whole ritual.
   date or by fit), so nothing is lost; it just isn't shouting at you each morning.
 - **New-grad IT only.** Sources are queried with their 신입 / entry filters; this
   is not a general job search.
-- No notifications, no background scheduling, no résumé parsing — by design.
+- No notifications or résumé parsing. Production can run one owner-scoped daily scrape through
+  the in-process scheduler.
 
 ## AI scoring (optional, v2.0, bring your own key)
 
 Off by default. On the profile form, open **AI 분석 (선택)**, select **Anthropic**
 as the provider, paste your own API key, and fill in a few free-text goals
-(what work you like, what you want to avoid). Your key is stored only in a local
-0600-permission file next to the database — never uploaded, never shown again
-after you save it.
+(what work you like, what you want to avoid). The server encrypts your key before
+storing it in PostgreSQL, binds it to your user and provider, and never shows it
+again after you save it.
 
 With AI on, a first layer reads each posting's career range, new-grad eligibility,
 and education requirements before the regular score is calculated. A second layer
@@ -203,6 +204,12 @@ volumes and print `ps` and `logs postgres` diagnostics; startup never removes
 state automatically. Ordinary app shutdown also leaves PostgreSQL running.
 Explicit stop, reset, and narrowly scoped malformed-container recovery commands
 live in [deploy/local/README.md](deploy/local/README.md).
+
+## Architecture and documentation
+
+See the [architecture overview](docs/architecture.md) for the runtime, request,
+scraping, scoring, AI, storage, and deployment boundaries. The
+[documentation index](docs/README.md) links to detailed decisions and operator guides.
 
 ## Contributing
 

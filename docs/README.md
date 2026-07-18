@@ -2,6 +2,10 @@
 
 Use this index instead of recursively loading the entire documentation tree.
 
+## Architecture
+
+- [Current system architecture](architecture.md)
+
 ## Product
 
 - [Parked feature ideas](product/feature-ideas.md)
