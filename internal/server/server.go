@@ -941,7 +941,7 @@ func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime)
 			d.Stale = !s.demoMode
 			delta = &d
 		}
-		result := scoring.Score(p, prof, ext, delta)
+		result := scoring.Score(p, prof, ext, delta, nil)
 		breakdown, err := json.Marshal(result)
 		if err != nil {
 			return 0, fmt.Errorf("server: marshal score: %w", err)

@@ -154,9 +154,25 @@ func matchStackTag(tags []string, name string) (string, bool) {
 // did — silently dropping the score in that case would look like a bug.
 func scoreCareer(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (LineItem, bool) {
 	years := prof.CareerYears
-	minC, maxC, newcomer := p.MinCareer, p.MaxCareer, p.Newcomer
+	minC, maxC, newcomer, override := careerFacts(p, ext)
 
-	override := false
+	switch {
+	case (newcomer && years == 0) || (years >= minC && years <= maxC):
+		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerExactAward(prof), Reason: careerReason}, true
+	case years == minC-1 || years == maxC+1:
+		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerNearMissAward(prof), Reason: careerNearReason}, true
+	case override:
+		// Parser contradicted the source category but the user doesn't fit the
+		// parsed range either. Surface a 0-delta chip so the missing career
+		// bonus is explainable instead of mysterious.
+		return LineItem{Label: careerLabel(years, true, minC, maxC), Delta: 0, Reason: careerReason}, true
+	default:
+		return LineItem{}, false
+	}
+}
+
+func careerFacts(p scraper.Posting, ext *ai.Extraction) (minC, maxC int, newcomer, override bool) {
+	minC, maxC, newcomer = p.MinCareer, p.MaxCareer, p.Newcomer
 	if ext != nil {
 		// Cache-read (D2): the AI extraction is authoritative for career fit.
 		// Use its min/max/newcomer and SKIP the regex override entirely. A nil
@@ -191,20 +207,7 @@ func scoreCareer(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (L
 			newcomer = false
 		}
 	}
-
-	switch {
-	case (newcomer && years == 0) || (years >= minC && years <= maxC):
-		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerExactAward(prof), Reason: careerReason}, true
-	case years == minC-1 || years == maxC+1:
-		return LineItem{Label: careerLabel(years, override, minC, maxC), Delta: careerNearMissAward(prof), Reason: careerNearReason}, true
-	case override:
-		// Parser contradicted the source category but the user doesn't fit the
-		// parsed range either. Surface a 0-delta chip so the missing career
-		// bonus is explainable instead of mysterious.
-		return LineItem{Label: careerLabel(years, true, minC, maxC), Delta: 0, Reason: careerReason}, true
-	default:
-		return LineItem{}, false
-	}
+	return minC, maxC, newcomer, override
 }
 
 // isInternRole reports whether a posting's TITLE marks it an 인턴/internship
@@ -362,23 +365,6 @@ func parseManwon(s string) int {
 }
 
 func isASCIIDigit(r rune) bool { return r >= '0' && r <= '9' }
-
-// checkDealbreakers returns the first reason the posting must be excluded, or
-// nil. Checks run in order: dealbreaker keywords, then an unmet education
-// requirement.
-func checkDealbreakers(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) *DealbreakerHit {
-	text := p.Title + " " + p.Company + " " + p.Description
-
-	for _, phrase := range prof.Dealbreakers {
-		if textContains(text, phrase) {
-			return &DealbreakerHit{Kind: dealbreakerKeyword, Phrase: phrase}
-		}
-	}
-	if req, ok := educationDealbreaker(p, prof, ext); ok {
-		return &DealbreakerHit{Kind: dealbreakerEducation, Phrase: req}
-	}
-	return nil
-}
 
 // educationDealbreaker reports whether the posting demands a higher education
 // level than the profile holds. It is inert when the user leaves MaxEducation

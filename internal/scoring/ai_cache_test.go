@@ -12,7 +12,7 @@ import (
 // scoreNoAI scores the offline path (no AI extraction or delta) — what every
 // pre-v2.0 test exercises.
 func scoreNoAI(p scraper.Posting, prof profile.Profile) ScoreResult {
-	return Score(p, prof, nil, nil)
+	return Score(p, prof, nil, nil, nil)
 }
 
 func findLine(r ScoreResult, label string) (LineItem, bool) {
@@ -43,7 +43,7 @@ func TestScoreCareerCachePreference(t *testing.T) {
 
 	// AI says newcomer/0y: full newcomer award, normal "신입" label, no override.
 	ext := &ai.Extraction{MinCareer: 0, MaxCareer: intPtr(0), Newcomer: true, EducationEnum: ai.EduNone}
-	withAI := Score(p, prof, ext, nil)
+	withAI := Score(p, prof, ext, nil, nil)
 	want := prof.EffectiveCareerWeight()
 	if d, ok := lineDelta(withAI, "신입"); !ok || d != want {
 		t.Fatalf("AI path: want full newcomer award %d on a '신입' chip, got delta=%d ok=%v; breakdown=%+v", want, d, ok, withAI.Breakdown)
@@ -83,7 +83,7 @@ func TestScoreCareerInternGuard(t *testing.T) {
 			p := basePosting()
 			p.Title = tc.title
 			p.Newcomer = true // source correctly marks it new-grad-eligible
-			r := Score(p, prof, badExt(), nil)
+			r := Score(p, prof, badExt(), nil, nil)
 			d, ok := lineDelta(r, "신입")
 			if tc.wantAward {
 				if !ok || d != want {
@@ -103,7 +103,7 @@ func TestScoreCareerCacheOpenUpperBound(t *testing.T) {
 	prof := baseProfile()
 	prof.CareerYears = 8
 	ext := &ai.Extraction{MinCareer: 3, MaxCareer: nil, Newcomer: false, EducationEnum: ai.EduNone} // "경력 3년 이상"
-	r := Score(p, prof, ext, nil)
+	r := Score(p, prof, ext, nil, nil)
 	if d, ok := lineDelta(r, "경력 8년"); !ok || d != prof.EffectiveCareerWeight() {
 		t.Fatalf("open upper bound: 8y should fit [3,∞), got delta=%d ok=%v; breakdown=%+v", d, ok, r.Breakdown)
 	}
@@ -118,7 +118,7 @@ func TestEducationDealbreakerCachePreference(t *testing.T) {
 	prof.MaxEducation = profile.EducationHighSchool
 
 	ext := &ai.Extraction{EducationEnum: ai.EduBachelor, Newcomer: true}
-	r := Score(p, prof, ext, nil)
+	r := Score(p, prof, ext, nil, nil)
 	if r.Total != -1 || r.DealbreakerHit == nil || r.DealbreakerHit.Kind != "education" {
 		t.Fatalf("AI education dealbreaker: total=%d hit=%+v, want -1 / education", r.Total, r.DealbreakerHit)
 	}
@@ -143,11 +143,11 @@ func TestScoreFloorClamp(t *testing.T) {
 	// A delta's net is the sum of its surviving items (an items-less delta emits
 	// no line at all — §c), so exercise the floor/cap through real items.
 	neg := &ai.Delta{NetDelta: -100, Items: []ai.DeltaItem{{Signal: "감점", Kind: "presence", Delta: -100, Evidence: "x"}}}
-	if r := Score(p, prof, nil, neg); r.Total != 0 {
+	if r := Score(p, prof, nil, neg, nil); r.Total != 0 {
 		t.Fatalf("negative net delta: Total = %d, want 0 (floored, never -1)", r.Total)
 	}
 	pos := &ai.Delta{NetDelta: 1000, Items: []ai.DeltaItem{{Signal: "가점", Kind: "presence", Delta: 1000, Evidence: "y"}}}
-	if r := Score(p, prof, nil, pos); r.Total != maxTotal {
+	if r := Score(p, prof, nil, pos, nil); r.Total != maxTotal {
 		t.Fatalf("huge positive delta: Total = %d, want %d (capped)", r.Total, maxTotal)
 	}
 }
@@ -164,7 +164,7 @@ func TestAIEmptyDeltaEmitsNoLine(t *testing.T) {
 		"nil delta":   nil,
 		"empty items": {NetDelta: 0, Items: nil},
 	} {
-		r := Score(p, prof, nil, delta)
+		r := Score(p, prof, nil, delta, nil)
 		if _, ok := lineDelta(r, aiLineLabel); ok {
 			t.Errorf("%s produced an AI line, want none", name)
 		}
@@ -187,7 +187,7 @@ func TestAIChipsSumToTotal(t *testing.T) {
 		{Signal: "백엔드 중심", Kind: ai.KindPresence, Delta: 7, Evidence: "서버 개발"},
 		{Signal: "야근", Kind: ai.KindAbsence, Delta: -12, Evidence: "'야근' 등 관련 언급 없음 (코드 확인)"},
 	}}
-	r := Score(p, prof, nil, delta)
+	r := Score(p, prof, nil, delta, nil)
 
 	sum := 0
 	for _, li := range r.Breakdown {
@@ -222,7 +222,7 @@ func TestAIStaleFlowsToLineItem(t *testing.T) {
 	delta := &ai.Delta{NetDelta: 8, Stale: true, Items: []ai.DeltaItem{
 		{Signal: "성장", Kind: ai.KindPresence, Delta: 8, Evidence: "빠르게 성장하는 팀"},
 	}}
-	r := Score(p, prof, nil, delta)
+	r := Score(p, prof, nil, delta, nil)
 
 	var found bool
 	for _, li := range r.Breakdown {
@@ -241,10 +241,10 @@ func TestAIStaleFlowsToLineItem(t *testing.T) {
 	}
 }
 
-// TestDealbreakerShortCircuitNeverReachesAI: a dealbroken posting returns -1
+// TestScorePreservesDealbreakerBeforeStage2: a dealbroken posting returns -1
 // with an EMPTY breakdown even when ext AND delta are present — the AI line is
 // never merged (D3/S4).
-func TestDealbreakerShortCircuitNeverReachesAI(t *testing.T) {
+func TestScorePreservesDealbreakerBeforeStage2(t *testing.T) {
 	p := basePosting()
 	p.Description = "병역특례 지원자 환영"
 	prof := baseProfile()
@@ -252,7 +252,7 @@ func TestDealbreakerShortCircuitNeverReachesAI(t *testing.T) {
 
 	ext := &ai.Extraction{Newcomer: true, EducationEnum: ai.EduNone}
 	delta := &ai.Delta{NetDelta: 50, Items: []ai.DeltaItem{{Signal: "x", Kind: "presence", Delta: 50, Evidence: "y"}}}
-	r := Score(p, prof, ext, delta)
+	r := Score(p, prof, ext, delta, nil)
 	if r.Total != -1 {
 		t.Fatalf("Total = %d, want -1 (keyword dealbreaker)", r.Total)
 	}
@@ -278,7 +278,7 @@ func TestAILineItemMerged(t *testing.T) {
 			{Signal: "야근", Kind: "absence", Delta: -2},
 		},
 	}
-	r := Score(p, prof, nil, delta)
+	r := Score(p, prof, nil, delta, nil)
 	li, ok := findLine(r, "AI 분석")
 	if !ok {
 		t.Fatalf("no 'AI 분석' line item; breakdown=%+v", r.Breakdown)
@@ -328,5 +328,16 @@ func TestBreakdownJSONBackCompat(t *testing.T) {
 	}
 	if res.Breakdown[0].Evidence != nil || res.Breakdown[0].Stale {
 		t.Error("missing evidence/stale keys must default to zero values")
+	}
+}
+
+func TestScoreResultUnmarshalsWithoutExclusionReasons(t *testing.T) {
+	var got ScoreResult
+	err := json.Unmarshal(
+		[]byte(`{"Total":-1,"Breakdown":[],"DealbreakerHit":{"Kind":"keyword","Phrase":"리서치"}}`),
+		&got,
+	)
+	if err != nil || got.ExclusionReasons != nil {
+		t.Fatalf("legacy score JSON: result=%+v err=%v", got, err)
 	}
 }

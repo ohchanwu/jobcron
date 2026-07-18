@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 func TestProfileMarshalRoundTrip(t *testing.T) {
@@ -151,5 +153,36 @@ func TestAIInputHashInvariants(t *testing.T) {
 	goalEdit.JobLikes = "프론트엔드"
 	if AIInputHash(goalEdit) == h {
 		t.Error("a goal edit must change ai_input_hash (stale AI delta)")
+	}
+}
+
+func TestDealbreakerInputHashInvariants(t *testing.T) {
+	base := Profile{Dealbreakers: []string{"사용자 리서치", "야근"}}
+	h := DealbreakerInputHash(base)
+	if len(h) != 64 {
+		t.Fatalf("DealbreakerInputHash = %q, want full SHA-256 hex", h)
+	}
+
+	equivalent := Profile{Dealbreakers: []string{
+		strings.ToUpper(norm.NFD.String("사용자, 리서치")),
+		"  야근!!! ",
+	}}
+	if got := DealbreakerInputHash(equivalent); got != h {
+		t.Errorf("canonical-only edits moved hash: got %q want %q", got, h)
+	}
+
+	reordered := Profile{Dealbreakers: []string{"야근", "사용자 리서치"}}
+	if DealbreakerInputHash(reordered) == h {
+		t.Error("phrase order must move dealbreaker input hash")
+	}
+
+	semanticEdit := Profile{Dealbreakers: []string{"사용자 인터뷰", "야근"}}
+	if DealbreakerInputHash(semanticEdit) == h {
+		t.Error("semantic token edit must move dealbreaker input hash")
+	}
+
+	withEmpty := Profile{Dealbreakers: []string{"사용자 리서치", "!!!", "야근"}}
+	if DealbreakerInputHash(withEmpty) != h {
+		t.Error("empty canonical phrases must not move dealbreaker input hash")
 	}
 }

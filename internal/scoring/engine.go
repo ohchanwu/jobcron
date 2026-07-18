@@ -1,6 +1,7 @@
 package scoring
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/ohchanwu/jobcron/internal/ai"
@@ -39,11 +40,21 @@ type DealbreakerHit struct {
 	Phrase string // the offending or missing phrase
 }
 
+// ExclusionReason is one persisted explanation for an excluded posting.
+type ExclusionReason struct {
+	Kind       string `json:"kind"`
+	Label      string `json:"label"`
+	Phrase     string `json:"phrase,omitempty"`
+	Evidence   string `json:"evidence,omitempty"`
+	Confidence string `json:"confidence"`
+}
+
 // ScoreResult is the outcome of scoring one posting against a profile.
 type ScoreResult struct {
-	Total          int        // 0..100, or -1 on a dealbreaker hit
-	Breakdown      []LineItem // contributions, ordered by Delta descending
-	DealbreakerHit *DealbreakerHit
+	Total            int        // 0..100, or -1 on a dealbreaker hit
+	Breakdown        []LineItem // contributions, ordered by Delta descending
+	DealbreakerHit   *DealbreakerHit
+	ExclusionReasons []ExclusionReason `json:"exclusion_reasons,omitempty"`
 }
 
 // Score evaluates a posting against a user profile, producing a 0..100 total
@@ -56,9 +67,15 @@ type ScoreResult struct {
 //
 // A dealbreaker short-circuits FIRST, before any AI delta is merged — a
 // dealbroken posting (Total: -1) never carries an AI line item (D3/S4).
-func Score(p scraper.Posting, prof profile.Profile, ext *ai.Extraction, delta *ai.Delta) ScoreResult {
-	if hit := checkDealbreakers(p, prof, ext); hit != nil {
-		return ScoreResult{Total: -1, DealbreakerHit: hit}
+func Score(
+	p scraper.Posting,
+	prof profile.Profile,
+	ext *ai.Extraction,
+	delta *ai.Delta,
+	validations map[string]ai.DealbreakerValidation,
+) ScoreResult {
+	if hit, reasons := hardExclusionReasons(p, prof, ext, validations); hit != nil {
+		return ScoreResult{Total: -1, DealbreakerHit: hit, ExclusionReasons: reasons}
 	}
 
 	var breakdown []LineItem
@@ -96,7 +113,99 @@ func Score(p scraper.Posting, prof profile.Profile, ext *ai.Extraction, delta *a
 	if total < 0 {
 		total = 0
 	}
-	return ScoreResult{Total: total, Breakdown: breakdown}
+
+	var reasons []ExclusionReason
+	if reason, ok := careerExclusionReason(p, prof, ext); ok {
+		reasons = append(reasons, reason)
+	}
+	if minimum := prof.EffectiveMinScore(); total < minimum {
+		reasons = append(reasons, ExclusionReason{
+			Kind:       "min_score",
+			Label:      fmt.Sprintf("기준 점수 미달: %d점 / 기준 %d점", total, minimum),
+			Confidence: "deterministic",
+		})
+	}
+	return ScoreResult{Total: total, Breakdown: breakdown, ExclusionReasons: reasons}
+}
+
+func hardExclusionReasons(
+	p scraper.Posting,
+	prof profile.Profile,
+	ext *ai.Extraction,
+	validations map[string]ai.DealbreakerValidation,
+) (*DealbreakerHit, []ExclusionReason) {
+	var hit *DealbreakerHit
+	var reasons []ExclusionReason
+	for _, candidate := range DealbreakerCandidates(p, prof) {
+		validation, ok := validations[candidate.ID]
+		if ok && validation.CandidateID == candidate.ID && validation.Verdict == ai.DealbreakerNotApplicable {
+			continue
+		}
+
+		reason := ExclusionReason{
+			Kind:       dealbreakerKeyword,
+			Label:      "제외 키워드: " + candidate.Phrase,
+			Phrase:     candidate.Phrase,
+			Confidence: "unverified",
+		}
+		if ok && validation.CandidateID == candidate.ID {
+			switch validation.Verdict {
+			case ai.DealbreakerApplies:
+				reason.Confidence = "confirmed"
+				reason.Evidence = validation.Evidence
+			case ai.DealbreakerUncertain:
+				reason.Confidence = "uncertain"
+				reason.Evidence = validation.Evidence
+			}
+		}
+		if hit == nil {
+			hit = &DealbreakerHit{Kind: dealbreakerKeyword, Phrase: candidate.Phrase}
+		}
+		reasons = append(reasons, reason)
+	}
+
+	if phrase, ok := educationDealbreaker(p, prof, ext); ok {
+		reason := ExclusionReason{
+			Kind:       dealbreakerEducation,
+			Label:      "학력 조건 불일치",
+			Phrase:     phrase,
+			Evidence:   p.EducationName,
+			Confidence: "deterministic",
+		}
+		if ext != nil {
+			reason.Evidence = ext.EducationEvidence
+			reason.Confidence = "confirmed"
+		}
+		if hit == nil {
+			hit = &DealbreakerHit{Kind: dealbreakerEducation, Phrase: phrase}
+		}
+		reasons = append(reasons, reason)
+	}
+	return hit, reasons
+}
+
+func careerExclusionReason(p scraper.Posting, prof profile.Profile, ext *ai.Extraction) (ExclusionReason, bool) {
+	minC, maxC, newcomer, _ := careerFacts(p, ext)
+	years := prof.CareerYears
+	if (newcomer && years == 0) || (years >= minC && years <= maxC) {
+		return ExclusionReason{}, false
+	}
+
+	label := fmt.Sprintf("경력 %d년 지원 불가", years)
+	if years == 0 {
+		label = "신입 지원 불가"
+	}
+	reason := ExclusionReason{
+		Kind:       "career",
+		Label:      label,
+		Phrase:     formatExperienceRange(minC, maxC),
+		Confidence: "deterministic",
+	}
+	if ext != nil {
+		reason.Evidence = ext.CareerEvidence
+		reason.Confidence = "confirmed"
+	}
+	return reason, true
 }
 
 // aiLineItem folds an AI Delta into one "AI 분석" line item: the net delta as

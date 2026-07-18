@@ -1,8 +1,13 @@
 package scoring
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/tokenmatch"
 	"golang.org/x/text/unicode/norm"
 )
@@ -27,3 +32,21 @@ func normalizeText(s string) string {
 // phrase MATCH. An empty phrase (one that tokenizes to nothing) matches
 // nothing.
 func textContains(text, phrase string) bool { return tokenmatch.Contains(text, phrase) }
+
+// DealbreakerCandidates returns every matched profile phrase in profile order.
+func DealbreakerCandidates(p scraper.Posting, prof profile.Profile) []ai.DealbreakerCandidate {
+	text := p.Title + " " + p.Company + " " + p.Description
+	var candidates []ai.DealbreakerCandidate
+	for _, phrase := range prof.Dealbreakers {
+		tokens := tokenize(phrase)
+		if len(tokens) == 0 || !textContains(text, phrase) {
+			continue
+		}
+		sum := sha256.Sum256([]byte(strings.Join(tokens, "\x00")))
+		candidates = append(candidates, ai.DealbreakerCandidate{
+			ID:     hex.EncodeToString(sum[:]),
+			Phrase: phrase,
+		})
+	}
+	return candidates
+}

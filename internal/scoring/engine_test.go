@@ -1,8 +1,11 @@
 package scoring
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
+	"github.com/ohchanwu/jobcron/internal/ai"
 	"github.com/ohchanwu/jobcron/internal/profile"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 )
@@ -256,6 +259,138 @@ func TestScoreDealbreakerKeywordIsTokenExact(t *testing.T) {
 	if r := scoreNoAI(p, prof); r.Total == -1 {
 		t.Error("dealbreaker '병특' wrongly matched the token '병특혜택없음'")
 	}
+}
+
+func TestDealbreakerCandidatesReturnsEveryMatchInProfileOrder(t *testing.T) {
+	p := basePosting()
+	p.Description = "이 포지션은 사용자 리서치 아님. 야근 업무를 담당합니다."
+	prof := baseProfile()
+	prof.Dealbreakers = []string{"사용자 리서치", "!!!", "야근"}
+
+	got := DealbreakerCandidates(p, prof)
+	if len(got) != 2 {
+		t.Fatalf("candidates = %+v, want two real matches", got)
+	}
+	for i, tc := range []struct {
+		phrase    string
+		canonical string
+	}{
+		{"사용자 리서치", "사용자\x00리서치"},
+		{"야근", "야근"},
+	} {
+		sum := sha256.Sum256([]byte(tc.canonical))
+		wantID := hex.EncodeToString(sum[:])
+		if got[i].Phrase != tc.phrase || got[i].ID != wantID || len(got[i].ID) != 64 {
+			t.Errorf("candidate %d = %+v, want phrase=%q id=%q", i, got[i], tc.phrase, wantID)
+		}
+	}
+}
+
+func TestScoreSuppressesHitOnlyWhenNotApplicable(t *testing.T) {
+	p := basePosting()
+	p.Description = "리서치 아님"
+	prof := baseProfile()
+	prof.Dealbreakers = []string{"리서치"}
+	candidate := DealbreakerCandidates(p, prof)[0]
+
+	r := Score(p, prof, nil, nil, map[string]ai.DealbreakerValidation{
+		candidate.ID: {CandidateID: candidate.ID, Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"},
+	})
+	if r.Total == -1 || r.DealbreakerHit != nil {
+		t.Fatalf("not_applicable hit was retained: %+v", r)
+	}
+	for _, reason := range r.ExclusionReasons {
+		if reason.Kind == "keyword" {
+			t.Fatalf("suppressed keyword remained in reasons: %+v", r.ExclusionReasons)
+		}
+	}
+}
+
+func TestScoreRetainsAppliesUncertainMissingAndUnavailableHits(t *testing.T) {
+	p := basePosting()
+	p.Description = "사용자 리서치 업무를 수행합니다"
+	prof := baseProfile()
+	prof.Dealbreakers = []string{"리서치"}
+	candidate := DealbreakerCandidates(p, prof)[0]
+
+	tests := []struct {
+		name        string
+		validations map[string]ai.DealbreakerValidation
+		confidence  string
+		evidence    string
+	}{
+		{"applies", map[string]ai.DealbreakerValidation{candidate.ID: {CandidateID: candidate.ID, Verdict: ai.DealbreakerApplies, Evidence: "리서치 업무를 수행"}}, "confirmed", "리서치 업무를 수행"},
+		{"uncertain", map[string]ai.DealbreakerValidation{candidate.ID: {CandidateID: candidate.ID, Verdict: ai.DealbreakerUncertain}}, "uncertain", ""},
+		{"missing", map[string]ai.DealbreakerValidation{}, "unverified", ""},
+		{"unavailable", nil, "unverified", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := Score(p, prof, nil, nil, tc.validations)
+			if r.Total != -1 || r.DealbreakerHit == nil || r.DealbreakerHit.Phrase != "리서치" {
+				t.Fatalf("retained hit = %+v, want keyword dealbreaker", r)
+			}
+			if len(r.ExclusionReasons) != 1 {
+				t.Fatalf("reasons = %+v, want one", r.ExclusionReasons)
+			}
+			got := r.ExclusionReasons[0]
+			if got.Kind != "keyword" || got.Label != "제외 키워드: 리서치" || got.Phrase != "리서치" || got.Confidence != tc.confidence || got.Evidence != tc.evidence {
+				t.Errorf("reason = %+v", got)
+			}
+		})
+	}
+}
+
+func TestScoreDoesNotHideLaterApplicableHit(t *testing.T) {
+	p := basePosting()
+	p.Description = "이 포지션은 리서치 아님. 야근 업무를 담당합니다."
+	prof := baseProfile()
+	prof.Dealbreakers = []string{"리서치", "야근"}
+	candidates := DealbreakerCandidates(p, prof)
+
+	r := Score(p, prof, nil, nil, map[string]ai.DealbreakerValidation{
+		candidates[0].ID: {CandidateID: candidates[0].ID, Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"},
+		candidates[1].ID: {CandidateID: candidates[1].ID, Verdict: ai.DealbreakerApplies, Evidence: "야근 업무를 담당"},
+	})
+	if r.Total != -1 || r.DealbreakerHit == nil || r.DealbreakerHit.Phrase != "야근" {
+		t.Fatalf("result = %+v, want retained later 야근 hit", r)
+	}
+	if len(r.ExclusionReasons) != 1 || r.ExclusionReasons[0].Phrase != "야근" || r.ExclusionReasons[0].Evidence != "야근 업무를 담당" {
+		t.Fatalf("reasons = %+v, want only confirmed 야근", r.ExclusionReasons)
+	}
+}
+
+func TestScoreStructuredEducationCareerAndMinScoreReasons(t *testing.T) {
+	t.Run("education with exact evidence", func(t *testing.T) {
+		p := basePosting()
+		prof := baseProfile()
+		prof.MaxEducation = profile.EducationHighSchool
+		ext := &ai.Extraction{EducationEnum: ai.EduBachelor, EducationEvidence: "대학교 졸업 이상", Newcomer: true}
+		r := Score(p, prof, ext, nil, nil)
+		want := ExclusionReason{Kind: "education", Label: "학력 조건 불일치", Phrase: "대졸(4년)", Evidence: "대학교 졸업 이상", Confidence: "confirmed"}
+		if len(r.ExclusionReasons) != 1 || r.ExclusionReasons[0] != want {
+			t.Fatalf("education reasons = %+v, want %+v", r.ExclusionReasons, want)
+		}
+	})
+
+	t.Run("career then MinScore", func(t *testing.T) {
+		p := basePosting()
+		p.Description = "경력 2년 이상의 백엔드 개발자를 찾습니다"
+		prof := baseProfile()
+		min := 40
+		prof.MinScore = &min
+		ext := &ai.Extraction{MinCareer: 2, MaxCareer: intPtr(5), CareerEvidence: "경력 2년 이상의 백엔드 개발자", EducationEnum: ai.EduNone}
+		r := Score(p, prof, ext, nil, nil)
+		if len(r.ExclusionReasons) != 2 {
+			t.Fatalf("reasons = %+v, want career and MinScore", r.ExclusionReasons)
+		}
+		if got := r.ExclusionReasons[0]; got.Kind != "career" || got.Label != "신입 지원 불가" || got.Phrase != "2-5년" || got.Evidence != ext.CareerEvidence || got.Confidence != "confirmed" {
+			t.Errorf("career reason = %+v", got)
+		}
+		if got := r.ExclusionReasons[1]; got.Kind != "min_score" || got.Label != "기준 점수 미달: 0점 / 기준 40점" || got.Phrase != "" || got.Evidence != "" || got.Confidence != "deterministic" {
+			t.Errorf("MinScore reason = %+v", got)
+		}
+	})
 }
 
 func TestScoreEducationDealbreaker(t *testing.T) {

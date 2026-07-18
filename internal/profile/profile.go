@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ohchanwu/jobcron/internal/tokenmatch"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -273,4 +274,21 @@ func BuildStage2ProfileText(p Profile) string {
 func AIInputHash(p Profile) string {
 	sum := sha256.Sum256([]byte(BuildStage2ProfileText(p)))
 	return hex.EncodeToString(sum[:])[:12]
+}
+
+// DealbreakerInputHash identifies the ordered canonical dealbreaker phrases.
+func DealbreakerInputHash(p Profile) string {
+	var canonical strings.Builder
+	for _, phrase := range p.Dealbreakers {
+		tokens := tokenmatch.Tokenize(phrase)
+		if len(tokens) == 0 {
+			continue
+		}
+		if canonical.Len() > 0 {
+			canonical.WriteString("\x00\x00")
+		}
+		canonical.WriteString(strings.Join(tokens, "\x00"))
+	}
+	sum := sha256.Sum256([]byte(canonical.String()))
+	return hex.EncodeToString(sum[:])
 }
