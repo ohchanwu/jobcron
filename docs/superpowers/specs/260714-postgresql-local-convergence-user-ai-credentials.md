@@ -1,17 +1,17 @@
 # PostgreSQL Local Convergence And Per-User AI Credentials
 
 **Date:** 2026-07-14
-**Status:** Draft for approval
+**Status:** Active; repository preparation complete, production rollout pending
 **Scope:** Writable local app, production credential storage, and user-scoped AI state
 
 ## Context
 
-Jobcron currently has two writable persistence modes. A normal local launch falls
-back to SQLite, while production uses PostgreSQL when `DATABASE_URL` is present.
-AI credentials live outside both databases in one global `ai_keys.json`. The
-repository's production Compose file declares a `jobcron_config` volume for that
-file, but Jobcron has not been deployed to EC2. The instance currently has only
-the application `.env`; Docker, the app, and the owner account are not set up.
+At approval time, Jobcron had two writable persistence modes. A normal local
+launch fell back to SQLite, while production used PostgreSQL when `DATABASE_URL`
+was present. AI credentials lived outside both databases in one global
+`ai_keys.json`, and production Compose declared a `jobcron_config` volume for
+that file. Jobcron had not been deployed to EC2; the instance had only the
+application `.env`, with no Docker, app, or owner account.
 
 That split no longer matches the hosted-first product. Account data and AI results
 must follow the authenticated user across devices, and one server-wide key file
@@ -23,6 +23,17 @@ This work starts before public launch. It supersedes only the timing in
 [`260714-hosted-first-local-database-convergence.md`](../decisions/260714-hosted-first-local-database-convergence.md):
 the accepted convergence outcome remains, but it is no longer deferred until
 after launch.
+
+## Execution Status
+
+Slices 1 through 4 and the repository-owned preparation in Slice 5 are
+implemented, integrated, and verified. The remaining Slice 5 work changes
+registry, AWS, RDS, EC2, DNS, production account, paid-provider, and rollback
+state, so it remains governed by the active human-blocked launch checklist.
+
+Keep this specification active until the production import, authenticated
+browser journey, paid AI check, container-recreation check, and final security
+gate pass. Then archive it with the completed Slice 5 plan and verification.
 
 ## Locked Product Decisions
 
@@ -40,10 +51,11 @@ after launch.
    initially supports only `anthropic`; the schema must not require a migration to
    add another validated provider later.
 
-## Verified Current State
+## Verified Pre-Implementation Baseline
 
-Code verified against `main` on 2026-07-14. Production EC2 preparation state
-confirmed on 2026-07-15.
+This baseline was verified against `main` on 2026-07-14, with the production EC2
+preparation state confirmed on 2026-07-15. It is retained to explain the gaps
+that the implementation closed; it does not describe the current repository.
 
 ### Runtime selection
 
