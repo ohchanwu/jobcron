@@ -27,6 +27,7 @@ Use this index instead of recursively loading the entire documentation tree.
 ## Implementation Work
 
 - [Active Superpowers work and context policy](superpowers/README.md)
+- [Stage 1 contextual dealbreaker validation and exclusion evidence](superpowers/specs/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md)
 - [Ponytail codebase reduction campaign][ponytail-campaign-plan]
 - [Ponytail reduction candidate ledger][ponytail-campaign-ledger]
 - [Ponytail campaign verification][ponytail-campaign-verification]
