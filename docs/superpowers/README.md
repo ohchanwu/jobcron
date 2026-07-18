@@ -6,18 +6,6 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Ponytail codebase reduction campaign](plans/260717-ponytail-codebase-reduction.md)
-- [Ponytail reduction candidate ledger](specs/260717-ponytail-reduction-ledger.md)
-- [Ponytail AI key path reduction](plans/260717-ponytail-ai-key-path-reduction.md)
-- [Ponytail server source reduction](plans/260717-ponytail-server-source-reduction.md)
-- [Ponytail AI model input reduction](plans/260717-ponytail-ai-model-input-reduction.md)
-- [Ponytail storage row scan reduction](plans/260717-ponytail-storage-row-scan-reduction.md)
-- [Ponytail token match reduction](plans/260717-ponytail-token-match-reduction.md)
-- [Ponytail robots parser foundation](plans/260717-ponytail-robots-parser-foundation.md)
-- [Ponytail robots parser completion](plans/260717-ponytail-robots-parser-completion.md)
-- [Ponytail request pacer foundation](plans/260717-ponytail-request-pacer-foundation.md)
-- [Ponytail request pacer completion](plans/260717-ponytail-request-pacer-completion.md)
-- [Ponytail scheduler API reduction](plans/260717-ponytail-scheduler-api-reduction.md)
 - [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
@@ -25,6 +13,9 @@ decision records needed for the current task.
 
 ## Recently Archived
 
+- [Ponytail codebase reduction campaign][ponytail-campaign-plan]
+- [Ponytail reduction candidate ledger][ponytail-campaign-ledger]
+- [Ponytail campaign verification][ponytail-campaign-verification]
 - [Daangn canonical role URLs][daangn-canonical-spec]
 - [Daangn canonical role URL implementation][daangn-canonical-plan]
 - [PostgreSQL convergence Slice 4 plan](archive/2026-07-16-postgresql-convergence-slice-4/260715-postgresql-convergence-slice-4-verified-sqlite-import.md)
@@ -72,3 +63,9 @@ decision records needed for the current task.
   archive/2026-07-17-daangn-canonical-role-urls/260717-daangn-canonical-role-urls.md
 [daangn-canonical-plan]:
   archive/2026-07-17-daangn-canonical-role-urls/260717-daangn-canonical-role-urls-plan.md
+[ponytail-campaign-plan]:
+  archive/2026-07-18-ponytail-codebase-reduction/260717-campaign-plan.md
+[ponytail-campaign-ledger]:
+  archive/2026-07-18-ponytail-codebase-reduction/260717-candidate-ledger.md
+[ponytail-campaign-verification]:
+  archive/2026-07-18-ponytail-codebase-reduction/260718-verification.md

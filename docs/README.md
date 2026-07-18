@@ -25,18 +25,9 @@ Use this index instead of recursively loading the entire documentation tree.
 ## Implementation Work
 
 - [Active Superpowers work and context policy](superpowers/README.md)
-- [Ponytail codebase reduction campaign](superpowers/plans/260717-ponytail-codebase-reduction.md)
-- [Ponytail reduction candidate ledger][ponytail-ledger]
-- [Ponytail AI key path reduction](superpowers/plans/260717-ponytail-ai-key-path-reduction.md)
-- [Ponytail server source reduction](superpowers/plans/260717-ponytail-server-source-reduction.md)
-- [Ponytail AI model input reduction](superpowers/plans/260717-ponytail-ai-model-input-reduction.md)
-- [Ponytail storage row scan reduction][ponytail-storage-row-scan]
-- [Ponytail token match reduction](superpowers/plans/260717-ponytail-token-match-reduction.md)
-- [Ponytail robots parser foundation](superpowers/plans/260717-ponytail-robots-parser-foundation.md)
-- [Ponytail robots parser completion][ponytail-robots-completion]
-- [Ponytail request pacer foundation][ponytail-request-pacer-foundation]
-- [Ponytail request pacer completion][ponytail-request-pacer-completion]
-- [Ponytail scheduler API reduction][ponytail-scheduler-api-reduction]
+- [Ponytail codebase reduction campaign][ponytail-campaign-plan]
+- [Ponytail reduction candidate ledger][ponytail-campaign-ledger]
+- [Ponytail campaign verification][ponytail-campaign-verification]
 - [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](superpowers/plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
 - [Multi-user account expansion follow-up](superpowers/specs/260715-multi-user-account-expansion.md)
@@ -66,10 +57,10 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 
 - `assets/screenshots/` contains images embedded by the root README files.
 
-[ponytail-ledger]: superpowers/specs/260717-ponytail-reduction-ledger.md
 [brainstorming-autonomous-gate]: learnings/260717-brainstorming-autonomous-mode-question-gate.md
-[ponytail-storage-row-scan]: superpowers/plans/260717-ponytail-storage-row-scan-reduction.md
-[ponytail-robots-completion]: superpowers/plans/260717-ponytail-robots-parser-completion.md
-[ponytail-request-pacer-foundation]: superpowers/plans/260717-ponytail-request-pacer-foundation.md
-[ponytail-request-pacer-completion]: superpowers/plans/260717-ponytail-request-pacer-completion.md
-[ponytail-scheduler-api-reduction]: superpowers/plans/260717-ponytail-scheduler-api-reduction.md
+[ponytail-campaign-plan]:
+  superpowers/archive/2026-07-18-ponytail-codebase-reduction/260717-campaign-plan.md
+[ponytail-campaign-ledger]:
+  superpowers/archive/2026-07-18-ponytail-codebase-reduction/260717-candidate-ledger.md
+[ponytail-campaign-verification]:
+  superpowers/archive/2026-07-18-ponytail-codebase-reduction/260718-verification.md

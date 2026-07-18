@@ -703,13 +703,18 @@ All batches cover one domain, touch at most five production files, target negati
 lines, and have no direct-dependency change. The two split clusters have explicit ordered
 rollback. All ten batches removed 437 production lines across ten reversible commits.
 
-## Task 4 Final Comparison
+## Final Campaign Comparison
 
-- approved findings: 8;
-- rejected findings: 5;
-- separate-decision findings: 0;
-- approved batches: 10;
-- actual implemented production-line delta: minus 71;
-- projected final production-line delta: minus 316;
-- direct-dependency delta: 0; and
-- source or user-visible behavior changes in Task 4: none.
+- Accepted findings: 8; rejected findings: 5; separate-decision findings: 0.
+- Implemented batches: 10, each independently reviewed and locally committed.
+- Production Go: 15,924 to 15,487 lines across 91 to 94 files; 437 lines removed.
+- Go tests: 22,982 to 23,305 lines across 99 to 104 files; 323 lines added.
+- Top-level Go tests: 620 to 631; 11 tests added.
+- Direct dependencies: 7 to 7; no change.
+- Web and shell source: 3,526 and 444 lines respectively; no change.
+- Statement coverage: 61.2 to 61.6 percent; up 0.4 percentage points.
+- Reproducible `jobcron` binary: 28,214,786 to 28,197,266 bytes; 17,520 bytes
+  removed. The importer and user binaries were byte-unchanged.
+- Final static, unit, race, PostgreSQL 18, live scraper, four-target cross-build,
+  browser, security, and publication gates passed.
+- Source behavior, user-visible behavior, and direct-dependency changes: none.
