@@ -9,7 +9,7 @@ import (
 func TestStubProviderImplementsProvider(t *testing.T) {
 	var _ Provider = (*StubProvider)(nil)
 
-	want := Extraction{MinCareer: 0, Newcomer: true, EducationEnum: "bachelor", Evidence: "신입 환영"}
+	want := Extraction{MinCareer: 0, Newcomer: true, EducationEnum: "bachelor", CareerEvidence: "신입 환영", EducationEvidence: "학사 이상"}
 	s := &StubProvider{
 		NameVal: "stub",
 		ExtractFn: func(ctx context.Context, modelText string) (Extraction, Usage, error) {

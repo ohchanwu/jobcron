@@ -20,7 +20,7 @@ func newcomerStub() *ai.StubProvider {
 	return &ai.StubProvider{
 		NameVal: "stub",
 		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
-			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "신입 환영"},
+			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "신입 환영"},
 				ai.Usage{InputTokens: 100, OutputTokens: 20}, nil
 		},
 	}
@@ -165,7 +165,7 @@ func TestRunUSDCapHaltsManualScrapeExtractionAfterFirstCall(t *testing.T) {
 		NameVal: "stub",
 		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
 			zero := 0
-			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "신입"},
+			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "신입"},
 				ai.Usage{InputTokens: aiRunTokenCapForUSDCents(1) + 1}, nil
 		},
 	}
@@ -198,7 +198,7 @@ func TestRunUSDCapHaltsOptInScheduledScrapeExtractionAfterFirstCall(t *testing.T
 		NameVal: "stub",
 		ExtractFn: func(ctx context.Context, modelText string) (ai.Extraction, ai.Usage, error) {
 			zero := 0
-			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "신입"},
+			return ai.Extraction{MinCareer: 0, MaxCareer: &zero, Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "신입"},
 				ai.Usage{InputTokens: aiRunTokenCapForUSDCents(1) + 1}, nil
 		},
 	}
@@ -344,7 +344,7 @@ func TestExtractStage1CacheHitSkipsProvider(t *testing.T) {
 		t.Fatalf("UpsertPosting: %v", err)
 	}
 	_, contentHash, _ := ai.ModelInput(p)
-	seeded := ai.Extraction{MinCareer: 0, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "seeded"}
+	seeded := ai.Extraction{MinCareer: 0, Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "seeded"}
 	if err := st.UpsertAIExtraction(ctx, id, contentHash, runtime.Version, seeded, time.Now()); err != nil {
 		t.Fatalf("seed extraction: %v", err)
 	}

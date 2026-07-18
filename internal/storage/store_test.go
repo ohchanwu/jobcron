@@ -273,7 +273,7 @@ func TestPostgresRuntimeStorageMethods(t *testing.T) {
 	}
 
 	maxCareer := 3
-	ext := ai.Extraction{MinCareer: 1, MaxCareer: &maxCareer, Newcomer: true, EducationEnum: "bachelor", Evidence: "evidence"}
+	ext := ai.Extraction{MinCareer: 1, MaxCareer: &maxCareer, Newcomer: true, EducationEnum: "bachelor", CareerEvidence: "evidence"}
 	if err := st.UpsertAIExtraction(ctx, id, "content", "v1", ext, when); err != nil {
 		t.Fatalf("UpsertAIExtraction: %v", err)
 	}

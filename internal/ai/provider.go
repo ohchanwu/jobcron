@@ -38,11 +38,12 @@ type Provider interface {
 // columns. The caller supplies posting id / content_hash / ai_version; the
 // model supplies these fields.
 type Extraction struct {
-	MinCareer     int    // years, lower bound; >= 0
-	MaxCareer     *int   // nil = open upper bound (read maps nil -> experienceUpperOpen 99)
-	Newcomer      bool   // the model's 신입-eligible judgment
-	EducationEnum string // raw enum: none|highschool|associate|bachelor|master|doctorate
-	Evidence      string // short cited quote (stored; not gated in Stage 1)
+	MinCareer         int    // years, lower bound; >= 0
+	MaxCareer         *int   // nil = open upper bound (read maps nil -> experienceUpperOpen 99)
+	Newcomer          bool   // the model's 신입-eligible judgment
+	EducationEnum     string // raw enum: none|highschool|associate|bachelor|master|doctorate
+	CareerEvidence    string // verbatim career quote from the posting
+	EducationEvidence string // verbatim education quote from the posting
 }
 
 // DeltaItem is one gated per-signal contribution from the Stage-2 ScoreDelta

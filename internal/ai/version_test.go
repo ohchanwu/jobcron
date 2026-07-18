@@ -7,22 +7,54 @@ import (
 
 var hex12 = regexp.MustCompile(`^[0-9a-f]{12}$`)
 
-func TestAIVersionStableAndSensitive(t *testing.T) {
-	base := AIVersion("anthropic", "claude-x")
-	if !hex12.MatchString(base) {
-		t.Fatalf("AIVersion = %q, want 12 lowercase hex chars", base)
+func TestTaskVersionsAreStableAndPartitioned(t *testing.T) {
+	score := ScoreVersion("anthropic", "claude-x")
+	if !hex12.MatchString(score) {
+		t.Fatalf("ScoreVersion = %q, want 12 lowercase hex chars", score)
 	}
-	if again := AIVersion("anthropic", "claude-x"); again != base {
-		t.Fatalf("AIVersion not deterministic: %q vs %q", base, again)
+	if score != "925859b252bb" {
+		t.Fatalf("ScoreVersion = %q, want the pre-split Stage 2 identity", score)
 	}
-	if AIVersion("openai", "claude-x") == base {
-		t.Fatal("changing provider must change AIVersion")
+	if score != AIVersion("anthropic", "claude-x") {
+		t.Fatal("Stage 2 cache identity changed")
 	}
-	if AIVersion("anthropic", "claude-y") == base {
-		t.Fatal("changing model must change AIVersion")
+	if EligibilityVersion("anthropic", "claude-x") == score {
+		t.Fatal("eligibility and score versions must be separate")
 	}
-	// Separator guard: ("ab","c") must differ from ("a","bc").
-	if AIVersion("ab", "c") == AIVersion("a", "bc") {
-		t.Fatal("AIVersion must not collide across the provider/model boundary")
+	if DealbreakerVersion("anthropic", "claude-x") == score {
+		t.Fatal("dealbreaker and score versions must be separate")
+	}
+	if ScoreVersion("anthropic", "claude-x") != score {
+		t.Fatal("score version must be stable")
+	}
+
+	versions := []struct {
+		name string
+		fn   func(string, string) string
+	}{
+		{"eligibility", EligibilityVersion},
+		{"dealbreaker", DealbreakerVersion},
+		{"score", ScoreVersion},
+	}
+	for _, version := range versions {
+		base := version.fn("anthropic", "claude-x")
+		if version.fn("openai", "claude-x") == base {
+			t.Errorf("%s version did not rotate with provider", version.name)
+		}
+		if version.fn("anthropic", "claude-y") == base {
+			t.Errorf("%s version did not rotate with model", version.name)
+		}
+	}
+
+	if taskVersion("anthropic", "claude-x", "eligibility", EligibilityPromptVersion) ==
+		taskVersion("anthropic", "claude-x", "other", EligibilityPromptVersion) {
+		t.Fatal("task name must rotate a task-specific version")
+	}
+	if taskVersion("anthropic", "claude-x", "eligibility", EligibilityPromptVersion) ==
+		taskVersion("anthropic", "claude-x", "eligibility", "other") {
+		t.Fatal("task prompt version must rotate its corresponding version")
+	}
+	if ScoreVersion("ab", "c") == ScoreVersion("a", "bc") {
+		t.Fatal("version parts must be NUL-separated")
 	}
 }

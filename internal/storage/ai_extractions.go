@@ -23,6 +23,7 @@ func (s *Store) UpsertAIExtraction(
 	if ext.MaxCareer != nil {
 		maxCareer = sql.NullInt64{Int64: int64(*ext.MaxCareer), Valid: true}
 	}
+	// ponytail: the legacy column carries career evidence until Task 3 splits the schema.
 	_, err := s.db.ExecContext(ctx, s.query(`
 INSERT INTO ai_extractions
     (posting_id, content_hash, ai_version, min_career, max_career, newcomer, education_enum, evidence, computed_at)
@@ -35,7 +36,7 @@ ON CONFLICT(posting_id, content_hash, ai_version) DO UPDATE SET
     evidence       = excluded.evidence,
     computed_at    = excluded.computed_at`),
 		postingID, contentHash, aiVersion, ext.MinCareer, maxCareer,
-		ext.Newcomer, ext.EducationEnum, ext.Evidence, computedAt.UTC())
+		ext.Newcomer, ext.EducationEnum, ext.CareerEvidence, computedAt.UTC())
 	if err != nil {
 		return fmt.Errorf("storage: upsert ai extraction: %w", err)
 	}
@@ -99,7 +100,7 @@ func scanExtraction(row rowScanner) (ai.Extraction, error) {
 		ext       ai.Extraction
 		maxCareer sql.NullInt64
 	)
-	if err := row.Scan(&ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.Evidence); err != nil {
+	if err := row.Scan(&ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.CareerEvidence); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ai.Extraction{}, sql.ErrNoRows
 		}
@@ -119,7 +120,7 @@ func scanExtractionWithID(rows *sql.Rows, pid *int64) (ai.Extraction, error) {
 		ext       ai.Extraction
 		maxCareer sql.NullInt64
 	)
-	if err := rows.Scan(pid, &ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.Evidence); err != nil {
+	if err := rows.Scan(pid, &ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.CareerEvidence); err != nil {
 		return ai.Extraction{}, fmt.Errorf("storage: scan ai extraction: %w", err)
 	}
 	if maxCareer.Valid {

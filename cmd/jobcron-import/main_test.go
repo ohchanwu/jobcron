@@ -946,11 +946,11 @@ func seedSQLiteImportFixture(t *testing.T) string {
 	}
 	maxCareer := 2
 	if err := st.UpsertAIExtraction(ctx, id, "content-hash", "ai-v1", ai.Extraction{
-		MinCareer:     0,
-		MaxCareer:     &maxCareer,
-		Newcomer:      true,
-		EducationEnum: "bachelor",
-		Evidence:      "신입",
+		MinCareer:      0,
+		MaxCareer:      &maxCareer,
+		Newcomer:       true,
+		EducationEnum:  "bachelor",
+		CareerEvidence: "신입",
 	}, when); err != nil {
 		t.Fatalf("UpsertAIExtraction: %v", err)
 	}

@@ -71,7 +71,7 @@ func TestBuildModelTextTruncationAndHashStability(t *testing.T) {
 
 func TestParseExtractionValid(t *testing.T) {
 	t.Run("max present", func(t *testing.T) {
-		ext, err := parseExtraction([]byte(`{"min_career":2,"max_career":5,"newcomer":false,"education":"bachelor","evidence":"경력 2-5년"}`))
+		ext, err := parseExtraction([]byte(`{"min_career":2,"max_career":5,"newcomer":false,"education":"bachelor","career_evidence":"경력 2-5년","education_evidence":"학사 이상"}`), "경력 2-5년, 학사 이상")
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
@@ -80,7 +80,7 @@ func TestParseExtractionValid(t *testing.T) {
 		}
 	})
 	t.Run("max null is open bound", func(t *testing.T) {
-		ext, err := parseExtraction([]byte(`{"min_career":3,"max_career":null,"newcomer":false,"education":"none","evidence":"경력 3년 이상"}`))
+		ext, err := parseExtraction([]byte(`{"min_career":3,"max_career":null,"newcomer":false,"education":"none","career_evidence":"경력 3년 이상","education_evidence":""}`), "경력 3년 이상")
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
@@ -89,8 +89,8 @@ func TestParseExtractionValid(t *testing.T) {
 		}
 	})
 	t.Run("tolerates markdown fences / prose", func(t *testing.T) {
-		raw := "여기 결과입니다:\n```json\n{\"min_career\":0,\"max_career\":0,\"newcomer\":true,\"education\":\"none\",\"evidence\":\"신입\"}\n```"
-		ext, err := parseExtraction([]byte(raw))
+		raw := "여기 결과입니다:\n```json\n{\"min_career\":0,\"max_career\":0,\"newcomer\":true,\"education\":\"none\",\"career_evidence\":\"신입\",\"education_evidence\":\"\"}\n```"
+		ext, err := parseExtraction([]byte(raw), "신입")
 		if err != nil {
 			t.Fatalf("parse fenced: %v", err)
 		}
@@ -104,19 +104,65 @@ func TestParseExtractionRejects(t *testing.T) {
 	cases := map[string]string{
 		"malformed JSON":     `{"min_career":2,`,
 		"no object":          `just some prose, no json`,
-		"min negative":       `{"min_career":-1,"newcomer":false,"education":"none","evidence":""}`,
-		"min absurd":         `{"min_career":2026,"newcomer":false,"education":"none","evidence":""}`,
-		"max below min":      `{"min_career":5,"max_career":2,"newcomer":false,"education":"none","evidence":""}`,
-		"max above ceiling":  `{"min_career":0,"max_career":200,"newcomer":true,"education":"none","evidence":""}`,
-		"education not enum": `{"min_career":0,"newcomer":true,"education":"phd","evidence":""}`,
-		"education empty":    `{"min_career":0,"newcomer":true,"evidence":""}`,
+		"min negative":       `{"min_career":-1,"newcomer":false,"education":"none","career_evidence":"","education_evidence":""}`,
+		"min absurd":         `{"min_career":2026,"newcomer":false,"education":"none","career_evidence":"","education_evidence":""}`,
+		"max below min":      `{"min_career":5,"max_career":2,"newcomer":false,"education":"none","career_evidence":"","education_evidence":""}`,
+		"max above ceiling":  `{"min_career":0,"max_career":200,"newcomer":true,"education":"none","career_evidence":"","education_evidence":""}`,
+		"education not enum": `{"min_career":0,"newcomer":true,"education":"phd","career_evidence":"","education_evidence":""}`,
+		"education empty":    `{"min_career":0,"newcomer":true,"career_evidence":"","education_evidence":""}`,
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := parseExtraction([]byte(raw)); err == nil {
+			if _, err := parseExtraction([]byte(raw), raw); err == nil {
 				t.Fatalf("expected rejection for %s, got none", name)
 			}
 		})
+	}
+}
+
+func TestParseExtractionRequiresRestrictiveCareerEvidence(t *testing.T) {
+	raw := []byte(`{"min_career":2,"max_career":null,"newcomer":false,"education":"none","career_evidence":"","education_evidence":""}`)
+	if _, err := parseExtraction(raw, "경력 2년 이상"); err == nil {
+		t.Fatal("restrictive career extraction without career evidence must be rejected")
+	}
+}
+
+func TestParseExtractionRequiresRestrictiveEducationEvidence(t *testing.T) {
+	raw := []byte(`{"min_career":0,"max_career":0,"newcomer":true,"education":"bachelor","career_evidence":"","education_evidence":""}`)
+	if _, err := parseExtraction(raw, "학사 이상"); err == nil {
+		t.Fatal("restrictive education extraction without education evidence must be rejected")
+	}
+}
+
+func TestParseExtractionRequiresEvidenceKeys(t *testing.T) {
+	cases := map[string]string{
+		"career_evidence":    `{"min_career":0,"max_career":0,"newcomer":true,"education":"none","education_evidence":""}`,
+		"education_evidence": `{"min_career":0,"max_career":0,"newcomer":true,"education":"none","career_evidence":""}`,
+	}
+	for missing, raw := range cases {
+		t.Run(missing, func(t *testing.T) {
+			if _, err := parseExtraction([]byte(raw), "신입 지원 가능"); err == nil {
+				t.Fatalf("extraction without %s key must be rejected", missing)
+			}
+		})
+	}
+}
+
+func TestExtractionRejectsEvidenceAbsentFromPosting(t *testing.T) {
+	raw := []byte(`{"min_career":2,"max_career":null,"newcomer":false,"education":"none","career_evidence":"경력 2년 이상","education_evidence":""}`)
+	if _, err := parseExtraction(raw, "신입 지원 가능"); err == nil {
+		t.Fatal("evidence absent from the posting must be rejected")
+	}
+}
+
+func TestExtractionAcceptsSeparateVerbatimEvidence(t *testing.T) {
+	raw := []byte(`{"min_career":2,"max_career":null,"newcomer":false,"education":"bachelor","career_evidence":"경력 2년 이상","education_evidence":"학사 이상"}`)
+	ext, err := parseExtraction(raw, "지원 자격: 경력 2년 이상, 학사 이상")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if ext.CareerEvidence != "경력 2년 이상" || ext.EducationEvidence != "학사 이상" {
+		t.Fatalf("evidence = %q, %q", ext.CareerEvidence, ext.EducationEvidence)
 	}
 }
 
@@ -171,16 +217,16 @@ func TestStripLeadingNumericPlus(t *testing.T) {
 // to Stage-1 extraction too.
 func TestParseExtractionDepthAndPlus(t *testing.T) {
 	t.Run("two objects: first wins", func(t *testing.T) {
-		raw := `{"min_career":0,"max_career":null,"newcomer":true,"education":"none","evidence":"신입 환영"}
-		{"min_career":5,"max_career":null,"newcomer":false,"education":"master","evidence":"무시"}`
-		ext, err := parseExtraction([]byte(raw))
+		raw := `{"min_career":0,"max_career":null,"newcomer":true,"education":"none","career_evidence":"신입 환영","education_evidence":""}
+		{"min_career":5,"max_career":null,"newcomer":false,"education":"master","career_evidence":"무시","education_evidence":"무시"}`
+		ext, err := parseExtraction([]byte(raw), "신입 환영")
 		if err != nil || ext.MinCareer != 0 || !ext.Newcomer || ext.EducationEnum != "none" {
 			t.Fatalf("expected the first object, got %+v err=%v", ext, err)
 		}
 	})
 	t.Run("leading + on numbers tolerated", func(t *testing.T) {
-		raw := `{"min_career": +2,"max_career": +5,"newcomer":false,"education":"bachelor","evidence":"경력 2-5년"}`
-		ext, err := parseExtraction([]byte(raw))
+		raw := `{"min_career": +2,"max_career": +5,"newcomer":false,"education":"bachelor","career_evidence":"경력 2-5년","education_evidence":"학사 이상"}`
+		ext, err := parseExtraction([]byte(raw), "경력 2-5년, 학사 이상")
 		if err != nil || ext.MinCareer != 2 || ext.MaxCareer == nil || *ext.MaxCareer != 5 {
 			t.Fatalf("expected min 2 max 5, got %+v err=%v", ext, err)
 		}
@@ -192,7 +238,7 @@ func TestParseExtractionDepthAndPlus(t *testing.T) {
 func TestHTTPProviderExtractEndToEnd(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Anthropic envelope wrapping the extraction JSON.
-		io.WriteString(w, `{"content":[{"type":"text","text":"{\"min_career\":0,\"max_career\":0,\"newcomer\":true,\"education\":\"bachelor\",\"evidence\":\"신입 환영\"}"}],"usage":{"input_tokens":40,"output_tokens":20}}`)
+		io.WriteString(w, `{"content":[{"type":"text","text":"{\"min_career\":0,\"max_career\":0,\"newcomer\":true,\"education\":\"bachelor\",\"career_evidence\":\"신입 환영\",\"education_evidence\":\"학사 이상\"}"}],"usage":{"input_tokens":40,"output_tokens":20}}`)
 	}))
 	defer srv.Close()
 
@@ -200,11 +246,11 @@ func TestHTTPProviderExtractEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newHTTPProvider: %v", err)
 	}
-	ext, usage, err := p.Extract(context.Background(), "model text")
+	ext, usage, err := p.Extract(context.Background(), "신입 환영, 학사 이상")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
-	if !ext.Newcomer || ext.EducationEnum != "bachelor" || ext.Evidence != "신입 환영" {
+	if !ext.Newcomer || ext.EducationEnum != "bachelor" || ext.CareerEvidence != "신입 환영" || ext.EducationEvidence != "학사 이상" {
 		t.Fatalf("extract = %+v", ext)
 	}
 	if usage.InputTokens != 40 || usage.OutputTokens != 20 {

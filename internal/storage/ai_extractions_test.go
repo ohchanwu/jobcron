@@ -34,7 +34,7 @@ func TestUpsertAIExtractionRoundTrip(t *testing.T) {
 	now := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
 
 	t.Run("open upper bound (nil max)", func(t *testing.T) {
-		ext := ai.Extraction{MinCareer: 3, MaxCareer: nil, Newcomer: false, EducationEnum: ai.EduBachelor, Evidence: "경력 3년 이상"}
+		ext := ai.Extraction{MinCareer: 3, MaxCareer: nil, Newcomer: false, EducationEnum: ai.EduBachelor, CareerEvidence: "경력 3년 이상", EducationEvidence: "학사 이상"}
 		if err := st.UpsertAIExtraction(ctx, id, "hashA", ver, ext, now); err != nil {
 			t.Fatalf("UpsertAIExtraction: %v", err)
 		}
@@ -42,13 +42,13 @@ func TestUpsertAIExtractionRoundTrip(t *testing.T) {
 		if err != nil || !ok {
 			t.Fatalf("AIExtraction: ok=%v err=%v", ok, err)
 		}
-		if got.MinCareer != 3 || got.MaxCareer != nil || got.Newcomer || got.EducationEnum != ai.EduBachelor || got.Evidence != "경력 3년 이상" {
+		if got.MinCareer != 3 || got.MaxCareer != nil || got.Newcomer || got.EducationEnum != ai.EduBachelor || got.CareerEvidence != "경력 3년 이상" || got.EducationEvidence != "" {
 			t.Fatalf("round trip = %+v", got)
 		}
 	})
 
 	t.Run("bounded max round-trips", func(t *testing.T) {
-		ext := ai.Extraction{MinCareer: 0, MaxCareer: ptr(0), Newcomer: true, EducationEnum: ai.EduNone, Evidence: "신입"}
+		ext := ai.Extraction{MinCareer: 0, MaxCareer: ptr(0), Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "신입"}
 		if err := st.UpsertAIExtraction(ctx, id, "hashB", ver, ext, now); err != nil {
 			t.Fatalf("UpsertAIExtraction: %v", err)
 		}
@@ -62,7 +62,7 @@ func TestUpsertAIExtractionRoundTrip(t *testing.T) {
 	})
 
 	t.Run("PK conflict updates in place", func(t *testing.T) {
-		ext := ai.Extraction{MinCareer: 9, MaxCareer: ptr(9), Newcomer: false, EducationEnum: ai.EduMaster, Evidence: "v2"}
+		ext := ai.Extraction{MinCareer: 9, MaxCareer: ptr(9), Newcomer: false, EducationEnum: ai.EduMaster, CareerEvidence: "v2"}
 		if err := st.UpsertAIExtraction(ctx, id, "hashA", ver, ext, now.Add(time.Hour)); err != nil {
 			t.Fatalf("re-upsert: %v", err)
 		}
@@ -98,17 +98,17 @@ func TestAIExtractionsByPostingIDBatchedAndLatest(t *testing.T) {
 
 	t0 := time.Date(2026, 6, 2, 9, 0, 0, 0, time.UTC)
 	// id1 has two content_hash rows under the same version; the newer wins.
-	if err := st.UpsertAIExtraction(ctx, id1, "old", ver, ai.Extraction{MinCareer: 5, EducationEnum: ai.EduBachelor, Evidence: "old"}, t0); err != nil {
+	if err := st.UpsertAIExtraction(ctx, id1, "old", ver, ai.Extraction{MinCareer: 5, EducationEnum: ai.EduBachelor, CareerEvidence: "old"}, t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.UpsertAIExtraction(ctx, id1, "new", ver, ai.Extraction{MinCareer: 0, Newcomer: true, EducationEnum: ai.EduNone, Evidence: "new"}, t0.Add(time.Hour)); err != nil {
+	if err := st.UpsertAIExtraction(ctx, id1, "new", ver, ai.Extraction{MinCareer: 0, Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "new"}, t0.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.UpsertAIExtraction(ctx, id2, "h", ver, ai.Extraction{MinCareer: 2, EducationEnum: ai.EduAssociate, Evidence: "two"}, t0); err != nil {
+	if err := st.UpsertAIExtraction(ctx, id2, "h", ver, ai.Extraction{MinCareer: 2, EducationEnum: ai.EduAssociate, CareerEvidence: "two"}, t0); err != nil {
 		t.Fatal(err)
 	}
 	// A row under a DIFFERENT version must not leak into this version's read.
-	if err := st.UpsertAIExtraction(ctx, id2, "h", "otherversion", ai.Extraction{MinCareer: 40, EducationEnum: ai.EduDoctorate, Evidence: "wrong"}, t0); err != nil {
+	if err := st.UpsertAIExtraction(ctx, id2, "h", "otherversion", ai.Extraction{MinCareer: 40, EducationEnum: ai.EduDoctorate, CareerEvidence: "wrong"}, t0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,7 +119,7 @@ func TestAIExtractionsByPostingIDBatchedAndLatest(t *testing.T) {
 	if len(m) != 2 {
 		t.Fatalf("map has %d entries, want 2", len(m))
 	}
-	if m[id1].Evidence != "new" || !m[id1].Newcomer {
+	if m[id1].CareerEvidence != "new" || !m[id1].Newcomer {
 		t.Fatalf("id1 = %+v, want the newer (computed_at DESC) row", m[id1])
 	}
 	if m[id2].MinCareer != 2 || m[id2].EducationEnum != ai.EduAssociate {
