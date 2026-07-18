@@ -4,7 +4,7 @@
 
 **Created:** 2026-07-18
 
-**Verified against:** `main` at `9491d0d2ad02c015d90844393016a7fc0306fa32`
+**Verified against:** `main` at `07d4357fea0d6ab83cec55c8deaa6c9068ffe65b`
 
 ## Context
 
@@ -210,8 +210,11 @@ ValidateDealbreakers(
 ) ([]DealbreakerValidation, Usage, error)
 ```
 
-The candidate ID is the full SHA-256 hex digest of the canonical token sequence. The raw phrase is
-sent to the provider but is not stored in the validation cache.
+The candidate ID is the full SHA-256 hex digest of the canonical token sequence. The provider also
+receives the exact profile phrase, such as `리서치`, because it must judge that phrase in the
+posting's context. The validation row stores the keyword hash, verdict, and evidence instead of a
+second plaintext copy of the phrase. The raw phrase remains in the user's profile and in the
+persisted exclusion reason used for display. The hash is a cache identity, not encryption.
 
 ### Prompt contract
 
@@ -261,9 +264,11 @@ ambiguity. Transport, provider, and budget failures are not cached and may retry
 Validate every deterministic candidate match. A posting avoids keyword exclusion only when every
 matched phrase has a cached `not_applicable` verdict.
 
-One `applies`, `uncertain`, missing, or unavailable verdict retains the hard exclusion. The reason
-panel lists every retained reason in profile order so a later match cannot be hidden behind the
-first one.
+One `applies`, `uncertain`, missing, or unavailable verdict retains the hard exclusion. Stage 1B
+must collect and validate all deterministic hits rather than stop after the first. For example, a
+`리서치` hit may be `not_applicable` while a later `야근` hit still applies. The reason panel lists
+every retained hit in profile order, so clearing one false positive cannot conceal another valid
+reason for exclusion.
 
 ## Persistence
 
@@ -299,15 +304,28 @@ CREATE TABLE ai_dealbreaker_validations (
 );
 ```
 
+These foreign keys use `ON DELETE CASCADE` because validation rows are disposable cache entries
+owned by both records. Deleting a user must remove that user's private judgments, and deleting a
+posting must remove validations that can no longer be reached. Without the cascades, either normal
+deletion would fail or orphaned cache rows would remain.
+
 The table is user-scoped even though a judgment can be objectively reusable. This avoids turning
 profile phrases into shared cross-account state and matches the existing ownership boundary for
 preference-derived AI data.
 
-### Legacy SQLite compatibility
+### PostgreSQL-only support boundary
 
-Add the equivalent additive table and extraction columns in SQLite migration `0013`. Normal
-application startup remains PostgreSQL-only. SQLite support exists only for the verified legacy
-reader and isolated compatibility tests; it must not enable paid AI or invent `user_id = 0` state.
+Implement Stage 1B only in PostgreSQL. Do not add a SQLite migration, storage implementation, or
+compatibility test for this feature. PostgreSQL is the supported backend for both hosted and local
+application use.
+
+Keep the existing read-only SQLite importer and snapshot source only until the verified one-time
+migration and its rollback window are complete. They are migration tooling, not an alternate
+runtime backend, and must not gain Stage 1B schema or paid-AI support. Migration `0017` renames the
+PostgreSQL extraction column, so the importer must continue reading the frozen SQLite `evidence`
+column while writing it to PostgreSQL `career_evidence` and writing empty `education_evidence`.
+Do not change the SQLite source schema. Removing the temporary import path is a separate cleanup
+after the migration can no longer need rollback.
 
 ### Store methods
 
@@ -333,7 +351,8 @@ AIDealbreakerValidationsByPostingID(
 ```
 
 The batched read must not introduce an N+1 query. Scoring ignores rows whose content hash no longer
-matches the posting.
+matches the posting. The inner map key is `content_hash + "\x00" + keyword_hash`, so historical
+content rows cannot overwrite the current row in memory.
 
 ## Runtime Flow
 
@@ -353,9 +372,13 @@ A Stage 1B cache hit makes no provider call and spends no tokens.
 
 ### Explicit AI re-rate
 
-The re-rate operation must process Stage 1B before selecting the Stage 2 `Today` set. It must
-include deterministic candidate hits from currently excluded postings; otherwise the false
-positive can never re-enter the main list.
+"Explicit AI re-rate" means the user-triggered `AI 평가` action served by the existing
+`/api/rerate` flow. Unlike automatic evaluation after a scrape, provider-free profile save,
+startup re-scoring, or a scheduled scrape, this is a deliberate request to rerun paid AI work.
+
+The re-rate operation must process Stage 1B before selecting the Stage 2 `Today` set. It must include
+deterministic candidate hits from currently excluded postings; otherwise the false positive can
+never re-enter the main list.
 
 After Stage 1B completes, re-score all of that user's postings, rebuild the eligible set, then run
 Stage 2 over its normal scope. Dealbreaker changes count as an AI-input change for re-rate readiness
@@ -363,9 +386,12 @@ even though they remain separate from the Stage 2 goal hash.
 
 ### Profile save and startup
 
-Profile save remains fast and provider-free. It commits the profile, re-scores from existing
-caches, and marks re-rate work pending when the normalized dealbreaker hash changed or validations
-are missing. The user can then run the existing AI re-rate flow.
+Profile save remains fast and provider-free. It commits the profile and recalculates scores using
+existing Stage 1A, Stage 1B, and Stage 2 cache entries. In particular, an unchanged dealbreaker hit
+reuses its Stage 1B verdict only when the user, posting content hash, AI version, and normalized
+keyword hash still match. A new or changed phrase produces a cache miss. Missing validations retain
+the deterministic exclusion as unverified and mark re-rate work pending; the user can then run the
+existing AI re-rate flow.
 
 Startup remains provider-free. It may merge cached validations and use the conservative fallback,
 but it must not create surprise paid calls.
@@ -385,8 +411,11 @@ silently weakens an unresolved user-defined hard constraint.
 
 ## Scoring Result Contract
 
-Persist structured reasons inside the existing per-user score JSON. Do not add a second render-time
-join for data already known during scoring.
+`scores.breakdown_json` already stores the serialized `ScoreResult` for one user's posting score.
+Add the structured exclusion reasons to that same object when scoring makes the classification.
+Page rendering must read those persisted reasons from the score instead of separately querying
+`ai_dealbreaker_validations` and reconstructing the decision. This keeps the displayed explanation
+identical to the score that produced the exclusion and avoids another database join.
 
 ```go
 type ExclusionReason struct {
@@ -405,8 +434,8 @@ type ScoreResult struct {
 }
 ```
 
-Keep `DealbreakerHit` during this change so existing score JSON and callers remain backward
-compatible. `ExclusionReasons` becomes the rendering contract.
+Keep `DealbreakerHit` during this change so existing `scores.breakdown_json` values and callers
+remain backward compatible. `ExclusionReasons` becomes the rendering contract.
 
 Reason priority is:
 
@@ -476,8 +505,8 @@ An unverified fallback says `규칙 기반 · AI 문맥 확인 없음`. An uncer
 
 - Treat the posting and every profile phrase as untrusted prompt data.
 - Store only the keyword hash in the validation table.
-- Keep the raw phrase only in the user-scoped profile and score JSON where it is already needed for
-  display.
+- Keep the raw phrase only in the user-scoped profile and the serialized `ScoreResult` in
+  `scores.breakdown_json`, where the exclusion card needs it for display.
 - Validate every displayed AI quote against the full posting input.
 - Let Go templates escape all reason and evidence fields.
 - Preserve the existing user ID and AI-runtime match checks before every paid call.
@@ -490,8 +519,12 @@ An unverified fallback says `규칙 기반 · AI 문맥 확인 없음`. An uncer
 - Stage 2 goal scoring, citation gate, cache keys, and stale-chip behavior.
 - Dealbreaker-before-Stage-2 ordering.
 - Score weights, MinScore, bookmark exemptions, and hidden-posting behavior.
-- Sole-owner scheduler policy and user-scoped credentials.
-- PostgreSQL-only normal startup and the read-only purpose of legacy SQLite.
+- Existing sole-owner scheduler policy and user-scoped credentials: resolve exactly one owner at
+  the start of a scheduled run; when there are zero or multiple owners, skip paid AI and record an
+  operator error rather than guessing. Multi-user scheduler fan-out remains out of scope.
+- The frozen SQLite source schema during the one-time migration rollback window. The importer may
+  map legacy `evidence` into the renamed PostgreSQL destination columns, but receives no Stage 1B
+  schema or runtime support.
 
 ## Testing Plan
 
@@ -513,13 +546,13 @@ An unverified fallback says `규칙 기반 · AI 문맥 확인 없음`. An uncer
 - Content, AI-version, and keyword-hash changes miss the cache.
 - Posting and user deletion cascade to validation rows.
 - Batch reads return current rows without N+1 queries.
-- The legacy SQLite compatibility schema opens without enabling paid AI.
 
 ### Server integration tests
 
 - Scrape order is Stage 1A, Stage 1B, score merge, then Stage 2.
 - A cached validation produces zero provider calls.
-- Explicit re-rate checks currently excluded candidate postings before rebuilding `Today`.
+- The user-triggered `AI 평가` re-rate checks currently excluded candidate postings before
+  rebuilding `Today`.
 - A dealbreaker profile change marks re-rate pending.
 - Budget exhaustion retains deterministic exclusions and truthful unverified labels.
 - Startup performs no provider call.
@@ -610,8 +643,10 @@ reconstructing scoring policy. Browser work comes after the backend can produce 
 
 ### Storage and server
 
-- PostgreSQL migration `0017` and SQLite compatibility migration `0013`.
+- PostgreSQL migration `0017`; no SQLite migration or Stage 1B compatibility schema.
 - New storage methods for user-scoped validation rows.
+- `cmd/jobcron-import/main.go`: map legacy SQLite extraction evidence into the renamed PostgreSQL
+  destination columns without changing the source schema.
 - `internal/server/server.go`: scrape Stage 1B and cache merge.
 - `internal/server/rerate.go`: excluded-candidate backfill before Stage 2.
 - `internal/server/handlers.go`: reason view model and re-rate readiness.
