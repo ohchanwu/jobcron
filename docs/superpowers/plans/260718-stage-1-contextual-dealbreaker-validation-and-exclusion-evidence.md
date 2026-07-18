@@ -58,6 +58,11 @@ API client, Go HTML templates, CSS, and gstack `/browse` for browser QA.
 - Modify: `internal/ai/stub_test.go`
 - Modify: `internal/ai/version.go`
 - Modify: `internal/ai/version_test.go`
+- Modify: `internal/storage/ai_extractions.go`
+- Modify: `internal/storage/ai_extractions_test.go`
+- Modify: `internal/storage/store_test.go`
+- Modify: `internal/server/ai_scrape_test.go`
+- Modify: `cmd/jobcron-import/main_test.go`
 
 **Interfaces:**
 
@@ -162,19 +167,27 @@ occur verbatim. Restrictive career and education results require their correspon
 - [ ] **Step 5: Update provider and stub fixtures, then run the package**
 
 Update existing fixtures from `Evidence` to the correct split field. Do not retain a third
-ambiguous evidence field.
+ambiguous evidence field. This public-field removal also requires a mechanical compatibility
+migration of existing storage, server, and importer-test callers in the files listed above; do not
+leave the repository uncompilable between Tasks 1 and 3. Until Task 3 lands the PostgreSQL column
+split, the existing extraction adapter maps its single legacy `evidence` column to
+`CareerEvidence` and leaves `EducationEvidence` empty. Task 3 replaces that temporary bridge with
+the final PostgreSQL mapping and the frozen-SQLite lossy-write guard.
 
 ```sh
-gofmt -w internal/ai
-go test ./internal/ai -count=1
+gofmt -w internal/ai internal/storage internal/server/ai_scrape_test.go \
+  cmd/jobcron-import/main_test.go
+go test ./internal/ai ./internal/storage ./internal/server ./cmd/jobcron-import -count=1
 ```
 
-Expected: all `internal/ai` tests pass and Stage 2 version tests prove backward compatibility.
+Expected: all affected packages compile and pass, and Stage 2 version tests prove backward
+compatibility.
 
 - [ ] **Step 6: Commit Task 1**
 
 ```sh
-git add internal/ai
+git add internal/ai internal/storage/ai_extractions.go internal/storage/ai_extractions_test.go \
+  internal/storage/store_test.go internal/server/ai_scrape_test.go cmd/jobcron-import/main_test.go
 git diff --cached --check
 git commit -m "refactor(ai): split eligibility evidence and cache versions"
 ```
@@ -411,11 +424,11 @@ caller holding the current posting to perform one exact lookup. Reject an upsert
 
 - [ ] **Step 4: Update extraction storage and importer mapping**
 
-Update PostgreSQL extraction reads and writes to use `career_evidence` and `education_evidence`.
-Keep the SQLite schema frozen. The existing SQLite storage adapter remains import-fixture-only:
-map its single `evidence` value to `CareerEvidence`, leave `EducationEvidence` empty, and reject a
-SQLite write that would discard non-empty education evidence. Do not add SQLite columns or use
-this adapter in application runtime.
+Replace Task 1's temporary single-column extraction bridge with PostgreSQL reads and writes using
+`career_evidence` and `education_evidence`. Keep the SQLite schema frozen. The existing SQLite
+storage adapter remains import-fixture-only: map its single `evidence` value to `CareerEvidence`,
+leave `EducationEvidence` empty, and reject a SQLite write that would discard non-empty education
+evidence. Do not add SQLite columns or use this adapter in application runtime.
 
 In `copyAIExtractions`, continue selecting legacy SQLite `evidence`, but write the PostgreSQL
 destination as:
