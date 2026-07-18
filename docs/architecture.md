@@ -2,10 +2,11 @@
 
 Jobcron is a single Go web application that scrapes Korean job boards, stores normalized
 postings in PostgreSQL, scores them for one owner, and serves an embedded HTML interface.
-Optional AI calls enrich eligibility facts and user-specific score explanations, but the
-deterministic scoring path remains complete when AI is disabled or unavailable.
+Optional AI calls extract global eligibility facts, validate user-specific dealbreaker hits in
+context, and enrich score explanations. The deterministic scoring path remains complete when AI
+is disabled or unavailable.
 
-This document describes the implemented architecture as of 2026-07-18. Approved future work is
+This document describes the implemented architecture as of 2026-07-19. Approved future work is
 listed separately so it is not mistaken for current behavior.
 
 ## System at a glance
@@ -131,9 +132,13 @@ One scrape executes these steps:
 4. Isolate a failing source and continue with the remaining sources.
 5. Sweep stale rows only for sources that completed successfully.
 6. Mark cross-portal duplicates and retain one canonical posting.
-7. Calculate deterministic scores with cached Stage 1 facts and cached Stage 2 deltas.
-8. Optionally run fresh Stage 2 analysis for the new briefing and merge its cached deltas.
-9. Finish the `scrape_runs` record with counts and any bounded error summary.
+7. Run or reuse global Stage 1A eligibility extraction for detailed postings.
+8. Generate the active user's exact deterministic dealbreaker candidates.
+9. Run or reuse user-scoped Stage 1B contextual validation within the shared paid-call budget.
+10. Calculate deterministic scores from Stage 1A facts and conservatively merged Stage 1B
+    verdicts.
+11. Optionally run Stage 2 for the corrected eligible set and merge its cached deltas.
+12. Finish the `scrape_runs` record with counts and any bounded error summary.
 
 Scraper clients use shared request pacing and robots-policy helpers. The project prefers stable
 HTTP or JSON endpoints and does not use browser automation for production scraping. See the
@@ -145,21 +150,48 @@ HTTP or JSON endpoints and does not use browser automation for production scrapi
 ### Deterministic baseline
 
 `internal/scoring` compares a normalized posting with the user's structured profile. Stack,
-career, location, salary, and preference rules contribute explained line items. A hard keyword or
-education dealbreaker returns an excluded score before any Stage 2 AI adjustment is merged.
+career, location, salary, and preference rules contribute explained line items. Hard keyword and
+education dealbreakers exclude before any Stage 2 AI adjustment is merged. A career mismatch is a
+separate reason; it becomes an exclusion only when the final score remains below `MinScore` after
+Stage 2. Contextual validation may suppress an exact keyword hit only when its cited verdict is
+`not_applicable`; it does not replace the deterministic candidate matcher.
 
 This path requires no provider and remains the fallback for missing credentials, provider errors,
 invalid model output, or exhausted AI budgets.
 
-### Stage 1: posting facts
+### Stage 1A: global posting facts
 
-The implemented first AI layer extracts career range, new-grad eligibility, and education facts
-from posting text. These facts describe the posting rather than a user, so the cache is global and
-keyed by posting content and AI version. Invalid or unavailable extraction falls back to source
-fields and deterministic parsing.
+Stage 1A extracts career range, new-grad eligibility, education, and separate career and education
+evidence from posting text. These facts describe the posting rather than a user, so the cache is
+global and keyed by posting content and `EligibilityVersion`. Invalid or unavailable extraction
+falls back to source fields and deterministic parsing.
 
-Contextual validation of user-specific dealbreaker hits is approved but not implemented. Its
-conservative fallback and exclusion-evidence UI are defined in the
+### Stage 1B: user-scoped dealbreaker context
+
+The deterministic matcher NFC-normalizes and lowercases text, then finds exact contiguous token
+sequences from the user's dealbreaker list. Each match becomes a candidate whose stable identity
+is the SHA-256 digest of that normalized token sequence.
+
+Stage 1B batches only unresolved candidates and classifies each as `applies`, `not_applicable`, or
+`uncertain`. Conclusive evidence must be a bounded verbatim quote from the posting and contain the
+same candidate token sequence. The PostgreSQL cache key combines `user_id`, posting, posting
+content hash, `DealbreakerVersion`, and normalized keyword hash, so neither users nor changed
+inputs can share a verdict accidentally.
+
+A keyword exclusion is suppressed only when every matched candidate is `not_applicable`.
+`applies`, `uncertain`, missing cache entries, invalid evidence, unavailable credentials, provider
+failures, and exhausted budgets all retain the deterministic exclusion. This conservative fallback
+lets AI remove a supported false positive without silently weakening an unresolved hard rule.
+
+Manual and opted-in scheduled scrapes may run Stage 1B before scoring. An explicit `AI 평가`
+rerate also evaluates currently excluded candidates before rebuilding the eligible Stage 2 set.
+Profile save and startup rescoring are provider-free: they reuse caches and mark missing validation
+as pending instead of making surprise paid calls. Stage 1B and Stage 2 share the user's run budget
+and call cap.
+
+Scoring persists the exact decision in `ScoreResult.ExclusionReasons` inside
+`scores.breakdown_json`. Rendering therefore explains the score that actually caused exclusion
+without querying the validation cache or recalculating policy. The complete contract is in the
 [Stage 1 contextual validation specification][stage1-context-spec].
 
 ### Stage 2: user fit
@@ -194,10 +226,10 @@ applies pending embedded migrations transactionally before returning the reposit
 
 The main ownership split is:
 
-- Shared posting facts: postings, canonical-duplicate relationships, global Stage 1 extractions,
+- Shared posting facts: postings, canonical-duplicate relationships, global Stage 1A extractions,
   and scrape-run history.
 - User-owned state: profiles, deterministic scores, bookmarks, hidden or not-interested state,
-  Stage 2 scores, AI usage, and encrypted AI credentials.
+  Stage 1B validations, Stage 2 scores, AI usage, and encrypted AI credentials.
 - Authentication state: users and hashed login sessions.
 
 Foreign keys remove dependent user state when its owner is deleted. Composite keys and repository
@@ -223,6 +255,13 @@ The browser is not a second database for the writable app. Durable profiles, sco
 state live in PostgreSQL so they follow the account across devices. Browser storage is reserved for
 presentation preferences and the temporary read-only demo behavior.
 
+Excluded daily and archive rows reuse one template partial that shows every persisted reason in
+profile order. The panel includes a visible label, conservative confidence text, and cited evidence
+when available. Keyword evidence is split into ordinary strings plus a marked token span; Go
+templates escape every segment, and provider output never becomes `template.HTML`. The danger
+styling keeps the full row at normal contrast and uses text and a warning symbol in addition to
+color.
+
 ## Deployment boundaries
 
 The prepared production deployment uses an immutable Linux arm64 container image. Caddy
@@ -244,6 +283,8 @@ overview.
 - One source failure does not discard successful results from other sources.
 - Stale-row sweeping runs only for sources that supplied a trustworthy fresh baseline.
 - AI failure degrades to deterministic scoring rather than failing the scrape or page.
+- Stage 1B failure retains the deterministic exclusion with an unverified status; it cannot abort
+  scrape, profile save, startup, or provider-free rescoring.
 - Missing or ambiguous scheduler ownership records a skipped run instead of selecting a user.
 - Startup rescoring repairs postings left without scores after an interrupted prior run.
 - Database migration failure prevents startup before the server accepts requests.
@@ -252,10 +293,9 @@ overview.
 
 The following work is documented but is not part of the implemented architecture:
 
-- [Contextual Stage 1 dealbreaker validation and exclusion evidence][stage1-context-spec]
 - [Multi-user account and scheduler expansion][multi-user-spec]
 
-When either change is implemented, update this document to describe the resulting current state
+When this change is implemented, update this document to describe the resulting current state
 and move completed implementation records through the documented lifecycle.
 
 ## Related documentation
