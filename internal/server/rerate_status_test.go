@@ -1,10 +1,15 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/ohchanwu/jobcron/internal/ai"
+	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
 func TestRerateTrackerRecordsLifecycle(t *testing.T) {
@@ -37,6 +42,24 @@ func TestRerateTrackerIgnoresStaleRunUpdates(t *testing.T) {
 	got, _ := tracker.snapshot(7, "today")
 	if got.RunID != current.RunID || got.State != rerateStateRunning || got.Message != "" {
 		t.Fatalf("snapshot accepted stale update: %+v", got)
+	}
+}
+
+func TestRerateTrackerInvalidatesOneUser(t *testing.T) {
+	tracker := newRerateTracker()
+	for _, key := range []rerateKey{{userID: 7, surface: "today"}, {userID: 7, surface: "bookmarks"}, {userID: 8, surface: "today"}} {
+		run := tracker.start(key.userID, key.surface, "entry-token-00000001")
+		tracker.complete(key.userID, key.surface, run.RunID, rerateOutcomeCached, "cached")
+	}
+	tracker.invalidateUser(7)
+	if _, ok := tracker.snapshot(7, "today"); ok {
+		t.Fatal("user 7 today status survived invalidation")
+	}
+	if _, ok := tracker.snapshot(7, "bookmarks"); ok {
+		t.Fatal("user 7 bookmarks status survived invalidation")
+	}
+	if got, ok := tracker.snapshot(8, "today"); !ok || got.State != rerateStateDone {
+		t.Fatalf("user 8 status changed: %+v ok=%v", got, ok)
 	}
 }
 
@@ -76,6 +99,29 @@ func TestRerateStatusEndpointRejectsUnknownSurface(t *testing.T) {
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/rerate/status?surface=hidden", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestRerateInfoMarksMissingDealbreakerValidationPending(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "rerate-pending@example.invalid")
+	prof := profile.Profile{Dealbreakers: []string{"리서치"}}
+	saveAIRuntimeProfile(t, st, userID, prof)
+	p := listingPosting("rerate-pending", "신입 리서치 개발자")
+	p.Description = "리서치 업무를 수행합니다"
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	p.ID = mustUpsert(t, st, p)
+	runtime := testAIRuntime(userID, &ai.StubProvider{NameVal: "stub"}, "shared-model")
+	if _, err := srv.scoreAll(ctx, userID, runtime); err != nil {
+		t.Fatal(err)
+	}
+	briefing, err := srv.buildBriefingWithRuntime(ctx, time.Now(), userID, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if briefing.Rerate == nil || briefing.Rerate.StaleCount != 1 {
+		t.Fatalf("rerate info = %+v, want one pending contextual validation", briefing.Rerate)
 	}
 }
 

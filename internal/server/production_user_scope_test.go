@@ -25,6 +25,7 @@ import (
 	"github.com/ohchanwu/jobcron/internal/auth"
 	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
+	"github.com/ohchanwu/jobcron/internal/scoring"
 	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/storage"
 )
@@ -817,6 +818,41 @@ FOR EACH ROW EXECUTE FUNCTION fail_handler_profile_save()`); err != nil {
 	}
 }
 
+func TestProductionProfileDealbreakerChangeIsProviderFreeAndInvalidatesRerateStatus(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, cookie := createSessionUser(t, st, "profile-dealbreaker@example.invalid", "profile-dealbreaker-session")
+	cipher := newAIRuntimeTestCipher(t, 0x63)
+	srv.SetCredentialCipher(cipher)
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic", AIModel: "shared-model", Dealbreakers: []string{"야근"}})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "synthetic-profile-key")
+	provider := &ai.StubProvider{NameVal: "anthropic"}
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return provider, nil }
+	run := srv.rerates.start(userID, "today", "entry-token-00000001")
+	srv.rerates.complete(userID, "today", run.RunID, rerateOutcomeCached, "cached")
+
+	form := url.Values{
+		"ai_provider":  {"anthropic"},
+		"ai_model":     {"shared-model"},
+		"dealbreakers": {"리서치"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	addCSRFToRequest(req, srv, cookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("profile save status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if provider.Calls != 0 || provider.ValidateDealbreakersCalls != 0 || provider.ScoreDeltaCalls != 0 {
+		t.Fatalf("profile save made paid calls: extract=%d validation=%d stage2=%d", provider.Calls, provider.ValidateDealbreakersCalls, provider.ScoreDeltaCalls)
+	}
+	if _, ok := srv.rerates.snapshot(userID, "today"); ok {
+		t.Fatal("changed dealbreaker profile retained stale rerate status")
+	}
+}
+
 func (c *countingCipher) Seal(userID int64, provider, plaintext string) ([]byte, []byte, int16, error) {
 	return c.inner.Seal(userID, provider, plaintext)
 }
@@ -900,6 +936,7 @@ func TestProductionConcurrentReratesIsolateUserRuntimeScoresAndUsage(t *testing.
 	p.Description = "서버 개발자를 찾습니다"
 	p.FirstSeenAt, p.LastSeenAt = now, now
 	postingID := mustUpsert(t, st, p)
+	p.ID = postingID
 	providerA := &isolatedProvider{name: "user-a-provider", delta: 7}
 	providerB := &isolatedProvider{name: "user-b-provider", delta: -4}
 	runtimeA := testAIRuntime(userA, providerA, "model-a")
@@ -942,11 +979,11 @@ func TestProductionConcurrentReratesIsolateUserRuntimeScoresAndUsage(t *testing.
 		t.Fatalf("user scores crossed: A=%s B=%s", scoreA.BreakdownJSON, scoreB.BreakdownJSON)
 	}
 	hash := profile.AIInputHash(prof)
-	deltaA, ok, err := st.AIScore(ctx, userA, postingID, hash, runtimeA.Version)
+	deltaA, ok, err := st.AIScore(ctx, userA, postingID, hash, runtimeA.ScoreVersion)
 	if err != nil || !ok || deltaA.NetDelta != 7 {
 		t.Fatalf("user A delta=%+v ok=%v err=%v", deltaA, ok, err)
 	}
-	deltaB, ok, err := st.AIScore(ctx, userB, postingID, hash, runtimeB.Version)
+	deltaB, ok, err := st.AIScore(ctx, userB, postingID, hash, runtimeB.ScoreVersion)
 	if err != nil || !ok || deltaB.NetDelta != -4 {
 		t.Fatalf("user B delta=%+v ok=%v err=%v", deltaB, ok, err)
 	}
@@ -960,6 +997,158 @@ func TestProductionConcurrentReratesIsolateUserRuntimeScoresAndUsage(t *testing.
 		if err != nil || monthIn != 10 || monthOut != 2 {
 			t.Fatalf("user %d monthly usage=(%d,%d) err=%v, want (10,2)", userID, monthIn, monthOut, err)
 		}
+	}
+}
+
+func TestProductionDealbreakerValidationIsolatesUserProfiles(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userA := insertAIRuntimeTestUser(t, st, "dealbreaker-a@example.invalid")
+	userB := insertAIRuntimeTestUser(t, st, "dealbreaker-b@example.invalid")
+	profiles := map[int64]profile.Profile{
+		userA: {Dealbreakers: []string{"리서치"}},
+		userB: {Dealbreakers: []string{"야근"}},
+	}
+	now := time.Now().UTC()
+	p := listingPosting("shared-dealbreaker", "신입 리서치 개발자")
+	p.Description = "리서치와 야근 업무를 담당합니다"
+	p.FirstSeenAt, p.LastSeenAt = now, now
+	postingID := mustUpsert(t, st, p)
+	p.ID = postingID
+
+	for userID, prof := range profiles {
+		saveAIRuntimeProfile(t, st, userID, prof)
+		provider := &ai.StubProvider{
+			NameVal: "stub",
+			ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+				return []ai.DealbreakerValidation{{
+					CandidateID: candidates[0].ID,
+					Verdict:     ai.DealbreakerApplies,
+					Evidence:    candidates[0].Phrase,
+				}}, ai.Usage{InputTokens: 10, OutputTokens: 2}, nil
+			},
+		}
+		runtime := testAIRuntime(userID, provider, "shared-model")
+		budget := srv.newAIBudget(ctx, userID, runtime)
+		if calls, err := srv.validateDealbreakers(ctx, userID, []scraper.Posting{p}, prof, runtime, budget, &callCap{max: 1}, noopEmit); err != nil || calls != 1 {
+			t.Fatalf("user %d validateDealbreakers calls=%d err=%v", userID, calls, err)
+		}
+		if _, err := srv.scoreAll(ctx, userID, runtime); err != nil {
+			t.Fatalf("user %d scoreAll: %v", userID, err)
+		}
+	}
+
+	for userID, phrase := range map[int64]string{userA: "리서치", userB: "야근"} {
+		runtime := testAIRuntime(userID, &ai.StubProvider{NameVal: "stub"}, "shared-model")
+		rows, err := st.AIDealbreakerValidationsByPostingID(ctx, userID, runtime.DealbreakerVersion)
+		if err != nil || len(rows[postingID]) != 1 {
+			t.Fatalf("user %d validation rows=%v err=%v", userID, rows[postingID], err)
+		}
+		score, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
+		if err != nil || !ok || !strings.Contains(score.BreakdownJSON, "제외 키워드: "+phrase) {
+			t.Fatalf("user %d score=%q ok=%v err=%v", userID, score.BreakdownJSON, ok, err)
+		}
+	}
+}
+
+func TestProductionScoreAllIgnoresStaleDealbreakerContentHash(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "dealbreaker-stale@example.invalid")
+	prof := profile.Profile{Dealbreakers: []string{"리서치"}}
+	saveAIRuntimeProfile(t, st, userID, prof)
+	p := listingPosting("dealbreaker-stale", "신입 리서치 개발자")
+	p.Description = "리서치 아님"
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	postingID := mustUpsert(t, st, p)
+	p.ID = postingID
+	runtime := testAIRuntime(userID, &ai.StubProvider{NameVal: "stub"}, "shared-model")
+	candidate := scoring.DealbreakerCandidates(p, prof)[0]
+	validation := ai.DealbreakerValidation{CandidateID: candidate.ID, Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"}
+	if err := st.UpsertAIDealbreakerValidation(ctx, userID, postingID, "stale-content-hash", runtime.DealbreakerVersion, candidate.ID, validation, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.scoreAll(ctx, userID, runtime); err != nil {
+		t.Fatal(err)
+	}
+	score, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
+	if err != nil || !ok || score.Total != -1 || !strings.Contains(score.BreakdownJSON, `"confidence":"unverified"`) {
+		t.Fatalf("stale validation affected score=%+v ok=%v err=%v", score, ok, err)
+	}
+}
+
+func TestProductionDealbreakerCacheMissesOnRuntimeVersionChange(t *testing.T) {
+	cases := []struct {
+		name       string
+		oldRuntime func(int64) *AIRuntime
+		newRuntime func(int64, ai.Provider) *AIRuntime
+	}{
+		{
+			name: "provider",
+			oldRuntime: func(userID int64) *AIRuntime {
+				return testAIRuntime(userID, &ai.StubProvider{NameVal: "provider-a"}, "shared-model")
+			},
+			newRuntime: func(userID int64, provider ai.Provider) *AIRuntime {
+				return testAIRuntime(userID, provider, "shared-model")
+			},
+		},
+		{
+			name: "model",
+			oldRuntime: func(userID int64) *AIRuntime {
+				return testAIRuntime(userID, &ai.StubProvider{NameVal: "stub"}, "model-a")
+			},
+			newRuntime: func(userID int64, provider ai.Provider) *AIRuntime {
+				return testAIRuntime(userID, provider, "model-b")
+			},
+		},
+		{
+			name: "prompt-version",
+			oldRuntime: func(userID int64) *AIRuntime {
+				return testAIRuntime(userID, &ai.StubProvider{NameVal: "stub"}, "shared-model")
+			},
+			newRuntime: func(userID int64, provider ai.Provider) *AIRuntime {
+				runtime := testAIRuntime(userID, provider, "shared-model")
+				runtime.DealbreakerVersion += "-next-prompt"
+				return runtime
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, st := newPostgresTestServer(t, &fakeScraper{})
+			ctx := context.Background()
+			userID := insertAIRuntimeTestUser(t, st, "dealbreaker-version-"+tc.name+"@example.invalid")
+			prof := profile.Profile{Dealbreakers: []string{"리서치"}}
+			saveAIRuntimeProfile(t, st, userID, prof)
+			p := listingPosting("dealbreaker-version-"+tc.name, "신입 리서치 개발자")
+			p.Description = "리서치 업무를 수행합니다"
+			p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+			p.ID = mustUpsert(t, st, p)
+			_, contentHash, _ := ai.ModelInput(p)
+			candidate := scoring.DealbreakerCandidates(p, prof)[0]
+			oldRuntime := tc.oldRuntime(userID)
+			validation := ai.DealbreakerValidation{CandidateID: candidate.ID, Verdict: ai.DealbreakerApplies, Evidence: "리서치 업무"}
+			if err := st.UpsertAIDealbreakerValidation(ctx, userID, p.ID, contentHash, oldRuntime.DealbreakerVersion, candidate.ID, validation, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+
+			providerName := "stub"
+			if tc.name == "provider" {
+				providerName = "provider-b"
+			}
+			provider := &ai.StubProvider{
+				NameVal: providerName,
+				ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+					return []ai.DealbreakerValidation{{CandidateID: candidates[0].ID, Verdict: ai.DealbreakerApplies, Evidence: "리서치 업무"}}, ai.Usage{}, nil
+				},
+			}
+			newRuntime := tc.newRuntime(userID, provider)
+			calls, err := srv.validateDealbreakers(ctx, userID, []scraper.Posting{p}, prof, newRuntime, srv.newAIBudget(ctx, userID, newRuntime), &callCap{max: 1}, noopEmit)
+			if err != nil || calls != 1 || provider.ValidateDealbreakersCalls != 1 {
+				t.Fatalf("runtime-version miss calls=%d provider-calls=%d err=%v, want 1/1/nil", calls, provider.ValidateDealbreakersCalls, err)
+			}
+		})
 	}
 }
 

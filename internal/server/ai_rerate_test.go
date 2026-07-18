@@ -69,7 +69,7 @@ func TestRunRerateRatesVisibleRows(t *testing.T) {
 		t.Errorf("ScoreDelta calls = %d, want 2 (one per visible uncached row)", stub.ScoreDeltaCalls)
 	}
 	// Both postings now carry a fresh ai_scores row.
-	deltas, err := srv.store.AIScoresByPostingID(ctx, 1, profile.AIInputHash(currentProfile(t, srv)), runtime.Version)
+	deltas, err := srv.store.AIScoresByPostingID(ctx, 1, profile.AIInputHash(currentProfile(t, srv)), runtime.ScoreVersion)
 	if err != nil {
 		t.Fatalf("AIScoresByPostingID: %v", err)
 	}
@@ -82,6 +82,101 @@ func TestRunRerateRatesVisibleRows(t *testing.T) {
 		if sc.Total < 7 {
 			t.Errorf("posting %d Total = %d, want >= 7 (AI +7 merged)", id, sc.Total)
 		}
+	}
+}
+
+func TestRunRerateValidatesExcludedPostingBeforeStage2(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "rerate-dealbreaker@example.invalid")
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, Dealbreakers: []string{"리서치"}, JobLikes: "서버 개발"}
+	saveAIRuntimeProfile(t, st, userID, prof)
+	now := time.Now().UTC()
+	p := listingPosting("rerate-dealbreaker", "신입 리서치 개발자")
+	p.Description = "리서치 아님. 서버 개발자를 찾습니다"
+	p.FirstSeenAt, p.LastSeenAt = now, now
+	postingID := mustUpsert(t, st, p)
+	provider := &ai.StubProvider{
+		NameVal: "stub",
+		ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			return []ai.DealbreakerValidation{{CandidateID: candidates[0].ID, Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"}}, ai.Usage{InputTokens: 2}, nil
+		},
+		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+			return []ai.RawDeltaItem{{Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발"}}, ai.Usage{InputTokens: 3}, nil
+		},
+	}
+	runtime := testAIRuntime(userID, provider, "shared-model")
+	if _, err := srv.scoreAll(ctx, userID, runtime); err != nil {
+		t.Fatal(err)
+	}
+	before, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
+	if err != nil || !ok || before.Total != -1 {
+		t.Fatalf("precondition score=%+v ok=%v err=%v", before, ok, err)
+	}
+
+	summary, err := srv.runRerate(ctx, "today", noopEmit, userID, runtime)
+	if err != nil {
+		t.Fatalf("runRerate: %v", err)
+	}
+	if provider.ValidateDealbreakersCalls != 1 || provider.ScoreDeltaCalls != 1 || summary.Visible != 1 || summary.Analyzed != 1 {
+		t.Fatalf("summary=%+v validation=%d stage2=%d", summary, provider.ValidateDealbreakersCalls, provider.ScoreDeltaCalls)
+	}
+	after, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
+	if err != nil || !ok || after.Total == -1 {
+		t.Fatalf("posting did not re-enter Today: score=%+v ok=%v err=%v", after, ok, err)
+	}
+}
+
+func TestRunRerateBackfillsStage1DespiteCurrentStage2Cache(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "rerate-stage1-order@example.invalid")
+	zero := 0
+	prof := profile.Profile{
+		CareerYears:  0,
+		MinScore:     &zero,
+		MaxEducation: profile.EducationHighSchool,
+		JobLikes:     "서버 개발",
+	}
+	saveAIRuntimeProfile(t, st, userID, prof)
+	now := time.Now().UTC()
+	p := listingPosting("rerate-stage1-order", "신입 서버 개발자")
+	p.Description = "서버 개발자를 찾습니다"
+	p.EducationName = "대졸(4년)"
+	p.FirstSeenAt, p.LastSeenAt = now, now
+	postingID := mustUpsert(t, st, p)
+	provider := &ai.StubProvider{
+		NameVal: "stub",
+		ExtractFn: func(context.Context, string) (ai.Extraction, ai.Usage, error) {
+			return ai.Extraction{Newcomer: true, EducationEnum: ai.EduNone}, ai.Usage{InputTokens: 2}, nil
+		},
+		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+			return nil, ai.Usage{InputTokens: 3}, nil
+		},
+	}
+	runtime := testAIRuntime(userID, provider, "shared-model")
+	if err := st.UpsertAIScore(ctx, userID, postingID, profile.AIInputHash(prof), runtime.ScoreVersion, ai.Delta{}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.scoreAll(ctx, userID, runtime); err != nil {
+		t.Fatal(err)
+	}
+	before, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
+	if err != nil || !ok || before.Total != -1 {
+		t.Fatalf("precondition score=%+v ok=%v err=%v", before, ok, err)
+	}
+
+	summary, err := srv.runRerate(ctx, "today", noopEmit, userID, runtime)
+	if err != nil {
+		t.Fatalf("runRerate: %v", err)
+	}
+	if provider.Calls != 1 || provider.ScoreDeltaCalls != 0 || summary.Visible != 1 || summary.Analyzed != 1 {
+		t.Fatalf("summary=%+v stage1=%d stage2=%d, want Stage 1A despite a free Stage 2 hit", summary, provider.Calls, provider.ScoreDeltaCalls)
+	}
+	after, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
+	if err != nil || !ok || after.Total == -1 {
+		t.Fatalf("Stage 1 extraction did not restore posting before Stage 2: score=%+v ok=%v err=%v", after, ok, err)
 	}
 }
 
@@ -217,7 +312,7 @@ func TestRerateProgressesAcrossPressesUnderBudget(t *testing.T) {
 func countAIScores(t *testing.T, srv *Server, runtime *AIRuntime) int {
 	t.Helper()
 	m, err := srv.store.AIScoresByPostingID(context.Background(),
-		1, profile.AIInputHash(currentProfile(t, srv)), runtime.Version)
+		1, profile.AIInputHash(currentProfile(t, srv)), runtime.ScoreVersion)
 	if err != nil {
 		t.Fatalf("AIScoresByPostingID: %v", err)
 	}
@@ -304,7 +399,7 @@ func TestRerateButtonShowsStaleCount(t *testing.T) {
 
 	// Seed a delta under a NON-current input hash → the merge falls back to it
 	// and marks it stale (no fresh row for the profile's current goal text).
-	if err := srv.store.UpsertAIScore(ctx, 1, id, "stalehash9999", runtime.Version,
+	if err := srv.store.UpsertAIScore(ctx, 1, id, "stalehash9999", runtime.ScoreVersion,
 		ai.Delta{NetDelta: -3, Items: []ai.DeltaItem{{Signal: "x", Kind: ai.KindPresence, Delta: -3, Evidence: "서버 개발자를 찾습니다"}}}, now); err != nil {
 		t.Fatalf("seed stale ai_score: %v", err)
 	}
@@ -407,7 +502,7 @@ func TestRerateInfoCountsCacheNotChips(t *testing.T) {
 
 	// An EMPTY current-goal delta: analyzed, but nothing survived the gate → no chip.
 	hash := profile.AIInputHash(currentProfile(t, srv))
-	if err := srv.store.UpsertAIScore(ctx, 1, id, hash, runtime.Version, ai.Delta{}, now); err != nil {
+	if err := srv.store.UpsertAIScore(ctx, 1, id, hash, runtime.ScoreVersion, ai.Delta{}, now); err != nil {
 		t.Fatalf("seed empty delta: %v", err)
 	}
 	if _, err := srv.scoreAll(ctx, 1, runtime); err != nil {

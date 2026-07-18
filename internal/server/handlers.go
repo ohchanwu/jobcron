@@ -340,7 +340,7 @@ func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, us
 	if len(b.Today) > briefingCap {
 		b.Today = b.Today[:briefingCap]
 	}
-	b.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "today", b.Today)
+	b.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "today", b.Today, b.Excluded)
 	b.ShowScheduledAITip = b.Rerate != nil && !prof.ScheduledAIEnabled
 	b.AIEstimatedDailyCents = prof.EffectiveAIDailyUSDCapCents()
 	return b, nil
@@ -525,6 +525,11 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	previousProfile, _, err := s.loadProfile(r.Context(), userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Sources: the form submits source_<id>=on for each checked box. We
 	// invert that into the DisabledSources opt-out list (registered IDs
 	// the user did NOT check), so a future scraper added in a later
@@ -595,10 +600,14 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	dealbreakersChanged := profile.DealbreakerInputHash(previousProfile) != profile.DealbreakerInputHash(p)
 	if userID == 0 {
 		if _, _, err := s.saveProfileJSON(r.Context(), userID, canonical); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if dealbreakersChanged {
+			s.rerates.invalidateUser(userID)
 		}
 		if _, err := s.scoreAll(r.Context(), userID, nil); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -628,6 +637,9 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	if _, _, err := s.store.SaveProfileAndCredentialForUser(r.Context(), userID, canonical, encrypted); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if dealbreakersChanged {
+		s.rerates.invalidateUser(userID)
 	}
 	runtime, err := s.aiRuntimeForUser(r.Context(), userID)
 	if err != nil {

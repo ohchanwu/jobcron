@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ohchanwu/jobcron/internal/ai"
 	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
 )
@@ -171,6 +172,29 @@ func TestRescoreSoleOwnerHealsWithRulesWhenAIRuntimeFails(t *testing.T) {
 				t.Fatalf("rule-only startup score = %+v err=%v, want posting %d", scores[postingID], scoreErr, postingID)
 			}
 		})
+	}
+}
+
+func TestRescoreSoleOwnerMergesCacheWithoutPaidCalls(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "startup-cache-only@example.invalid")
+	cipher := newAIRuntimeTestCipher(t, 0x75)
+	srv.SetCredentialCipher(cipher)
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{AIProvider: "anthropic", AIModel: "shared-model", Dealbreakers: []string{"리서치"}})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "startup-cache-only-key")
+	provider := &ai.StubProvider{NameVal: "anthropic"}
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return provider, nil }
+	p := listingPosting("startup-cache-only", "신입 리서치 개발자")
+	p.Description = "리서치 업무를 수행합니다"
+	p.FirstSeenAt, p.LastSeenAt = time.Now().UTC(), time.Now().UTC()
+	mustUpsert(t, st, p)
+
+	if count, err := srv.RescoreSoleOwner(ctx); err != nil || count != 1 {
+		t.Fatalf("RescoreSoleOwner count=%d err=%v", count, err)
+	}
+	if provider.Calls != 0 || provider.ValidateDealbreakersCalls != 0 || provider.ScoreDeltaCalls != 0 {
+		t.Fatalf("startup made paid calls: extract=%d validation=%d stage2=%d", provider.Calls, provider.ValidateDealbreakersCalls, provider.ScoreDeltaCalls)
 	}
 }
 

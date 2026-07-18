@@ -133,6 +133,16 @@ func (t *rerateTracker) snapshot(userID int64, surface string) (rerateStatus, bo
 	return status, ok
 }
 
+func (t *rerateTracker) invalidateUser(userID int64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for key := range t.runs {
+		if key.userID == userID {
+			delete(t.runs, key)
+		}
+	}
+}
+
 func (s *Server) handleRerateStatus(w http.ResponseWriter, r *http.Request) {
 	surface := r.URL.Query().Get("surface")
 	if !validRerateSurface(surface) {

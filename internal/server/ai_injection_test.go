@@ -72,7 +72,7 @@ func TestRerateInjectionProducesNoInflatedScore(t *testing.T) {
 		t.Fatal("the API key reached the model prompt — it must never be in the model input")
 	}
 	// A cached (empty) delta row exists — reconnect-safe — but it carries no items.
-	d, ok, err := st.AIScore(ctx, 1, id, profile.AIInputHash(prof), runtime.Version)
+	d, ok, err := st.AIScore(ctx, 1, id, profile.AIInputHash(prof), runtime.ScoreVersion)
 	if err != nil {
 		t.Fatalf("AIScore: %v", err)
 	}

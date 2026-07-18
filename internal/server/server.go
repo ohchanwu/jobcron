@@ -136,13 +136,15 @@ type aiProviderFactory func(provider, key, model string, rateLimit time.Duration
 // credential for the operation lifetime. The runtime must remain ephemeral and
 // is never cached on Server.
 type AIRuntime struct {
-	UserID          int64
-	Provider        ai.Provider
-	Version         string
-	RunTokenCap     int
-	DailyTokenCap   int
-	MonthlyTokenCap int
-	PerCallCap      int
+	UserID             int64
+	Provider           ai.Provider
+	EligibilityVersion string
+	DealbreakerVersion string
+	ScoreVersion       string
+	RunTokenCap        int
+	DailyTokenCap      int
+	MonthlyTokenCap    int
+	PerCallCap         int
 }
 
 // SetCredentialCipher installs the process-level credential envelope cipher.
@@ -204,13 +206,15 @@ func (s *Server) aiRuntimeForUser(ctx context.Context, userID int64) (*AIRuntime
 		return nil, fmt.Errorf("server: construct AI provider: %w", err)
 	}
 	return &AIRuntime{
-		UserID:          userID,
-		Provider:        aiProvider,
-		Version:         ai.AIVersion(provider, model),
-		RunTokenCap:     aiRunTokenCapForUSDCents(prof.EffectiveAIRunUSDCapCents()),
-		DailyTokenCap:   minPositive(prof.EffectiveAIDailyTokenCap(), aiDailyTokenCapForUSDCents(prof.EffectiveAIDailyUSDCapCents())),
-		MonthlyTokenCap: aiMonthlyTokenCapForUSDCents(prof.EffectiveAIMonthlyUSDCapCents()),
-		PerCallCap:      prof.EffectiveAIPerCallCap(),
+		UserID:             userID,
+		Provider:           aiProvider,
+		EligibilityVersion: ai.EligibilityVersion(provider, model),
+		DealbreakerVersion: ai.DealbreakerVersion(provider, model),
+		ScoreVersion:       ai.ScoreVersion(provider, model),
+		RunTokenCap:        aiRunTokenCapForUSDCents(prof.EffectiveAIRunUSDCapCents()),
+		DailyTokenCap:      minPositive(prof.EffectiveAIDailyTokenCap(), aiDailyTokenCapForUSDCents(prof.EffectiveAIDailyUSDCapCents())),
+		MonthlyTokenCap:    aiMonthlyTokenCapForUSDCents(prof.EffectiveAIMonthlyUSDCapCents()),
+		PerCallCap:         prof.EffectiveAIPerCallCap(),
 	}, nil
 }
 
@@ -485,6 +489,10 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	// when AI is off, so no per-posting budget bookkeeping happens at all.
 	freshAI := freshAIAllowedForTrigger(trigger, profileOK, prof, runtime)
 	budget := s.newAIBudget(ctx, userID, runtime)
+	calls := &callCap{}
+	if runtime != nil {
+		calls.max = runtime.PerCallCap
+	}
 	if !freshAI {
 		budget = nil
 	}
@@ -493,8 +501,9 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	// is stale (no fresh baseline this run), so we leave its existing rows
 	// untouched until the next successful scrape.
 	var succeeded []scraper.Scraper
+	var detailedPostings []scraper.Posting
 	for _, src := range active {
-		sub, err := s.runScrapeSource(ctx, src, now, userID, runtime, budget, emit)
+		sub, detailed, err := s.runScrapeSource(ctx, src, now, userID, runtime, budget, emit)
 		if err != nil {
 			// Per-source fault isolation: one source's failure must not
 			// abort the whole briefing. Surface the failure as a status
@@ -504,6 +513,7 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 			res.Failed++
 			continue
 		}
+		detailedPostings = append(detailedPostings, detailed...)
 		succeeded = append(succeeded, src)
 		res.Listed += sub.Listed
 		res.New += sub.New
@@ -531,6 +541,13 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	if duplicates > 0 {
 		emit("status", fmt.Sprintf("다른 사이트에 똑같이 올라온 공고 %d개를 묶었어요", duplicates))
 	}
+	if freshAI && len(detailedPostings) > 0 {
+		emit("status", "제외 조건의 문맥을 확인하는 중...")
+		_, providerErr := s.validateDealbreakers(ctx, userID, detailedPostings, prof, runtime, budget, calls, emit)
+		if providerErr != nil {
+			emit("status", providerFailureMessage(providerErr))
+		}
+	}
 
 	// Cold-start banner (D6): if the per-run AI budget ran out mid-scrape during
 	// Stage-1 extraction, some postings were scored by regex instead of AI. A
@@ -549,15 +566,13 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 	// Auto-rate the fresh briefing with Stage-2 so new postings show their
 	// evidence-cited AI chip without a manual 재평가. Runs AFTER the offline
 	// scoreAll (so "visible" reflects real scores), over the today surface only,
-	// through the same worker pool as 재평가. A fresh run budget gives Stage-2 its
-	// own per-run cap; the daily cap still accounts for the scrape's Stage-1 spend
-	// (newAIBudget re-reads the ledger). runtime.PerCallCap bounds the spend per scrape;
-	// the rest stays for a manual 재평가.
+	// through the same worker pool as 재평가. Stage 1A, Stage 1B, and Stage 2
+	// share this scrape's token budget; Stage 1B and Stage 2 also share the
+	// runtime.PerCallCap counter so contextual validation cannot bypass it.
 	if freshAI {
 		if vis, verr := s.visibleForRerate(ctx, "today", now, userID, runtime); verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
-			rateBudget := s.newAIBudget(ctx, userID, runtime)
-			rated, _, provErr := s.rateStage2(ctx, vis, prof, userID, runtime, rateBudget, emit)
+			rated, _, provErr := s.rateStage2(ctx, vis, prof, userID, runtime, budget, calls, emit)
 			if rated > 0 {
 				// Merge the fresh Stage-2 deltas into the rendered scores.
 				if rescored, rerr := s.scoreAll(ctx, userID, runtime); rerr == nil {
@@ -569,7 +584,7 @@ func (s *Server) runScrapeForTrigger(ctx context.Context, trigger string, emit f
 				// Surface it calmly inline — the scrape itself still succeeds.
 				emit("status", providerFailureMessage(provErr))
 			}
-			if rateBudget != nil && rateBudget.isDegraded() {
+			if budget != nil && budget.isDegraded() {
 				emit("status", "오늘 AI 예산을 다 써서 일부 공고는 아직 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 			}
 		}
@@ -685,22 +700,23 @@ func (b *aiBudget) isDegraded() bool {
 // so the user can tell which source is currently active in the stream.
 func (s *Server) runScrapeSource(
 	ctx context.Context, src scraper.Scraper, now time.Time, userID int64, runtime *AIRuntime, budget *aiBudget, emit func(event, data string),
-) (ScrapeResult, error) {
+) (ScrapeResult, []scraper.Posting, error) {
 	label := sourceLabel(src.Source())
 	emit("status", fmt.Sprintf("[%s] robots.txt 확인 중...", label))
 	if err := src.CheckAccess(ctx); err != nil {
-		return ScrapeResult{}, fmt.Errorf("server: %s access denied: %w", src.Source(), err)
+		return ScrapeResult{}, nil, fmt.Errorf("server: %s access denied: %w", src.Source(), err)
 	}
 	emit("status", fmt.Sprintf("[%s] ✓ 허용됐어요 — 공고 목록을 가져오는 중...", label))
 	listing, err := src.FetchListing(ctx, 0)
 	if err != nil {
-		return ScrapeResult{}, fmt.Errorf("server: %s fetch listing: %w", src.Source(), err)
+		return ScrapeResult{}, nil, fmt.Errorf("server: %s fetch listing: %w", src.Source(), err)
 	}
 	seen, err := s.store.SeenDetail(ctx, src.Source())
 	if err != nil {
-		return ScrapeResult{}, err
+		return ScrapeResult{}, nil, err
 	}
 	res := ScrapeResult{Listed: len(listing)}
+	var detailedPostings []scraper.Posting
 
 	// refreshCand is an already-seen posting eligible for an edited-JD re-fetch:
 	// the listing posting (carries the id/url FetchDetail needs) plus its stored
@@ -717,7 +733,7 @@ func (s *Server) runScrapeSource(
 		if info, ok := seen[p.SourcePostingID]; ok {
 			p.LastSeenAt = now
 			if _, _, err := s.store.UpsertPosting(ctx, p); err != nil {
-				return res, fmt.Errorf("server: refresh seen posting: %w", err)
+				return res, detailedPostings, fmt.Errorf("server: refresh seen posting: %w", err)
 			}
 			if info.DetailFetchedAt.Before(staleBefore) {
 				cands = append(cands, refreshCand{p: p, id: info.ID, detAt: info.DetailFetchedAt})
@@ -740,8 +756,10 @@ func (s *Server) runScrapeSource(
 		detailed.LastSeenAt = now
 		id, _, err := s.store.UpsertPosting(ctx, detailed)
 		if err != nil {
-			return res, fmt.Errorf("server: insert new posting: %w", err)
+			return res, detailedPostings, fmt.Errorf("server: insert new posting: %w", err)
 		}
+		detailed.ID = id
+		detailedPostings = append(detailedPostings, detailed)
 		res.New++
 		emit("progress", fmt.Sprintf("[%s] 공고 %d/%d 가져오는 중...", label, res.New, len(fresh)))
 		// Stage-1 AI extraction (cache-read, D2). Best-effort: any failure
@@ -767,13 +785,15 @@ func (s *Server) runScrapeSource(
 		}
 		detailed.LastSeenAt = now
 		if err := s.store.RefreshPostingDetail(ctx, c.id, detailed, now); err != nil {
-			return res, fmt.Errorf("server: refresh posting detail: %w", err)
+			return res, detailedPostings, fmt.Errorf("server: refresh posting detail: %w", err)
 		}
+		detailed.ID = c.id
+		detailedPostings = append(detailedPostings, detailed)
 		res.Refreshed++
 		emit("progress", fmt.Sprintf("[%s] 기존 공고 새로고침 %d/%d...", label, i+1, len(cands)))
 		s.extractStage1(ctx, c.id, detailed, now, userID, runtime, budget)
 	}
-	return res, nil
+	return res, detailedPostings, nil
 }
 
 // extractStage1 runs and caches the Stage-1 AI extraction for one new posting,
@@ -788,7 +808,7 @@ func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting,
 	// Cache hit (same content already extracted under this ai_version): reuse,
 	// no provider call. New postings always miss; this matters for the T7
 	// re-rate backfill and idempotent re-runs.
-	if _, ok, err := s.store.AIExtraction(ctx, id, contentHash, runtime.Version); err == nil && ok {
+	if _, ok, err := s.store.AIExtraction(ctx, id, contentHash, runtime.EligibilityVersion); err == nil && ok {
 		return
 	}
 	ext, usage, err := runtime.Provider.Extract(ctx, sent)
@@ -797,7 +817,7 @@ func (s *Server) extractStage1(ctx context.Context, id int64, p scraper.Posting,
 	}
 	budget.debit(ctx, usage)
 	// Best-effort cache write; a failure here just means a regex score this pass.
-	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, runtime.Version, ext, now)
+	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, runtime.EligibilityVersion, ext, now)
 }
 
 // loadProfile fetches the saved profile, returning ok=false when none has
@@ -872,28 +892,35 @@ func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime)
 	// Batch-load the Stage-1 extractions and Stage-2 deltas once (no N+1) when
 	// AI is enabled; scoreCareer/educationDealbreaker prefer the extractions,
 	// and the deltas merge as the "AI 분석" line item. This is merge-only — D10:
-	// scoreAll NEVER calls the provider; the provider runs only at scrape time
-	// (Stage 1) and on a 재평가 (Stage 2, T7).
+	// scoreAll NEVER calls the provider; paid Stage 1A/1B work runs at scrape
+	// time, while a 재평가 may run Stage 1B followed by Stage 2.
 	var (
-		exts         map[int64]ai.Extraction
-		freshDeltas  map[int64]ai.Delta // keyed by the CURRENT goal text (ai_input_hash) + current ai_version
-		latestDeltas map[int64]ai.Delta // newest per posting under the current ai_version, any goal text — stale fallback for a goal edit
-		anyVerDeltas map[int64]ai.Delta // newest per posting across ANY ai_version — stale fallback for a provider/model switch
+		exts                   map[int64]ai.Extraction
+		dealbreakerValidations map[int64]map[string]storage.AIDealbreakerValidation
+		freshDeltas            map[int64]ai.Delta // keyed by the CURRENT goal text (ai_input_hash) + current ai_version
+		latestDeltas           map[int64]ai.Delta // newest per posting under the current ai_version, any goal text — stale fallback for a goal edit
+		anyVerDeltas           map[int64]ai.Delta // newest per posting across ANY ai_version — stale fallback for a provider/model switch
 	)
 	if runtime != nil {
 		if userID <= 0 || runtime.UserID != userID {
 			return 0, fmt.Errorf("server: AI runtime user mismatch")
 		}
-		exts, err = s.store.AIExtractionsByPostingID(ctx, runtime.Version)
+		exts, err = s.store.AIExtractionsByPostingID(ctx, runtime.EligibilityVersion)
 		if err != nil {
 			return 0, err
+		}
+		if s.store.Dialect() == storage.DialectPostgres {
+			dealbreakerValidations, err = s.store.AIDealbreakerValidationsByPostingID(ctx, userID, runtime.DealbreakerVersion)
+			if err != nil {
+				return 0, err
+			}
 		}
 		aiInputHash := profile.AIInputHash(prof)
-		freshDeltas, err = s.store.AIScoresByPostingID(ctx, userID, aiInputHash, runtime.Version)
+		freshDeltas, err = s.store.AIScoresByPostingID(ctx, userID, aiInputHash, runtime.ScoreVersion)
 		if err != nil {
 			return 0, err
 		}
-		latestDeltas, err = s.store.LatestAIScoresByPostingID(ctx, userID, runtime.Version)
+		latestDeltas, err = s.store.LatestAIScoresByPostingID(ctx, userID, runtime.ScoreVersion)
 		if err != nil {
 			return 0, err
 		}
@@ -941,7 +968,17 @@ func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime)
 			d.Stale = !s.demoMode
 			delta = &d
 		}
-		result := scoring.Score(p, prof, ext, delta, nil)
+		var validations map[string]ai.DealbreakerValidation
+		if cached := dealbreakerValidations[p.ID]; len(cached) > 0 {
+			_, contentHash, _ := ai.ModelInput(p)
+			validations = make(map[string]ai.DealbreakerValidation)
+			for _, candidate := range scoring.DealbreakerCandidates(p, prof) {
+				if row, ok := cached[contentHash+"\x00"+candidate.ID]; ok {
+					validations[candidate.ID] = row.Validation
+				}
+			}
+		}
+		result := scoring.Score(p, prof, ext, delta, validations)
 		breakdown, err := json.Marshal(result)
 		if err != nil {
 			return 0, fmt.Errorf("server: marshal score: %w", err)

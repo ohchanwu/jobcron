@@ -240,6 +240,7 @@ func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, use
 	for _, day := range view.Days {
 		lists = append(lists, day.Postings)
 	}
+	lists = append(lists, view.Excluded)
 	view.Rerate = s.buildRerateInfo(ctx, userID, runtime, prof, "archive", lists...)
 	return view, nil
 }

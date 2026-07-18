@@ -38,7 +38,7 @@ func saveSinipProfile(t *testing.T, srv *Server) {
 // (one row per posting in these tests).
 func aiExtractionCount(t *testing.T, srv *Server, runtime *AIRuntime) int {
 	t.Helper()
-	m, err := srv.store.AIExtractionsByPostingID(context.Background(), runtime.Version)
+	m, err := srv.store.AIExtractionsByPostingID(context.Background(), runtime.EligibilityVersion)
 	if err != nil {
 		t.Fatalf("count ai_extractions: %v", err)
 	}
@@ -78,6 +78,145 @@ func TestRunScrapeAutoRatesFreshBriefingWithStage2(t *testing.T) {
 	// current goal — no 재평가 needed.
 	if n := countAIScores(t, srv, runtime); n != 2 {
 		t.Fatalf("after scrape: %d Stage-2 deltas cached, want 2 (auto-rated, no manual 재평가)", n)
+	}
+}
+
+func TestRunScrapeOrdersDealbreakerValidationBeforeStage2(t *testing.T) {
+	p := listingPosting("dealbreaker-order", "신입 리서치 개발자")
+	p.Description = "리서치 아님. 서버 개발자를 찾습니다"
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("dealbreaker-order", p.Title)},
+		details: map[string]scraper.Posting{"dealbreaker-order": p},
+	}
+	srv, st := newPostgresTestServer(t, f)
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "dealbreaker-order@example.invalid")
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, Dealbreakers: []string{"리서치"}, JobLikes: "서버 개발"}
+	saveAIRuntimeProfile(t, st, userID, prof)
+	var order []string
+	provider := &ai.StubProvider{
+		NameVal: "stub",
+		ExtractFn: func(context.Context, string) (ai.Extraction, ai.Usage, error) {
+			order = append(order, "stage1a")
+			return ai.Extraction{Newcomer: true, EducationEnum: ai.EduNone}, ai.Usage{InputTokens: 1}, nil
+		},
+		ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			order = append(order, "stage1b")
+			return []ai.DealbreakerValidation{{CandidateID: candidates[0].ID, Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"}}, ai.Usage{InputTokens: 2}, nil
+		},
+		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+			postings, err := st.AllPostings(ctx)
+			if err != nil || len(postings) != 1 {
+				return nil, ai.Usage{}, errors.New("score merge missing before Stage 2")
+			}
+			score, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postings[0].ID)
+			if err != nil || !ok || score.Total == -1 {
+				return nil, ai.Usage{}, errors.New("contextual score not merged before Stage 2")
+			}
+			order = append(order, "stage2")
+			return []ai.RawDeltaItem{{Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발"}}, ai.Usage{InputTokens: 3}, nil
+		},
+	}
+	runtime := testAIRuntime(userID, provider, "shared-model")
+	if _, err := srv.runScrape(ctx, noopEmit, userID, runtime); err != nil {
+		t.Fatalf("runScrape: %v", err)
+	}
+	if got := strings.Join(order, " -> "); got != "stage1a -> stage1b -> stage2" {
+		t.Fatalf("paid flow order = %q", got)
+	}
+}
+
+func TestRunScrapeDealbreakerCacheHitSpendsNothing(t *testing.T) {
+	p := listingPosting("dealbreaker-cache", "신입 리서치 개발자")
+	p.Description = "리서치 아님. 서버 개발자를 찾습니다"
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("dealbreaker-cache", p.Title)},
+		details: map[string]scraper.Posting{"dealbreaker-cache": p},
+	}
+	srv, st := newPostgresTestServer(t, f)
+	ctx := context.Background()
+	userID := insertAIRuntimeTestUser(t, st, "dealbreaker-cache@example.invalid")
+	zero := 0
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, Dealbreakers: []string{"리서치"}, JobLikes: "서버 개발"}
+	saveAIRuntimeProfile(t, st, userID, prof)
+	provider := &ai.StubProvider{
+		NameVal: "stub",
+		ExtractFn: func(context.Context, string) (ai.Extraction, ai.Usage, error) {
+			return ai.Extraction{Newcomer: true, EducationEnum: ai.EduNone}, ai.Usage{InputTokens: 1}, nil
+		},
+		ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			return []ai.DealbreakerValidation{{CandidateID: candidates[0].ID, Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"}}, ai.Usage{InputTokens: 2}, nil
+		},
+		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+			return nil, ai.Usage{InputTokens: 3}, nil
+		},
+	}
+	runtime := testAIRuntime(userID, provider, "shared-model")
+	if _, err := srv.runScrape(ctx, noopEmit, userID, runtime); err != nil {
+		t.Fatal(err)
+	}
+	day := time.Now().UTC().Format("2006-01-02")
+	inBefore, outBefore, _ := st.AIUsageForDay(ctx, userID, day)
+	validationCalls := provider.ValidateDealbreakersCalls
+	stage2Calls := provider.ScoreDeltaCalls
+	if _, err := st.SQLDB().ExecContext(ctx, `UPDATE postings SET detail_fetched_at = $1`, time.Now().UTC().Add(-25*time.Hour)); err != nil {
+		t.Fatalf("age detail cache: %v", err)
+	}
+	if _, err := srv.runScrape(ctx, noopEmit, userID, runtime); err != nil {
+		t.Fatal(err)
+	}
+	inAfter, outAfter, _ := st.AIUsageForDay(ctx, userID, day)
+	if provider.ValidateDealbreakersCalls != validationCalls || provider.ScoreDeltaCalls != stage2Calls || inAfter != inBefore || outAfter != outBefore {
+		t.Fatalf("cache hit respent: validation %d->%d stage2 %d->%d usage (%d,%d)->(%d,%d)", validationCalls, provider.ValidateDealbreakersCalls, stage2Calls, provider.ScoreDeltaCalls, inBefore, outBefore, inAfter, outAfter)
+	}
+}
+
+func TestRunScrapeDealbreakerFallbacksRetainExclusion(t *testing.T) {
+	cases := []struct {
+		name       string
+		validation func(context.Context, string, []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error)
+		configure  func(*AIRuntime)
+		runtimeOff bool
+	}{
+		{name: "provider error", validation: func(context.Context, string, []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			return nil, ai.Usage{}, errors.New("provider unavailable")
+		}},
+		{name: "malformed response", validation: func(context.Context, string, []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			return nil, ai.Usage{InputTokens: 2}, errors.New("malformed response")
+		}},
+		{name: "invalid quote", validation: func(context.Context, string, []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			return nil, ai.Usage{InputTokens: 2}, nil
+		}},
+		{name: "missing credential", runtimeOff: true},
+		{name: "exhausted budget", configure: func(runtime *AIRuntime) { runtime.RunTokenCap = 0 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := listingPosting("fallback", "신입 리서치 개발자")
+			p.Description = "리서치 업무를 수행합니다"
+			f := &fakeScraper{listing: []scraper.Posting{listingPosting("fallback", p.Title)}, details: map[string]scraper.Posting{"fallback": p}}
+			srv, st := newPostgresTestServer(t, f)
+			ctx := context.Background()
+			userID := insertAIRuntimeTestUser(t, st, "fallback-"+strings.ReplaceAll(tc.name, " ", "-")+"@example.invalid")
+			saveAIRuntimeProfile(t, st, userID, profile.Profile{Dealbreakers: []string{"리서치"}})
+			provider := &ai.StubProvider{NameVal: "stub", ValidateDealbreakersFn: tc.validation}
+			runtime := testAIRuntime(userID, provider, "shared-model")
+			if tc.configure != nil {
+				tc.configure(runtime)
+			}
+			if tc.runtimeOff {
+				runtime = nil
+			}
+			if _, err := srv.runScrape(ctx, noopEmit, userID, runtime); err != nil {
+				t.Fatalf("fallback aborted scrape: %v", err)
+			}
+			postings, _ := st.AllPostings(ctx)
+			score, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postings[0].ID)
+			if err != nil || !ok || score.Total != -1 || !strings.Contains(score.BreakdownJSON, `"confidence":"unverified"`) {
+				t.Fatalf("fallback score=%+v ok=%v err=%v", score, ok, err)
+			}
+		})
 	}
 }
 
@@ -242,7 +381,7 @@ func TestRunScrapeStubProviderExtractsNewPostings(t *testing.T) {
 		t.Errorf("FetchDetail calls = %d, want 2", len(f.detailCalls))
 	}
 	// The cached extraction is readable under the run's ai_version.
-	exts, err := st.AIExtractionsByPostingID(ctx, runtime.Version)
+	exts, err := st.AIExtractionsByPostingID(ctx, runtime.EligibilityVersion)
 	if err != nil || len(exts) != 2 {
 		t.Fatalf("AIExtractionsByPostingID: got %d (err=%v), want 2", len(exts), err)
 	}
@@ -345,7 +484,7 @@ func TestExtractStage1CacheHitSkipsProvider(t *testing.T) {
 	}
 	_, contentHash, _ := ai.ModelInput(p)
 	seeded := ai.Extraction{MinCareer: 0, Newcomer: true, EducationEnum: ai.EduNone, CareerEvidence: "seeded"}
-	if err := st.UpsertAIExtraction(ctx, id, contentHash, runtime.Version, seeded, time.Now()); err != nil {
+	if err := st.UpsertAIExtraction(ctx, id, contentHash, runtime.EligibilityVersion, seeded, time.Now()); err != nil {
 		t.Fatalf("seed extraction: %v", err)
 	}
 

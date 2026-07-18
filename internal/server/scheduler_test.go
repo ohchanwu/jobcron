@@ -252,6 +252,87 @@ func TestRunScheduledScrapeDegradesUnavailableAIRuntimeToRules(t *testing.T) {
 	}
 }
 
+func TestRunScheduledScrapeValidatesDealbreakersForSoleOptedInOwner(t *testing.T) {
+	p := listingPosting("scheduled-dealbreaker", "신입 리서치 개발자")
+	p.Description = "리서치 업무를 수행합니다"
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("scheduled-dealbreaker", p.Title)},
+		details: map[string]scraper.Posting{"scheduled-dealbreaker": p},
+	}
+	srv, st := newPostgresTestServer(t, f)
+	userID := insertAIRuntimeTestUser(t, st, "scheduler-dealbreaker@example.invalid")
+	cipher := newAIRuntimeTestCipher(t, 0x66)
+	srv.SetCredentialCipher(cipher)
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{
+		AIProvider:         "anthropic",
+		AIModel:            "shared-model",
+		ScheduledAIEnabled: true,
+		Dealbreakers:       []string{"리서치"},
+	})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "scheduled-dealbreaker-key")
+	provider := &ai.StubProvider{
+		NameVal: "anthropic",
+		ExtractFn: func(context.Context, string) (ai.Extraction, ai.Usage, error) {
+			return ai.Extraction{Newcomer: true, EducationEnum: ai.EduNone}, ai.Usage{InputTokens: 1}, nil
+		},
+		ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			return []ai.DealbreakerValidation{{CandidateID: candidates[0].ID, Verdict: ai.DealbreakerApplies, Evidence: "리서치 업무"}}, ai.Usage{InputTokens: 2}, nil
+		},
+	}
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return provider, nil }
+
+	srv.runScheduledScrape(context.Background())
+
+	if provider.ValidateDealbreakersCalls != 1 {
+		t.Fatalf("scheduled validation calls=%d, want 1", provider.ValidateDealbreakersCalls)
+	}
+	run, ok, err := st.LatestScrapeRun(context.Background())
+	if err != nil || !ok || run.Status != storage.ScrapeRunStatusSuccess {
+		t.Fatalf("scheduled run=%+v ok=%v err=%v", run, ok, err)
+	}
+}
+
+func TestRunScheduledScrapeSkipsPaidAIForSoleOptedOutOwner(t *testing.T) {
+	p := listingPosting("scheduled-dealbreaker-opt-out", "신입 리서치 개발자")
+	p.Description = "리서치 업무를 수행합니다"
+	f := &fakeScraper{
+		listing: []scraper.Posting{listingPosting("scheduled-dealbreaker-opt-out", p.Title)},
+		details: map[string]scraper.Posting{"scheduled-dealbreaker-opt-out": p},
+	}
+	srv, st := newPostgresTestServer(t, f)
+	userID := insertAIRuntimeTestUser(t, st, "scheduler-dealbreaker-opt-out@example.invalid")
+	cipher := newAIRuntimeTestCipher(t, 0x67)
+	srv.SetCredentialCipher(cipher)
+	saveAIRuntimeProfile(t, st, userID, profile.Profile{
+		AIProvider:         "anthropic",
+		AIModel:            "shared-model",
+		ScheduledAIEnabled: false,
+		Dealbreakers:       []string{"리서치"},
+	})
+	saveAIRuntimeCredential(t, st, cipher, userID, "anthropic", "scheduled-dealbreaker-opt-out-key")
+	provider := &ai.StubProvider{NameVal: "anthropic"}
+	srv.newAIProvider = func(string, string, string, time.Duration) (ai.Provider, error) { return provider, nil }
+
+	srv.runScheduledScrape(context.Background())
+
+	if provider.Calls != 0 || provider.ValidateDealbreakersCalls != 0 || provider.ScoreDeltaCalls != 0 {
+		t.Fatalf("scheduled opt-out paid calls=(extract:%d validate:%d score:%d), want all zero",
+			provider.Calls, provider.ValidateDealbreakersCalls, provider.ScoreDeltaCalls)
+	}
+	run, ok, err := st.LatestScrapeRun(context.Background())
+	if err != nil || !ok || run.Status != storage.ScrapeRunStatusSuccess {
+		t.Fatalf("scheduled opt-out run=%+v ok=%v err=%v", run, ok, err)
+	}
+	scores, err := st.ScoresByPostingID(context.Background(), userID)
+	var total int
+	for _, score := range scores {
+		total = score.Total
+	}
+	if err != nil || len(scores) != 1 || total != -1 {
+		t.Fatalf("scheduled opt-out conservative scores=%+v err=%v, want one excluded row", scores, err)
+	}
+}
+
 type firstOpenBlockingCipher struct {
 	inner   credential.Cipher
 	entered chan struct{}

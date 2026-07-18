@@ -104,7 +104,7 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 	delta := ai.Delta{NetDelta: 7, Items: []ai.DeltaItem{
 		{Signal: "백엔드", Kind: ai.KindPresence, Delta: 7, Evidence: "서버 개발자를 찾습니다", MatchedGoal: "좋아하는 업무"},
 	}}
-	if err := srv.store.UpsertAIScore(ctx, 1, id, profile.AIInputHash(prof), runtimeA.Version, delta, now); err != nil {
+	if err := srv.store.UpsertAIScore(ctx, 1, id, profile.AIInputHash(prof), runtimeA.ScoreVersion, delta, now); err != nil {
 		t.Fatalf("seed delta under provider A: %v", err)
 	}
 	if _, err := srv.scoreAll(ctx, 1, runtimeA); err != nil {

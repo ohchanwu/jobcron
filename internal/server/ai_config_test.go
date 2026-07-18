@@ -90,13 +90,20 @@ func TestAIRuntimeForUserIsolatesEncryptedCredentials(t *testing.T) {
 	if providerA.keyFingerprint == providerB.keyFingerprint {
 		t.Fatal("distinct user credentials produced the same test fingerprint")
 	}
-	if runtimeA.UserID != userA || runtimeA.Version != ai.AIVersion("anthropic", "model-a") ||
+	if runtimeA.UserID != userA ||
+		runtimeA.EligibilityVersion != ai.EligibilityVersion("anthropic", "model-a") ||
+		runtimeA.DealbreakerVersion != ai.DealbreakerVersion("anthropic", "model-a") ||
+		runtimeA.ScoreVersion != ai.ScoreVersion("anthropic", "model-a") ||
 		runtimeA.RunTokenCap != aiRunTokenCapForUSDCents(7) ||
 		runtimeA.DailyTokenCap != minPositive(12345, aiDailyTokenCapForUSDCents(8)) ||
 		runtimeA.MonthlyTokenCap != aiMonthlyTokenCapForUSDCents(9) || runtimeA.PerCallCap != 7 {
 		t.Fatalf("user A runtime metadata = %+v", runtimeA)
 	}
-	if runtimeB.UserID != userB || runtimeB.Version != ai.AIVersion("anthropic", "model-b") || runtimeB.PerCallCap != 11 {
+	if runtimeB.UserID != userB ||
+		runtimeB.EligibilityVersion != ai.EligibilityVersion("anthropic", "model-b") ||
+		runtimeB.DealbreakerVersion != ai.DealbreakerVersion("anthropic", "model-b") ||
+		runtimeB.ScoreVersion != ai.ScoreVersion("anthropic", "model-b") ||
+		runtimeB.PerCallCap != 11 {
 		t.Fatalf("user B runtime metadata = %+v", runtimeB)
 	}
 }
