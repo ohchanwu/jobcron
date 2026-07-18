@@ -2,11 +2,24 @@ package storage
 
 import (
 	"context"
+	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/ohchanwu/jobcron/internal/ai"
 )
+
+type queryCounter struct{ count atomic.Int64 }
+
+func (c *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
+	c.count.Add(1)
+	return ctx
+}
+
+func (*queryCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
 func TestAIDealbreakerValidationRoundTrip(t *testing.T) {
 	st, _ := newPostgresTestStoreWithSchema(t)
@@ -141,7 +154,7 @@ func TestAIDealbreakerValidationCascades(t *testing.T) {
 }
 
 func TestAIDealbreakerValidationsUseOneBatchQuery(t *testing.T) {
-	st, _ := newPostgresTestStoreWithSchema(t)
+	st, schema := newPostgresTestStoreWithSchema(t)
 	ctx := context.Background()
 	userID := insertMigrationTestUser(t, st, "dealbreaker-batch@example.invalid")
 	validation := ai.DealbreakerValidation{CandidateID: "keyword", Verdict: ai.DealbreakerApplies}
@@ -151,8 +164,30 @@ func TestAIDealbreakerValidationsUseOneBatchQuery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := readDealbreakerValidations(t, st, userID, "ai-v1"); len(got) != 2 {
+
+	config, err := pgx.ParseConfig(databaseURLWithSearchPath(os.Getenv("JOBCRON_TEST_POSTGRES_URL"), schema))
+	if err != nil {
+		t.Fatalf("parse traced PostgreSQL config: %v", err)
+	}
+	counter := &queryCounter{}
+	config.Tracer = counter
+	db := stdlib.OpenDB(*config)
+	t.Cleanup(func() { _ = db.Close() })
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatalf("ping traced PostgreSQL connection: %v", err)
+	}
+	tracedStore := &Store{db: db, dialect: DialectPostgres}
+	counter.count.Store(0)
+
+	got, err := tracedStore.AIDealbreakerValidationsByPostingID(ctx, userID, "ai-v1")
+	if err != nil {
+		t.Fatalf("AIDealbreakerValidationsByPostingID: %v", err)
+	}
+	if len(got) != 2 {
 		t.Fatalf("batched read returned %d postings, want 2", len(got))
+	}
+	if queries := counter.count.Load(); queries != 1 {
+		t.Fatalf("batched read executed %d SQL queries, want 1", queries)
 	}
 }
 

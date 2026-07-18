@@ -306,6 +306,24 @@ func TestScoreSuppressesHitOnlyWhenNotApplicable(t *testing.T) {
 	}
 }
 
+func TestScoreRejectsMismatchedValidationCandidateID(t *testing.T) {
+	p := basePosting()
+	p.Description = "리서치 아님"
+	prof := baseProfile()
+	prof.Dealbreakers = []string{"리서치"}
+	candidate := DealbreakerCandidates(p, prof)[0]
+
+	r := Score(p, prof, nil, nil, map[string]ai.DealbreakerValidation{
+		candidate.ID: {CandidateID: "different-candidate", Verdict: ai.DealbreakerNotApplicable, Evidence: "리서치 아님"},
+	})
+	if r.Total != -1 || len(r.ExclusionReasons) != 1 {
+		t.Fatalf("mismatched candidate suppressed exclusion: %+v", r)
+	}
+	if got := r.ExclusionReasons[0]; got.Phrase != "리서치" || got.Confidence != "unverified" || got.Evidence != "" {
+		t.Fatalf("mismatched candidate reason = %+v, want conservative unverified exclusion", got)
+	}
+}
+
 func TestScoreRetainsAppliesUncertainMissingAndUnavailableHits(t *testing.T) {
 	p := basePosting()
 	p.Description = "사용자 리서치 업무를 수행합니다"
@@ -391,6 +409,22 @@ func TestScoreStructuredEducationCareerAndMinScoreReasons(t *testing.T) {
 			t.Errorf("MinScore reason = %+v", got)
 		}
 	})
+}
+
+func TestScoreAcceptsLegacyExtractionWithoutEducationEvidence(t *testing.T) {
+	p := basePosting()
+	p.EducationName = "대학교졸업(4년) 이상"
+	prof := baseProfile()
+	prof.MaxEducation = profile.EducationHighSchool
+	ext := &ai.Extraction{EducationEnum: ai.EduBachelor, Newcomer: true}
+
+	r := Score(p, prof, ext, nil, nil)
+	if r.Total != -1 || len(r.ExclusionReasons) != 1 {
+		t.Fatalf("legacy extraction did not retain education exclusion: %+v", r)
+	}
+	if got := r.ExclusionReasons[0]; got.Kind != "education" || got.Phrase != "대졸(4년)" || got.Evidence != "" || got.Confidence != "confirmed" {
+		t.Fatalf("legacy education reason = %+v", got)
+	}
 }
 
 func TestScoreEducationDealbreaker(t *testing.T) {

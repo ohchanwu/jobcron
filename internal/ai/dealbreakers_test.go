@@ -87,6 +87,29 @@ func TestParseDealbreakerValidationsRejectsForgedEvidence(t *testing.T) {
 	}
 }
 
+func TestParseDealbreakerValidationsEvidenceRuneBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		size int
+		want int
+	}{
+		{name: "240 runes accepted", size: maxDealbreakerEvidenceRunes, want: 1},
+		{name: "241 runes rejected", size: maxDealbreakerEvidenceRunes + 1, want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			evidence := strings.Repeat("가", tc.size-len([]rune(" 리서치"))) + " 리서치"
+			raw := []byte(`{"checks":[{"candidate_id":"research","verdict":"applies","evidence":"` + evidence + `"}]}`)
+			got, err := parseDealbreakerValidations(raw, evidence, dealbreakerCandidates[:1])
+			if err != nil {
+				t.Fatalf("parseDealbreakerValidations: %v", err)
+			}
+			if len(got) != tc.want {
+				t.Fatalf("%d-rune evidence returned %d validations, want %d", tc.size, len(got), tc.want)
+			}
+		})
+	}
+}
+
 func TestParseDealbreakerValidationsRejectsEvidenceWithoutCandidate(t *testing.T) {
 	raw := []byte(`{"checks":[{"candidate_id":"research","verdict":"applies","evidence":"분석 업무를 수행합니다"}]}`)
 	got, err := parseDealbreakerValidations(raw, "분석 업무를 수행합니다. 별도 리서치", dealbreakerCandidates[:1])
