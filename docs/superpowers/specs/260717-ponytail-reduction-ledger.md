@@ -678,20 +678,30 @@ import cycle. Batch-shape constraints are applied after the seven-condition gate
 
 - Candidate: PONY-005.
 - Plan: `docs/superpowers/plans/260717-ponytail-scheduler-api-reduction.md`.
-- Status: `planned`.
+- Status: `implemented` after independent review approval.
+- Reviewed source: `85b4ff78a6abcb3cf5844e9f6c25e2a87d49747a`.
+- Integrated source: patch-identical commit
+  `9fc13164de9f1736a0fb84a50d0f0019846dd17d`.
 - Behavior owner: `internal/server` scheduler startup.
 - Production files: `internal/server/scheduler.go` and `cmd/jobcron/main.go`.
 - Behavior lock: `TestStartSchedulerRunsScheduledScrapeAfterSleep` and
   `TestStartSchedulerRecordsSkippedRunWhenScrapeLockBusy`.
-- Estimated delta: minus 10 production lines; zero dependencies.
+- Actual delta: 10 production lines removed; no test-line or direct-dependency change.
+  Controlled shipped-binary delta: `jobcron` minus 160 bytes; importer and user tool
+  unchanged.
+- Verification: exact topology and patch identity, static, build, focused tests at ten runs,
+  focused race tests at ten runs, full unit/race/coverage, exact API-deletion and callsite
+  assertions, dependency stability, range Gitleaks, Markdown width, and independent
+  adversarial review gates passed.
+- Ponytail: the scheduler now returns only the startup error its caller observes; the
+  background loop, cancellation, timing, owner selection, and paid-AI policy are unchanged.
+- Rollback: `git revert 9fc13164de9f1736a0fb84a50d0f0019846dd17d`.
 - Rollback boundary: one scheduler-API commit restores the return type and ignored handle.
 - Reversibility: no other approved batch changes scheduler startup or lifecycle.
 
 All batches cover one domain, touch at most five production files, target negative production
 lines, and have no direct-dependency change. The two split clusters have explicit ordered
-rollback. The first nine batches have removed 427 production lines. Using measured results
-for those batches and the current estimate for the remaining batch, the projected approved
-total is minus 437 production lines across ten reversible batches.
+rollback. All ten batches removed 437 production lines across ten reversible commits.
 
 ## Task 4 Final Comparison
 
