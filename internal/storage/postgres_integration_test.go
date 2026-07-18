@@ -14,6 +14,7 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 	st, schema := newPostgresTestStoreWithSchema(t)
 
 	for _, table := range []string{
+		"ai_dealbreaker_validations",
 		"local_data_imports",
 		"users",
 		"user_ai_credentials",
@@ -35,6 +36,33 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 		if err != nil || !exists {
 			t.Fatalf("table %s exists=%v err=%v", table, exists, err)
 		}
+	}
+}
+
+func TestContextualDealbreakerMigrationSplitsExtractionEvidence(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 16)
+	ctx := context.Background()
+	postingID := insertMigrationTestPosting(t, st, "contextual-evidence")
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO ai_extractions (
+    posting_id, content_hash, ai_version, min_career, newcomer,
+    education_enum, evidence, computed_at
+) VALUES ($1, 'content', 'ai-v1', 0, true, 'none', '신입 가능', now())`, postingID); err != nil {
+		t.Fatalf("seed extraction: %v", err)
+	}
+
+	if err := applyPostgresMigrationVersion(st.db, 17); err != nil {
+		t.Fatalf("apply migration 0017: %v", err)
+	}
+	var careerEvidence, educationEvidence string
+	if err := st.db.QueryRowContext(ctx, `
+SELECT career_evidence, education_evidence
+  FROM ai_extractions
+ WHERE posting_id = $1`, postingID).Scan(&careerEvidence, &educationEvidence); err != nil {
+		t.Fatalf("read migrated extraction: %v", err)
+	}
+	if careerEvidence != "신입 가능" || educationEvidence != "" {
+		t.Fatalf("migrated evidence = career:%q education:%q", careerEvidence, educationEvidence)
 	}
 }
 

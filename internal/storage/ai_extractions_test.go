@@ -34,7 +34,7 @@ func TestUpsertAIExtractionRoundTrip(t *testing.T) {
 	now := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
 
 	t.Run("open upper bound (nil max)", func(t *testing.T) {
-		ext := ai.Extraction{MinCareer: 3, MaxCareer: nil, Newcomer: false, EducationEnum: ai.EduBachelor, CareerEvidence: "경력 3년 이상", EducationEvidence: "학사 이상"}
+		ext := ai.Extraction{MinCareer: 3, MaxCareer: nil, Newcomer: false, EducationEnum: ai.EduBachelor, CareerEvidence: "경력 3년 이상"}
 		if err := st.UpsertAIExtraction(ctx, id, "hashA", ver, ext, now); err != nil {
 			t.Fatalf("UpsertAIExtraction: %v", err)
 		}
@@ -44,6 +44,13 @@ func TestUpsertAIExtractionRoundTrip(t *testing.T) {
 		}
 		if got.MinCareer != 3 || got.MaxCareer != nil || got.Newcomer || got.EducationEnum != ai.EduBachelor || got.CareerEvidence != "경력 3년 이상" || got.EducationEvidence != "" {
 			t.Fatalf("round trip = %+v", got)
+		}
+	})
+
+	t.Run("legacy SQLite rejects education evidence", func(t *testing.T) {
+		ext := ai.Extraction{EducationEnum: ai.EduBachelor, CareerEvidence: "경력", EducationEvidence: "학사 이상"}
+		if err := st.UpsertAIExtraction(ctx, id, "education", ver, ext, now); err == nil {
+			t.Fatal("SQLite write discarded education evidence")
 		}
 	})
 
@@ -83,6 +90,47 @@ func TestUpsertAIExtractionRoundTrip(t *testing.T) {
 			t.Fatalf("miss: ok=%v err=%v", ok, err)
 		}
 	})
+}
+
+func TestPostgresAIExtractionRoundTrip(t *testing.T) {
+	st, _ := newPostgresTestStoreWithSchema(t)
+	ctx := context.Background()
+	postingID := insertMigrationTestPosting(t, st, "extraction-evidence")
+	ext := ai.Extraction{
+		MinCareer:         2,
+		EducationEnum:     ai.EduBachelor,
+		CareerEvidence:    "경력 2년 이상",
+		EducationEvidence: "학사 이상",
+	}
+	if err := st.UpsertAIExtraction(ctx, postingID, "content", "ai-v1", ext, time.Now()); err != nil {
+		t.Fatalf("UpsertAIExtraction: %v", err)
+	}
+	got, ok, err := st.AIExtraction(ctx, postingID, "content", "ai-v1")
+	if err != nil || !ok {
+		t.Fatalf("AIExtraction: ok=%v err=%v", ok, err)
+	}
+	if got.CareerEvidence != ext.CareerEvidence || got.EducationEvidence != ext.EducationEvidence {
+		t.Fatalf("evidence = career:%q education:%q", got.CareerEvidence, got.EducationEvidence)
+	}
+	ext.CareerEvidence = "경력 3년 이상"
+	ext.EducationEvidence = "석사 이상"
+	if err := st.UpsertAIExtraction(ctx, postingID, "content", "ai-v1", ext, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("update extraction: %v", err)
+	}
+	batched, err := st.AIExtractionsByPostingID(ctx, "ai-v1")
+	if err != nil {
+		t.Fatalf("AIExtractionsByPostingID: %v", err)
+	}
+	if got := batched[postingID]; got.CareerEvidence != ext.CareerEvidence || got.EducationEvidence != ext.EducationEvidence {
+		t.Fatalf("batched evidence = career:%q education:%q", got.CareerEvidence, got.EducationEvidence)
+	}
+	var count int
+	if err := st.db.QueryRowContext(ctx, `SELECT count(*) FROM ai_extractions WHERE posting_id = $1`, postingID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("upsert row count = %d, want 1", count)
+	}
 }
 
 func TestAIExtractionsByPostingIDBatchedAndLatest(t *testing.T) {

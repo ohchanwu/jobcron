@@ -19,12 +19,34 @@ func (s *Store) UpsertAIExtraction(
 	ctx context.Context, postingID int64, contentHash, aiVersion string,
 	ext ai.Extraction, computedAt time.Time,
 ) error {
+	if s.dialect == DialectSQLite && ext.EducationEvidence != "" {
+		return errors.New("storage: legacy SQLite cannot store education evidence")
+	}
 	var maxCareer sql.NullInt64
 	if ext.MaxCareer != nil {
 		maxCareer = sql.NullInt64{Int64: int64(*ext.MaxCareer), Valid: true}
 	}
-	// ponytail: the legacy column carries career evidence until Task 3 splits the schema.
-	_, err := s.db.ExecContext(ctx, s.query(`
+	if s.dialect == DialectPostgres {
+		_, err := s.db.ExecContext(ctx, `
+INSERT INTO ai_extractions
+    (posting_id, content_hash, ai_version, min_career, max_career, newcomer, education_enum, career_evidence, education_evidence, computed_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+ON CONFLICT(posting_id, content_hash, ai_version) DO UPDATE SET
+    min_career         = excluded.min_career,
+    max_career         = excluded.max_career,
+    newcomer           = excluded.newcomer,
+    education_enum     = excluded.education_enum,
+    career_evidence    = excluded.career_evidence,
+    education_evidence = excluded.education_evidence,
+    computed_at        = excluded.computed_at`,
+			postingID, contentHash, aiVersion, ext.MinCareer, maxCareer,
+			ext.Newcomer, ext.EducationEnum, ext.CareerEvidence, ext.EducationEvidence, computedAt.UTC())
+		if err != nil {
+			return fmt.Errorf("storage: upsert ai extraction: %w", err)
+		}
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
 INSERT INTO ai_extractions
     (posting_id, content_hash, ai_version, min_career, max_career, newcomer, education_enum, evidence, computed_at)
 VALUES (?,?,?,?,?,?,?,?,?)
@@ -34,7 +56,7 @@ ON CONFLICT(posting_id, content_hash, ai_version) DO UPDATE SET
     newcomer       = excluded.newcomer,
     education_enum = excluded.education_enum,
     evidence       = excluded.evidence,
-    computed_at    = excluded.computed_at`),
+	computed_at    = excluded.computed_at`,
 		postingID, contentHash, aiVersion, ext.MinCareer, maxCareer,
 		ext.Newcomer, ext.EducationEnum, ext.CareerEvidence, computedAt.UTC())
 	if err != nil {
@@ -49,12 +71,18 @@ ON CONFLICT(posting_id, content_hash, ai_version) DO UPDATE SET
 func (s *Store) AIExtraction(
 	ctx context.Context, postingID int64, contentHash, aiVersion string,
 ) (ai.Extraction, bool, error) {
-	row := s.db.QueryRowContext(ctx, s.query(`
+	query := `
 SELECT min_career, max_career, newcomer, education_enum, evidence
 FROM ai_extractions
-WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`),
-		postingID, contentHash, aiVersion)
-	ext, err := scanExtraction(row)
+WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT min_career, max_career, newcomer, education_enum, career_evidence, education_evidence
+FROM ai_extractions
+WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`
+	}
+	row := s.db.QueryRowContext(ctx, s.query(query), postingID, contentHash, aiVersion)
+	ext, err := scanExtraction(row, s.dialect == DialectPostgres)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ai.Extraction{}, false, nil
 	}
@@ -70,11 +98,19 @@ WHERE posting_id = ? AND content_hash = ? AND ai_version = ?`),
 // scoring merge (scoreAll) calls it once and looks up by posting id, never
 // N+1. Postings with no extraction are simply absent from the map.
 func (s *Store) AIExtractionsByPostingID(ctx context.Context, aiVersion string) (map[int64]ai.Extraction, error) {
-	rows, err := s.db.QueryContext(ctx, s.query(`
+	query := `
 SELECT posting_id, min_career, max_career, newcomer, education_enum, evidence
 FROM ai_extractions
 WHERE ai_version = ?
-ORDER BY posting_id, computed_at DESC`), aiVersion)
+ORDER BY posting_id, computed_at DESC`
+	if s.dialect == DialectPostgres {
+		query = `
+SELECT posting_id, min_career, max_career, newcomer, education_enum, career_evidence, education_evidence
+FROM ai_extractions
+WHERE ai_version = ?
+ORDER BY posting_id, computed_at DESC`
+	}
+	rows, err := s.db.QueryContext(ctx, s.query(query), aiVersion)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query ai extractions: %w", err)
 	}
@@ -82,7 +118,7 @@ ORDER BY posting_id, computed_at DESC`), aiVersion)
 	out := map[int64]ai.Extraction{}
 	for rows.Next() {
 		var pid int64
-		ext, err := scanExtractionWithID(rows, &pid)
+		ext, err := scanExtractionWithID(rows, &pid, s.dialect == DialectPostgres)
 		if err != nil {
 			return nil, err
 		}
@@ -94,13 +130,16 @@ ORDER BY posting_id, computed_at DESC`), aiVersion)
 	return out, rows.Err()
 }
 
-// scanExtraction reads the five value columns into an ai.Extraction.
-func scanExtraction(row rowScanner) (ai.Extraction, error) {
+func scanExtraction(row rowScanner, splitEvidence bool) (ai.Extraction, error) {
 	var (
 		ext       ai.Extraction
 		maxCareer sql.NullInt64
 	)
-	if err := row.Scan(&ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.CareerEvidence); err != nil {
+	values := []any{&ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.CareerEvidence}
+	if splitEvidence {
+		values = append(values, &ext.EducationEvidence)
+	}
+	if err := row.Scan(values...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ai.Extraction{}, sql.ErrNoRows
 		}
@@ -115,12 +154,16 @@ func scanExtraction(row rowScanner) (ai.Extraction, error) {
 
 // scanExtractionWithID is scanExtraction for the batched query, which selects
 // posting_id as the leading column.
-func scanExtractionWithID(rows *sql.Rows, pid *int64) (ai.Extraction, error) {
+func scanExtractionWithID(rows *sql.Rows, pid *int64, splitEvidence bool) (ai.Extraction, error) {
 	var (
 		ext       ai.Extraction
 		maxCareer sql.NullInt64
 	)
-	if err := rows.Scan(pid, &ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.CareerEvidence); err != nil {
+	values := []any{pid, &ext.MinCareer, &maxCareer, &ext.Newcomer, &ext.EducationEnum, &ext.CareerEvidence}
+	if splitEvidence {
+		values = append(values, &ext.EducationEvidence)
+	}
+	if err := rows.Scan(values...); err != nil {
 		return ai.Extraction{}, fmt.Errorf("storage: scan ai extraction: %w", err)
 	}
 	if maxCareer.Valid {

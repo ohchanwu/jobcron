@@ -341,6 +341,16 @@ VALUES ($1, 'preexisting', now(), now())`, ownerEmail); err != nil {
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_scores WHERE user_id <> %d`, ownerID), 0)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_usage WHERE user_id = %d`, ownerID), 1)
 	assertPostgresScalar(t, db, fmt.Sprintf(`SELECT count(*) FROM ai_usage WHERE user_id <> %d`, ownerID), 0)
+	var careerEvidence, educationEvidence string
+	if err := db.QueryRow(`
+SELECT career_evidence, education_evidence
+  FROM ai_extractions
+ WHERE posting_id = 1`).Scan(&careerEvidence, &educationEvidence); err != nil {
+		t.Fatalf("query imported extraction evidence: %v", err)
+	}
+	if careerEvidence != "신입" || educationEvidence != "" {
+		t.Fatalf("imported extraction evidence = career:%q education:%q", careerEvidence, educationEvidence)
+	}
 
 	var title, company, profileJSON, importedOwnerEmail string
 	if err := db.QueryRow(`

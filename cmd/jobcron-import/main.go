@@ -773,14 +773,15 @@ FROM ai_extractions`)
 		}
 		if _, err := tx.ExecContext(ctx, `
 INSERT INTO ai_extractions
-    (posting_id, content_hash, ai_version, min_career, max_career, newcomer, education_enum, evidence, computed_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    (posting_id, content_hash, ai_version, min_career, max_career, newcomer, education_enum, career_evidence, education_evidence, computed_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'',$9)
 ON CONFLICT (posting_id, content_hash, ai_version) DO UPDATE SET
     min_career = EXCLUDED.min_career,
     max_career = EXCLUDED.max_career,
     newcomer = EXCLUDED.newcomer,
     education_enum = EXCLUDED.education_enum,
-    evidence = EXCLUDED.evidence,
+    career_evidence = EXCLUDED.career_evidence,
+    education_evidence = EXCLUDED.education_evidence,
     computed_at = EXCLUDED.computed_at`,
 			postingID, contentHash, aiVersion, minCareer, maxCareer, newcomer, educationEnum, evidence, computedAt.UTC()); err != nil {
 			return fmt.Errorf("import: write ai_extraction for posting %d: %w", postingID, err)
@@ -1009,13 +1010,14 @@ func compareRepresentativeTimestamp(
 
 func compareRepresentativeAIExtraction(ctx context.Context, source *sql.DB, target postgresQuerier) error {
 	type extraction struct {
-		postingID            int64
-		contentHash, version string
-		minCareer            int
-		maxCareer            sql.NullInt64
-		newcomer             bool
-		education, evidence  string
-		computedAt           time.Time
+		postingID                 int64
+		contentHash, version      string
+		minCareer                 int
+		maxCareer                 sql.NullInt64
+		newcomer                  bool
+		education, careerEvidence string
+		educationEvidence         string
+		computedAt                time.Time
 	}
 	var want extraction
 	err := source.QueryRowContext(ctx, `
@@ -1023,7 +1025,7 @@ SELECT posting_id, content_hash, ai_version, min_career, max_career, newcomer,
        education_enum, evidence, computed_at
 FROM ai_extractions ORDER BY posting_id, content_hash, ai_version LIMIT 1`).Scan(
 		&want.postingID, &want.contentHash, &want.version, &want.minCareer, &want.maxCareer,
-		&want.newcomer, &want.education, &want.evidence, &want.computedAt,
+		&want.newcomer, &want.education, &want.careerEvidence, &want.computedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil
@@ -1034,19 +1036,20 @@ FROM ai_extractions ORDER BY posting_id, content_hash, ai_version LIMIT 1`).Scan
 	var got extraction
 	err = target.QueryRowContext(ctx, `
 SELECT posting_id, content_hash, ai_version, min_career, max_career, newcomer,
-       education_enum, evidence, computed_at
+	   education_enum, career_evidence, education_evidence, computed_at
 FROM ai_extractions
 WHERE posting_id = $1 AND content_hash = $2 AND ai_version = $3`,
 		want.postingID, want.contentHash, want.version).Scan(
 		&got.postingID, &got.contentHash, &got.version, &got.minCareer, &got.maxCareer,
-		&got.newcomer, &got.education, &got.evidence, &got.computedAt,
+		&got.newcomer, &got.education, &got.careerEvidence, &got.educationEvidence, &got.computedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("verify representative AI extraction: %w", err)
 	}
 	if got.postingID != want.postingID || got.contentHash != want.contentHash || got.version != want.version ||
 		got.minCareer != want.minCareer || got.maxCareer != want.maxCareer || got.newcomer != want.newcomer ||
-		got.education != want.education || got.evidence != want.evidence || !got.computedAt.Equal(want.computedAt) {
+		got.education != want.education || got.careerEvidence != want.careerEvidence ||
+		got.educationEvidence != "" || !got.computedAt.Equal(want.computedAt) {
 		return errors.New("representative AI extraction mismatch")
 	}
 	return nil
