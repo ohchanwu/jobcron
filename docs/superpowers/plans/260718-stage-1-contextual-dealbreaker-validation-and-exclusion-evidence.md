@@ -1006,3 +1006,18 @@ gitleaks git --redact --no-banner
 
 Review the complete diff for scope, user isolation, fallback truthfulness, paid-call placement, UI
 escaping, legacy import preservation, and unrelated changes. Do not push.
+
+- [ ] **Step 8: Close Gas Town bookkeeping without remote submission**
+
+Do not run the polecat submit formula, `gt done`, or any merge-queue submit command. This
+repository's autonomous-work policy forbids pushes, while the standard submit formula pushes its
+worker branch before creating a merge request. Close the campaign beads from the Mayor lane after
+the reviewed commits are integrated locally, then verify:
+
+```sh
+gt mq list jobscraper --json
+```
+
+Expected: no open merge request. Reject any stale worker merge request before it can integrate.
+Report any worker branch that was already pushed, but do not delete a remote branch without the
+human's explicit authorization.
