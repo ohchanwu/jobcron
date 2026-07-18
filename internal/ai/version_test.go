@@ -24,6 +24,17 @@ func TestTaskVersionsAreStableAndPartitioned(t *testing.T) {
 	if DealbreakerVersion("anthropic", "claude-x") == score {
 		t.Fatal("dealbreaker and score versions must be separate")
 	}
+	eligibility := EligibilityVersion("anthropic", "claude-x")
+	if eligibility != taskVersion("anthropic", "claude-x", "eligibility", EligibilityPromptVersion) {
+		t.Fatal("EligibilityVersion must use the eligibility task name and prompt version")
+	}
+	dealbreaker := DealbreakerVersion("anthropic", "claude-x")
+	if dealbreaker != taskVersion("anthropic", "claude-x", "dealbreaker", DealbreakerPromptVersion) {
+		t.Fatal("DealbreakerVersion must use the dealbreaker task name and prompt version")
+	}
+	if eligibility == dealbreaker {
+		t.Fatal("eligibility and dealbreaker versions must be separate")
+	}
 	if ScoreVersion("anthropic", "claude-x") != score {
 		t.Fatal("score version must be stable")
 	}
