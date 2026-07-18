@@ -21,7 +21,7 @@ Jobcron은 한국 채용 플랫폼 [점핏 (Jumpit)](https://jumpit.saramin.co.k
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/dashboard-dark.png">
-  <img src="docs/assets/screenshots/dashboard.png" alt="점수순으로 정렬된 전체 공고 페이지의 소스 필터와 AI 평가 칩">
+  <img src="docs/assets/screenshots/dashboard.png" alt="점수순으로 정렬된 전체 공고 페이지의 소스 필터와 펼쳐진 AI 평가 패널">
 </picture>
 
 ## 왜 만들었나 (Why)

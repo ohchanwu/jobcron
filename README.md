@@ -21,7 +21,7 @@ API key — see *Usage*.)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/dashboard-dark.png">
-  <img src="docs/assets/screenshots/dashboard.png" alt="Expanded out-of-interest postings with visible exclusion reasons and evidence">
+  <img src="docs/assets/screenshots/dashboard.png" alt="Score-sorted all-postings page with source filters and an expanded AI evaluation panel">
 </picture>
 
 ## Why
