@@ -46,6 +46,9 @@ html[data-theme="dark"]  { color-scheme: dark; }
   --accent-soft: light-dark(#f1e6cc, #2e2616);
   --highlight:   light-dark(#c0552e, #d97a48);   /* deadline */
   --rule:        light-dark(#e3d8c1, #2b2618);
+  --danger:        light-dark(#a33d32, #f09a8d);
+  --danger-soft:   light-dark(#faece8, #321b18);
+  --danger-border: light-dark(#d9a49b, #78453e);
 
   /* Electric indigo is reserved for AI analysis surfaces. */
   --ai-chip:     light-dark(#eeeafe, #29233f);
@@ -786,11 +789,54 @@ nav.primary a.active {
 }
 .excluded-box summary::before { content: "▾ "; color: var(--accent); }
 .excluded-box[open] summary::before { content: "▴ "; }
-.excluded-box .posting { opacity: 0.5; }
 .excluded-box .score {
   color: var(--ink-soft);
   font-size: 2rem;
   padding-top: 0.5rem;
+}
+
+.exclusion-reasons {
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.exclusion-reasons h3,
+.exclusion-label,
+.exclusion-status,
+.exclusion-reasons blockquote { margin: 0; }
+.exclusion-reasons h3 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.exclusion-reason + .exclusion-reason {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--danger-border);
+}
+.exclusion-label { font-weight: 650; }
+.exclusion-reasons blockquote {
+  margin-top: 0.3rem;
+  padding-left: 0.65rem;
+  border-left: 2px solid var(--danger-border);
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+.exclusion-reasons blockquote::before { content: "\201C"; }
+.exclusion-reasons blockquote::after { content: "\201D"; }
+.exclusion-reasons mark {
+  color: inherit;
+  background: transparent;
+  box-shadow: inset 0 -0.45em var(--danger-border);
+}
+.exclusion-status {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--danger);
 }
 
 /* Footer */

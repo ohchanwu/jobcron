@@ -194,8 +194,9 @@ type dashboardPosting struct {
 	NotInterested    bool               // user has muted this posting ("관심 없음")
 	Explanation      string             // "React +20 · 신입 +25 ..." (used for excluded rows)
 	Breakdown        []scoring.LineItem // structured line items, rendered as chips
-	Deadline         deadlineBadgeInfo  // closing-date badge: text + urgency tier
-	DuplicateSources []string           // sources of cross-portal duplicates collapsed into this canonical
+	ExclusionReasons []exclusionReasonView
+	Deadline         deadlineBadgeInfo // closing-date badge: text + urgency tier
+	DuplicateSources []string          // sources of cross-portal duplicates collapsed into this canonical
 }
 
 // briefing is the daily-briefing view model: postings first seen today, split
@@ -329,6 +330,7 @@ func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, us
 		if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 			dp.Explanation = scoring.Explain(result)
 			dp.Breakdown = result.Breakdown
+			dp.ExclusionReasons = exclusionReasonViews(result.ExclusionReasons)
 		}
 		if dp.Excluded {
 			b.Excluded = append(b.Excluded, dp)

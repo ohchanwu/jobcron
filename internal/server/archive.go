@@ -194,6 +194,7 @@ func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, use
 		if json.Unmarshal([]byte(sc.BreakdownJSON), &result) == nil {
 			dp.Explanation = scoring.Explain(result)
 			dp.Breakdown = result.Breakdown
+			dp.ExclusionReasons = exclusionReasonViews(result.ExclusionReasons)
 		}
 
 		// Past-deadline postings drop into the 관심 밖 collapsible regardless of

@@ -137,6 +137,7 @@
                 {{if .Explanation}}<span class="sep">/</span><span>{{.Explanation}}</span>{{end}}
                 {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
               </div>
+              {{template "exclusion-reasons" .ExclusionReasons}}
             </div>
             <div class="posting-actions">
               <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"

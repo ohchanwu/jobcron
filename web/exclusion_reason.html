@@ -1,0 +1,12 @@
+{{define "exclusion-reasons"}}{{if .}}
+<section class="exclusion-reasons" aria-label="제외 이유">
+  <h3><span aria-hidden="true">!</span> 제외 이유</h3>
+  {{range .}}
+  <div class="exclusion-reason">
+    <p class="exclusion-label">{{.Label}}</p>
+    {{if .HasEvidence}}<blockquote>{{range .Evidence}}{{if .Marked}}<mark>{{.Text}}</mark>{{else}}{{.Text}}{{end}}{{end}}</blockquote>{{end}}
+    <p class="exclusion-status">{{.Status}}</p>
+  </div>
+  {{end}}
+</section>
+{{end}}{{end}}
