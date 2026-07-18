@@ -204,6 +204,8 @@ git commit -m "refactor(ai): split eligibility evidence and cache versions"
 - Modify: `internal/ai/stub.go`
 - Modify: `internal/ai/stub_test.go`
 - Modify: `internal/ai/injection_test.go`
+- Modify: `internal/server/ai_config_test.go`
+- Modify: `internal/server/production_user_scope_test.go`
 
 **Interfaces:**
 
@@ -293,22 +295,24 @@ func (p *httpProvider) ValidateDealbreakers(
 
 Return immediately without a provider call when `candidates` is empty. Update the existing stub
 with one optional function field matching the new method, and return `ErrNotImplemented` when it is
-unset.
+unset. Because this expands the public Go interface, mechanically update the two existing server
+test doubles listed above to return `ErrNotImplemented`; do not add server orchestration yet.
 
 - [ ] **Step 5: Run package, race, and injection tests**
 
 ```sh
 gofmt -w internal/ai
-go test ./internal/ai -count=1
+go test ./internal/ai ./internal/server -count=1
 go test -race ./internal/ai -count=1
 ```
 
-Expected: all parser, provider, citation, injection, and race tests pass.
+Expected: all parser, provider, citation, injection, server compile, and race tests pass.
 
 - [ ] **Step 6: Commit Task 2**
 
 ```sh
-git add internal/ai
+git add internal/ai internal/server/ai_config_test.go \
+  internal/server/production_user_scope_test.go
 git diff --cached --check
 git commit -m "feat(ai): validate contextual dealbreaker matches"
 ```
