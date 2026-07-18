@@ -406,13 +406,19 @@ func (s *Store) AIDealbreakerValidationsByPostingID(
 Reject non-positive user IDs and non-PostgreSQL stores before issuing SQL. Query the full user's
 current AI version once and group rows in Go. Key the inner map by
 `contentHash + "\x00" + keywordHash`; this preserves historical content rows while allowing the
-caller holding the current posting to perform one exact lookup.
+caller holding the current posting to perform one exact lookup. Reject an upsert when
+`validation.CandidateID != keywordHash`; cache identity and returned payload must agree.
 
 - [ ] **Step 4: Update extraction storage and importer mapping**
 
 Update PostgreSQL extraction reads and writes to use `career_evidence` and `education_evidence`.
-Keep the SQLite schema frozen. In `copyAIExtractions`, continue selecting legacy SQLite `evidence`,
-but write the PostgreSQL destination as:
+Keep the SQLite schema frozen. The existing SQLite storage adapter remains import-fixture-only:
+map its single `evidence` value to `CareerEvidence`, leave `EducationEvidence` empty, and reject a
+SQLite write that would discard non-empty education evidence. Do not add SQLite columns or use
+this adapter in application runtime.
+
+In `copyAIExtractions`, continue selecting legacy SQLite `evidence`, but write the PostgreSQL
+destination as:
 
 ```sql
 INSERT INTO ai_extractions (
@@ -868,10 +874,14 @@ JOBCRON_TEST_POSTGRES_URL="$DATABASE_URL" go test ./... -count=1
 JOBCRON_TEST_POSTGRES_URL="$DATABASE_URL" go test -race ./... -count=1
 go vet ./...
 go build ./...
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./cmd/jobcron
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./cmd/jobcron
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./cmd/jobcron
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./cmd/jobcron
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -o /tmp/jobcron-linux-amd64 ./cmd/jobcron
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+  go build -o /tmp/jobcron-linux-arm64 ./cmd/jobcron
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
+  go build -o /tmp/jobcron-darwin-arm64 ./cmd/jobcron
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+  go build -o /tmp/jobcron-windows-amd64.exe ./cmd/jobcron
 ```
 
 Expected: all unit, PostgreSQL integration, race, vet, build, and cross-build gates pass. Confirm
