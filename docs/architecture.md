@@ -311,7 +311,7 @@ and move completed implementation records through the documented lifecycle.
 [postgres-credential-spec]:
   superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md
 [stage1-context-spec]:
-  superpowers/specs/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
+  superpowers/archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
 [hosted-first-storage]:
   superpowers/decisions/260714-hosted-first-local-database-convergence.md
 [multi-user-spec]:

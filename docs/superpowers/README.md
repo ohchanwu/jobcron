@@ -6,8 +6,6 @@ decision records needed for the current task.
 
 ## Active Work
 
-- [Stage 1 contextual dealbreaker validation and exclusion evidence](specs/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md)
-- [Stage 1 contextual dealbreaker implementation plan](plans/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md)
 - [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
@@ -15,6 +13,8 @@ decision records needed for the current task.
 
 ## Recently Archived
 
+- [Contextual dealbreaker validation specification][contextual-dealbreaker-spec]
+- [Contextual dealbreaker validation implementation][contextual-dealbreaker-plan]
 - [Ponytail codebase reduction campaign][ponytail-campaign-plan]
 - [Ponytail reduction candidate ledger][ponytail-campaign-ledger]
 - [Ponytail campaign verification][ponytail-campaign-verification]
@@ -71,3 +71,7 @@ decision records needed for the current task.
   archive/2026-07-18-ponytail-codebase-reduction/260717-candidate-ledger.md
 [ponytail-campaign-verification]:
   archive/2026-07-18-ponytail-codebase-reduction/260718-verification.md
+[contextual-dealbreaker-spec]:
+  archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
+[contextual-dealbreaker-plan]:
+  archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence-plan.md

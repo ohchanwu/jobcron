@@ -32,7 +32,7 @@ Use this index instead of recursively loading the entire documentation tree.
 ## Implementation Work
 
 - [Active Superpowers work and context policy](superpowers/README.md)
-- [Stage 1 contextual dealbreaker validation and exclusion evidence](superpowers/specs/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md)
+- [Stage 1 contextual dealbreaker validation and exclusion evidence][contextual-dealbreaker-spec]
 - [Ponytail codebase reduction campaign][ponytail-campaign-plan]
 - [Ponytail reduction candidate ledger][ponytail-campaign-ledger]
 - [Ponytail campaign verification][ponytail-campaign-verification]
@@ -75,3 +75,5 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
   superpowers/archive/2026-07-18-ponytail-codebase-reduction/260717-candidate-ledger.md
 [ponytail-campaign-verification]:
   superpowers/archive/2026-07-18-ponytail-codebase-reduction/260718-verification.md
+[contextual-dealbreaker-spec]:
+  superpowers/archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
