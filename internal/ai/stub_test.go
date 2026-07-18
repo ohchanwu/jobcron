@@ -39,4 +39,7 @@ func TestStubProviderNilFnIsNotImplemented(t *testing.T) {
 	if s.Name() != "stub" {
 		t.Fatalf("default Name() = %q, want stub", s.Name())
 	}
+	if _, _, err := s.ValidateDealbreakers(context.Background(), "x", nil); !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("nil ValidateDealbreakersFn err = %v, want ErrNotImplemented", err)
+	}
 }

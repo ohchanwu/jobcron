@@ -46,7 +46,8 @@ var anthropicSpec = providerSpec{
 }
 
 // maxOutputTokens bounds the model's reply. Stage-1 extraction replies are
-// tiny (measured max ~120 output tokens), but Stage-2 ScoreDelta carries an
+// tiny (measured max ~120 output tokens), Stage-1B contextual validation stays
+// bounded by its short evidence quotes, but Stage-2 ScoreDelta carries an
 // evidence quote per signal and runs large: a live measurement over the real
 // corpus (2026-06-08, Haiku) saw successful ScoreDelta replies up to ~820
 // output tokens and a reply that hit the OLD 1024 ceiling and truncated

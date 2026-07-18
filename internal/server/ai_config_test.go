@@ -208,6 +208,9 @@ func (p *fingerprintProvider) Name() string { return p.name }
 func (p *fingerprintProvider) Extract(context.Context, string) (ai.Extraction, ai.Usage, error) {
 	return ai.Extraction{}, ai.Usage{}, ai.ErrNotImplemented
 }
+func (p *fingerprintProvider) ValidateDealbreakers(context.Context, string, []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+	return nil, ai.Usage{}, ai.ErrNotImplemented
+}
 func (p *fingerprintProvider) ScoreDelta(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
 	return nil, ai.Usage{}, ai.ErrNotImplemented
 }

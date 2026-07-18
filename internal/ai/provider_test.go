@@ -1,8 +1,41 @@
 package ai
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
+
+func TestHTTPProviderValidateDealbreakers(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		io.WriteString(w, `{"content":[{"type":"text","text":"{\"checks\":[{\"candidate_id\":\"research\",\"verdict\":\"not_applicable\",\"evidence\":\"리서치 아님\"}]}"}],"usage":{"input_tokens":12,"output_tokens":6}}`)
+	}))
+	defer srv.Close()
+
+	p, err := newHTTPProvider(anthropicSpec, "sk", "claude-x", srv.URL, 0)
+	if err != nil {
+		t.Fatalf("newHTTPProvider: %v", err)
+	}
+	got, usage, err := p.ValidateDealbreakers(context.Background(), "리서치 아님", []DealbreakerCandidate{{ID: "research", Phrase: "리서치"}})
+	if err != nil {
+		t.Fatalf("ValidateDealbreakers: %v", err)
+	}
+	if len(got) != 1 || got[0].Verdict != DealbreakerNotApplicable || usage.InputTokens != 12 || usage.OutputTokens != 6 {
+		t.Fatalf("validation = %+v, usage = %+v", got, usage)
+	}
+	if calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls)
+	}
+
+	got, usage, err = p.ValidateDealbreakers(context.Background(), "ignored", nil)
+	if err != nil || got != nil || usage != (Usage{}) || calls != 1 {
+		t.Fatalf("empty candidates must skip provider: got=%+v usage=%+v err=%v calls=%d", got, usage, err, calls)
+	}
+}
 
 func TestModelsForProvider(t *testing.T) {
 	for _, prov := range Providers() {

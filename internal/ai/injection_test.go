@@ -75,6 +75,21 @@ func TestInjectionNoKeyInModelInput(t *testing.T) {
 	if strings.Contains(buildScoreDeltaUser(sent, "좋아하는 업무: 백엔드"), apiKey) {
 		t.Fatal("the API key must never appear in the ScoreDelta user message")
 	}
+	if strings.Contains(buildDealbreakerUser(sent, []DealbreakerCandidate{{ID: "x", Phrase: "야근"}}), apiKey) {
+		t.Fatal("the API key must never appear in the dealbreaker user message")
+	}
+}
+
+func TestInjectionDealbreakerGateRejectsFabricatedEvidence(t *testing.T) {
+	sent, _, _ := ModelInput(scraperPostingFromJD(injectedJD))
+	raw := []byte(`{"checks":[{"candidate_id":"overtime","verdict":"applies","evidence":"야근 업무를 수행합니다"}]}`)
+	got, err := parseDealbreakerValidations(raw, sent, []DealbreakerCandidate{{ID: "overtime", Phrase: "야근"}})
+	if err != nil {
+		t.Fatalf("parseDealbreakerValidations: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("fabricated dealbreaker evidence survived: %+v", got)
+	}
 }
 
 // TestInjectionHTTPProviderStillGatedEndToEnd: even when the (canned) provider

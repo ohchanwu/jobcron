@@ -26,12 +26,38 @@ type Provider interface {
 	// row. Usage carries the token counts the ledger debits.
 	Extract(ctx context.Context, modelText string) (Extraction, Usage, error)
 
+	// ValidateDealbreakers decides whether deterministic phrase matches apply
+	// in context and returns only citation-gated results. Missing candidate IDs
+	// remain unresolved for the caller's conservative fallback.
+	ValidateDealbreakers(ctx context.Context, modelText string, candidates []DealbreakerCandidate) ([]DealbreakerValidation, Usage, error)
+
 	// ScoreDelta weighs one posting (modelText) against the applicant's
 	// free-form goals (profileText) and returns the raw, un-gated per-signal
 	// items. A non-nil error means the caller applies no delta for that
 	// posting. The returned items are NOT citation-gated — the caller passes
 	// them through GateDelta before trusting any of them.
 	ScoreDelta(ctx context.Context, modelText, profileText string) ([]RawDeltaItem, Usage, error)
+}
+
+// DealbreakerCandidate is one deterministic profile-phrase match to validate.
+type DealbreakerCandidate struct {
+	ID     string
+	Phrase string
+}
+
+type DealbreakerVerdict string
+
+const (
+	DealbreakerApplies       DealbreakerVerdict = "applies"
+	DealbreakerNotApplicable DealbreakerVerdict = "not_applicable"
+	DealbreakerUncertain     DealbreakerVerdict = "uncertain"
+)
+
+// DealbreakerValidation is one independently validated contextual judgment.
+type DealbreakerValidation struct {
+	CandidateID string
+	Verdict     DealbreakerVerdict
+	Evidence    string
 }
 
 // Extraction is the validated Stage-1 result, mirroring the ai_extractions
