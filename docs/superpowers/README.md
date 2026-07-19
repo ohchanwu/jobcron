@@ -6,6 +6,7 @@ decision records needed for the current task.
 
 ## Active Work
 
+- [Terraform AWS foundation and Cloudflare ingress automation][terraform-aws-foundation]
 - [First production human steps](specs/260716-first-production-launch-human-blocked-steps.md)
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
@@ -75,3 +76,5 @@ decision records needed for the current task.
   archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
 [contextual-dealbreaker-plan]:
   archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence-plan.md
+[terraform-aws-foundation]:
+  specs/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
