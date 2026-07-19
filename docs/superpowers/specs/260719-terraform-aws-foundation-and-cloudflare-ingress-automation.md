@@ -10,13 +10,13 @@
 
 Move Jobcron's first production infrastructure into Terraform before launch. The first
 implementation must fix the disconnected EC2/RDS network, make the host reproducible, and keep
-origin ingress synchronized with Cloudflare's published IPv4 ranges without routine operator
+origin ingress synchronized with Cloudflare's published IPv4 ranges without routine overseer
 edits.
 
 This specification replaces the infrastructure assumptions in the current production rollout
 guide. It does not authorize an AWS apply or production cutover by itself.
 
-## Operator-Reported Current State
+## Overseer-Reported Current State
 
 The following inventory was reported from the AWS console on 2026-07-19. Exact account IDs,
 resource IDs, addresses, names, endpoints, and credentials remain outside tracked documentation.
@@ -31,7 +31,7 @@ Implementation must verify every item through the authenticated AWS CLI before p
 - Its root volume is an unencrypted 8 GiB `gp3` volume.
 - No IAM instance profile, launch template, Auto Scaling group, load balancer, or target group
   exists.
-- The security group has two SSH rules sourced from private operator IPv4 addresses. It has no
+- The security group has two SSH rules sourced from private overseer IPv4 addresses. It has no
   web ingress.
 - Docker and Jobcron are not installed. The only application material is an untracked `.env`
   file.
@@ -45,7 +45,7 @@ Implementation must verify every item through the authenticated AWS CLI before p
 - Its subnet group contains four public subnets in a different VPC from EC2.
 - The EC2 and RDS VPCs have no peering, Transit Gateway, or other private route between them.
 - Its security group includes PostgreSQL rules referring to the EC2 security group and one
-  operator IPv4 address. Neither rule creates reachability across the isolated VPCs.
+  overseer IPv4 address. Neither rule creates reachability across the isolated VPCs.
 
 The configured `DATABASE_URL` therefore does not make the current topology functional. Network
 reachability must be fixed before the first application start.
@@ -69,7 +69,9 @@ reachability must be fixed before the first application start.
 6. Replace inbound SSH with AWS Systems Manager Session Manager.
 7. Keep runtime secrets, database passwords, and TLS private keys out of Git, Terraform state,
    EC2 user data, and persistent host files.
-8. Preserve a safe, explicit rollback boundary until the new stack passes production checks.
+8. Preserve database dumps and rotated application logs outside EC2 and copy them to the trusted
+   MacBook.
+9. Preserve a safe, explicit rollback boundary until the new stack passes production checks.
 
 ## Non-Goals
 
@@ -99,8 +101,9 @@ Elastic IPv4 -> EC2 public subnet -> Caddy -> app:7777
                               RDS private subnets
 
 GitHub schedule -> OIDC edge role -> Terraform edge state -> prefix-list entries
-Human-approved run -> OIDC production role -> Terraform production state
+Overseer-approved run -> OIDC production role -> Terraform production state
 EC2 instance role -> Session Manager + one runtime Secrets Manager secret
+EC2 backup timer -> encrypted S3 recovery bucket -> overseer MacBook pull
 ```
 
 The existing RDS VPC becomes the canonical VPC. Its public subnets remain available for the
@@ -108,7 +111,7 @@ single EC2 origin. Terraform adds two private database subnets in distinct Avail
 with no internet-gateway route, and places the replacement RDS subnet group there.
 
 The old EC2 VPC is not peered. The old EC2 instance remains outside Terraform until the rollback
-window closes, then the operator removes it and its unused network resources explicitly.
+window closes, then the overseer removes it and its unused network resources explicitly.
 
 ## Terraform Layout And Ownership
 
@@ -117,7 +120,7 @@ Use three small root configurations rather than a module hierarchy:
 ```text
 infra/terraform/
   bootstrap/   # state bucket, GitHub OIDC provider, and automation roles
-  production/  # adopted VPC/EIP plus RDS, EC2, IAM, secrets, and security groups
+  production/  # adopted network plus RDS, EC2, IAM, secrets, backups, and security groups
   edge/        # Cloudflare IPv4 prefix list and the origin :443 ingress rule
 ```
 
@@ -131,18 +134,22 @@ security group so the edge root can discover them without copying resource IDs i
 Exact backend bucket names, role ARNs, account IDs, resource IDs, and import IDs live in
 untracked backend files or protected GitHub environment variables.
 
-## State Bootstrap And Human Identity
+## State Bootstrap And Overseer Identity
 
 The AWS root user is not used for the CLI, Terraform, or GitHub Actions. Root MFA is already
 enabled and remains reserved for account-level recovery and billing tasks.
 
-Before the first Terraform run, the operator must:
+Before the first Terraform run, the overseer must:
 
-1. enable IAM Identity Center for the account;
+1. enable an organization instance of IAM Identity Center for the account;
 2. create a named administrator identity with MFA;
 3. install AWS CLI v2 and Terraform on the trusted Mac;
 4. authenticate with temporary credentials through `aws configure sso`; and
 5. verify the expected account and `ap-northeast-2` region without printing credentials.
+
+Use an organization instance even while this is a standalone account. Organization instances
+support permission sets and AWS-account access; account instances support only selected
+application assignments and cannot provide the SSO-based administrator access required here.
 
 The bootstrap root initially uses local state on the trusted Mac. Its first apply creates:
 
@@ -150,15 +157,15 @@ The bootstrap root initially uses local state on the trusted Mac. Its first appl
 - bucket versioning and server-side encryption;
 - a bucket policy requiring TLS;
 - GitHub's AWS OIDC provider, if the account does not already have one;
-- a human-approved production role; and
+- an overseer-approved production role; and
 - a narrow unattended edge role.
 
 After creation, migrate bootstrap state into the same bucket. Enable S3 native locking with
 `use_lockfile = true`. Do not create a DynamoDB lock table; HashiCorp now marks DynamoDB-based
 locking as deprecated.
 
-All three state resources use `prevent_destroy`. The bucket retains old object versions so an
-operator can recover from an accidental state overwrite. State may contain sensitive metadata,
+All three state resources use `prevent_destroy`. The bucket retains old object versions so the
+overseer can recover from an accidental state overwrite. State may contain sensitive metadata,
 so read and write access is limited to the Identity Center administrator and the matching OIDC
 role and state key.
 
@@ -201,7 +208,7 @@ subnet group, or their stale security groups.
 - Remove all personal-IP and cross-VPC database rules with the disposable old RDS stack.
 
 The implementation plan must include a CIDR-capacity check before assigning new subnet ranges.
-Exact VPC and subnet CIDRs stay in the protected operator inventory, not tracked prose.
+Exact VPC and subnet CIDRs stay in the protected overseer inventory, not tracked prose.
 
 ## RDS Requirements
 
@@ -221,8 +228,8 @@ Add Terraform `prevent_destroy` in addition to RDS deletion protection. Any late
 must remove both safeguards deliberately and require a final snapshot.
 
 Set RDS to manage its master password in its own Secrets Manager secret. Terraform and the EC2
-instance role never receive that password. After EC2 has Session Manager access, the operator opens
-an SSM port-forward from the trusted Mac to private RDS. The operator retrieves the master secret
+instance role never receive that password. After EC2 has Session Manager access, the overseer opens
+an SSM port-forward from the trusted Mac to private RDS. The overseer retrieves the master secret
 locally with the Identity Center session, creates a lower-privilege Jobcron database role over the
 TLS tunnel, then stores only that application's TLS-required `DATABASE_URL` in the runtime secret.
 
@@ -249,15 +256,41 @@ normal pruning. Expansion is one-way; do not pre-allocate 20 GiB without observe
 
 The instance profile grants only:
 
-- the standard permissions required for Session Manager; and
-- `secretsmanager:GetSecretValue` for the one Jobcron runtime secret.
+- the standard permissions required for Session Manager;
+- `secretsmanager:GetSecretValue` for the one Jobcron runtime secret; and
+- write-only object access to the Jobcron prefix in the recovery archive bucket.
 
-It must not read the RDS master secret or mutate the runtime secret.
+It must not read the RDS master secret, mutate the runtime secret, or read or delete recovery
+archives.
+
+## Off-Cloud Database And Log Archives
+
+RDS automated backups and snapshots remain AWS-native recovery mechanisms; they are not files that
+can be copied directly to the MacBook. A nightly systemd timer instead creates a PostgreSQL logical
+dump in custom format and exports timestamped Jobcron and Caddy container logs before local Docker
+rotation makes them unavailable.
+
+Upload both artifact types, plus SHA-256 manifests, to a private encrypted S3 recovery bucket that
+is separate from Terraform state. Use immutable timestamped object keys. The instance may only
+write its assigned prefix. Log output must exclude request headers, cookies, secret values, and
+other unnecessary personal data.
+
+Terraform blocks public access, requires TLS, enables default encryption and versioning, and adds
+`prevent_destroy` to the recovery bucket. Do not enable Object Lock until a real compliance or
+ransomware-resistance requirement justifies its irreversible retention controls.
+
+A MacBook `launchd` job uses the overseer's short-lived Identity Center session to pull missing
+objects and verify their manifests. It then tags verified objects `macbook-copy=verified`. An
+expired SSO session causes an actionable local failure and a retry on a later wake; it never causes
+server-side deletion. S3 lifecycle rules expire verified objects after they are at least 14 days
+old and retain unverified objects for 90 days, so a sleeping MacBook delays the off-cloud copy
+instead of immediately losing it. Local Docker rotation remains bounded independently of the S3
+archive.
 
 ## Runtime Secret And Fail-Closed Startup
 
 Terraform creates the runtime Secrets Manager container but never creates a secret version. The
-operator populates it outside Terraform after the new application database role exists.
+overseer populates it outside Terraform after the new application database role exists.
 
 One secret version contains the existing production environment values plus:
 
@@ -285,7 +318,7 @@ Caddy is the only public container and publishes host port 443 only. It loads th
 certificate and private key from read-only `/run/jobcron` mounts and proxies to `app:7777` on the
 private Docker network.
 
-The Cloudflare launch steps remain human-controlled:
+The Cloudflare launch steps remain overseer-controlled:
 
 1. issue an Origin CA certificate covering the apex and `www` hostnames;
 2. populate the runtime secret before Caddy starts;
@@ -298,9 +331,9 @@ Port 80 remains closed. A browser connecting directly to the origin would not tr
 Origin CA certificate; that is expected because the security group accepts only Cloudflare.
 
 Cloudflare does not notify customers when Origin CA certificates approach expiration. Record the
-certificate expiry in the private operator calendar and schedule renewal before it lapses.
+certificate expiry in the private overseer calendar and schedule renewal before it lapses.
 
-HSTS is a later human decision. Enable it only after stable HTTPS, redirect, subdomain, and
+HSTS is a later overseer decision. Enable it only after stable HTTPS, redirect, subdomain, and
 rollback behavior has been verified because browsers cache the policy.
 
 ## Cloudflare IPv4 Automation
@@ -308,6 +341,12 @@ rollback behavior has been verified because browsers cache the policy.
 The edge root reads Cloudflare's official `https://www.cloudflare.com/ips-v4` endpoint. On
 2026-07-19 it published 15 IPv4 CIDRs. The origin has no IPv6 address, so the seven published IPv6
 ranges are not applied.
+
+Keep the origin IPv4-only for the first release. Cloudflare still advertises IPv6 to visitors and
+proxies those requests to an IPv4 origin. When both IPv4 and IPv6 origin addresses exist,
+Cloudflare prefers IPv4. Adding origin IPv6 therefore does not improve visitor-to-edge connectivity
+and would add routes, security-group rules, and a second prefix-list automation path. Revisit only
+if measured Cloudflare-to-origin latency or an explicit IPv4-removal goal justifies it.
 
 Normalize the response into a unique set and fail before planning an update unless all checks
 pass:
@@ -365,20 +404,21 @@ on a schedule.
 1. Create the Identity Center administrator and install the local CLI tools.
 2. Apply bootstrap locally, migrate its state to S3, and verify state recovery.
 3. Inventory and import the canonical VPC, public networking, and Elastic IPv4 allocation.
-4. Apply the new private subnets, security groups, RDS, runtime-secret container, IAM resources,
-   and replacement EC2 host. Jobcron and Caddy remain stopped while the secret is empty.
+4. Apply the new private subnets, security groups, RDS, runtime-secret container, recovery archive
+   bucket, IAM resources, and replacement EC2 host. Jobcron and Caddy remain stopped while the
+   secret is empty.
 5. Confirm Session Manager access, then open an SSM port-forward from the trusted Mac to RDS.
 6. Create the lower-privilege database role and populate the runtime secret without displaying
    values or granting the instance access to the RDS master secret.
-7. Verify secret retrieval, Docker, Compose, Caddy, migrations, owner creation, and the data
-   import through private paths.
+7. Verify secret retrieval, Docker, Compose, Caddy, migrations, owner creation, the data import,
+   one database dump, and one log archive through private paths.
 8. Apply the edge root and confirm the security group has only Cloudflare port 443 ingress.
 9. Re-associate the Elastic IPv4 address, enable the proxied Cloudflare records, and select Full
    (strict).
 10. Walk the real production user path and record private evidence.
 11. Keep old resources through the rollback window, then remove them explicitly.
 
-The implementation plan must separate each state-changing phase with a saved plan and a human
+The implementation plan must separate each state-changing phase with a saved plan and an overseer
 approval checkpoint. No checkpoint may print a secret, endpoint, account identifier, or personal
 address.
 
@@ -442,6 +482,10 @@ Implementation is incomplete until it updates:
 - Rebooting EC2 recreates transient files, starts the approved image, and leaves no persistent
   `.env` or origin private key.
 - Docker logs rotate, the current and previous images remain, and older unused images are pruned.
+- A PostgreSQL dump and container-log archive reach the recovery bucket, the MacBook pull verifies
+  both manifests, and the S3 lifecycle distinguishes verified from unverified objects.
+- A pulled dump restores into a disposable PostgreSQL database, and the restored schema and row
+  counts match the source verification manifest.
 - Cloudflare Full (strict) serves the apex and `www` behavior through a real browser without a
   certificate error or redirect loop.
 - A direct-origin request remains blocked after proxying is enabled.
@@ -461,8 +505,9 @@ This specification is implemented when:
 7. Cloudflare IPv4 changes update the AWS prefix list automatically through the narrow edge
    workflow;
 8. only Cloudflare can reach Caddy on port 443;
-9. the real proxied application passes the production browser checks; and
-10. stale deployment documentation and superseded manual assumptions are updated or archived.
+9. database dumps and rotated logs survive EC2 loss and have a verified MacBook copy path;
+10. the real proxied application passes the production browser checks; and
+11. stale deployment documentation and superseded manual assumptions are updated or archived.
 
 ## Implementation Slices
 
@@ -473,7 +518,7 @@ This specification is implemented when:
    |
 3. Private database tier and secret containers
    |
-4. Replacement EC2, Session Manager, transient runtime, and Caddy
+4. Replacement EC2, Session Manager, transient runtime, Caddy, and recovery archives
    |
 5. Cloudflare prefix-list automation
    |
@@ -490,8 +535,12 @@ or capacity needs.
 - [Terraform resource import workflow](https://developer.hashicorp.com/terraform/language/import)
 - [AWS customer-managed prefix lists](https://docs.aws.amazon.com/vpc/latest/userguide/managed-prefix-lists.html)
 - [AWS Systems Manager Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html)
+- [IAM Identity Center instance types](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-instances.html)
 - [RDS-managed master passwords](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html)
+- [Amazon S3 Lifecycle rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html)
+- [PostgreSQL `pg_dump`](https://www.postgresql.org/docs/current/app-pgdump.html)
 - [GitHub Actions OIDC for AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)
 - [Cloudflare IP ranges](https://www.cloudflare.com/ips/)
 - [Cloudflare Origin CA](https://developers.cloudflare.com/ssl/origin-configuration/origin-ca/)
 - [Cloudflare Full strict mode](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/)
+- [Cloudflare IPv6 compatibility](https://developers.cloudflare.com/network/ipv6-compatibility/)
