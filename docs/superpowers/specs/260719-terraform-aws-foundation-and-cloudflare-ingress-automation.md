@@ -141,11 +141,60 @@ enabled and remains reserved for account-level recovery and billing tasks.
 
 Before the first Terraform run, the overseer must:
 
-1. enable an organization instance of IAM Identity Center for the account;
-2. create a named administrator identity with MFA;
-3. install AWS CLI v2 and Terraform on the trusted Mac;
-4. authenticate with temporary credentials through `aws configure sso`; and
-5. verify the expected account and `ap-northeast-2` region without printing credentials.
+1. [x] enable an organization instance of IAM Identity Center for the account;
+2. [ ] create one individual administrator identity with phishing-resistant MFA;
+3. [x] install AWS CLI v2 and Terraform on the trusted Mac;
+4. [ ] configure and authenticate the `jobcron-admin` AWS CLI profile; and
+5. [ ] verify its account, role, and `ap-northeast-2` client region without printing identifiers.
+
+Name the Identity Center user after the human, not the privilege. Use the overseer's existing
+stable personal work handle because the Identity Center username cannot be changed later; keep
+the real username and unique email address in the protected inventory. Do not create a shared
+`admin`, `administrator`, or `overseer` user. Name the permission set
+`JobcronAdministratorAccess`, attach the AWS-managed `AdministratorAccess` policy for this
+bootstrap phase, and assign it only to that individual user. Register a FIDO2 authenticator such
+as Touch ID or a hardware security key, plus a second FIDO2 authenticator for recovery.
+
+Run the interactive AWS CLI wizard on the trusted Mac:
+
+```bash
+aws configure sso
+aws sso login --profile jobcron-admin
+```
+
+Use `jobcron` as the SSO session name, the private access-portal start URL or issuer URL, and the
+AWS Region that hosts the Identity Center directory. Keep the default
+`sso:account:access` registration scope, then select the intended account and
+`JobcronAdministratorAccess` permission set. Set the default client Region to
+`ap-northeast-2`, the output format to `json`, and the profile name to `jobcron-admin`. The SSO
+Region identifies the directory and may differ from the workload Region. The browser authorization
+stores no long-lived AWS access key: the CLI writes non-secret profile configuration to
+`~/.aws/config`, caches the SSO token locally, and retrieves short-lived role credentials as
+needed. Run `aws sso login --profile jobcron-admin` again after the Identity Center session
+expires.
+
+Verify the private account ID, generated SSO role, and client Region without echoing any of them:
+
+```zsh
+read -r -s 'JOBCRON_EXPECTED_ACCOUNT_ID?Expected AWS account ID: '
+printf '\n'
+JOBCRON_ACTUAL_ACCOUNT_ID="$(aws sts get-caller-identity \
+  --profile jobcron-admin --query Account --output text)"
+JOBCRON_CALLER_ARN="$(aws sts get-caller-identity \
+  --profile jobcron-admin --query Arn --output text)"
+JOBCRON_ACTUAL_REGION="$(aws configure get region --profile jobcron-admin)"
+
+if [[ "$JOBCRON_ACTUAL_ACCOUNT_ID" == "$JOBCRON_EXPECTED_ACCOUNT_ID" &&
+      "$JOBCRON_CALLER_ARN" == *':assumed-role/AWSReservedSSO_JobcronAdministratorAccess_'* &&
+      "$JOBCRON_ACTUAL_REGION" == 'ap-northeast-2' ]]; then
+  printf 'AWS identity, role, and region verified\n'
+else
+  printf 'AWS identity, role, or region mismatch\n' >&2
+fi
+
+unset JOBCRON_EXPECTED_ACCOUNT_ID JOBCRON_ACTUAL_ACCOUNT_ID
+unset JOBCRON_CALLER_ARN JOBCRON_ACTUAL_REGION
+```
 
 Use an organization instance even while this is a standalone account. Organization instances
 support permission sets and AWS-account access; account instances support only selected
@@ -536,6 +585,10 @@ or capacity needs.
 - [AWS customer-managed prefix lists](https://docs.aws.amazon.com/vpc/latest/userguide/managed-prefix-lists.html)
 - [AWS Systems Manager Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html)
 - [IAM Identity Center instance types](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-instances.html)
+- [Add IAM Identity Center users](https://docs.aws.amazon.com/singlesignon/latest/userguide/addusers.html)
+- [IAM Identity Center MFA types](https://docs.aws.amazon.com/singlesignon/latest/userguide/mfa-types.html)
+- [AWS CLI IAM Identity Center authentication](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)
+- [AWS STS `get-caller-identity`](https://docs.aws.amazon.com/cli/latest/reference/sts/get-caller-identity.html)
 - [RDS-managed master passwords](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html)
 - [Amazon S3 Lifecycle rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html)
 - [PostgreSQL `pg_dump`](https://www.postgresql.org/docs/current/app-pgdump.html)
