@@ -237,7 +237,9 @@ methods include `user_id` wherever two accounts must not share state. The curren
 therefore a product limitation, not a storage shortcut.
 
 Legacy SQLite is not a writable runtime. `cmd/jobcron-import` creates a verified snapshot, checks
-counts and collisions, and imports preserved local data into an existing PostgreSQL owner.
+counts and collisions, and imports preserved local data into an existing PostgreSQL owner. It
+inserts all postings before restoring their self-referencing canonical-duplicate links, so a link
+may safely point to a posting with a later ID.
 `cmd/jobcron-user` creates or repairs that owner outside the public application surface. SQLite
 migrations remain embedded only for importer compatibility and tests.
 

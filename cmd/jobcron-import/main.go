@@ -625,6 +625,10 @@ ORDER BY id`)
 		return fmt.Errorf("import: read postings: %w", err)
 	}
 	defer rows.Close()
+	var duplicateLinks []struct {
+		postingID   int64
+		duplicateID int64
+	}
 	for rows.Next() {
 		var r postingRow
 		if err := rows.Scan(
@@ -635,6 +639,12 @@ ORDER BY id`)
 		); err != nil {
 			return fmt.Errorf("import: scan posting: %w", err)
 		}
+		if r.DuplicateOf.Valid {
+			duplicateLinks = append(duplicateLinks, struct {
+				postingID   int64
+				duplicateID int64
+			}{postingID: r.ID, duplicateID: r.DuplicateOf.Int64})
+		}
 		if _, err := tx.ExecContext(ctx, `
 INSERT INTO postings (
     id, source, source_posting_id, url, title, company, location,
@@ -642,7 +652,7 @@ INSERT INTO postings (
     stack_tags_json, tags_json, description, raw_json, published_at, closed_at,
     always_open, first_seen_at, last_seen_at, duplicate_of, detail_fetched_at
 ) VALUES (
-    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NULL,$23
 )
 ON CONFLICT (id) DO UPDATE SET
     source = EXCLUDED.source,
@@ -666,16 +676,25 @@ ON CONFLICT (id) DO UPDATE SET
     always_open = EXCLUDED.always_open,
     first_seen_at = EXCLUDED.first_seen_at,
     last_seen_at = EXCLUDED.last_seen_at,
-    duplicate_of = EXCLUDED.duplicate_of,
+    duplicate_of = NULL,
     detail_fetched_at = EXCLUDED.detail_fetched_at`,
 			r.ID, r.Source, r.SourcePostingID, r.URL, r.Title, r.Company, r.Location,
 			r.Newcomer, r.MinCareer, r.MaxCareer, r.CareerLevel, r.Education, r.EducationName,
 			r.StackTagsJSON, r.TagsJSON, r.Description, r.RawJSON, r.PublishedAt, r.ClosedAt,
-			r.AlwaysOpen, r.FirstSeenAt.UTC(), r.LastSeenAt.UTC(), r.DuplicateOf, r.DetailFetchedAt); err != nil {
+			r.AlwaysOpen, r.FirstSeenAt.UTC(), r.LastSeenAt.UTC(), r.DetailFetchedAt); err != nil {
 			return fmt.Errorf("import: write posting %d: %w", r.ID, err)
 		}
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, link := range duplicateLinks {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE postings SET duplicate_of = $1 WHERE id = $2`, link.duplicateID, link.postingID); err != nil {
+			return fmt.Errorf("import: write duplicate link for posting %d: %w", link.postingID, err)
+		}
+	}
+	return nil
 }
 
 func copyScores(ctx context.Context, source *sql.DB, tx *sql.Tx, ownerID int64) error {

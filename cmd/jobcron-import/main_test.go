@@ -384,6 +384,77 @@ WHERE p.source = 'jumpit' AND p.source_posting_id = 'import-1' AND s.total = 87`
 	}
 }
 
+func TestImportApplyPreservesForwardDuplicateLink(t *testing.T) {
+	postgresURL := requireImportPostgres(t)
+	sqlitePath := seedSQLiteImportFixture(t)
+	ctx := context.Background()
+
+	source, err := storage.OpenSQLiteAt(sqlitePath)
+	if err != nil {
+		t.Fatalf("open SQLite source: %v", err)
+	}
+	t.Cleanup(func() { _ = source.Close() })
+	seenAt := time.Date(2026, 7, 9, 1, 4, 3, 0, time.UTC)
+	forwardSourceID, _, err := source.UpsertPosting(ctx, scraper.Posting{
+		Source:          "demoday",
+		SourcePostingID: "import-forward-source",
+		URL:             "https://demoday.example/jobs/import-forward-source",
+		Title:           "forward duplicate",
+		Company:         "test company",
+		Description:     "points to a later posting ID",
+		RawJSON:         `{}`,
+		FirstSeenAt:     seenAt,
+		LastSeenAt:      seenAt,
+	})
+	if err != nil {
+		t.Fatalf("insert forward duplicate: %v", err)
+	}
+	forwardTargetID, _, err := source.UpsertPosting(ctx, scraper.Posting{
+		Source:          "greeting",
+		SourcePostingID: "import-forward-target",
+		URL:             "https://greeting.example/jobs/import-forward-target",
+		Title:           "forward duplicate target",
+		Company:         "test company",
+		Description:     "has a later posting ID",
+		RawJSON:         `{}`,
+		FirstSeenAt:     seenAt.Add(time.Minute),
+		LastSeenAt:      seenAt.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert forward duplicate target: %v", err)
+	}
+	if forwardSourceID >= forwardTargetID {
+		t.Fatalf("source ID %d must precede target ID %d", forwardSourceID, forwardTargetID)
+	}
+	if _, err := source.SQLDB().ExecContext(ctx,
+		`UPDATE postings SET duplicate_of = ? WHERE id = ?`, forwardTargetID, forwardSourceID); err != nil {
+		t.Fatalf("set forward duplicate link: %v", err)
+	}
+
+	ownerEmail := "forward-duplicate-owner@example.invalid"
+	targetURL, _ := prepareImportTarget(t, postgresURL, ownerEmail)
+	if err := runImport(ctx, importOptions{
+		sqlitePath: sqlitePath, postgresURL: targetURL, ownerEmail: ownerEmail,
+		apply: true, out: io.Discard,
+	}); err != nil {
+		t.Fatalf("runImport: %v", err)
+	}
+
+	target, err := sql.Open("pgx", targetURL)
+	if err != nil {
+		t.Fatalf("open PostgreSQL target: %v", err)
+	}
+	defer target.Close()
+	var duplicateOf int64
+	if err := target.QueryRow(
+		`SELECT duplicate_of FROM postings WHERE id = $1`, forwardSourceID).Scan(&duplicateOf); err != nil {
+		t.Fatalf("read imported forward duplicate link: %v", err)
+	}
+	if duplicateOf != forwardTargetID {
+		t.Fatalf("duplicate_of = %d, want later posting %d", duplicateOf, forwardTargetID)
+	}
+}
+
 func TestImportCredentialIsEncryptedWithConfiguredMasterKey(t *testing.T) {
 	postgresURL := requireImportPostgres(t)
 	sqlitePath := seedSQLiteImportFixture(t)
