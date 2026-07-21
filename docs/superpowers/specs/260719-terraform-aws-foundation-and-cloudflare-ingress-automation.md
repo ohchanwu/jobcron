@@ -142,7 +142,7 @@ enabled and remains reserved for account-level recovery and billing tasks.
 Before the first Terraform run, the overseer must:
 
 1. [x] enable an organization instance of IAM Identity Center for the account;
-2. [ ] create one individual administrator identity with phishing-resistant MFA;
+2. [x] create one individual administrator identity with phishing-resistant MFA;
 3. [x] install AWS CLI v2 and Terraform on the trusted Mac;
 4. [ ] configure and authenticate the `jobcron-admin` AWS CLI profile; and
 5. [ ] verify its account, role, and `ap-northeast-2` client region without printing identifiers.
