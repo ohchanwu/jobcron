@@ -13,6 +13,13 @@ import (
 // CreateSession stores a hashed session token for a user. Callers must pass the
 // SHA-256 token hash, never the raw bearer token.
 func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
+	if err := s.insertSession(ctx, s.db, userID, tokenHash, expiresAt); err != nil {
+		return fmt.Errorf("storage: create session: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) insertSession(ctx context.Context, db queryExecer, userID int64, tokenHash string, expiresAt time.Time) error {
 	if userID == 0 {
 		return errors.New("storage: session user id is required")
 	}
@@ -20,13 +27,10 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash strin
 		return errors.New("storage: session token hash is required")
 	}
 	now := time.Now().UTC()
-	_, err := s.db.ExecContext(ctx, s.query(`
+	_, err := db.ExecContext(ctx, s.query(`
 INSERT INTO sessions (user_id, session_token_hash, created_at, expires_at, last_seen_at)
 VALUES (?, ?, ?, ?, ?)`), userID, tokenHash, now, expiresAt.UTC(), now)
-	if err != nil {
-		return fmt.Errorf("storage: create session: %w", err)
-	}
-	return nil
+	return err
 }
 
 // CreateSessionIfPasswordHash stores a session only while the user's password

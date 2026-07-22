@@ -1,6 +1,8 @@
 package server
 
 import (
+	"container/list"
+	"crypto/sha256"
 	"net"
 	"net/http"
 	"strings"
@@ -11,16 +13,21 @@ import (
 const (
 	loginRateLimitMaxFailures = 5
 	loginRateLimitWindow      = 15 * time.Minute
+	loginRateLimitMaxKeys     = 1024
+	loginRateLimitPruneEvery  = time.Minute
 	proxySecretHeaderName     = "X-Jobcron-Proxy"
 )
 
 type loginRateLimiter struct {
-	mu       sync.Mutex
-	now      func() time.Time
-	attempts map[string]loginAttempts
+	mu        sync.Mutex
+	now       func() time.Time
+	nextPrune time.Time
+	attempts  map[[sha256.Size]byte]*list.Element
+	order     list.List
 }
 
 type loginAttempts struct {
+	key       [sha256.Size]byte
 	count     int
 	windowEnd time.Time
 }
@@ -28,7 +35,7 @@ type loginAttempts struct {
 func newLoginRateLimiter() *loginRateLimiter {
 	return &loginRateLimiter{
 		now:      time.Now,
-		attempts: map[string]loginAttempts{},
+		attempts: map[[sha256.Size]byte]*list.Element{},
 	}
 }
 
@@ -37,37 +44,69 @@ func (l *loginRateLimiter) reserveFailure(ip, email string) bool {
 	defer l.mu.Unlock()
 	key := loginRateLimitKey(ip, email)
 	now := l.now()
-	l.pruneExpired(now)
-	a, ok := l.attempts[key]
-	if !ok || !now.Before(a.windowEnd) {
-		l.attempts[key] = loginAttempts{count: 1, windowEnd: now.Add(loginRateLimitWindow)}
-		return true
+	if !now.Before(l.nextPrune) {
+		l.pruneExpired(now)
+		l.nextPrune = now.Add(loginRateLimitPruneEvery)
 	}
-	if a.count >= loginRateLimitMaxFailures {
-		return false
+	element, ok := l.attempts[key]
+	if ok {
+		a := element.Value.(*loginAttempts)
+		if now.Before(a.windowEnd) {
+			if a.count >= loginRateLimitMaxFailures {
+				return false
+			}
+			a.count++
+			return true
+		}
+		l.remove(element)
 	}
-	a.count++
-	l.attempts[key] = a
+	if len(l.attempts) >= loginRateLimitMaxKeys {
+		l.remove(l.order.Front())
+	}
+	// Entries stay in creation order rather than moving on each failure. That
+	// keeps the hot path O(1) and makes capacity eviction deterministic.
+	a := &loginAttempts{key: key, count: 1, windowEnd: now.Add(loginRateLimitWindow)}
+	element = l.order.PushBack(a)
+	l.attempts[key] = element
 	return true
+}
+
+func (l *loginRateLimiter) reserveIP(ip string) bool {
+	return l.reserveFailure(ip, "")
 }
 
 func (l *loginRateLimiter) reset(ip, email string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.pruneExpired(l.now())
-	delete(l.attempts, loginRateLimitKey(ip, email))
-}
-
-func (l *loginRateLimiter) pruneExpired(now time.Time) {
-	for key, attempt := range l.attempts {
-		if !now.Before(attempt.windowEnd) {
-			delete(l.attempts, key)
-		}
+	if element := l.attempts[loginRateLimitKey(ip, email)]; element != nil {
+		l.remove(element)
 	}
 }
 
-func loginRateLimitKey(ip, email string) string {
-	return strings.ToLower(strings.TrimSpace(ip)) + "\x00" + strings.ToLower(strings.TrimSpace(email))
+func (l *loginRateLimiter) resetIP(ip string) {
+	l.reset(ip, "")
+}
+
+func (l *loginRateLimiter) pruneExpired(now time.Time) {
+	for element := l.order.Front(); element != nil; {
+		next := element.Next()
+		if !now.Before(element.Value.(*loginAttempts).windowEnd) {
+			l.remove(element)
+		}
+		element = next
+	}
+}
+
+func (l *loginRateLimiter) remove(element *list.Element) {
+	if element == nil {
+		return
+	}
+	delete(l.attempts, element.Value.(*loginAttempts).key)
+	l.order.Remove(element)
+}
+
+func loginRateLimitKey(ip, email string) [sha256.Size]byte {
+	return sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(ip)) + "\x00" + strings.ToLower(strings.TrimSpace(email))))
 }
 
 func (s *Server) clientIP(r *http.Request) string {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -37,6 +38,31 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (Use
 	return user, nil
 }
 
+// CreateUserWithSession atomically creates an account and its initial session.
+func (s *Store) CreateUserWithSession(
+	ctx context.Context,
+	email, passwordHash, tokenHash string,
+	expiresAt time.Time,
+) (User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, fmt.Errorf("storage: begin user signup: %w", err)
+	}
+	defer tx.Rollback()
+
+	user, err := s.insertUser(ctx, tx, email, passwordHash)
+	if err != nil {
+		return User{}, fmt.Errorf("storage: create signup user: %w", err)
+	}
+	if err := s.insertSession(ctx, tx, user.ID, tokenHash, expiresAt); err != nil {
+		return User{}, fmt.Errorf("storage: create signup session: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return User{}, fmt.Errorf("storage: commit user signup: %w", err)
+	}
+	return user, nil
+}
+
 func (s *Store) insertUser(ctx context.Context, db queryExecer, email, passwordHash string) (User, error) {
 	email = auth.NormalizeEmail(email)
 	if email == "" {
@@ -52,7 +78,8 @@ VALUES (?, ?, ?, ?)
 RETURNING id, email, password_hash, created_at, updated_at`), email, passwordHash, now, now)
 	user, err := scanUser(row)
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" {
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" ||
+		s.dialect == DialectSQLite && err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
 		return User{}, ErrEmailAlreadyExists
 	}
 	return user, err

@@ -99,12 +99,14 @@ scrape time (`JOBCRON_DAILY_SCRAPE_TIME`). Add only:
 ```dotenv
 JOBCRON_IMAGE=<registry-user>/jobcron:sha-<12-character-commit>
 JOBCRON_CREDENTIAL_ENCRYPTION_KEY=<base64-32-byte-master-key>
+JOBCRON_PROXY_SECRET=<random-shared-proxy-secret>
 ```
 
 Generate the credential master key on a trusted machine, keep a separate secure
 backup, and validate that it decodes to exactly 32 bytes without printing it.
-Keep demo mode, the legacy admin token, the Worknet key, and the proxy secret
-unset for this first pass.
+Generate the proxy secret independently; it is shared only by Caddy and the app
+so authentication throttles use the real client address. Keep demo mode, the
+legacy admin token, and the Worknet key unset for this first pass.
 
 Validate Compose before starting anything:
 

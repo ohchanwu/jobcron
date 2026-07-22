@@ -5,9 +5,48 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ohchanwu/jobcron/internal/auth"
 )
+
+func TestPostgresCreateUserWithSessionIsAtomic(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	expiresAt := time.Now().Add(time.Hour)
+
+	rawToken := "token-one"
+	user, err := st.CreateUserWithSession(ctx, " First@Example.COM ", "hash-one", auth.HashSessionToken(rawToken), expiresAt)
+	if err != nil {
+		t.Fatalf("CreateUserWithSession: %v", err)
+	}
+	if user.Email != "first@example.com" {
+		t.Fatalf("created email = %q, want canonical email", user.Email)
+	}
+	if _, ok, err := st.UserBySessionToken(ctx, rawToken); err != nil || !ok {
+		t.Fatalf("UserBySessionToken: ok=%v err=%v", ok, err)
+	}
+	if _, err := st.CreateUserWithSession(ctx, "first@example.com", "hash-two", "token-two", expiresAt); !errors.Is(err, ErrEmailAlreadyExists) {
+		t.Fatalf("duplicate error = %v, want ErrEmailAlreadyExists", err)
+	}
+
+	if _, err := st.SQLDB().ExecContext(ctx, `
+CREATE FUNCTION fail_signup_session() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'forced session failure';
+END
+$$;
+CREATE TRIGGER fail_signup_session BEFORE INSERT ON sessions
+FOR EACH ROW EXECUTE FUNCTION fail_signup_session()`); err != nil {
+		t.Fatalf("create failure trigger: %v", err)
+	}
+	if _, err := st.CreateUserWithSession(ctx, "rollback@example.com", "hash-three", "token-three", expiresAt); err == nil {
+		t.Fatal("CreateUserWithSession error = nil, want forced session failure")
+	}
+	if _, ok, err := st.UserByEmail(ctx, "rollback@example.com"); err != nil || ok {
+		t.Fatalf("rolled-back user lookup: ok=%v err=%v", ok, err)
+	}
+}
 
 func TestCreateOwnerUserCreatesOnlyOwner(t *testing.T) {
 	st := newPostgresTestStore(t)

@@ -33,6 +33,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
 	mux.HandleFunc("GET /login", s.handleLoginForm)
 	mux.HandleFunc("POST /login", s.handleLoginPost)
+	mux.HandleFunc("GET /signup", s.handleSignupForm)
+	mux.HandleFunc("POST /signup", s.handleSignupPost)
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("GET /api/scrape", s.handleScrapeSSE)
 	mux.HandleFunc("GET /api/rerate", s.handleRerateSSE)
@@ -49,7 +51,7 @@ func (s *Server) Handler() http.Handler {
 		http.FileServer(http.FS(web.FS))))
 	var handler http.Handler = mux
 	if s.productionMode && !s.demoMode {
-		handler = s.requireAuth(s.csrfProtect(handler))
+		handler = s.requireAuth(limitSignupBody(s.csrfProtect(handler)))
 	}
 	if !s.demoMode {
 		return handler

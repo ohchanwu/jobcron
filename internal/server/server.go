@@ -105,13 +105,16 @@ func minPositive(a, b int) int {
 
 // Server wires storage, one or more scrapers, and the HTTP handlers together.
 type Server struct {
-	store        *storage.Store
-	sources      []scraper.Scraper
-	tmpl         *template.Template
-	flight       *singleFlight
-	rerates      *rerateTracker
-	csrfSecret   []byte
-	loginLimiter *loginRateLimiter
+	store           *storage.Store
+	sources         []scraper.Scraper
+	tmpl            *template.Template
+	flight          *singleFlight
+	rerates         *rerateTracker
+	csrfSecret      []byte
+	loginLimiter    *loginRateLimiter
+	loginIPLimiter  *loginRateLimiter
+	signupLimiter   *loginRateLimiter
+	signupHashSlots chan struct{}
 
 	credentialCipher credential.Cipher
 	newAIProvider    aiProviderFactory
@@ -394,14 +397,17 @@ func newServer(store *storage.Store, localUserID int64, sources ...scraper.Scrap
 		panic("server.New: at least one scraper is required")
 	}
 	srv := &Server{
-		store:         store,
-		sources:       sources,
-		flight:        newSingleFlight(),
-		rerates:       newRerateTracker(),
-		csrfSecret:    newCSRFSecret(),
-		loginLimiter:  newLoginRateLimiter(),
-		newAIProvider: ai.New,
-		localUserID:   localUserID,
+		store:           store,
+		sources:         sources,
+		flight:          newSingleFlight(),
+		rerates:         newRerateTracker(),
+		csrfSecret:      newCSRFSecret(),
+		loginLimiter:    newLoginRateLimiter(),
+		loginIPLimiter:  newLoginRateLimiter(),
+		signupLimiter:   newLoginRateLimiter(),
+		signupHashSlots: make(chan struct{}, signupHashConcurrency),
+		newAIProvider:   ai.New,
+		localUserID:     localUserID,
 	}
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,

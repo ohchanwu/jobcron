@@ -17,6 +17,7 @@ const (
 	syntheticDatabase       = "postgres://synthetic:synthetic@db.example.invalid/jobcron?sslmode=require"
 	syntheticSession        = "synthetic-session-secret-at-least-32-bytes"
 	syntheticKey            = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+	syntheticProxySecret    = "synthetic-proxy-secret"
 	syntheticDailyTime      = "06:15"
 )
 
@@ -25,6 +26,7 @@ var syntheticProductionEnvironment = []string{
 	"DATABASE_URL=" + syntheticDatabase,
 	"SESSION_SECRET=" + syntheticSession,
 	"JOBCRON_CREDENTIAL_ENCRYPTION_KEY=" + syntheticKey,
+	"JOBCRON_PROXY_SECRET=" + syntheticProxySecret,
 	"JOBCRON_DAILY_SCRAPE_TIME=" + syntheticDailyTime,
 }
 
@@ -181,6 +183,7 @@ func TestProductionComposeVerifierRequiresSyntheticInputs(t *testing.T) {
 		"DATABASE_URL",
 		"SESSION_SECRET",
 		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY",
+		"JOBCRON_PROXY_SECRET",
 	} {
 		t.Run(name, func(t *testing.T) {
 			result := runProductionVerifier(t, nil, removeEnvironment(syntheticProductionEnvironment, name))
@@ -296,6 +299,13 @@ func TestProductionComposeVerifierRejectsMissingAppEnvironment(t *testing.T) {
 			assertRejectedContract(t, result, "services.app.environment."+name)
 		})
 	}
+	t.Run("JOBCRON_PROXY_SECRET", func(t *testing.T) {
+		result := runProductionVerifier(t, replaceOnce(
+			"      JOBCRON_STAGE1_SPONSOR_USER_ID:\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
+			"      JOBCRON_STAGE1_SPONSOR_USER_ID:",
+		), syntheticProductionEnvironment)
+		assertRejectedContract(t, result, "services.app.environment.JOBCRON_PROXY_SECRET")
+	})
 }
 
 func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testing.T) {
@@ -328,6 +338,14 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 				`      JOBCRON_CREDENTIAL_ENCRYPTION_KEY: "mismatched-credential-key"`,
 			),
 		},
+		{
+			name:          "JOBCRON_PROXY_SECRET",
+			mismatchValue: "mismatched-proxy-secret",
+			mutate: replaceOnce(
+				"      JOBCRON_STAGE1_SPONSOR_USER_ID:\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
+				"      JOBCRON_STAGE1_SPONSOR_USER_ID:\n      JOBCRON_PROXY_SECRET: \"mismatched-proxy-secret\"",
+			),
+		},
 	}
 
 	for _, test := range tests {
@@ -339,6 +357,17 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 			}
 		})
 	}
+	t.Run("Caddy JOBCRON_PROXY_SECRET", func(t *testing.T) {
+		mismatchValue := "mismatched-caddy-proxy-secret"
+		result := runProductionVerifier(t, replaceOnce(
+			"    environment:\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
+			"    environment:\n      JOBCRON_PROXY_SECRET: \""+mismatchValue+"\"",
+		), syntheticProductionEnvironment)
+		assertRejectedContract(t, result, "services.caddy.environment.JOBCRON_PROXY_SECRET")
+		if strings.Contains(result.output, mismatchValue) {
+			t.Fatalf("rejection output disclosed mismatched Caddy proxy secret: %q", result.output)
+		}
+	})
 }
 
 func TestProductionComposeVerifierRejectsWrongProductionSettings(t *testing.T) {
@@ -435,7 +464,6 @@ func TestProductionComposeVerifierRejectsForbiddenAppEnvironment(t *testing.T) {
 		"JOBCRON_DEMO",
 		"JOBCRON_ADMIN_TOKEN",
 		"JOBCRON_WORKNET_KEY",
-		"JOBCRON_PROXY_SECRET",
 	} {
 		t.Run(name, func(t *testing.T) {
 			forbiddenValue := "forbidden-synthetic-value-" + name
@@ -512,6 +540,7 @@ func TestProductionComposeCIUsesSyntheticInputs(t *testing.T) {
 		"DATABASE_URL":                      syntheticDatabase,
 		"SESSION_SECRET":                    syntheticSession,
 		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY": syntheticKey,
+		"JOBCRON_PROXY_SECRET":              syntheticProxySecret,
 		"JOBCRON_DAILY_SCRAPE_TIME":         syntheticDailyTime,
 	}
 	if len(contractStep.Env) != len(wantEnvironment) {
@@ -586,7 +615,14 @@ func assertRejectedContract(t *testing.T, result verifierResult, contract string
 	if !strings.Contains(result.output, contract) {
 		t.Fatalf("rejection output = %q, want contract field %s", result.output, contract)
 	}
-	for _, value := range []string{syntheticImage, syntheticDatabase, syntheticSession, syntheticKey, syntheticDailyTime} {
+	for _, value := range []string{
+		syntheticImage,
+		syntheticDatabase,
+		syntheticSession,
+		syntheticKey,
+		syntheticProxySecret,
+		syntheticDailyTime,
+	} {
 		if strings.Contains(result.output, value) {
 			t.Fatalf("rejection output disclosed a synthetic environment value: %q", result.output)
 		}

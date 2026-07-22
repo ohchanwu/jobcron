@@ -18,7 +18,9 @@ const (
 	testDailyTime        = "06:15"
 	testSignupAccessCode = "synthetic-cohort-code"
 	testSponsorUserID    = "42"
+	testProxySecret      = "synthetic-proxy-secret"
 	credentialKeyEnvName = "JOBCRON_CREDENTIAL_ENCRYPTION_KEY"
+	proxySecretEnvName   = "JOBCRON_PROXY_SECRET"
 )
 
 type composeConfig struct {
@@ -129,6 +131,23 @@ func TestProductionComposePassesCohortRuntimeVariables(t *testing.T) {
 	}
 }
 
+func TestProductionComposeSharesRequiredProxySecret(t *testing.T) {
+	config := renderCompose(t)
+	for _, service := range []string{"app", "caddy"} {
+		if got := config.Services[service].Environment[proxySecretEnvName]; got != testProxySecret {
+			t.Fatalf("%s %s = %q, want shared synthetic secret", service, proxySecretEnvName, got)
+		}
+	}
+	caddyfile, err := os.ReadFile("Caddyfile")
+	if err != nil {
+		t.Fatalf("read Caddyfile: %v", err)
+	}
+	want := "header_up X-Jobcron-Proxy {$JOBCRON_PROXY_SECRET}"
+	if !strings.Contains(string(caddyfile), want) {
+		t.Fatalf("Caddyfile does not overwrite the trusted proxy header with %q", want)
+	}
+}
+
 func TestProductionComposeLeavesCohortRuntimeVariablesUnset(t *testing.T) {
 	output, err := composeCommand(true).CombinedOutput()
 	if err != nil {
@@ -157,6 +176,7 @@ func renderCompose(t *testing.T) composeConfig {
 	cmd.Env = append(cmd.Env,
 		"JOBCRON_SIGNUP_ACCESS_CODE="+testSignupAccessCode,
 		"JOBCRON_STAGE1_SPONSOR_USER_ID="+testSponsorUserID,
+		proxySecretEnvName+"="+testProxySecret,
 	)
 	return renderComposeCommand(t, cmd)
 }
@@ -185,12 +205,14 @@ func composeCommand(includeCredentialKey bool) *exec.Cmd {
 		"JOBCRON_DAILY_SCRAPE_TIME",
 		"JOBCRON_SIGNUP_ACCESS_CODE",
 		"JOBCRON_STAGE1_SPONSOR_USER_ID",
+		proxySecretEnvName,
 	)
 	cmd.Env = append(cmd.Env,
 		"JOBCRON_IMAGE="+testImage,
 		"DATABASE_URL="+testDatabaseURL,
 		"SESSION_SECRET="+testSessionSecret,
 		"JOBCRON_DAILY_SCRAPE_TIME="+testDailyTime,
+		proxySecretEnvName+"="+testProxySecret,
 	)
 	if includeCredentialKey {
 		cmd.Env = append(cmd.Env, credentialKeyEnvName+"="+testCredentialKey)

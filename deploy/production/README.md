@@ -7,8 +7,9 @@ configured database URL, session secret, environment, host, port, no-open
 setting, and daily scrape time.
 
 For the first rollout, preserve those existing values and add only
-`JOBCRON_IMAGE` and `JOBCRON_CREDENTIAL_ENCRYPTION_KEY`. Validate Compose before
-starting anything. From the trusted Mac, open the localhost-only tunnel,
+`JOBCRON_IMAGE`, `JOBCRON_CREDENTIAL_ENCRYPTION_KEY`, and
+`JOBCRON_PROXY_SECRET`. Validate Compose before starting anything. From the
+trusted Mac, open the localhost-only tunnel,
 silently read private values only into the current shell, and export
 `JOBCRON_ENV=production` so import fails closed, run `create-owner`, create the
 pre-import RDS snapshot, dry-run `jobcron-import`, review the fingerprint, eight
@@ -42,6 +43,7 @@ JOBCRON_IMAGE=example/jobcron:sha-000000000000 \
 DATABASE_URL='postgres://example:example@db.example.invalid:5432/example?sslmode=require' \
 SESSION_SECRET=synthetic-session-secret \
 JOBCRON_CREDENTIAL_ENCRYPTION_KEY='MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=' \
+JOBCRON_PROXY_SECRET='synthetic-proxy-secret' \
 JOBCRON_DAILY_SCRAPE_TIME='06:15' \
 docker compose config
 ```
@@ -50,7 +52,9 @@ The rendered config must expose only Caddy on ports `80` and `443`; keep the app
 private on `7777`; include the database, session, credential-key, production,
 no-open, scheduler, and daily-time settings; and contain no app filesystem or
 legacy credential volume. It must not include demo mode, an admin token, a
-Worknet key, or a proxy secret.
+Worknet key, or a publicly supplied trusted-proxy header. Caddy and the app must
+receive the same proxy secret so only Caddy can supply the client address used
+by authentication rate limits.
 
 Compose passes the preserved `JOBCRON_DAILY_SCRAPE_TIME` value into the app;
 omitting it uses the safe `05:00` default.

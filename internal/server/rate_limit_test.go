@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ func TestLoginRateLimitBlocksSixthFailedAttemptUntilWindowExpires(t *testing.T) 
 	srv.SetProductionMode(true)
 	now := time.Date(2026, 7, 10, 1, 0, 0, 0, time.UTC)
 	srv.loginLimiter.now = func() time.Time { return now }
+	srv.loginIPLimiter.now = func() time.Time { return now }
 	hash, err := auth.HashPassword("correct-password")
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
@@ -145,14 +148,133 @@ func TestLoginRateLimitPrunesExpiredAttempts(t *testing.T) {
 
 func TestLoginRateLimitReservationIsAtomic(t *testing.T) {
 	limiter := newLoginRateLimiter()
-	var allowed int
-	for i := 0; i < loginRateLimitMaxFailures+1; i++ {
-		if limiter.reserveFailure("198.51.100.10", "owner@example.com") {
-			allowed++
+	start := make(chan struct{})
+	var ready sync.WaitGroup
+	var done sync.WaitGroup
+	var allowed atomic.Int64
+	const attempts = loginRateLimitMaxFailures + 20
+	ready.Add(attempts)
+	done.Add(attempts)
+	for range attempts {
+		go func() {
+			defer done.Done()
+			ready.Done()
+			<-start
+			if limiter.reserveFailure("198.51.100.10", "owner@example.com") {
+				allowed.Add(1)
+			}
+		}()
+	}
+	ready.Wait()
+	close(start)
+	done.Wait()
+	if got := allowed.Load(); got != loginRateLimitMaxFailures {
+		t.Fatalf("allowed reservations = %d, want %d", got, loginRateLimitMaxFailures)
+	}
+}
+
+func TestLoginRateLimiterEvictsOldestInsteadOfBlockingNewClients(t *testing.T) {
+	limiter := newLoginRateLimiter()
+	for i := 0; i < loginRateLimitMaxKeys; i++ {
+		if !limiter.reserveFailure(fmt.Sprintf("198.51.100.%d", i), "student@example.com") {
+			t.Fatalf("seed reservation %d was blocked", i)
 		}
 	}
-	if allowed != loginRateLimitMaxFailures {
-		t.Fatalf("allowed reservations = %d, want %d", allowed, loginRateLimitMaxFailures)
+	if !limiter.reserveFailure("203.0.113.250", "unrelated@example.com") {
+		t.Fatal("unrelated client was blocked when limiter reached capacity")
+	}
+	if got := len(limiter.attempts); got != loginRateLimitMaxKeys {
+		t.Fatalf("limiter entries = %d, want %d", got, loginRateLimitMaxKeys)
+	}
+}
+
+func TestLoginRateLimitCannotBeBypassedByRotatingEmail(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+
+	for i := 0; i < loginRateLimitMaxFailures; i++ {
+		rec := postLogin(t, srv, "198.51.100.10:1234", fmt.Sprintf("missing-%d@example.com", i), "wrong-password")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status = %d, want 401", i+1, rec.Code)
+		}
+	}
+	rec := postLogin(t, srv, "198.51.100.10:1234", "another@example.com", "wrong-password")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("rotating-email sixth status = %d, want 429", rec.Code)
+	}
+	assertAccountCounts(t, st, 0, 0)
+}
+
+func TestSignupRateLimitIsIndependentAndBlocksBeforePasswordValidation(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	srv.SetSignupAccessCode(testSignupAccessCode)
+
+	for i := 0; i < loginRateLimitMaxFailures; i++ {
+		rec := postSignup(t, srv, validSignupForm("wrong-code"))
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("attempt %d status = %d, want 422", i+1, rec.Code)
+		}
+	}
+	rec := postSignup(t, srv, validSignupForm(testSignupAccessCode))
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("sixth signup status = %d, want 429 before password hashing", rec.Code)
+	}
+	assertAccountCounts(t, st, 0, 0)
+
+	login := postLogin(t, srv, "198.51.100.10:1234", "new@example.com", "wrong-password")
+	if login.Code != http.StatusUnauthorized {
+		t.Fatalf("independent first login status = %d, want 401", login.Code)
+	}
+}
+
+func TestSignupRateLimitCannotBeBypassedByRotatingEmail(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	srv.SetSignupAccessCode(testSignupAccessCode)
+
+	for i := 0; i < loginRateLimitMaxFailures; i++ {
+		form := validSignupForm("wrong-code")
+		form.Set("email", fmt.Sprintf("student-%d@example.com", i))
+		if rec := postSignup(t, srv, form); rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("attempt %d status = %d, want 422", i+1, rec.Code)
+		}
+	}
+	form := validSignupForm("wrong-code")
+	form.Set("email", "student-6@example.com")
+	if rec := postSignup(t, srv, form); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("rotating-email sixth status = %d, want 429", rec.Code)
+	}
+	assertAccountCounts(t, st, 0, 0)
+}
+
+func TestSignupRejectsOversizedFieldsBeforeLimiterState(t *testing.T) {
+	for _, field := range []string{"email", "password", "password_confirm", "access_code"} {
+		t.Run(field, func(t *testing.T) {
+			srv, st := newTestServer(t, &fakeScraper{})
+			srv.SetProductionMode(true)
+			srv.SetSignupAccessCode(testSignupAccessCode)
+			form := validSignupForm(testSignupAccessCode)
+			form.Set(field, strings.Repeat("a", auth.MaxPasswordBytes+1))
+
+			if rec := postSignup(t, srv, form); rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want 422", rec.Code)
+			}
+			if got := len(srv.signupLimiter.attempts); got != 0 {
+				t.Fatalf("limiter entries = %d, want 0", got)
+			}
+			assertAccountCounts(t, st, 0, 0)
+		})
+	}
+}
+
+func TestLoginRateLimiterStateIsBounded(t *testing.T) {
+	limiter := newLoginRateLimiter()
+	for i := 0; i < 1100; i++ {
+		limiter.reserveFailure(fmt.Sprintf("198.51.100.%d", i), "student@example.com")
+	}
+	if got := len(limiter.attempts); got > 1024 {
+		t.Fatalf("limiter entries = %d, want at most 1024", got)
 	}
 }
 

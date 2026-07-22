@@ -12,8 +12,9 @@
   entry point.
 - The MacBook builds and pushes the Linux arm64 image; EC2 verifies and pulls the
   reviewed image. EC2 does not build it.
-- Worknet remains disabled for the first production pass. Do not set
-  `JOBCRON_PROXY_SECRET` for production.
+- Worknet remains disabled for the first production pass. Production Caddy and
+  the app share `JOBCRON_PROXY_SECRET` so signup and login throttles see each
+  client's address without trusting public forwarded headers.
 - Secrets stay outside Git. The production Compose example intentionally leaves
   `SESSION_SECRET` empty so configuration fails until a real secret is supplied.
 - Autonomous agents may commit locally but must not push.

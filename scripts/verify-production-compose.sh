@@ -12,6 +12,7 @@ fail() {
 [ -n "${SESSION_SECRET:-}" ] || fail "required variable SESSION_SECRET"
 [ -n "${JOBCRON_CREDENTIAL_ENCRYPTION_KEY:-}" ] ||
 	fail "required variable JOBCRON_CREDENTIAL_ENCRYPTION_KEY"
+[ -n "${JOBCRON_PROXY_SECRET:-}" ] || fail "required variable JOBCRON_PROXY_SECRET"
 
 command -v docker >/dev/null 2>&1 || fail "docker compose command"
 command -v jq >/dev/null 2>&1 || fail "jq structured Compose inspector"
@@ -102,8 +103,10 @@ check_contract "services.app.environment.JOBCRON_ADMIN_TOKEN must be absent" \
 	'(.services.app.environment | has("JOBCRON_ADMIN_TOKEN")) | not'
 check_contract "services.app.environment.JOBCRON_WORKNET_KEY must be absent" \
 	'(.services.app.environment | has("JOBCRON_WORKNET_KEY")) | not'
-check_contract "services.app.environment.JOBCRON_PROXY_SECRET must be absent" \
-	'(.services.app.environment | has("JOBCRON_PROXY_SECRET")) | not'
+check_contract "services.app.environment.JOBCRON_PROXY_SECRET" \
+	'.services.app.environment.JOBCRON_PROXY_SECRET == env.JOBCRON_PROXY_SECRET'
+check_contract "services.caddy.environment.JOBCRON_PROXY_SECRET" \
+	'.services.caddy.environment.JOBCRON_PROXY_SECRET == env.JOBCRON_PROXY_SECRET'
 check_contract "services.app.environment.JOBCRON_SCHEDULER_ENABLED must be 1" \
 	'.services.app.environment.JOBCRON_SCHEDULER_ENABLED == "1"'
 check_contract "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME must preserve the same-name input or default to 05:00" '

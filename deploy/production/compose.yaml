@@ -4,7 +4,7 @@
 # - pulls a prebuilt image instead of building on EC2
 # - uses AWS RDS PostgreSQL through DATABASE_URL
 # - runs the private owner-login app, not read-only demo mode
-# - leaves Worknet and proxy-secret support disabled for the first pass
+# - leaves Worknet disabled for the first pass
 services:
   app:
     image: "${JOBCRON_IMAGE:?set JOBCRON_IMAGE in .env}"
@@ -28,6 +28,7 @@ services:
       JOBCRON_DAILY_SCRAPE_TIME: "${JOBCRON_DAILY_SCRAPE_TIME:-05:00}"
       JOBCRON_SIGNUP_ACCESS_CODE:
       JOBCRON_STAGE1_SPONSOR_USER_ID:
+      JOBCRON_PROXY_SECRET: "${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}"
     expose:
       - "7777"
     restart: unless-stopped
@@ -39,6 +40,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      JOBCRON_PROXY_SECRET: "${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
