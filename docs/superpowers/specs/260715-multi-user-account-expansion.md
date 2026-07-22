@@ -46,7 +46,9 @@ more than one user exists. This milestone removes both restrictions.
 1. Accounts are independent. There are no organizations, teams, application
    roles, or social-login providers.
 2. The cohort gets self-service email-and-password signup protected by one
-   server-side access code. Signup is not yet open to the general public.
+   server-side access code. The shared code proves only that a registrant knows
+   the value; it does not prove that they are a particular classmate. Signup is
+   not yet open to the general public.
 3. Passwords reuse the existing Argon2id implementation. Cohort users can change
    their password while signed in. Recovery for a forgotten password and email
    verification are deferred; the operator handles cohort recovery through the
@@ -112,8 +114,15 @@ more than one user exists. This milestone removes both restrictions.
 
 ### AI providers and credentials
 
-- Support Anthropic, OpenAI, and Gemini through the existing `ai.Provider`
-  interface and shared HTTP-provider chassis. Do not add provider SDK dependencies.
+- Keep the existing `ai.Provider` interface as Jobcron's application boundary for
+  Anthropic, OpenAI, and Gemini. Do not expose provider-specific types above each
+  provider adapter.
+- Use the smallest provider client that preserves Jobcron's custom HTTP transport
+  and egress pinning, explicit pacing and retry behavior, usage accounting,
+  stable error mapping, and deterministic offline tests. Start with the existing
+  dependency-free HTTP chassis. An official provider SDK is allowed when a short
+  implementation spike proves that it removes more adapter and maintenance code
+  than it adds without weakening those properties.
 - Give each provider a small static model allowlist and one inexpensive default.
   Keep volatile model identifiers in the code and tests rather than locking them
   into this specification.
@@ -124,23 +133,45 @@ more than one user exists. This milestone removes both restrictions.
 - Keep blank key input as “preserve the existing key” for the selected provider.
 - Keep create, replace, read, and delete operations scoped to the authenticated
   user's selected provider row.
-- Implement OpenAI with its Chat Completions REST contract. Implement Gemini with
-  its documented OpenAI-compatible REST endpoint, reusing the OpenAI-shaped body
-  and response parser while keeping separate provider identity, authentication,
-  base host, model allowlist, errors, usage accounting, and egress pin.
 - Keep Anthropic's existing Messages API adapter unchanged except where the
   shared three-provider UI or tests require it.
+- Restore OpenAI through the existing HTTP chassis unless the SDK spike meets the
+  criteria above. OpenAI already fits the current request-and-response shape, so
+  an SDK must earn its dependency cost rather than being selected by default.
+- For Gemini, compare direct Gemini REST, Google's official SDK, and the documented
+  OpenAI-compatible endpoint during implementation planning. Select the smallest
+  option that meets the same transport, pacing, accounting, error, and testability
+  requirements. Do not mandate the compatibility endpoint merely to make the
+  provider adapters look alike.
 - Add offline HTTP contract tests for all three providers and opt-in live contract
   tests that run only when the corresponding test API key is present.
 - Correct the profile copy that still describes a local `0600` key file. In the
   hosted app, the credential is encrypted before storage in PostgreSQL.
 - Do not add providers beyond these three, dynamic provider plugins, or remote
   model discovery.
+- Do not add LangChain for this milestone. Jobcron currently performs fixed,
+  structured extraction and scoring calls rather than agent, tool-use, retrieval,
+  or multi-step orchestration workflows. Reconsider a workflow framework only if
+  those capabilities become real requirements and the existing provider boundary
+  starts accumulating orchestration code.
+
+### Delivery order
+
+- Complete the multi-user core first: signup and account lifecycle, server-side
+  sessions, user isolation, and the global scheduled-work flow using the existing
+  Anthropic adapter.
+- Implement OpenAI and Gemini as a separate provider-expansion slice after that
+  core is independently verified. They do not block the first cohort launch. Hide
+  an unavailable provider option rather than exposing a control that cannot work.
+- Keep the slices independently reviewable so provider transport choices cannot
+  delay or destabilize the account and scheduler changes.
 
 Implementation references:
 
 - [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 - [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai)
+- [LangChain overview](https://docs.langchain.com/oss/python/langchain/overview)
+- [LangChainGo community project](https://github.com/tmc/langchaingo)
 
 ### Scheduled work
 
@@ -154,10 +185,25 @@ Implementation references:
 - Resolve each user's selected provider, AI runtime, credential, and usage budget
   independently. Paid AI calls occur only inside that user's scoring pass and are
   charged only to that user's usage ledger.
-- Reuse global cached `ai_extractions` when available. An uncached extraction is
-  paid for by the user whose scoring pass requested it; later cache hits make no
-  paid call. Revisit user-scoped extraction caches only if this simple cohort
-  policy causes a material cost-fairness problem.
+- Keep `ai_extractions` global and identify one reusable extraction by
+  `(posting_id, content_hash, ai_version)`. `content_hash` represents the
+  normalized posting input. `ai_version` represents the provider, model, and
+  prompt revision plus any response-shaping settings, so changes to the content
+  or extraction behavior produce a miss.
+- During each sequential user pass, calculate the required `ai_version` and check
+  the global cache before making a paid call. On a hit, reuse the public posting
+  facts without debiting that user. On a miss, call that user's selected provider
+  with that user's key, validate the structured response, debit only that user's
+  usage ledger, and then upsert the global extraction.
+- Do not cache provider errors, malformed structured output, or deterministic
+  fallback results. A failed paid extraction must not poison later users' cache
+  lookups.
+- Accept “first matching requester pays; later matching users reuse for free” as
+  an intentionally simple but imperfect cohort policy. Re-evaluate it before
+  public signup, or sooner if actual usage makes the cross-user subsidy material.
+  The explicit alternatives are a user-scoped cache, which is fairer but repeats
+  calls, or an operator-funded global extraction credential, which centralizes
+  the cost but changes the BYOK product boundary. Do not silently change policy.
 - Record a bounded per-user failure summary without logging credentials or
   allowing one user's error to abort the remaining users.
 - Keep the existing single global scrape lock. Replace it only if production
@@ -238,6 +284,10 @@ without editing the database manually.
   directly in tests rather than waiting for the clock. With at least two users,
   assert one shared fetch, separate user scoring, one broken key that does not
   stop another user, and one missing profile that is skipped.
+- Verify cache identity and payer behavior: two users requesting the same
+  posting, content hash, and AI version cause one paid call and one cache hit;
+  changing the content, provider, model, or prompt version causes a miss; and a
+  provider or validation failure writes no reusable extraction.
 - Add offline provider contract tests for Anthropic, OpenAI, and Gemini, including
   authentication, request and response shape, usage accounting, model validation,
   API errors, and host pinning.
@@ -257,6 +307,7 @@ without editing the database manually.
   cohort milestone.
 - Providers beyond Anthropic, OpenAI, and Gemini; dynamic provider plugins;
   remote model discovery; or shared funded AI usage.
+- LangChain or another general-purpose agent, retrieval, or workflow framework.
 - Per-user scraping schedules, duplicate source fetches, concurrent fan-out,
   queues, workers, or distributed scheduling.
 - Applying Terraform, modifying live AWS resources, changing DNS, or performing
