@@ -54,13 +54,16 @@ more than one user exists. This milestone removes both restrictions.
    verification are deferred; the operator handles cohort recovery through the
    user-management CLI.
 4. AI access is bring-your-own-key. The UI supports Anthropic, OpenAI, and
-   Gemini. Shared Jobcron-funded usage is out of scope.
-5. The server performs one global scrape every day at 05:00 KST, then scores the
-   shared postings separately for each user.
+   Gemini. The overseer's account sponsors global Stage-1 cache population;
+   a separate Jobcron-funded service credential is out of scope.
+5. The server performs one global scrape every day at 05:00 KST. It populates
+   missing global Stage-1 extractions through one explicitly configured sponsor
+   account, then scores the shared postings separately for each user.
 6. Per-user scoring runs sequentially at first. Concurrency or a job queue is
    added only if measured run duration requires it.
-7. A missing, invalid, or exhausted AI credential affects only that user.
-   Deterministic scoring continues and other users still complete.
+7. A missing, invalid, or exhausted AI credential affects only its assigned
+   work. Sponsor failure skips uncached Stage-1 AI extraction; another user's
+   failure affects only that user's analysis. Deterministic scoring continues.
 8. Deleting an account removes its sessions, profile, saved-job state, AI
    scores, usage, contextual validations, import records, and credentials.
    Global postings, public `ai_extractions`, and global scrape history remain.
@@ -107,6 +110,9 @@ more than one user exists. This milestone removes both restrictions.
   confirmation.
 - Revoke all sessions as part of account deletion through the existing foreign
   key cascade, then expire the browser cookie.
+- If the configured Stage-1 sponsor account is deleted, future cache population
+  fails closed until the operator configures another sponsor. Never substitute
+  the first or next database user automatically.
 - Verify that deleting a user removes every private row but preserves global
   posting facts and scrape history.
 - State clearly in the signup UI that the cohort release does not verify email
@@ -135,6 +141,9 @@ more than one user exists. This milestone removes both restrictions.
   user's selected provider row.
 - Keep Anthropic's existing Messages API adapter unchanged except where the
   shared three-provider UI or tests require it.
+- Use one canonical Stage-1 semantic contract and output schema across all
+  providers. Provider adapters may differ in wire format or structured-output
+  features, but they must not redefine the extracted facts.
 - Restore OpenAI through the existing HTTP chassis unless the SDK spike meets the
   criteria above. OpenAI already fits the current request-and-response shape, so
   an SDK must earn its dependency cost rather than being selected by default.
@@ -180,30 +189,38 @@ Implementation references:
   the scheduled run ambiguous or cause it to be skipped.
 - Fetch, normalize, deduplicate, and upsert shared postings once without using a
   user's paid AI credential.
+- Read the Stage-1 sponsor from `JOBCRON_STAGE1_SPONSOR_USER_ID`. Resolve exactly
+  that account's selected provider, model, encrypted credential, and usage budget.
+  The variable is an explicit billing assignment, not an application role.
+- Populate missing global Stage-1 extractions before per-user scoring. Charge
+  every paid Stage-1 call only to the sponsor's usage ledger.
+- Apply the same payer rule to scheduled scrapes, interactive rerates, backfills,
+  and retries. The user who happens to trigger a Stage-1 miss never becomes its
+  payer.
+- If the sponsor ID is absent, unknown, deleted, unconfigured, invalid, or over
+  budget, record a bounded failure and continue with existing cache hits and the
+  deterministic fallback. Never borrow another user's credential.
 - Enumerate current users and perform profile-dependent scoring sequentially.
   Users without a saved profile are skipped until they finish setup.
 - Resolve each user's selected provider, AI runtime, credential, and usage budget
-  independently. Paid AI calls occur only inside that user's scoring pass and are
-  charged only to that user's usage ledger.
+  independently for contextual validation and Stage-2 scoring. Those paid calls
+  occur only inside that user's pass and are charged only to that user's ledger.
 - Keep `ai_extractions` global and identify one reusable extraction by
-  `(posting_id, content_hash, ai_version)`. `content_hash` represents the
-  normalized posting input. `ai_version` represents the provider, model, and
-  prompt revision plus any response-shaping settings, so changes to the content
-  or extraction behavior produce a miss.
-- During each sequential user pass, calculate the required `ai_version` and check
-  the global cache before making a paid call. On a hit, reuse the public posting
-  facts without debiting that user. On a miss, call that user's selected provider
-  with that user's key, validate the structured response, debit only that user's
-  usage ledger, and then upsert the global extraction.
+  `(posting_id, content_hash, extraction_contract_version)`. `content_hash`
+  represents the normalized posting input. The contract version represents the
+  Stage-1 fact definitions, output schema, and validation rules.
+- Keep provider, model, transport, and response settings out of Stage-1 cache
+  identity. Prompt wording changes also reuse the cache when they preserve the
+  same contract. A semantic, schema, or validation change must bump the contract
+  version and produce a miss.
+- Reuse the existing `ai_version` storage field for the extraction contract
+  version; do not add a replacement cache table or column merely to rename it.
+- On a cache hit, reuse the public posting facts without debiting any account. On
+  a miss, call the sponsor's selected provider with the sponsor's key, validate
+  the structured response, debit only the sponsor, and upsert the extraction.
 - Do not cache provider errors, malformed structured output, or deterministic
   fallback results. A failed paid extraction must not poison later users' cache
   lookups.
-- Accept “first matching requester pays; later matching users reuse for free” as
-  an intentionally simple but imperfect cohort policy. Re-evaluate it before
-  public signup, or sooner if actual usage makes the cross-user subsidy material.
-  The explicit alternatives are a user-scoped cache, which is fairer but repeats
-  calls, or an operator-funded global extraction credential, which centralizes
-  the cost but changes the BYOK product boundary. Do not silently change policy.
 - Record a bounded per-user failure summary without logging credentials or
   allowing one user's error to abort the remaining users.
 - Keep the existing single global scrape lock. Replace it only if production
@@ -216,9 +233,11 @@ Implementation references:
 - Users cannot read, overwrite, prune, or debit one another's state.
 - `ai_extractions` remains global only while it contains public posting facts and
   no profile, credential, or account data.
-- The 05:00 shared fetch must not impersonate the first database user or spend
-  that user's API key on behalf of everyone. Paid AI starts only inside an
-  explicitly identified user's scoring pass with that user's selected key.
+- The sponsor designation grants no permissions and changes no authorization
+  checks. It identifies only which account pays for global Stage-1 cache misses.
+- The 05:00 workflow must resolve the configured sponsor explicitly. It must not
+  infer sponsorship from account creation order or silently spend another user's
+  API key.
 
 ## Truly Public Signup Follow-Up
 
@@ -282,12 +301,19 @@ without editing the database manually.
   enumeration-safe duplicate handling, CSRF, auto-login, and unauthenticated access.
 - Verify the 05:00 scheduler calculation, then invoke the scheduled workflow
   directly in tests rather than waiting for the clock. With at least two users,
-  assert one shared fetch, separate user scoring, one broken key that does not
-  stop another user, and one missing profile that is skipped.
-- Verify cache identity and payer behavior: two users requesting the same
-  posting, content hash, and AI version cause one paid call and one cache hit;
-  changing the content, provider, model, or prompt version causes a miss; and a
-  provider or validation failure writes no reusable extraction.
+  assert one shared fetch, sponsor-funded Stage-1 population, separate user
+  scoring, one broken user key that does not stop another user, and one missing
+  profile that is skipped.
+- Verify sponsor failure behavior: missing, unknown, deleted, unconfigured,
+  invalid, and exhausted sponsors do not debit any other user and do not stop the
+  deterministic workflow.
+- Verify that scheduled scrapes, interactive rerates, backfills, and retries all
+  charge Stage-1 misses only to the configured sponsor.
+- Verify cache identity and payer behavior: repeated requests for the same
+  posting, content hash, and extraction contract cause one sponsor-paid call and
+  subsequent global hits. Changing provider, model, transport, or non-semantic
+  prompt wording remains a hit; changing posting content or the extraction
+  contract causes a miss. Provider or validation failure writes no extraction.
 - Add offline provider contract tests for Anthropic, OpenAI, and Gemini, including
   authentication, request and response shape, usage accounting, model validation,
   API errors, and host pinning.
@@ -306,7 +332,8 @@ without editing the database manually.
 - Social login, multi-factor authentication, or public password recovery in the
   cohort milestone.
 - Providers beyond Anthropic, OpenAI, and Gemini; dynamic provider plugins;
-  remote model discovery; or shared funded AI usage.
+  remote model discovery; a separate Jobcron-funded service credential; or
+  shared funded contextual and Stage-2 usage.
 - LangChain or another general-purpose agent, retrieval, or workflow framework.
 - Per-user scraping schedules, duplicate source fetches, concurrent fan-out,
   queues, workers, or distributed scheduling.
@@ -325,8 +352,9 @@ Before production deployment, the overseer reviews and can explain:
 - the IAM principal and least-privilege permissions used for planning, applying,
   deployment, and runtime secret access;
 - Terraform state storage, locking, backup, and recovery;
-- how `JOBCRON_SIGNUP_ACCESS_CODE` and existing secrets reach the container
-  without entering Git or Terraform state as plaintext;
+- how `JOBCRON_STAGE1_SPONSOR_USER_ID` reaches the container as reviewed runtime
+  configuration, and how `JOBCRON_SIGNUP_ACCESS_CODE` and existing secrets reach
+  it without entering Git or Terraform state as plaintext;
 - the database migration, rollback, credential-rotation, and account bootstrap
   procedures; and
 - the expected recurring AWS and third-party costs.
