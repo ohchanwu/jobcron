@@ -237,6 +237,10 @@ form and uniqueness, while storage exposes general create and lookup methods wit
 application roles. The deployment-only owner bootstrap remains table-locked and refuses any
 database that already contains an account.
 
+Login creates a session only if the user's password hash still equals the exact hash just verified,
+while holding the same PostgreSQL user-row lock used by password mutation. A concurrent password
+change or operator reset therefore cannot leave a session authenticated by the old password.
+
 Foreign keys remove dependent user state when its owner is deleted. Composite keys and repository
 methods include `user_id` wherever two accounts must not share state. The current owner-only UI is
 therefore a product limitation, not a storage shortcut.
@@ -245,8 +249,8 @@ Legacy SQLite is not a writable runtime. `cmd/jobcron-import` creates a verified
 counts and collisions, and imports preserved local data into an existing PostgreSQL owner. It
 inserts all postings before restoring their self-referencing canonical-duplicate links, so a link
 may safely point to a posting with a later ID.
-`cmd/jobcron-user` creates or repairs that owner outside the public application surface. SQLite
-migrations remain embedded only for importer compatibility and tests.
+`cmd/jobcron-user` bootstraps the owner and resets or deletes exact accounts outside the public
+application surface. SQLite migrations remain embedded only for importer compatibility and tests.
 
 See the [hosted-first storage decision][hosted-first-storage] and the
 [local import procedure](../deploy/local/README.md#verified-sqlite-import).

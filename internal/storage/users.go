@@ -144,6 +144,69 @@ UPDATE users
 	return user, nil
 }
 
+// ResetUserPassword replaces one user's password hash and revokes all of that
+// user's sessions in the same transaction.
+func (s *Store) ResetUserPassword(ctx context.Context, email, passwordHash string) (User, error) {
+	email = auth.NormalizeEmail(email)
+	if email == "" {
+		return User{}, errors.New("storage: user email is required")
+	}
+	if passwordHash == "" {
+		return User{}, errors.New("storage: user password hash is required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, fmt.Errorf("storage: begin user password reset: %w", err)
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRowContext(ctx, s.query(`
+UPDATE users
+   SET password_hash = ?,
+       updated_at = ?
+ WHERE email = ?
+ RETURNING id, email, password_hash, created_at, updated_at`), passwordHash, time.Now().UTC(), email)
+	user, err := scanUser(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, errors.New("storage: user does not exist")
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("storage: reset user password: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, s.query(`DELETE FROM sessions WHERE user_id = ?`), user.ID); err != nil {
+		return User{}, fmt.Errorf("storage: revoke user sessions: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return User{}, fmt.Errorf("storage: commit user password reset: %w", err)
+	}
+	return user, nil
+}
+
+// DeleteUser deletes one exact account. PostgreSQL cascades its private state.
+func (s *Store) DeleteUser(ctx context.Context, userID int64) (bool, error) {
+	if userID <= 0 {
+		return false, nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin user deletion: %w", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, s.query(`DELETE FROM users WHERE id = ?`), userID)
+	if err != nil {
+		return false, fmt.Errorf("storage: delete user: %w", err)
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("storage: count deleted users: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("storage: commit user deletion: %w", err)
+	}
+	return deleted > 0, nil
+}
+
 func (s *Store) lockUsersForOwnerChange(ctx context.Context, tx *sql.Tx) error {
 	if s.dialect == DialectPostgres {
 		if _, err := tx.ExecContext(ctx, `LOCK TABLE users IN EXCLUSIVE MODE`); err != nil {

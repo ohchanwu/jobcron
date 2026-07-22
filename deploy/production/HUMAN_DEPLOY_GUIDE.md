@@ -197,6 +197,42 @@ The command opens PostgreSQL and applies the embedded migrations. After success,
 confirm through an approved query that the user count is exactly one. Do not run
 `create-owner` again.
 
+For a later password reset, target the exact account address and supply the new
+password only through the command-specific environment variable:
+
+```zsh
+read -r 'USER_EMAIL?User email: '
+export USER_EMAIL
+read -r -s 'JOBCRON_USER_PASSWORD?Replacement password: '
+printf '\n'
+export JOBCRON_USER_PASSWORD
+
+go run ./cmd/jobcron-user reset-password \
+  --database-url "$TUNNELED_DATABASE_URL" \
+  --email "$USER_EMAIL"
+
+unset JOBCRON_USER_PASSWORD USER_EMAIL
+```
+
+The reset revokes every session for that account. To permanently delete one
+account and its private state, require the operator to repeat the same address:
+
+```zsh
+read -r 'USER_EMAIL?User email: '
+export USER_EMAIL
+
+go run ./cmd/jobcron-user delete-user \
+  --database-url "$TUNNELED_DATABASE_URL" \
+  --email "$USER_EMAIL" \
+  --confirm-email "$USER_EMAIL"
+
+unset USER_EMAIL
+```
+
+Deletion cascades the selected account's private profile, saved-job, score, AI,
+credential, import, and session state. Shared postings, global extraction facts,
+and scrape-run history remain.
+
 ## 8. Create the pre-import RDS snapshot
 
 Create a manual pre-import RDS snapshot through the approved AWS operator

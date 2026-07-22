@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ohchanwu/jobcron/internal/auth"
 )
@@ -257,6 +259,114 @@ func TestLoginSuccessSetsSecureSessionCookie(t *testing.T) {
 	if page.Code != http.StatusOK {
 		t.Fatalf("authenticated page status = %d, want 200", page.Code)
 	}
+}
+
+func TestLoginVerifiedBeforePasswordResetCannotCreateSurvivingSession(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	ctx := context.Background()
+
+	oldHash, err := auth.HashPassword("old-password")
+	if err != nil {
+		t.Fatalf("HashPassword(old): %v", err)
+	}
+	user, err := st.CreateOwnerUser(ctx, "owner@example.com", oldHash)
+	if err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	newHash, err := auth.HashPassword("new-password")
+	if err != nil {
+		t.Fatalf("HashPassword(new): %v", err)
+	}
+
+	tx, err := st.SQLDB().BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, newHash, user.ID); err != nil {
+		t.Fatalf("stage password reset: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = $1`, user.ID); err != nil {
+		t.Fatalf("stage session revocation: %v", err)
+	}
+
+	result := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		form := url.Values{"email": {user.Email}, "password": {"old-password"}}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		addCSRF(t, srv, req, "")
+		srv.Handler().ServeHTTP(rec, req)
+		result <- rec
+	}()
+
+	rec, blocked, err := waitForLoginResultOrSessionLock(ctx, st.SQLDB(), result)
+	if err != nil {
+		t.Fatalf("wait for login concurrency point: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit password reset: %v", err)
+	}
+	if blocked {
+		select {
+		case rec = <-result:
+		case <-time.After(5 * time.Second):
+			t.Fatal("login did not finish after password reset committed")
+		}
+	}
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("old-password login status = %d, want 401", rec.Code)
+	}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == sessionCookieName {
+			t.Fatalf("old-password login set %s cookie", sessionCookieName)
+		}
+	}
+	var sessions int
+	if err := st.SQLDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE user_id = $1`, user.ID).Scan(&sessions); err != nil {
+		t.Fatalf("count sessions: %v", err)
+	}
+	if sessions != 0 {
+		t.Fatalf("surviving sessions = %d, want 0", sessions)
+	}
+}
+
+func waitForLoginResultOrSessionLock(
+	ctx context.Context,
+	db *sql.DB,
+	result <-chan *httptest.ResponseRecorder,
+) (*httptest.ResponseRecorder, bool, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case rec := <-result:
+			return rec, false, nil
+		default:
+		}
+
+		var blocked bool
+		err := db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_stat_activity
+				WHERE pid <> pg_backend_pid()
+				  AND datname = current_database()
+				  AND state = 'active'
+				  AND wait_event_type = 'Lock'
+				  AND query LIKE '%WITH authenticated_user AS (%'
+			)`).Scan(&blocked)
+		if err != nil {
+			return nil, false, err
+		}
+		if blocked {
+			return nil, true, nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return nil, false, fmt.Errorf("timed out waiting for login result or session lock")
 }
 
 func TestLogoutClearsSessionCookie(t *testing.T) {

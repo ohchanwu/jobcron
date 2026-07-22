@@ -123,17 +123,25 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		s.renderLoginFailure(w, r)
 		return
 	}
-	s.loginLimiter.reset(ip, email)
 	token, err := auth.GenerateSessionToken()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := s.store.CreateSession(r.Context(), user.ID, auth.HashSessionToken(token), time.Now().Add(sessionTTL)); err != nil {
+	expiresAt := time.Now().Add(sessionTTL)
+	created, err := s.store.CreateSessionIfPasswordHash(
+		r.Context(), user.ID, user.PasswordHash, auth.HashSessionToken(token), expiresAt,
+	)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, s.sessionCookie(token, time.Now().Add(sessionTTL)))
+	if !created {
+		s.renderLoginFailure(w, r)
+		return
+	}
+	s.loginLimiter.reset(ip, email)
+	http.SetCookie(w, s.sessionCookie(token, expiresAt))
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
