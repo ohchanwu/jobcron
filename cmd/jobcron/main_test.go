@@ -20,11 +20,10 @@ import (
 type fakeRuntimeUserStore struct {
 	managedID    int64
 	managedErr   error
-	soleID       int64
-	soleOK       bool
-	soleErr      error
+	userIDs      []int64
+	userIDsErr   error
 	managedCalls int
-	soleCalls    int
+	userIDsCalls int
 	closeErr     error
 	closeCalls   int
 }
@@ -34,9 +33,9 @@ func (s *fakeRuntimeUserStore) EnsureManagedLocalOwner(context.Context) (int64, 
 	return s.managedID, s.managedErr
 }
 
-func (s *fakeRuntimeUserStore) SoleOwnerUserID(context.Context) (int64, bool, error) {
-	s.soleCalls++
-	return s.soleID, s.soleOK, s.soleErr
+func (s *fakeRuntimeUserStore) UserIDs(context.Context) ([]int64, error) {
+	s.userIDsCalls++
+	return s.userIDs, s.userIDsErr
 }
 
 func (s *fakeRuntimeUserStore) Close() error {
@@ -68,7 +67,7 @@ func TestExplicitDatabaseURLNeverInvokesDocker(t *testing.T) {
 	const explicitURL = "postgres://explicit.example.invalid/jobcron"
 	ensureCalls := 0
 	openedURL := ""
-	store := &fakeRuntimeUserStore{soleID: 41, soleOK: true}
+	store := &fakeRuntimeUserStore{userIDs: []int64{41}}
 	stubRuntimeDependencies(t,
 		func(context.Context) (string, error) {
 			ensureCalls++
@@ -97,12 +96,14 @@ func TestExplicitDatabaseURLNeverInvokesDocker(t *testing.T) {
 	if runtime.UserID != 41 {
 		t.Fatalf("UserID = %d, want 41", runtime.UserID)
 	}
+	if store.userIDsCalls != 1 {
+		t.Fatalf("UserIDs calls = %d, want 1", store.userIDsCalls)
+	}
 }
 
 func TestResolveRuntimeReturnsStoreCloseErrorAfterSuccessfulResolution(t *testing.T) {
 	store := &fakeRuntimeUserStore{
-		soleID:   41,
-		soleOK:   true,
+		userIDs:  []int64{41},
 		closeErr: errors.New("close runtime owner store"),
 	}
 	stubRuntimeDependencies(t,
@@ -114,18 +115,35 @@ func TestResolveRuntimeReturnsStoreCloseErrorAfterSuccessfulResolution(t *testin
 	_, err := resolvePostgresRuntime(context.Background(), config.Config{
 		DatabaseURL: "postgres://explicit.example.invalid/jobcron",
 	})
-	if err == nil || !strings.Contains(err.Error(), "close runtime owner store") {
-		t.Fatalf("resolvePostgresRuntime error = %v, want close error", err)
+	if err == nil || err.Error() != "close PostgreSQL runtime store: close runtime owner store" {
+		t.Fatalf("resolvePostgresRuntime error = %v, want runtime-store close error", err)
 	}
 	if store.closeCalls != 1 {
 		t.Fatalf("Close calls = %d, want 1", store.closeCalls)
 	}
 }
 
+func TestResolveRuntimeWrapsOpenErrorAsRuntimeStore(t *testing.T) {
+	stubRuntimeDependencies(t,
+		func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
+		func() ([]byte, error) { return nil, errors.New("unexpected local key load") },
+		func(string) (runtimeUserStore, error) { return nil, errors.New("dial failed") },
+	)
+
+	_, err := resolvePostgresRuntime(context.Background(), config.Config{
+		Production:              true,
+		DatabaseURL:             "postgres://production.example.invalid/jobcron",
+		CredentialEncryptionKey: bytes.Repeat([]byte{0x44}, credential.MasterKeyBytes),
+	})
+	if err == nil || err.Error() != "open PostgreSQL runtime store: dial failed" {
+		t.Fatalf("resolvePostgresRuntime error = %v, want runtime-store open error", err)
+	}
+}
+
 func TestResolveRuntimePreservesOwnerErrorWhenStoreCloseAlsoFails(t *testing.T) {
 	store := &fakeRuntimeUserStore{
-		soleErr:  errors.New("resolve owner failed"),
-		closeErr: errors.New("close runtime owner store"),
+		userIDsErr: errors.New("resolve owner failed"),
+		closeErr:   errors.New("close runtime owner store"),
 	}
 	stubRuntimeDependencies(t,
 		func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
@@ -187,8 +205,8 @@ func TestResolveRuntimeLocalWithoutURLUsesManagedPostgres(t *testing.T) {
 		t.Fatalf("runtime URL = %q managed = %v ensure calls = %d, want managed URL and one Ensure",
 			runtime.DatabaseURL, runtime.ManagedLocal, ensureCalls)
 	}
-	if store.managedCalls != 1 || store.soleCalls != 0 {
-		t.Fatalf("owner calls = managed %d sole %d, want 1 and 0", store.managedCalls, store.soleCalls)
+	if store.managedCalls != 1 || store.userIDsCalls != 0 {
+		t.Fatalf("user calls = managed %d list %d, want 1 and 0", store.managedCalls, store.userIDsCalls)
 	}
 }
 
@@ -238,7 +256,7 @@ func TestResolveRuntimeLocalLoadsProtectedMasterKey(t *testing.T) {
 func TestResolveRuntimeProductionNeverCreatesLocalMasterKey(t *testing.T) {
 	configuredKey := bytes.Repeat([]byte{0x44}, credential.MasterKeyBytes)
 	keyCalls := 0
-	store := &fakeRuntimeUserStore{soleID: 73, soleOK: true}
+	store := &fakeRuntimeUserStore{userIDs: []int64{73}}
 	stubRuntimeDependencies(t,
 		func(context.Context) (string, error) { return "", errors.New("unexpected Ensure") },
 		func() ([]byte, error) { keyCalls++; return nil, errors.New("unexpected local key load") },
@@ -259,23 +277,23 @@ func TestResolveRuntimeProductionNeverCreatesLocalMasterKey(t *testing.T) {
 	if len(runtime.CredentialEncryptionKey) != credential.MasterKeyBytes {
 		t.Fatalf("master-key length = %d, want %d", len(runtime.CredentialEncryptionKey), credential.MasterKeyBytes)
 	}
-	if runtime.UserID != 73 || runtime.ManagedLocal {
-		t.Fatalf("production runtime user ID = %d managed = %v, want verified sole owner",
+	if runtime.UserID != 0 || runtime.ManagedLocal {
+		t.Fatalf("production runtime user ID = %d managed = %v, want zero and false",
 			runtime.UserID, runtime.ManagedLocal)
 	}
-	if store.soleCalls != 1 || store.managedCalls != 0 {
-		t.Fatalf("production owner calls = sole %d managed %d, want 1 and 0", store.soleCalls, store.managedCalls)
+	if store.userIDsCalls != 0 || store.managedCalls != 0 {
+		t.Fatalf("production user calls = list %d managed %d, want both zero",
+			store.userIDsCalls, store.managedCalls)
 	}
 }
 
-func TestProductionExplicitURLRefusesMissingOrAmbiguousOwner(t *testing.T) {
+func TestProductionExplicitURLAllowsEmptyOrMultipleUsers(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		store   *fakeRuntimeUserStore
-		wantErr string
+		name  string
+		store *fakeRuntimeUserStore
 	}{
-		{name: "zero users", store: &fakeRuntimeUserStore{}, wantErr: "exactly one existing user"},
-		{name: "multiple users", store: &fakeRuntimeUserStore{soleErr: errors.New("multiple users exist")}, wantErr: "multiple users"},
+		{name: "zero users", store: &fakeRuntimeUserStore{}},
+		{name: "multiple users", store: &fakeRuntimeUserStore{userIDs: []int64{7, 8}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stubRuntimeDependencies(t,
@@ -283,31 +301,49 @@ func TestProductionExplicitURLRefusesMissingOrAmbiguousOwner(t *testing.T) {
 				func() ([]byte, error) { return nil, errors.New("unexpected local key load") },
 				func(string) (runtimeUserStore, error) { return tc.store, nil },
 			)
-			_, err := resolvePostgresRuntime(context.Background(), config.Config{
+			runtime, err := resolvePostgresRuntime(context.Background(), config.Config{
 				Production:              true,
 				DatabaseURL:             "postgres://production.example.invalid/jobcron",
 				CredentialEncryptionKey: bytes.Repeat([]byte{0x45}, credential.MasterKeyBytes),
 			})
-			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("resolvePostgresRuntime error = %v, want %q", err, tc.wantErr)
+			if err != nil {
+				t.Fatalf("resolvePostgresRuntime: %v", err)
 			}
-			if tc.store.soleCalls != 1 || tc.store.managedCalls != 0 {
-				t.Fatalf("production owner calls = sole %d managed %d, want 1 and 0", tc.store.soleCalls, tc.store.managedCalls)
+			if runtime.UserID != 0 {
+				t.Fatalf("UserID = %d, want 0", runtime.UserID)
+			}
+			if tc.store.userIDsCalls != 0 || tc.store.managedCalls != 0 {
+				t.Fatalf("production user calls = list %d managed %d, want both zero",
+					tc.store.userIDsCalls, tc.store.managedCalls)
 			}
 		})
 	}
 }
 
-func TestMainHasNoZeroUserServerFallback(t *testing.T) {
+func TestMainWiresRuntimeModeAndCohortConfiguration(t *testing.T) {
 	source, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(source, []byte("server.New(store")) {
-		t.Fatal("normal PostgreSQL startup retains the zero-user server.New fallback")
+	for _, want := range []string{
+		"if cfg.Production {",
+		"srv = server.New(store, sources...)",
+		"srv = server.NewForLocalUser(store, resolved.UserID, sources...)",
+		"srv.SetSignupAccessCode(cfg.SignupAccessCode)",
+		"srv.SetStage1SponsorUserID(cfg.Stage1SponsorUserID)",
+		"if !cfg.Production {\n\t\tif _, err := srv.RescoreSoleOwner",
+	} {
+		if !bytes.Contains(source, []byte(want)) {
+			t.Errorf("main.go missing %q", want)
+		}
 	}
-	if !bytes.Contains(source, []byte("server.NewForLocalUser(store, resolved.UserID")) {
-		t.Fatal("normal startup does not unconditionally use the resolved positive owner")
+	for _, setter := range [][]byte{
+		[]byte("srv.SetSignupAccessCode"),
+		[]byte("srv.SetStage1SponsorUserID"),
+	} {
+		if bytes.Index(source, setter) > bytes.Index(source, []byte("server.StartScheduler")) {
+			t.Errorf("%s is configured after scheduler startup", setter)
+		}
 	}
 }
 
@@ -330,8 +366,8 @@ func TestManagedLocalStartupUsesStablePositiveUserID(t *testing.T) {
 	if first.UserID <= 0 || second.UserID != first.UserID {
 		t.Fatalf("managed user IDs = %d, %d; want stable positive ID", first.UserID, second.UserID)
 	}
-	if store.managedCalls != 2 || store.soleCalls != 0 {
-		t.Fatalf("owner calls = managed %d sole %d, want 2 and 0", store.managedCalls, store.soleCalls)
+	if store.managedCalls != 2 || store.userIDsCalls != 0 {
+		t.Fatalf("user calls = managed %d list %d, want 2 and 0", store.managedCalls, store.userIDsCalls)
 	}
 }
 
@@ -342,8 +378,9 @@ func TestExplicitURLRefusesAmbiguousUsers(t *testing.T) {
 		wantErr string
 	}{
 		{name: "zero users", store: &fakeRuntimeUserStore{}, wantErr: "exactly one existing user"},
-		{name: "zero ID", store: &fakeRuntimeUserStore{soleID: 0, soleOK: true}, wantErr: "positive user ID"},
-		{name: "multiple users", store: &fakeRuntimeUserStore{soleErr: errors.New("multiple users exist")}, wantErr: "multiple users"},
+		{name: "zero ID", store: &fakeRuntimeUserStore{userIDs: []int64{0}}, wantErr: "positive user ID"},
+		{name: "multiple users", store: &fakeRuntimeUserStore{userIDs: []int64{1, 2}}, wantErr: "exactly one existing user"},
+		{name: "list error", store: &fakeRuntimeUserStore{userIDsErr: errors.New("list users failed")}, wantErr: "list users failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -358,8 +395,9 @@ func TestExplicitURLRefusesAmbiguousUsers(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("resolvePostgresRuntime error = %v, want %q", err, tt.wantErr)
 			}
-			if tt.store.managedCalls != 0 || tt.store.soleCalls != 1 {
-				t.Fatalf("owner calls = managed %d sole %d, want 0 and 1", tt.store.managedCalls, tt.store.soleCalls)
+			if tt.store.managedCalls != 0 || tt.store.userIDsCalls != 1 {
+				t.Fatalf("user calls = managed %d list %d, want 0 and 1",
+					tt.store.managedCalls, tt.store.userIDsCalls)
 			}
 		})
 	}
@@ -481,13 +519,10 @@ func TestHelpPrintsFlagsAndDoesNotStartRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	help := string(helpBytes)
-	for _, want := range []string{"Usage: jobcron [flags]", "-port", "-no-open", "-worknet-api-key"} {
+	for _, want := range []string{"Usage: jobcron [flags]", "-db", "-port", "-no-open", "-worknet-api-key"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help missing %q:\n%s", want, help)
 		}
-	}
-	if strings.Contains(help, "-db") {
-		t.Fatalf("help advertises removed database flag:\n%s", help)
 	}
 	if runtimeCalls != 0 {
 		t.Fatalf("runtime dependency calls during help = %d, want 0", runtimeCalls)

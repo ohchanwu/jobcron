@@ -46,7 +46,7 @@ type runtimeStorage struct {
 
 type runtimeUserStore interface {
 	EnsureManagedLocalOwner(context.Context) (int64, error)
-	SoleOwnerUserID(context.Context) (int64, bool, error)
+	UserIDs(context.Context) ([]int64, error)
 	Close() error
 }
 
@@ -71,11 +71,16 @@ func main() {
 		fmt.Println("jobcron", version)
 		return
 	}
-	resolved, err := resolvePostgresRuntime(context.Background(), cfg)
-	if err != nil {
-		log.Fatalf("jobcron: %v", err)
+	var resolved runtimeStorage
+	var store *storage.Store
+	if cfg.DBPath != "" {
+		store, err = storage.OpenSQLiteAt(cfg.DBPath)
+	} else {
+		resolved, err = resolvePostgresRuntime(context.Background(), cfg)
+		if err == nil {
+			store, err = openPostgresRuntime(resolved)
+		}
 	}
-	store, err := openPostgresRuntime(resolved)
 	if err != nil {
 		log.Fatalf("jobcron: %v", err)
 	}
@@ -99,17 +104,28 @@ func main() {
 			"(점핏·랠릿·데모데이·그리팅·당근·크래프톤·몰로코·센드버드는 켜져 있어요).",
 			"워크넷도 보려면 --worknet-api-key 플래그나 JOBCRON_WORKNET_KEY 환경변수를 설정하세요.")
 	}
-	srv := server.NewForLocalUser(store, resolved.UserID, sources...)
+	var srv *server.Server
+	if store.Dialect() == storage.DialectSQLite {
+		srv = server.New(store, sources...)
+	} else if cfg.Production {
+		srv = server.New(store, sources...)
+	} else {
+		srv = server.NewForLocalUser(store, resolved.UserID, sources...)
+	}
 	srv.SetSessionSecret(cfg.SessionSecret)
 	srv.SetDemoMode(cfg.Demo)
 	srv.SetProductionMode(cfg.Production)
+	srv.SetSignupAccessCode(cfg.SignupAccessCode)
+	srv.SetStage1SponsorUserID(cfg.Stage1SponsorUserID)
 	srv.SetAdminToken(cfg.AdminToken)
 	srv.SetProxySecret(cfg.ProxySecret)
-	credentialCipher, err := credentialCipherForRuntime(resolved)
-	if err != nil {
-		log.Fatalf("jobcron: credential encryption: %v", err)
+	if store.Dialect() != storage.DialectSQLite {
+		credentialCipher, err := credentialCipherForRuntime(resolved)
+		if err != nil {
+			log.Fatalf("jobcron: credential encryption: %v", err)
+		}
+		srv.SetCredentialCipher(credentialCipher)
 	}
-	srv.SetCredentialCipher(credentialCipher)
 	// Heal any posting left unscored by an interrupted scrape (e.g. a crash or
 	// restart between insert and the end-of-run scoring) so it never renders as
 	// a blank card. Exact-owner resolution merges that user's cached AI deltas;
@@ -117,8 +133,10 @@ func main() {
 	// Non-fatal: owner resolution, AI runtime resolution, or rule-score storage
 	// may fail. RescoreSoleOwner still attempts rule-only recovery whenever the
 	// owner is known, and may return a joined error when both paths fail.
-	if _, err := srv.RescoreSoleOwner(context.Background()); err != nil {
-		log.Printf("jobcron: 시작 시 점수 복구를 완료하지 못했어요: %v", err)
+	if !cfg.Production {
+		if _, err := srv.RescoreSoleOwner(context.Background()); err != nil {
+			log.Printf("jobcron: 시작 시 점수 복구를 완료하지 못했어요: %v", err)
+		}
 	}
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
@@ -206,22 +224,30 @@ func resolvePostgresRuntime(ctx context.Context, cfg config.Config) (resolved ru
 	}
 	store, err := openRuntimeUserStore(databaseURL)
 	if err != nil {
-		return runtimeStorage{}, fmt.Errorf("resolve PostgreSQL owner: %w", err)
+		return runtimeStorage{}, fmt.Errorf("open PostgreSQL runtime store: %w", err)
 	}
 	defer func() {
 		if closeErr := store.Close(); retErr == nil && closeErr != nil {
-			retErr = fmt.Errorf("close PostgreSQL owner store: %w", closeErr)
+			retErr = fmt.Errorf("close PostgreSQL runtime store: %w", closeErr)
 		}
 	}()
+	if cfg.Production {
+		return runtimeStorage{
+			DatabaseURL:             databaseURL,
+			CredentialEncryptionKey: masterKey,
+		}, nil
+	}
 
 	var userID int64
 	if managedLocal {
 		userID, err = store.EnsureManagedLocalOwner(ctx)
 	} else {
-		var ok bool
-		userID, ok, err = store.SoleOwnerUserID(ctx)
-		if err == nil && !ok {
+		var userIDs []int64
+		userIDs, err = store.UserIDs(ctx)
+		if err == nil && len(userIDs) != 1 {
 			err = fmt.Errorf("explicit DATABASE_URL requires exactly one existing user")
+		} else if err == nil {
+			userID = userIDs[0]
 		}
 	}
 	if err != nil {

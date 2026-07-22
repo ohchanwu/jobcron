@@ -1,12 +1,13 @@
 # Architecture
 
 Jobcron is a single Go web application that scrapes Korean job boards, stores normalized
-postings in PostgreSQL, scores them for one owner, and serves an embedded HTML interface.
+postings in PostgreSQL, scores them for an authenticated or fixed local user, and serves an
+embedded HTML interface.
 Optional AI calls extract global eligibility facts, validate user-specific dealbreaker hits in
 context, and enrich score explanations. The deterministic scoring path remains complete when AI
 is disabled or unavailable.
 
-This document describes the implemented architecture as of 2026-07-19. Approved future work is
+This document describes the implemented architecture as of 2026-07-23. Approved future work is
 listed separately so it is not mistaken for current behavior.
 
 ## System at a glance
@@ -39,9 +40,21 @@ master key. Cookie-session authentication and CSRF protection cover the writable
 The prepared deployment makes Caddy the only public listener and proxies requests to the private
 application container backed by private Amazon RDS. The first production rollout is still pending.
 
-The daily scheduler is enabled by configuration and runs inside the application process. The
-current scheduler resolves exactly one owner before a scheduled scrape. It records a skipped run
-instead of guessing when the owner is missing or ambiguous.
+Production startup opens PostgreSQL without resolving a sole owner. Authenticated requests resolve
+their user from the session, so both empty and multi-user databases can start successfully.
+Startup also skips the legacy sole-owner rescore pass.
+Production and demo modes are mutually exclusive; configuration loading rejects their combination
+whether demo mode comes from the environment or the command line.
+
+`JOBCRON_SIGNUP_ACCESS_CODE` and `JOBCRON_STAGE1_SPONSOR_USER_ID` are optional. A configured
+sponsor ID must be a positive base-10 integer. Startup loads both settings and wires them into the
+server, while the production Compose file passes them through without defaults. Task 3 does not
+yet expose signup or spend the sponsor's AI budget; those behaviors remain in later account and
+scheduler tasks.
+
+The daily scheduler is enabled by configuration and runs inside the application process at
+`JOBCRON_DAILY_SCRAPE_TIME` in Asia/Seoul (`05:00` by default). The current scheduled scrape
+still resolves exactly one owner and records a skipped run when the owner is missing or ambiguous.
 
 See the [production deployment reference](../deploy/production/README.md), the
 [human rollout guide](../deploy/production/HUMAN_DEPLOY_GUIDE.md), and the
@@ -69,15 +82,17 @@ PostgreSQL instance and for controlled migration verification.
 
 Demo mode reuses the application and embedded frontend but rejects database mutations. Visitor
 bookmark and hidden state stays in browser storage. An administrator token may authorize a demo
-scrape, but ordinary visitors cannot scrape or rerate.
+scrape, but ordinary visitors cannot scrape or rerate. The tracked demo deployment is
+non-production and opens its uploaded SQLite snapshot only through the explicit
+`--demo --db <path>` compatibility path; ordinary local startup does not use SQLite.
 
 See the [demo deployment reference](../deploy/demo/README.md).
 
 ## Process and package boundaries
 
-- `cmd/jobcron` loads configuration, resolves the database and owner, opens storage, wires
-  scrapers, installs the credential cipher, heals interrupted scoring, starts the scheduler, and
-  serves HTTP.
+- `cmd/jobcron` loads configuration, resolves the database and, outside production, the fixed
+  no-login user, opens storage, wires scrapers, installs the credential cipher, heals interrupted
+  scoring where applicable, starts the scheduler, and serves HTTP.
 - `internal/server` owns routes, authentication middleware, scrape and rerate orchestration,
   rendering, Server-Sent Events, budgets, and the in-process scheduler.
 - `internal/scraper` defines the normalized posting contract and shared robots, pacing, and
@@ -85,8 +100,9 @@ See the [demo deployment reference](../deploy/demo/README.md).
 - `internal/scoring` applies deterministic profile rules and merges cached AI facts and deltas.
 - `internal/ai` defines the provider contract, Anthropic client, prompts, response parsing,
   evidence gates, and AI version identity.
-- `internal/storage` exposes one concrete PostgreSQL-backed repository and applies embedded schema
-  migrations. SQLite entry points exist only for the legacy importer and compatibility tests.
+- `internal/storage` exposes one concrete repository and applies embedded schema migrations.
+  PostgreSQL backs production and ordinary local modes. SQLite entry points exist only for the
+  legacy importer, the tracked read-only demo, and compatibility tests.
 - `internal/credential` encrypts per-user provider credentials and manages the protected local
   master key.
 - `internal/auth` creates password hashes and opaque session tokens.
@@ -110,10 +126,12 @@ when the request carries the configured proxy secret.
 
 Every authenticated handler resolves a `userID` before accessing profiles, saved-job state,
 scores, AI usage, or credentials. Local mode supplies the fixed local owner's ID through the same
-server methods. This keeps storage calls user-scoped even though the current product exposes only
-one owner account.
+server methods. This keeps storage calls user-scoped while the broader account rollout remains
+incomplete.
 
-Public signup, password recovery, organizations, and per-user schedules are not implemented. The
+Public signup, sponsor-funded onboarding, password recovery, organizations, and per-user schedules
+are not implemented. The optional signup access code and Stage 1 sponsor ID are wired runtime
+configuration for that follow-up. The
 [multi-user expansion follow-up](superpowers/specs/260715-multi-user-account-expansion.md) records
 that deferred product work.
 
@@ -245,12 +263,15 @@ Foreign keys remove dependent user state when its owner is deleted. Composite ke
 methods include `user_id` wherever two accounts must not share state. The current owner-only UI is
 therefore a product limitation, not a storage shortcut.
 
-Legacy SQLite is not a writable runtime. `cmd/jobcron-import` creates a verified snapshot, checks
-counts and collisions, and imports preserved local data into an existing PostgreSQL owner. It
-inserts all postings before restoring their self-referencing canonical-duplicate links, so a link
-may safely point to a posting with a later ID.
+Legacy SQLite is not an ordinary writable runtime. The tracked read-only demo may open an uploaded
+snapshot through `--demo --db`; all other application startup paths use PostgreSQL.
+`cmd/jobcron-import` creates a verified snapshot, checks counts and collisions, and imports
+preserved local data into an existing PostgreSQL owner. It inserts all postings before restoring
+their self-referencing canonical-duplicate links, so a link may safely point to a posting with a
+later ID.
 `cmd/jobcron-user` bootstraps the owner and resets or deletes exact accounts outside the public
-application surface. SQLite migrations remain embedded only for importer compatibility and tests.
+application surface. SQLite migrations remain embedded for importer compatibility, the read-only
+demo, and tests.
 
 See the [hosted-first storage decision][hosted-first-storage] and the
 [local import procedure](../deploy/local/README.md#verified-sqlite-import).

@@ -13,7 +13,7 @@ import (
 const (
 	defaultHost            = "127.0.0.1"
 	defaultPort            = 7777
-	defaultDailyScrapeTime = "08:00"
+	defaultDailyScrapeTime = "05:00"
 	minSessionSecretBytes  = 32
 )
 
@@ -26,6 +26,8 @@ type Config struct {
 	CredentialEncryptionKey []byte
 	SchedulerEnabled        bool
 	DailyScrapeTime         string
+	SignupAccessCode        string
+	Stage1SponsorUserID     int64
 	AdminToken              string
 	ProxySecret             string
 	WorknetKey              string
@@ -34,6 +36,7 @@ type Config struct {
 	StrictPort              bool
 	NoOpen                  bool
 	Demo                    bool
+	DBPath                  string
 	ShowHelp                bool
 	ShowVersion             bool
 }
@@ -48,6 +51,7 @@ func Load(args []string, env map[string]string) (Config, error) {
 		SessionSecret:    []byte(envValue(env, "SESSION_SECRET")),
 		SchedulerEnabled: envBool(envValue(env, "JOBCRON_SCHEDULER_ENABLED")),
 		DailyScrapeTime:  envDefault(env, "JOBCRON_DAILY_SCRAPE_TIME", defaultDailyScrapeTime),
+		SignupAccessCode: envValue(env, "JOBCRON_SIGNUP_ACCESS_CODE"),
 		AdminToken:       envValue(env, "JOBCRON_ADMIN_TOKEN"),
 		ProxySecret:      envValue(env, "JOBCRON_PROXY_SECRET"),
 		WorknetKey:       envValue(env, "JOBCRON_WORKNET_KEY"),
@@ -72,12 +76,25 @@ func Load(args []string, env map[string]string) (Config, error) {
 	if cfg.ShowHelp || cfg.ShowVersion {
 		return cfg, nil
 	}
+	if cfg.Production && cfg.Demo {
+		return Config{}, fmt.Errorf("production does not support demo mode")
+	}
+	if cfg.DBPath != "" && !cfg.Demo {
+		return Config{}, fmt.Errorf("--db requires demo mode")
+	}
 	if encodedCredentialEncryptionKey != "" {
 		key, err := credential.ParseMasterKey(encodedCredentialEncryptionKey)
 		if err != nil {
 			return Config{}, fmt.Errorf("JOBCRON_CREDENTIAL_ENCRYPTION_KEY: %w", err)
 		}
 		cfg.CredentialEncryptionKey = key
+	}
+	if v := envValue(env, "JOBCRON_STAGE1_SPONSOR_USER_ID"); v != "" {
+		userID, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || userID <= 0 {
+			return Config{}, fmt.Errorf("JOBCRON_STAGE1_SPONSOR_USER_ID must be a positive base-10 integer")
+		}
+		cfg.Stage1SponsorUserID = userID
 	}
 
 	if cfg.Production {
@@ -101,6 +118,7 @@ func newFlagSet(cfg *Config, output io.Writer) *flag.FlagSet {
 	fs.StringVar(&cfg.Host, "host", cfg.Host, "host/interface to bind")
 	fs.BoolVar(&cfg.NoOpen, "no-open", cfg.NoOpen, "do not open a browser window on startup")
 	fs.BoolVar(&cfg.Demo, "demo", cfg.Demo, "run in read-only public demo mode")
+	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database file for demo mode")
 	fs.StringVar(&cfg.WorknetKey, "worknet-api-key", cfg.WorknetKey,
 		"워크넷 OpenAPI key (free at data.go.kr). Disables the 워크넷 source when empty.")
 	fs.BoolVar(&cfg.ShowHelp, "help", false, "print this help and exit")

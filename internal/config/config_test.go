@@ -39,6 +39,33 @@ func TestLoadProductionRequiresCredentialEncryptionKey(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsProductionDemoFromEnvironment(t *testing.T) {
+	env := validProductionEnv()
+	env["JOBCRON_DEMO"] = "1"
+
+	_, err := config.Load(nil, env)
+	if err == nil || err.Error() != "production does not support demo mode" {
+		t.Fatalf("Load error = %v, want production demo rejection", err)
+	}
+}
+
+func TestLoadRejectsProductionDemoFromFlag(t *testing.T) {
+	_, err := config.Load([]string{"--demo"}, validProductionEnv())
+	if err == nil || err.Error() != "production does not support demo mode" {
+		t.Fatalf("Load error = %v, want production demo rejection", err)
+	}
+}
+
+func TestLoadAllowsDemoOutsideProduction(t *testing.T) {
+	cfg, err := config.Load([]string{"--demo"}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Demo {
+		t.Fatal("Demo = false, want true")
+	}
+}
+
 func TestLoadRejectsInvalidCredentialEncryptionKey(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -128,6 +155,73 @@ func TestLoadDefaultsSchedulerOffOutsideProduction(t *testing.T) {
 	}
 }
 
+func TestLoadParsesSignupAccessCode(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{
+		"JOBCRON_SIGNUP_ACCESS_CODE": "cohort-code",
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SignupAccessCode != "cohort-code" {
+		t.Fatalf("SignupAccessCode = %q, want cohort-code", cfg.SignupAccessCode)
+	}
+}
+
+func TestLoadAllowsMissingSignupAccessCode(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SignupAccessCode != "" {
+		t.Fatalf("SignupAccessCode = %q, want empty", cfg.SignupAccessCode)
+	}
+}
+
+func TestLoadParsesStage1SponsorUserID(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{
+		"JOBCRON_STAGE1_SPONSOR_USER_ID": "42",
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Stage1SponsorUserID != 42 {
+		t.Fatalf("Stage1SponsorUserID = %d, want 42", cfg.Stage1SponsorUserID)
+	}
+}
+
+func TestLoadAllowsMissingStage1SponsorUserID(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Stage1SponsorUserID != 0 {
+		t.Fatalf("Stage1SponsorUserID = %d, want 0", cfg.Stage1SponsorUserID)
+	}
+}
+
+func TestLoadRejectsInvalidStage1SponsorUserID(t *testing.T) {
+	for _, value := range []string{"0", "-1", "1.5", "0x10", "not-an-id"} {
+		t.Run(value, func(t *testing.T) {
+			_, err := config.Load(nil, map[string]string{
+				"JOBCRON_STAGE1_SPONSOR_USER_ID": value,
+			})
+			if err == nil || !strings.Contains(err.Error(), "JOBCRON_STAGE1_SPONSOR_USER_ID") {
+				t.Fatalf("Load error = %v, want sponsor user ID error", err)
+			}
+		})
+	}
+}
+
+func TestLoadDefaultsDailyScrapeTime(t *testing.T) {
+	cfg, err := config.Load(nil, map[string]string{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.DailyScrapeTime != "05:00" {
+		t.Fatalf("DailyScrapeTime = %q, want 05:00", cfg.DailyScrapeTime)
+	}
+}
+
 func TestLoadUsesExplicitDefaults(t *testing.T) {
 	cfg, err := config.Load(nil, map[string]string{})
 	if err != nil {
@@ -138,9 +232,6 @@ func TestLoadUsesExplicitDefaults(t *testing.T) {
 	}
 	if cfg.Port != 7777 {
 		t.Fatalf("Port = %d, want 7777", cfg.Port)
-	}
-	if cfg.DailyScrapeTime != "08:00" {
-		t.Fatalf("DailyScrapeTime = %q, want 08:00", cfg.DailyScrapeTime)
 	}
 }
 
@@ -231,14 +322,21 @@ func TestLoadCLIFlagsOverrideEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsDBFlag(t *testing.T) {
-	_, err := config.Load([]string{"--db", "/tmp/legacy.db"}, map[string]string{})
-	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined") {
-		t.Fatalf("Load --db error = %v, want unknown-flag refusal", err)
+func TestLoadAllowsDBFlagForDemo(t *testing.T) {
+	_, err := config.Load([]string{"--demo", "--db", "/tmp/demo.db"}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
 	}
 }
 
-func TestHelpListsRegisteredFlagsAndExcludesDB(t *testing.T) {
+func TestLoadRejectsDBFlagOutsideDemo(t *testing.T) {
+	_, err := config.Load([]string{"--db", "/tmp/local.db"}, map[string]string{})
+	if err == nil || err.Error() != "--db requires demo mode" {
+		t.Fatalf("Load --db error = %v, want demo-only refusal", err)
+	}
+}
+
+func TestHelpListsRegisteredFlags(t *testing.T) {
 	cfg, err := config.Load([]string{"--help"}, map[string]string{"JOBCRON_ENV": "production"})
 	if err != nil {
 		t.Fatalf("Load --help: %v", err)
@@ -249,13 +347,12 @@ func TestHelpListsRegisteredFlagsAndExcludesDB(t *testing.T) {
 	var out bytes.Buffer
 	config.WriteHelp(&out)
 	help := out.String()
-	for _, want := range []string{"Usage: jobcron [flags]", "-port", "-no-open", "-worknet-api-key", "-version"} {
+	for _, want := range []string{
+		"Usage: jobcron [flags]", "-db", "-port", "-no-open", "-worknet-api-key", "-version",
+	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help missing %q:\n%s", want, help)
 		}
-	}
-	if strings.Contains(help, "-db") {
-		t.Fatalf("help advertises removed database flag:\n%s", help)
 	}
 }
 

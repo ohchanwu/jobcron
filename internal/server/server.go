@@ -122,11 +122,13 @@ type Server struct {
 	// render/profile-save regression tests. Production leaves it nil.
 	afterRenderScoreSnapshot func()
 
-	demoMode       bool   // read-only public demo mode
-	productionMode bool   // require owner login for protected HTTP routes
-	localUserID    int64  // immutable positive owner for non-production PostgreSQL
-	adminToken     string // optional safety token for operator GET mutators in demo mode
-	proxySecret    string // optional shared secret that allows Caddy forwarded-client headers
+	demoMode            bool   // read-only public demo mode
+	productionMode      bool   // require owner login for protected HTTP routes
+	localUserID         int64  // immutable positive owner for non-production PostgreSQL
+	adminToken          string // optional safety token for operator GET mutators in demo mode
+	proxySecret         string // optional shared secret that allows Caddy forwarded-client headers
+	signupAccessCode    string
+	stage1SponsorUserID int64
 }
 
 type aiProviderFactory func(provider, key, model string, rateLimit time.Duration) (ai.Provider, error)
@@ -238,6 +240,12 @@ func (s *Server) SetDemoMode(on bool) { s.demoMode = on }
 
 // SetProductionMode requires cookie-session authentication for protected pages.
 func (s *Server) SetProductionMode(on bool) { s.productionMode = on }
+
+// SetSignupAccessCode installs the cohort signup gate before serving requests.
+func (s *Server) SetSignupAccessCode(code string) { s.signupAccessCode = code }
+
+// SetStage1SponsorUserID installs the account that funds global Stage-1 misses.
+func (s *Server) SetStage1SponsorUserID(userID int64) { s.stage1SponsorUserID = userID }
 
 // SetSessionSecret makes security tokens derive from the configured production
 // SESSION_SECRET. New still creates a random development secret so tests and
@@ -372,9 +380,8 @@ func New(store *storage.Store, sources ...scraper.Scraper) *Server {
 	return newServer(store, 0, sources...)
 }
 
-// NewForLocalUser builds a PostgreSQL server with a verified positive sole
-// owner. Non-production state uses it directly; production still resolves each
-// authenticated request's user after SetProductionMode(true).
+// NewForLocalUser builds a non-production PostgreSQL server with a verified
+// positive no-login user.
 func NewForLocalUser(store *storage.Store, userID int64, sources ...scraper.Scraper) *Server {
 	if userID <= 0 {
 		panic("server.NewForLocalUser: user ID must be positive")

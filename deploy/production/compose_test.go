@@ -16,6 +16,8 @@ const (
 	testSessionSecret    = "synthetic-session-secret-at-least-32-bytes"
 	testCredentialKey    = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
 	testDailyTime        = "06:15"
+	testSignupAccessCode = "synthetic-cohort-code"
+	testSponsorUserID    = "42"
 	credentialKeyEnvName = "JOBCRON_CREDENTIAL_ENCRYPTION_KEY"
 )
 
@@ -117,9 +119,51 @@ func TestProductionComposePreservesDailyTimeAndCommand(t *testing.T) {
 	}
 }
 
+func TestProductionComposePassesCohortRuntimeVariables(t *testing.T) {
+	app := renderCompose(t).Services["app"]
+	if got := app.Environment["JOBCRON_SIGNUP_ACCESS_CODE"]; got != testSignupAccessCode {
+		t.Fatalf("JOBCRON_SIGNUP_ACCESS_CODE = %q, want preserved synthetic code", got)
+	}
+	if got := app.Environment["JOBCRON_STAGE1_SPONSOR_USER_ID"]; got != testSponsorUserID {
+		t.Fatalf("JOBCRON_STAGE1_SPONSOR_USER_ID = %q, want %q", got, testSponsorUserID)
+	}
+}
+
+func TestProductionComposeLeavesCohortRuntimeVariablesUnset(t *testing.T) {
+	output, err := composeCommand(true).CombinedOutput()
+	if err != nil {
+		t.Fatalf("docker compose config: %v\n%s", err, output)
+	}
+	var config struct {
+		Services map[string]struct {
+			Environment map[string]*string `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(output, &config); err != nil {
+		t.Fatalf("parse rendered compose config: %v\n%s", err, output)
+	}
+	app := config.Services["app"]
+	for _, name := range []string{"JOBCRON_SIGNUP_ACCESS_CODE", "JOBCRON_STAGE1_SPONSOR_USER_ID"} {
+		value, ok := app.Environment[name]
+		if !ok || value != nil {
+			t.Errorf("%s = %v (present %v), want explicit null passthrough", name, value, ok)
+		}
+	}
+}
+
 func renderCompose(t *testing.T) composeConfig {
 	t.Helper()
-	output, err := composeCommand(true).CombinedOutput()
+	cmd := composeCommand(true)
+	cmd.Env = append(cmd.Env,
+		"JOBCRON_SIGNUP_ACCESS_CODE="+testSignupAccessCode,
+		"JOBCRON_STAGE1_SPONSOR_USER_ID="+testSponsorUserID,
+	)
+	return renderComposeCommand(t, cmd)
+}
+
+func renderComposeCommand(t *testing.T, cmd *exec.Cmd) composeConfig {
+	t.Helper()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("docker compose config: %v\n%s", err, output)
 	}
@@ -139,6 +183,8 @@ func composeCommand(includeCredentialKey bool) *exec.Cmd {
 		"SESSION_SECRET",
 		credentialKeyEnvName,
 		"JOBCRON_DAILY_SCRAPE_TIME",
+		"JOBCRON_SIGNUP_ACCESS_CODE",
+		"JOBCRON_STAGE1_SPONSOR_USER_ID",
 	)
 	cmd.Env = append(cmd.Env,
 		"JOBCRON_IMAGE="+testImage,
