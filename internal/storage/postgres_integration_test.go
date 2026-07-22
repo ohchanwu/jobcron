@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const goTrimSpaceCharacters = "\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
+
 func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 	st, schema := newPostgresTestStoreWithSchema(t)
 
@@ -36,6 +38,87 @@ func TestPostgresMigrationsCreateCoreTables(t *testing.T) {
 		if err != nil || !exists {
 			t.Fatalf("table %s exists=%v err=%v", table, exists, err)
 		}
+	}
+}
+
+func TestCanonicalEmailMigrationNormalizesExistingRowsAndEnforcesConstraint(t *testing.T) {
+	st := newPostgresTestStoreThroughMigration(t, 17)
+	ctx := context.Background()
+	users := []struct {
+		id   int64
+		want string
+	}{
+		{insertMigrationTestUser(t, st, " Student@Example.COM "), "student@example.com"},
+		{insertMigrationTestUser(t, st, "\tTabbed@Example.COM\n"), "tabbed@example.com"},
+		{insertMigrationTestUser(t, st, goTrimSpaceCharacters+"Unicode@Example.COM"+goTrimSpaceCharacters), "unicode@example.com"},
+	}
+
+	if err := applyPostgresMigrationVersion(st.db, 18); err != nil {
+		t.Fatalf("apply migration 0018: %v", err)
+	}
+	for _, user := range users {
+		var email string
+		if err := st.db.QueryRowContext(ctx, `SELECT email FROM users WHERE id = $1`, user.id).Scan(&email); err != nil {
+			t.Fatalf("read normalized email: %v", err)
+		}
+		if email != user.want {
+			t.Fatalf("migrated email = %q, want %q", email, user.want)
+		}
+	}
+	var constraintExists bool
+	if err := st.db.QueryRowContext(ctx, `
+SELECT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conrelid = 'users'::regclass
+       AND conname = 'users_email_canonical'
+)`).Scan(&constraintExists); err != nil {
+		t.Fatalf("inspect canonical email constraint: %v", err)
+	}
+	if !constraintExists {
+		t.Fatal("users_email_canonical constraint does not exist")
+	}
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO users (email, password_hash) VALUES ('Other@Example.COM', 'hash')`); err == nil {
+		t.Fatal("non-canonical email insert succeeded")
+	}
+	for _, email := range []string{
+		"\tother@example.com\n",
+		"\u00a0other@example.com\u3000",
+	} {
+		if _, err := st.db.ExecContext(ctx, `
+INSERT INTO users (email, password_hash) VALUES ($1, 'hash')`, email); err == nil {
+			t.Fatalf("whitespace-wrapped email %q insert succeeded", email)
+		}
+	}
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO users (email, password_hash) VALUES ('', 'hash')`); err == nil {
+		t.Fatal("empty email insert succeeded")
+	}
+	if _, err := st.db.ExecContext(ctx, `
+INSERT INTO users (email, password_hash) VALUES ('student@example.com', 'hash')`); err == nil {
+		t.Fatal("duplicate canonical email insert succeeded")
+	}
+}
+
+func TestCanonicalEmailMigrationRejectsHistoricalCollision(t *testing.T) {
+	for _, tc := range []struct {
+		name, wrapped string
+	}{
+		{name: "ASCII space", wrapped: " Student@Example.COM "},
+		{name: "tab", wrapped: "\tStudent@Example.COM\n"},
+		{name: "Unicode whitespace", wrapped: goTrimSpaceCharacters + "Student@Example.COM" + goTrimSpaceCharacters},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := newPostgresTestStoreThroughMigration(t, 17)
+			insertMigrationTestUser(t, st, tc.wrapped)
+			insertMigrationTestUser(t, st, "student@example.com")
+
+			if err := applyPostgresMigrationVersion(st.db, 18); err == nil {
+				t.Fatal("migration 0018 succeeded with colliding historical emails")
+			}
+			assertMigrationVersionRecorded(t, st, 18, false)
+		})
 	}
 }
 

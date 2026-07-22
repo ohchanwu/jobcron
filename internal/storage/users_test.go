@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -25,9 +26,6 @@ func TestCreateOwnerUserCreatesOnlyOwner(t *testing.T) {
 	if user.PasswordHash != "hash-one" {
 		t.Fatalf("User.PasswordHash = %q", user.PasswordHash)
 	}
-	if user.Role != "owner" {
-		t.Fatalf("User.Role = %q, want owner", user.Role)
-	}
 	if user.CreatedAt.IsZero() || user.UpdatedAt.IsZero() {
 		t.Fatalf("timestamps not populated: created=%v updated=%v", user.CreatedAt, user.UpdatedAt)
 	}
@@ -38,6 +36,153 @@ func TestCreateOwnerUserCreatesOnlyOwner(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "owner user already exists") {
 		t.Fatalf("second CreateOwnerUser error = %v", err)
+	}
+}
+
+func TestCreateUserAllowsMultipleAccountsAndLookups(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+
+	first, err := st.CreateUser(ctx, " First@Example.COM ", "hash-one")
+	if err != nil {
+		t.Fatalf("first CreateUser: %v", err)
+	}
+	second, err := st.CreateUser(ctx, "second@example.com", "hash-two")
+	if err != nil {
+		t.Fatalf("second CreateUser: %v", err)
+	}
+	if first.Email != "first@example.com" || second.Email != "second@example.com" {
+		t.Fatalf("created emails = %q, %q", first.Email, second.Email)
+	}
+	if first.ID <= 0 || second.ID <= first.ID {
+		t.Fatalf("created IDs = %d, %d, want ascending positive IDs", first.ID, second.ID)
+	}
+
+	byEmail, ok, err := st.UserByEmail(ctx, "  FIRST@EXAMPLE.COM ")
+	if err != nil || !ok || byEmail.ID != first.ID {
+		t.Fatalf("UserByEmail = ID %d ok %v err %v, want ID %d", byEmail.ID, ok, err, first.ID)
+	}
+	byID, ok, err := st.UserByID(ctx, second.ID)
+	if err != nil || !ok || byID.Email != second.Email {
+		t.Fatalf("UserByID = email %q ok %v err %v, want %q", byID.Email, ok, err, second.Email)
+	}
+	if _, err := st.SQLDB().ExecContext(ctx, `
+INSERT INTO users (id, email, password_hash) VALUES (0, 'zero@example.com', 'hash-zero')`); err != nil {
+		t.Fatalf("seed zero-ID user: %v", err)
+	}
+	ids, err := st.UserIDs(ctx)
+	if err != nil {
+		t.Fatalf("UserIDs: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != first.ID || ids[1] != second.ID {
+		t.Fatalf("UserIDs = %v, want [%d %d]", ids, first.ID, second.ID)
+	}
+}
+
+func TestCreateUserRejectsNormalizedDuplicate(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.CreateUser(ctx, " Student@Example.COM ", "hash-one"); err != nil {
+		t.Fatalf("first CreateUser: %v", err)
+	}
+	if _, err := st.CreateUser(ctx, "student@example.com", "hash-two"); !errors.Is(err, ErrEmailAlreadyExists) {
+		t.Fatalf("duplicate CreateUser error = %v, want ErrEmailAlreadyExists", err)
+	}
+	var count int
+	if err := st.SQLDB().QueryRowContext(ctx, `SELECT count(*) FROM users WHERE email = 'student@example.com'`).Scan(&count); err != nil {
+		t.Fatalf("count normalized users: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("normalized user rows = %d, want 1", count)
+	}
+}
+
+func TestCreateUserRejectsMissingFields(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name        string
+		email, hash string
+	}{
+		{name: "empty email", hash: "hash"},
+		{name: "whitespace email", email: "   ", hash: "hash"},
+		{name: "empty password hash", email: "user@example.com"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := st.CreateUser(ctx, tc.email, tc.hash); err == nil {
+				t.Fatalf("CreateUser(%q, %q) error = nil", tc.email, tc.hash)
+			}
+		})
+	}
+	var count int
+	if err := st.SQLDB().QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&count); err != nil {
+		t.Fatalf("count users: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("users after rejected creates = %d, want 0", count)
+	}
+}
+
+func TestCreateUserConcurrentNormalizedDuplicateCreatesOneRow(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, email := range []string{" Student@Example.COM ", "student@example.com"} {
+		go func() {
+			<-start
+			_, err := st.CreateUser(ctx, email, "hash")
+			results <- err
+		}()
+	}
+	close(start)
+
+	var successes, duplicates int
+	for range 2 {
+		switch err := <-results; {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrEmailAlreadyExists):
+			duplicates++
+		default:
+			t.Fatalf("concurrent CreateUser error = %v", err)
+		}
+	}
+	if successes != 1 || duplicates != 1 {
+		t.Fatalf("concurrent results = %d success, %d duplicate", successes, duplicates)
+	}
+	var count int
+	if err := st.SQLDB().QueryRowContext(ctx, `SELECT count(*) FROM users WHERE email = 'student@example.com'`).Scan(&count); err != nil {
+		t.Fatalf("count concurrent users: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("concurrent user rows = %d, want 1", count)
+	}
+}
+
+func TestCreateOwnerUserRejectsExistingGeneralAccount(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	if _, err := st.CreateUser(ctx, "member@example.com", "member-hash"); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if _, err := st.CreateOwnerUser(ctx, "owner@example.com", "owner-hash"); err == nil || !strings.Contains(err.Error(), "owner user already exists") {
+		t.Fatalf("CreateOwnerUser error = %v, want existing-user refusal", err)
+	}
+}
+
+func TestUserLookupsReturnNotFoundForInvalidAndMissingKeys(t *testing.T) {
+	st := newPostgresTestStore(t)
+	ctx := context.Background()
+	for _, email := range []string{"", "   ", "missing@example.com"} {
+		if user, ok, err := st.UserByEmail(ctx, email); err != nil || ok || user.ID != 0 {
+			t.Fatalf("UserByEmail(%q) = user %+v ok %v err %v", email, user, ok, err)
+		}
+	}
+	for _, id := range []int64{0, -1, 1} {
+		if user, ok, err := st.UserByID(ctx, id); err != nil || ok || user.ID != 0 {
+			t.Fatalf("UserByID(%d) = user %+v ok %v err %v", id, user, ok, err)
+		}
 	}
 }
 
@@ -173,7 +318,7 @@ func TestResetOwnerPasswordUpdatesExistingOwner(t *testing.T) {
 		t.Fatalf("CreateOwnerUser: %v", err)
 	}
 
-	updated, err := st.ResetOwnerPassword(ctx, "owner@example.com", "new-hash")
+	updated, err := st.ResetOwnerPassword(ctx, " OWNER@EXAMPLE.COM ", "new-hash")
 	if err != nil {
 		t.Fatalf("ResetOwnerPassword: %v", err)
 	}
@@ -182,9 +327,6 @@ func TestResetOwnerPasswordUpdatesExistingOwner(t *testing.T) {
 	}
 	if updated.PasswordHash != "new-hash" {
 		t.Fatalf("updated password hash = %q", updated.PasswordHash)
-	}
-	if updated.Role != "owner" {
-		t.Fatalf("updated role = %q, want owner", updated.Role)
 	}
 }
 

@@ -42,7 +42,7 @@ SELECT u.id, u.email, u.password_hash, u.created_at, u.updated_at
   JOIN users u ON u.id = s.user_id
  WHERE s.session_token_hash = ?
    AND s.expires_at > ?`), tokenHash, now)
-	user, err := scanOwnerUser(row)
+	user, err := scanUser(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}

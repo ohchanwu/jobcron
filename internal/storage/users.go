@@ -6,27 +6,62 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/ohchanwu/jobcron/internal/auth"
 )
 
 const (
-	ownerRole                     = "owner"
 	managedLocalOwnerEmail        = "local-owner@jobcron.example.invalid"
 	managedLocalOwnerPasswordHash = "$jobcron$local-login-disabled"
 )
 
-// User is an application account row. Milestone A only creates one owner.
+// ErrEmailAlreadyExists reports a canonical email uniqueness conflict.
+var ErrEmailAlreadyExists = errors.New("storage: email already exists")
+
+// User is an application account row.
 type User struct {
 	ID           int64
 	Email        string
 	PasswordHash string
-	Role         string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+// CreateUser creates an application account with a canonical email address.
+func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (User, error) {
+	user, err := s.insertUser(ctx, s.db, email, passwordHash)
+	if err != nil {
+		return User{}, fmt.Errorf("storage: create user: %w", err)
+	}
+	return user, nil
+}
+
+func (s *Store) insertUser(ctx context.Context, db queryExecer, email, passwordHash string) (User, error) {
+	email = auth.NormalizeEmail(email)
+	if email == "" {
+		return User{}, errors.New("storage: user email is required")
+	}
+	if passwordHash == "" {
+		return User{}, errors.New("storage: user password hash is required")
+	}
+	now := time.Now().UTC()
+	row := db.QueryRowContext(ctx, s.query(`
+INSERT INTO users (email, password_hash, created_at, updated_at)
+VALUES (?, ?, ?, ?)
+RETURNING id, email, password_hash, created_at, updated_at`), email, passwordHash, now, now)
+	user, err := scanUser(row)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" {
+		return User{}, ErrEmailAlreadyExists
+	}
+	return user, err
 }
 
 // CreateOwnerUser creates the first and only owner account for the production
 // app. It fails once any user already exists.
 func (s *Store) CreateOwnerUser(ctx context.Context, email, passwordHash string) (User, error) {
+	email = auth.NormalizeEmail(email)
 	if email == "" {
 		return User{}, errors.New("storage: owner email is required")
 	}
@@ -50,12 +85,7 @@ func (s *Store) CreateOwnerUser(ctx context.Context, email, passwordHash string)
 		return User{}, errors.New("storage: owner user already exists")
 	}
 
-	now := time.Now().UTC()
-	row := tx.QueryRowContext(ctx, s.query(`
-INSERT INTO users (email, password_hash, created_at, updated_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, email, password_hash, created_at, updated_at`), email, passwordHash, now, now)
-	user, err := scanOwnerUser(row)
+	user, err := s.insertUser(ctx, tx, email, passwordHash)
 	if err != nil {
 		return User{}, fmt.Errorf("storage: create owner user: %w", err)
 	}
@@ -67,6 +97,7 @@ RETURNING id, email, password_hash, created_at, updated_at`), email, passwordHas
 
 // ResetOwnerPassword replaces the password hash for the sole owner account.
 func (s *Store) ResetOwnerPassword(ctx context.Context, email, passwordHash string) (User, error) {
+	email = auth.NormalizeEmail(email)
 	if email == "" {
 		return User{}, errors.New("storage: owner email is required")
 	}
@@ -100,7 +131,7 @@ UPDATE users
        updated_at = ?
  WHERE email = ?
  RETURNING id, email, password_hash, created_at, updated_at`), passwordHash, now, email)
-	user, err := scanOwnerUser(row)
+	user, err := scanUser(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, errors.New("storage: owner user does not match email")
 	}
@@ -124,6 +155,7 @@ func (s *Store) lockUsersForOwnerChange(ctx context.Context, tx *sql.Tx) error {
 
 // UserByEmail returns an application user by email address.
 func (s *Store) UserByEmail(ctx context.Context, email string) (User, bool, error) {
+	email = auth.NormalizeEmail(email)
 	if email == "" {
 		return User{}, false, nil
 	}
@@ -131,7 +163,7 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, bool, erro
 SELECT id, email, password_hash, created_at, updated_at
   FROM users
  WHERE email = ?`), email)
-	user, err := scanOwnerUser(row)
+	user, err := scanUser(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -139,6 +171,46 @@ SELECT id, email, password_hash, created_at, updated_at
 		return User{}, false, fmt.Errorf("storage: user by email: %w", err)
 	}
 	return user, true, nil
+}
+
+// UserByID returns an application user by exact positive ID.
+func (s *Store) UserByID(ctx context.Context, userID int64) (User, bool, error) {
+	if userID <= 0 {
+		return User{}, false, nil
+	}
+	row := s.db.QueryRowContext(ctx, s.query(`
+SELECT id, email, password_hash, created_at, updated_at
+  FROM users
+ WHERE id = ?`), userID)
+	user, err := scanUser(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, false, nil
+	}
+	if err != nil {
+		return User{}, false, fmt.Errorf("storage: user by id: %w", err)
+	}
+	return user, true, nil
+}
+
+// UserIDs returns every positive application user ID in ascending order.
+func (s *Store) UserIDs(ctx context.Context) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM users WHERE id > 0 ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list user ids: %w", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("storage: scan user id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: list user ids: %w", err)
+	}
+	return ids, nil
 }
 
 // SoleOwnerUserID returns the only application's user ID. It refuses to guess
@@ -256,11 +328,10 @@ func (s *Store) firstUserID(ctx context.Context) (int64, bool, error) {
 	return id, true, nil
 }
 
-func scanOwnerUser(row rowScanner) (User, error) {
+func scanUser(row rowScanner) (User, error) {
 	var user User
 	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		return User{}, err
 	}
-	user.Role = ownerRole
 	return user, nil
 }

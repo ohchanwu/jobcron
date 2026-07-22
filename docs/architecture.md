@@ -232,6 +232,11 @@ The main ownership split is:
   Stage 1B validations, Stage 2 scores, AI usage, and encrypted AI credentials.
 - Authentication state: users and hashed login sessions.
 
+Account email identity is stored as trimmed lowercase text. PostgreSQL enforces both that canonical
+form and uniqueness, while storage exposes general create and lookup methods without manufacturing
+application roles. The deployment-only owner bootstrap remains table-locked and refuses any
+database that already contains an account.
+
 Foreign keys remove dependent user state when its owner is deleted. Composite keys and repository
 methods include `user_id` wherever two accounts must not share state. The current owner-only UI is
 therefore a product limitation, not a storage shortcut.
