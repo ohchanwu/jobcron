@@ -36,8 +36,10 @@ The current repository already provides:
 - encrypted, per-user Anthropic credential storage; and
 - foreign-key cascades for private user-owned state.
 
-The owner-only creation and scheduler paths remain incompatible with multiple
-users and are part of this milestone.
+The database can safely hold multiple users, but two owner-era entry points still
+prevent the app from operating that way. The `jobcron-user create-owner` command
+refuses to create a second account, and the daily scheduler refuses to run when
+more than one user exists. This milestone removes both restrictions.
 
 ## Locked Product Decisions
 
@@ -45,11 +47,12 @@ users and are part of this milestone.
    roles, or social-login providers.
 2. The cohort gets self-service email-and-password signup protected by one
    server-side access code. Signup is not yet open to the general public.
-3. Passwords reuse the existing Argon2id implementation. Password recovery and
-   email verification are deferred; the operator handles cohort resets through
-   the user-management CLI.
-4. AI access is bring-your-own-key. The UI supports Anthropic only. OpenAI,
-   Gemini, and shared Jobcron-funded usage are out of scope.
+3. Passwords reuse the existing Argon2id implementation. Cohort users can change
+   their password while signed in. Recovery for a forgotten password and email
+   verification are deferred; the operator handles cohort recovery through the
+   user-management CLI.
+4. AI access is bring-your-own-key. The UI supports Anthropic, OpenAI, and
+   Gemini. Shared Jobcron-funded usage is out of scope.
 5. The server performs one global scrape every day at 05:00 KST, then scores the
    shared postings separately for each user.
 6. Per-user scoring runs sequentially at first. Concurrency or a job queue is
@@ -59,15 +62,17 @@ users and are part of this milestone.
 8. Deleting an account removes its sessions, profile, saved-job state, AI
    scores, usage, contextual validations, import records, and credentials.
    Global postings, public `ai_extractions`, and global scrape history remain.
-9. Cohort account deletion is operator-assisted. Truly public signup requires
-   self-service deletion before launch.
+9. Cohort users can permanently delete their own account after re-authentication
+   and explicit confirmation. Operator CLI commands remain available for support.
 
 ## Milestone Scope
 
 ### Account creation
 
-- Replace owner-only storage assumptions with a general `CreateUser` path while
-  preserving the owner bootstrap command for deployment.
+- Add a general `Store.CreateUser` Go storage method that can create more than
+  one account. Keep the existing `jobcron-user create-owner` CLI command for
+  creating the first production account before web signup is enabled; this
+  one-time setup is the “owner bootstrap.”
 - Canonicalize email identity consistently at creation, login, reset, and
   deletion. Store and compare the trimmed lowercase address.
 - Keep the database uniqueness constraint as the final duplicate-account guard.
@@ -87,36 +92,72 @@ users and are part of this milestone.
 
 ### Cohort account lifecycle
 
+- Keep the existing server-side session design. Jobcron does not use JWTs: the
+  browser receives an opaque random cookie, while PostgreSQL stores only its
+  hash. Deleting session rows invalidates those cookies immediately.
+- Let an authenticated user change their password after confirming the current
+  password, then revoke their other sessions.
+- Let an authenticated user permanently delete their account after confirming
+  the current password and accepting an explicit destructive confirmation.
 - Generalize the existing password-reset CLI to select exactly one user by
   normalized email.
 - Add an operator CLI command that deletes exactly one user after explicit
   confirmation.
 - Revoke all sessions as part of account deletion through the existing foreign
-  key cascade.
+  key cascade, then expire the browser cookie.
 - Verify that deleting a user removes every private row but preserves global
   posting facts and scrape history.
 - State clearly in the signup UI that the cohort release does not verify email
-  ownership and that password reset or deletion requires contacting the operator.
+  ownership and that forgotten-password recovery requires contacting the operator.
 
-### AI credentials
+### AI providers and credentials
 
-- Add an authenticated Anthropic delete-key action with confirmation.
-- Keep blank key input as “preserve the existing key.”
+- Support Anthropic, OpenAI, and Gemini through the existing `ai.Provider`
+  interface and shared HTTP-provider chassis. Do not add provider SDK dependencies.
+- Give each provider a small static model allowlist and one inexpensive default.
+  Keep volatile model identifiers in the code and tests rather than locking them
+  into this specification.
+- Let each user store at most one encrypted key per provider and select one active
+  provider and model for scoring.
+- Add authenticated create, replace, and delete-key actions for each supported
+  provider, with confirmation before deletion.
+- Keep blank key input as “preserve the existing key” for the selected provider.
 - Keep create, replace, read, and delete operations scoped to the authenticated
-  user's Anthropic row.
+  user's selected provider row.
+- Implement OpenAI with its Chat Completions REST contract. Implement Gemini with
+  its documented OpenAI-compatible REST endpoint, reusing the OpenAI-shaped body
+  and response parser while keeping separate provider identity, authentication,
+  base host, model allowlist, errors, usage accounting, and egress pin.
+- Keep Anthropic's existing Messages API adapter unchanged except where the
+  shared three-provider UI or tests require it.
+- Add offline HTTP contract tests for all three providers and opt-in live contract
+  tests that run only when the corresponding test API key is present.
 - Correct the profile copy that still describes a local `0600` key file. In the
   hosted app, the credential is encrypted before storage in PostgreSQL.
-- Do not add provider abstractions or UI for providers not in this milestone.
+- Do not add providers beyond these three, dynamic provider plugins, or remote
+  model discovery.
+
+Implementation references:
+
+- [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
+- [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai)
 
 ### Scheduled work
 
 - Align the application default and production configuration on 05:00 KST.
 - Replace `SoleOwnerUserID` in scheduled work. Multiple users must no longer make
   the scheduled run ambiguous or cause it to be skipped.
-- Fetch, normalize, deduplicate, upsert, and extract global posting facts once.
+- Fetch, normalize, deduplicate, and upsert shared postings once without using a
+  user's paid AI credential.
 - Enumerate current users and perform profile-dependent scoring sequentially.
   Users without a saved profile are skipped until they finish setup.
-- Resolve each user's AI runtime, credential, and usage budget independently.
+- Resolve each user's selected provider, AI runtime, credential, and usage budget
+  independently. Paid AI calls occur only inside that user's scoring pass and are
+  charged only to that user's usage ledger.
+- Reuse global cached `ai_extractions` when available. An uncached extraction is
+  paid for by the user whose scoring pass requested it; later cache hits make no
+  paid call. Revisit user-scoped extraction caches only if this simple cohort
+  policy causes a material cost-fairness problem.
 - Record a bounded per-user failure summary without logging credentials or
   allowing one user's error to abort the remaining users.
 - Keep the existing single global scrape lock. Replace it only if production
@@ -129,7 +170,9 @@ users and are part of this milestone.
 - Users cannot read, overwrite, prune, or debit one another's state.
 - `ai_extractions` remains global only while it contains public posting facts and
   no profile, credential, or account data.
-- Global scrape work never selects an arbitrary user for paid AI execution.
+- The 05:00 shared fetch must not impersonate the first database user or spend
+  that user's API key on behalf of everyone. Paid AI starts only inside an
+  explicitly identified user's scoring pass with that user's selected key.
 
 ## Truly Public Signup Follow-Up
 
@@ -157,12 +200,8 @@ open internet signup. The following work is required before removing it.
 - Add an operator mechanism to disable an abusive account without introducing
   application roles or a web administration console.
 
-### Complete self-service account lifecycle
+### Complete public support and policy
 
-- Let an authenticated user change their password after confirming the current
-  password, then revoke their other sessions.
-- Let a user permanently delete their account after re-authentication and an
-  explicit destructive confirmation.
 - Publish clear privacy, retention, deletion, and acceptable-use terms before
   collecting accounts from the general public.
 - Provide a support path for lost access, disputed email ownership, and deletion
@@ -192,14 +231,21 @@ without editing the database manually.
 - Run the complete Go test suite and the PostgreSQL integration suite.
 - Add storage tests for normalized email uniqueness, concurrent duplicate
   creation, password reset targeting, and account-deletion cascades.
-- Add server tests for access-code failure, signup throttling, enumeration-safe
-  duplicate handling, CSRF, auto-login, and unauthenticated access.
-- Add scheduler tests with at least two users, distinct profiles, one broken AI
-  key, one missing profile, and one successful user.
+- Verify that signup with a missing, incorrect, or unconfigured cohort access code
+  creates neither an account nor a session. Also test signup throttling,
+  enumeration-safe duplicate handling, CSRF, auto-login, and unauthenticated access.
+- Verify the 05:00 scheduler calculation, then invoke the scheduled workflow
+  directly in tests rather than waiting for the clock. With at least two users,
+  assert one shared fetch, separate user scoring, one broken key that does not
+  stop another user, and one missing profile that is skipped.
+- Add offline provider contract tests for Anthropic, OpenAI, and Gemini, including
+  authentication, request and response shape, usage accounting, model validation,
+  API errors, and host pinning.
 - Verify in a real browser that two accounts cannot see or change one another's
   profile, saved jobs, hidden jobs, scores, usage, or AI credential.
-- Walk signup, login, profile setup, key replacement, key deletion, logout, and
-  failure paths on desktop and mobile viewports with no console errors.
+- Walk signup, login, profile setup, provider switching, key replacement, key
+  deletion, password change, account deletion, logout, and failure paths on
+  desktop and mobile viewports with no console errors.
 - Update `docs/architecture.md`, deployment documentation, and the active
   Terraform specification with the final runtime-secret interface.
 
@@ -209,7 +255,8 @@ without editing the database manually.
   application roles.
 - Social login, multi-factor authentication, or public password recovery in the
   cohort milestone.
-- OpenAI, Gemini, shared funded AI usage, or provider-selection abstractions.
+- Providers beyond Anthropic, OpenAI, and Gemini; dynamic provider plugins;
+  remote model discovery; or shared funded AI usage.
 - Per-user scraping schedules, duplicate source fetches, concurrent fan-out,
   queues, workers, or distributed scheduling.
 - Applying Terraform, modifying live AWS resources, changing DNS, or performing
