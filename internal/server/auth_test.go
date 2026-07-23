@@ -188,7 +188,7 @@ func TestLoginFailureUsesGenericError(t *testing.T) {
 		t.Fatalf("CreateOwnerUser: %v", err)
 	}
 
-	form := url.Values{"email": {"missing@example.com"}, "password": {"wrong-password"}}
+	form := url.Values{"email": {"missing@example.com"}, "password": {"jobcron-fixed-dummy-password"}}
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -204,6 +204,100 @@ func TestLoginFailureUsesGenericError(t *testing.T) {
 	}
 	if strings.Contains(body, "missing@example.com") || strings.Contains(body, "존재") {
 		t.Fatalf("body reveals account existence: %q", body)
+	}
+	if got := len(srv.passwordWorkSlots); got != 0 {
+		t.Fatalf("password-work slots after missing login = %d, want 0", got)
+	}
+}
+
+func TestDummyLoginPasswordHashIsValid(t *testing.T) {
+	matches, err := auth.VerifyPassword(dummyLoginPasswordHash, "jobcron-fixed-dummy-password")
+	if err != nil {
+		t.Fatalf("VerifyPassword(dummy hash): %v", err)
+	}
+	if !matches {
+		t.Fatal("VerifyPassword(dummy hash) = false, want true")
+	}
+}
+
+func TestLoginSaturationDoesNotRevealAccountExistence(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	if _, err := st.CreateOwnerUser(context.Background(), "owner@example.com", dummyLoginPasswordHash); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	srv.passwordWorkSlots = make(chan struct{}, 1)
+	srv.passwordWorkSlots <- struct{}{}
+
+	registered := postLogin(t, srv, "198.51.100.30:1234", "owner@example.com", "wrong-password")
+	if got := len(srv.passwordWorkSlots); got != 1 {
+		t.Fatalf("shared password-work slots after registered login = %d, want 1", got)
+	}
+	missing := postLogin(t, srv, "198.51.100.31:1234", "missing@example.com", "wrong-password")
+	if got := len(srv.passwordWorkSlots); got != 1 {
+		t.Fatalf("shared password-work slots after missing login = %d, want 1", got)
+	}
+
+	if registered.Code != missing.Code {
+		t.Fatalf("registered status = %d, missing status = %d", registered.Code, missing.Code)
+	}
+	if registered.Code != http.StatusTooManyRequests {
+		t.Fatalf("saturated login status = %d, want 429", registered.Code)
+	}
+	if registered.Body.String() != missing.Body.String() {
+		t.Fatalf("registered body = %q, missing body = %q", registered.Body.String(), missing.Body.String())
+	}
+}
+
+func TestLoginSharesPasswordWorkCapacityAndReleases(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	hash, err := auth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if _, err := st.CreateOwnerUser(context.Background(), "owner@example.com", hash); err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	srv.passwordWorkSlots = make(chan struct{}, 1)
+
+	srv.passwordWorkSlots <- struct{}{}
+	rec := postLogin(t, srv, "198.51.100.20:1234", "owner@example.com", "correct-password")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("saturated login status = %d, want 429", rec.Code)
+	}
+	if got := len(srv.passwordWorkSlots); got != 1 {
+		t.Fatalf("shared password-work slots after saturation = %d, want 1", got)
+	}
+	<-srv.passwordWorkSlots
+
+	rec = postLogin(t, srv, "198.51.100.21:1234", "owner@example.com", "wrong-password")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong-password login status = %d, want 401", rec.Code)
+	}
+	if got := len(srv.passwordWorkSlots); got != 0 {
+		t.Fatalf("password-work slots after mismatch = %d, want 0", got)
+	}
+	if _, err := st.ResetUserPassword(context.Background(), "owner@example.com", "malformed-hash"); err != nil {
+		t.Fatalf("install malformed password hash: %v", err)
+	}
+	rec = postLogin(t, srv, "198.51.100.22:1234", "owner@example.com", "wrong-password")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("password-verifier error status = %d, want 401", rec.Code)
+	}
+	if got := len(srv.passwordWorkSlots); got != 0 {
+		t.Fatalf("password-work slots after verifier error = %d, want 0", got)
+	}
+	if _, err := st.ResetUserPassword(context.Background(), "owner@example.com", hash); err != nil {
+		t.Fatalf("restore password hash: %v", err)
+	}
+
+	rec = postLogin(t, srv, "198.51.100.23:1234", "owner@example.com", "correct-password")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("successful login status = %d, want 303", rec.Code)
+	}
+	if got := len(srv.passwordWorkSlots); got != 0 {
+		t.Fatalf("password-work slots after success = %d, want 0", got)
 	}
 }
 
@@ -305,6 +399,9 @@ func TestLoginVerifiedBeforePasswordResetCannotCreateSurvivingSession(t *testing
 	rec, blocked, err := waitForLoginResultOrSessionLock(ctx, st.SQLDB(), result)
 	if err != nil {
 		t.Fatalf("wait for login concurrency point: %v", err)
+	}
+	if got := len(srv.passwordWorkSlots); got != 0 {
+		t.Fatalf("password-work slots held during session transaction = %d, want 0", got)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit password reset: %v", err)

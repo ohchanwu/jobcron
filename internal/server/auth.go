@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	sessionCookieName = "jobcron_session"
-	sessionTTL        = 30 * 24 * time.Hour
-	loginErrorCopy    = "이메일 또는 비밀번호를 확인해주세요."
+	sessionCookieName      = "jobcron_session"
+	sessionTTL             = 30 * 24 * time.Hour
+	loginErrorCopy         = "이메일 또는 비밀번호를 확인해주세요."
+	dummyLoginPasswordHash = "$argon2id$v=19$m=65536,t=3,p=2$HnaitXE81jwvEnc/8ZDBNQ$bSyeYlt4Gm57RgICVNGJDc9qXFyISc+SkuiTHec9BQM"
 )
 
 var errSessionNotCreated = errors.New("server: authenticated user changed before session creation")
@@ -118,12 +119,17 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !ok {
-		s.renderLoginFailure(w, r)
+	passwordHash := dummyLoginPasswordHash
+	if ok {
+		passwordHash = user.PasswordHash
+	}
+	if !s.acquirePasswordWork(r.Context()) {
+		http.Error(w, "too many login attempts", http.StatusTooManyRequests)
 		return
 	}
-	matches, err := auth.VerifyPassword(user.PasswordHash, password)
-	if err != nil || !matches {
+	matches, err := auth.VerifyPassword(passwordHash, password)
+	s.releasePasswordWork()
+	if !ok || err != nil || !matches {
 		s.renderLoginFailure(w, r)
 		return
 	}
