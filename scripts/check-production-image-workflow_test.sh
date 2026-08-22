@@ -4,11 +4,15 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checker="$repo_root/scripts/check-production-image-workflow.sh"
 workflow="$repo_root/.github/workflows/publish-production-image.yml"
+ci_workflow="$repo_root/.github/workflows/ci.yml"
 fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
 
 test -x "$checker"
 test -f "$workflow"
+grep -Fqx \
+  '        run: bash scripts/check-production-image-workflow_test.sh' \
+  "$ci_workflow"
 
 fixture="$fixture_root/publish-production-image.yml"
 output="$fixture_root/checker.out"

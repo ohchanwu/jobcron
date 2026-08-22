@@ -367,6 +367,12 @@ if [[ ! -f "$edge_workflow" ]]; then
   printf 'FAIL: edge prefix-list workflow is absent\n' >&2
   exit 1
 fi
+if [[ "$(grep -Fxc \
+  '          TF_DATA_DIR: ${{ runner.temp }}/terraform-data' \
+  "$edge_workflow" || true)" -ne 2 ]]; then
+  printf 'FAIL: edge Terraform data directory is not step-scoped\n' >&2
+  exit 1
+fi
 if ! grep -Fq \
   "uses: aws-actions/configure-aws-credentials@$aws_action_sha" \
   "$production_workflow"; then
@@ -440,6 +446,11 @@ expect_rejected "TF_DATA_DIR outside runner temp" "$edge_error" \
   replace_once "$edge_workflow" \
   'TF_DATA_DIR: ${{ runner.temp }}/terraform-data' \
   'TF_DATA_DIR: /tmp/terraform-data' || failures=$((failures + 1))
+expect_rejected "job-wide TF_DATA_DIR runner context" "$edge_error" \
+  replace_once "$edge_workflow" \
+  '          TF_DATA_DIR: ${{ runner.temp }}/terraform-data' \
+  '      TF_DATA_DIR: ${{ runner.temp }}/terraform-data' ||
+  failures=$((failures + 1))
 expect_rejected "Slice 4 checkpoint outside runner temp" "$edge_error" \
   replace_once "$edge_workflow" \
   '${RUNNER_TEMP}/slice-4-checkpoint.json' \

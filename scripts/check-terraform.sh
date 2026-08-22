@@ -657,7 +657,6 @@ for literal in \
   '    environment: edge' \
   '  group: terraform-edge-prefix-list' \
   '  cancel-in-progress: false' \
-  '      TF_DATA_DIR: ${{ runner.temp }}/terraform-data' \
   '          mask-aws-account-id: true' \
   '            -detailed-exitcode \' \
   '          if [[ "$plan_rc" -eq 0 ]]; then' \
@@ -671,6 +670,9 @@ for literal in \
   [[ "$(grep -Fxc "$literal" "$edge_workflow" || true)" -eq 1 ]] ||
     fail_edge_workflow
 done
+[[ "$(grep -Fxc \
+  '          TF_DATA_DIR: ${{ runner.temp }}/terraform-data' \
+  "$edge_workflow" || true)" -eq 2 ]] || fail_edge_workflow
 [[ "$(grep -Fxc '          umask 077' "$edge_workflow" || true)" -eq 4 ]] ||
   fail_edge_workflow
 
@@ -705,7 +707,7 @@ if grep -Eq \
   "$edge_workflow"; then
   fail_edge_workflow
 fi
-[[ "$(grep -Foc 'TF_DATA_DIR' "$edge_workflow" || true)" -eq 1 ]] ||
+[[ "$(grep -Foc 'TF_DATA_DIR' "$edge_workflow" || true)" -eq 2 ]] ||
   fail_edge_workflow
 
 for artifact in \

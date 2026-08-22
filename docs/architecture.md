@@ -474,8 +474,10 @@ credentials out of process arguments and recovery evidence.
 The origin security group carries the public semantic discovery tag
 `jobcron:edge-target = origin-security-group`. The adopted canonical VPC remains untagged because
 Window 1 forbids updating it; Slice 5 derives the VPC from the tagged security group's `vpc_id`.
-`edge` owns future Cloudflare ingress automation. The old EC2 instance and prior RDS instance
-remain unchanged rollback resources outside this ownership slice.
+`edge` owns future Cloudflare ingress automation. Its workflow scopes `TF_DATA_DIR` to the
+Terraform execution steps because GitHub exposes `runner.temp` only after the job starts. The old
+EC2 instance and prior RDS instance remain unchanged rollback resources outside this ownership
+slice.
 
 The bootstrap root was first applied with local state and then migrated into the protected S3
 backend. All roots use separate state keys and native S3 lock files. Bucket versioning supports
