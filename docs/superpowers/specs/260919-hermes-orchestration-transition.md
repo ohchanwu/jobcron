@@ -99,6 +99,11 @@ with `--no-open`; browser smoke checks, when required, use a headless browser
 against the local service. No autonomous task may use a browser session to
 perform an external write.
 
+Jobcron v1.x does not permit browser-driven scraping or browser-fingerprint
+bypass. Autonomous implementation must not add or use Playwright, chromedp, or
+similar browser automation for scraping; the headless local UI-smoke exception
+above does not change that product constraint.
+
 ## Current transition checklist
 
 - [x] Approved roster and Terra/Luna dispatch routing are recorded.
@@ -108,7 +113,8 @@ perform an external write.
   `reviewer-sol` review are required.
 - [x] Human-only external-action gates and Telegram notification limits are
   recorded.
-- [x] Jobcron's no-browser and `--no-open` rule is carried into the workflow.
+- [x] Jobcron's no-browser-driven-scraping and `--no-open` rules are carried
+  into the workflow.
 - [ ] Apply this contract to each newly created implementation card and revise
   it only through an approved, reviewed documentation change.
 
