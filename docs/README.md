@@ -46,6 +46,7 @@ Use this index instead of recursively loading the entire documentation tree.
 - [Ponytail codebase reduction campaign][ponytail-campaign-plan]
 - [Ponytail reduction candidate ledger][ponytail-campaign-ledger]
 - [Ponytail campaign verification][ponytail-campaign-verification]
+- [Hermes orchestration transition][hermes-orchestration-transition]
 - [PostgreSQL local convergence and per-user AI credentials](superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 - [Slice 5: First production deployment](superpowers/plans/260715-postgresql-convergence-slice-5-first-production-deployment.md)
 - [Multi-user account expansion and public-signup follow-up](superpowers/archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md)
@@ -99,6 +100,8 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
   superpowers/archive/2026-07-18-ponytail-codebase-reduction/260717-candidate-ledger.md
 [ponytail-campaign-verification]:
   superpowers/archive/2026-07-18-ponytail-codebase-reduction/260718-verification.md
+[hermes-orchestration-transition]:
+  superpowers/specs/260919-hermes-orchestration-transition.md
 [contextual-dealbreaker-spec]:
   superpowers/archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
 [dealbreaker-provenance-spec]:

@@ -14,6 +14,7 @@ decision records needed for the current task.
 - [Terraform-first production launch roadmap][terraform-launch-roadmap]
 - [Terraform Slice 4 replacement EC2 and transient runtime implementation][terraform-slice-4-plan]
 - [Terraform Slice 5 Cloudflare prefix-list automation implementation][terraform-slice-5-plan]
+- [Hermes orchestration transition][hermes-orchestration-transition]
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 
 ## Recently Archived
@@ -125,6 +126,8 @@ decision records needed for the current task.
   plans/260728-terraform-slice-4-replacement-ec2-transient-runtime-implementation.md
 [terraform-slice-5-plan]:
   plans/260728-terraform-slice-5-cloudflare-prefix-list-automation-implementation.md
+[hermes-orchestration-transition]:
+  specs/260919-hermes-orchestration-transition.md
 [terraform-slice-2-spec]:
   archive/2026-07-27-terraform-slice-2/260727-terraform-slice-2-canonical-vpc-eip-adoption.md
 [terraform-slice-2-plan]:
