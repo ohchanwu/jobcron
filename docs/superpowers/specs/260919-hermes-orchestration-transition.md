@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-**Status:** active transition; local repository adoption only.
+**Status: active transition; local repository adoption only.**
 
 This document is Jobcron's repository adapter for the canonical Hermes skill
 `multi-agent-coding-orchestrator`. The skill defines shared multi-agent policy;
