@@ -41,7 +41,7 @@ not duplicate its roster or routing rules.
 - [x] Jobcron's adapter is linked from the active Superpowers work index.
 - [x] Jobcron-specific no-browser, `--no-open`, local UI-smoke, local-only, and
   public-safe constraints are recorded.
-- [x] End-to-end Jobcron implementation-card lifecycle completed through this
+- [x] End-to-end Jobcron local orchestration lifecycle completed through this
   Kanban dry run: `go test ./...`, `go vet ./...`, and `gofmt -l .` passed; the
   card recorded baseline evidence and completed local review handoff.
 
