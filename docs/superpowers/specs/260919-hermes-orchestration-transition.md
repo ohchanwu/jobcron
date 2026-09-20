@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-**Status: active transition; local repository adoption only.**
+**Status: operational; local repository adoption validated.**
 
 This document is Jobcron's repository adapter for the canonical Hermes skill
 `multi-agent-coding-orchestrator`. The skill defines shared multi-agent policy;
@@ -41,9 +41,9 @@ not duplicate its roster or routing rules.
 - [x] Jobcron's adapter is linked from the active Superpowers work index.
 - [x] Jobcron-specific no-browser, `--no-open`, local UI-smoke, local-only, and
   public-safe constraints are recorded.
-- [ ] The shared procedure has not yet completed an end-to-end Jobcron
-  implementation-card lifecycle; apply it to newly assigned cards and revise
-  this adapter only through reviewed documentation work.
+- [x] End-to-end Jobcron implementation-card lifecycle completed through this
+  Kanban dry run: `go test ./...`, `go vet ./...`, and `gofmt -l .` passed; the
+  card recorded baseline evidence and completed local review handoff.
 
 ## Acceptance and rollback
 
