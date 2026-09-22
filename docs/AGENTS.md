@@ -1,4 +1,4 @@
-# Superpowers Documentation
+# Documentation Tree
 
 This tree stores implementation knowledge, not general product documentation.
 
@@ -14,7 +14,7 @@ This tree stores implementation knowledge, not general product documentation.
   personal data.
 - Prefix content files below this tree with their best-supported `YYMMDD`
   creation date. Structural `README.md` and `AGENTS.md` files are exempt.
-- Update this tree's index and `docs/README.md` when adding, moving, or removing
+- Update `docs/README.md` — this tree's single index — when adding, moving, or removing
   durable records.
 - Treat every tracked file as public. Use placeholders for credentials,
   addresses, account identifiers, email addresses, and machine-specific paths.
