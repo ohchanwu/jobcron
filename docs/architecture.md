@@ -65,7 +65,7 @@ later users.
 
 See the [production deployment reference](../deploy/production/README.md), the
 [human rollout guide](../deploy/production/HUMAN_DEPLOY_GUIDE.md), and the
-[RDS decision](superpowers/decisions/260710-rds-production-settings.md).
+[RDS decision](decisions/260710-rds-production-settings.md).
 
 ### Managed local app
 
@@ -176,7 +176,7 @@ server methods. This keeps storage calls user-scoped across the implemented mult
 
 Email verification, public password recovery, organizations, and per-user schedules are not
 implemented. The
-[multi-user expansion follow-up](superpowers/archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md) records
+[multi-user expansion follow-up](archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md) records
 that remaining product work.
 
 ## Scrape pipeline
@@ -210,7 +210,7 @@ authenticated user and only that profile's enabled sources.
 Scraper clients use shared request pacing and robots-policy helpers. The project prefers stable
 HTTP or JSON endpoints and does not use browser automation for production scraping. See the
 [source catalog](scraping/source-catalog.md) and the
-[no-browser-driven-scraping decision](superpowers/decisions/260606-no-browser-driven-scraping.md).
+[no-browser-driven-scraping decision](decisions/260606-no-browser-driven-scraping.md).
 
 ## Scoring and AI
 
@@ -495,7 +495,7 @@ workflow uses the protected `production` environment and short-lived OIDC creden
 initialize state and detect plan changes; it has no apply or plan-publication path.
 
 Stable deployment choices are recorded in the
-[production and naming decision](superpowers/decisions/260711-jobcron-production.md). Exact operator
+[production and naming decision](decisions/260711-jobcron-production.md). Exact operator
 steps belong in the [production guide](../deploy/production/README.md), not in this architecture
 overview.
 
@@ -519,13 +519,13 @@ overview.
 - [Local PostgreSQL operations](../deploy/local/README.md)
 - [Production deployment reference](../deploy/production/README.md)
 - [Production human rollout guide](../deploy/production/HUMAN_DEPLOY_GUIDE.md)
-- [Stable architectural decisions](superpowers/README.md#stable-decisions)
+- [Stable architectural decisions](README.md#stable-decisions)
 
 [postgres-credential-spec]:
-  superpowers/specs/260714-postgresql-local-convergence-user-ai-credentials.md
+  specs/260714-postgresql-local-convergence-user-ai-credentials.md
 [dealbreaker-provenance-spec]:
-  superpowers/archive/2026-07-25-contextual-dealbreaker-match-provenance/260725-contextual-dealbreaker-match-provenance-contract.md
+  archive/2026-07-25-contextual-dealbreaker-match-provenance/260725-contextual-dealbreaker-match-provenance-contract.md
 [stage1-context-spec]:
-  superpowers/archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
+  archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
 [hosted-first-storage]:
-  superpowers/decisions/260714-hosted-first-local-database-convergence.md
+  decisions/260714-hosted-first-local-database-convergence.md

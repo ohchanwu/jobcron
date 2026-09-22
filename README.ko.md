@@ -85,7 +85,7 @@ jobcron은 *감정적 측면(emotional layer)*을 위해 만들어졌습니다: 
   Asia/Seoul 05:00에 공고를 한 번 수집한 뒤 프로필이 있는 사용자를 순서대로 분석합니다.
 - 첫 코호트의 가입은 접근 코드로 제한됩니다. 이메일 소유권은 확인하지 않으며 계정 복구는
   운영자 지원 방식입니다. 완전 공개 가입에는
-  [보관된 후속 명세](docs/superpowers/archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md#truly-public-signup-follow-up)의 보호 장치가 더 필요합니다.
+  [보관된 후속 명세](docs/archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md#truly-public-signup-follow-up)의 보호 장치가 더 필요합니다.
 
 ## AI 점수화 (선택, v2.0, 당신의 키를 직접 사용)
 

@@ -84,7 +84,7 @@ Run it once a day. That is the whole ritual.
   then analyzes each profiled user sequentially through the in-process scheduler.
 - Signup is access-code gated for the first cohort. Email ownership is not verified and recovery
   is operator-assisted; truly public signup needs the safeguards in the
-  [archived follow-up specification](docs/superpowers/archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md#truly-public-signup-follow-up).
+  [archived follow-up specification](docs/archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md#truly-public-signup-follow-up).
 
 ## AI scoring (optional, v2.0, bring your own key)
 
