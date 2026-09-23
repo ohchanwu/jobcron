@@ -1270,12 +1270,12 @@ Stop before mutation if any of these occurs:
   bootstrap procedure.
 
 [foundation]:
-  ../specs/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
+  260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
 [human-steps]:
-  ../specs/260726-terraform-first-production-launch-human-blocked-steps.md
+  260726-terraform-first-production-launch-human-blocked-steps.md
 [window-1]:
-  ../specs/260728-pre-batch-1-window-1-authorization-contract.md
+  260728-pre-batch-1-window-1-authorization-contract.md
 [slice-3]:
-  260728-terraform-slice-3-private-database-secret-containers-implementation.md
+  ../2026-07-28-terraform-slice-3/260728-terraform-slice-3-private-database-secret-containers-implementation.md
 [slice-4]:
   260728-terraform-slice-4-replacement-ec2-transient-runtime-implementation.md

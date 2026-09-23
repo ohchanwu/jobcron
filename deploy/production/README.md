@@ -1,5 +1,10 @@
 # AWS production deploy: jobcron.app
 
+> **Alpha launch:** The active end-to-end runbook is the concise
+> [human-assisted alpha deployment specification](../../docs/specs/260923-human-assisted-alpha-deployment.md).
+> This directory remains the technical runtime reference; its earlier Slice 4
+> sequencing is not independent authorization to execute every step.
+
 ## Slice 4 status
 
 This directory now implements the replacement-host runtime, but running it is a

@@ -1478,4 +1478,4 @@ Require the private Task 8 verdict, independent exact-digest approval, clean
 tracked tree, and no unreviewed commit before Slice 4 begins.
 
 [window-1-contract]:
-  ../specs/260728-pre-batch-1-window-1-authorization-contract.md
+  ../2026-09-23-simplified-alpha-deployment/260728-pre-batch-1-window-1-authorization-contract.md

@@ -29,10 +29,10 @@ shell, `jq`, Go contract tests, and macOS `zsh`.
 ## Global Constraints
 
 - This plan implements the approved
-  [foundation specification](../specs/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md),
-  [human-blocked launch contract](../specs/260726-terraform-first-production-launch-human-blocked-steps.md),
+  [foundation specification](260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md),
+  [human-blocked launch contract](260726-terraform-first-production-launch-human-blocked-steps.md),
   and
-  [Window 1 authorization contract](../specs/260728-pre-batch-1-window-1-authorization-contract.md).
+  [Window 1 authorization contract](260728-pre-batch-1-window-1-authorization-contract.md).
 - Slice 4 implementation may be prepared early, but no Slice 4 saved plan,
   apply, or private runtime operation starts until the Slice 3 completion
   checkpoint and exact integrated commit are recorded privately.

@@ -35,14 +35,7 @@ Read this index before opening plans, specifications, or implementation
 reports. Load only the active files listed here and the concise decision
 records needed for the current task.
 
-- [Jobcron production custody P1 repairs][jobcron-custody-p1-plan]
-- [Terraform AWS foundation and Cloudflare ingress automation][terraform-aws-foundation]
-- [Terraform-first production launch human-blocked steps][terraform-launch-human-steps]
-- [Pre-Batch-1 human input checklist][pre-batch-1-checklist]
-- [Pre-Batch-1 Window 1 authorization contract][pre-batch-1-contract]
-- [Terraform-first production launch roadmap][terraform-launch-roadmap]
-- [Terraform Slice 4 replacement EC2 and transient runtime][terraform-slice-4]
-- [Terraform Slice 5 Cloudflare prefix-list automation][terraform-slice-5]
+- [Human-assisted alpha deployment][human-assisted-alpha-deployment]
 - [Hermes orchestration transition][hermes-orchestration-transition]
 - [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 
@@ -52,6 +45,7 @@ Archived files are completed evidence. Do not scan this tree; open an entry
 only when the active task or a human explicitly names it. See
 [archive guidance](archive/AGENTS.md).
 
+- [Superseded first-production deployment records][simplified-alpha-deployment-archive]
 - [Terraform Slice 3 implementation archive][terraform-slice-3-plan]
 - [Terraform Slice 3 verification][terraform-slice-3-verification]
 - [Terraform Slice 2: canonical VPC and EIP adoption][terraform-slice-2-spec]
@@ -98,7 +92,6 @@ only when the active task or a human explicitly names it. See
 
 ## Stable Decisions
 
-- [Two-window first-production-launch authorization][two-window-authorization]
 - [No browser-driven scraping for v1.x](decisions/260606-no-browser-driven-scraping.md)
 - [RDS production settings](decisions/260710-rds-production-settings.md)
 - [Jobcron production and rename decisions](decisions/260711-jobcron-production.md)
@@ -140,18 +133,10 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 [campaign-scope-outlives-slice]: learnings/260718-campaign-scope-outlives-slice-completion.md
 [caller-managed-convoy-closeout]: learnings/260718-caller-managed-convoy-closeout.md
 [local-only-submit-formula]: learnings/260719-local-only-polecat-submit-formula.md
-[jobcron-custody-p1-plan]:
-  plans/260822-jobcron-production-custody-p1-repairs.md
-[terraform-aws-foundation]:
-  specs/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
-[terraform-launch-human-steps]:
-  specs/260726-terraform-first-production-launch-human-blocked-steps.md
-[pre-batch-1-checklist]:
-  specs/260728-pre-batch-1-human-input-checklist.md
-[pre-batch-1-contract]:
-  specs/260728-pre-batch-1-window-1-authorization-contract.md
-[terraform-launch-roadmap]:
-  plans/260726-terraform-first-production-launch-roadmap.md
+[human-assisted-alpha-deployment]:
+  specs/260923-human-assisted-alpha-deployment.md
+[simplified-alpha-deployment-archive]:
+  archive/2026-09-23-simplified-alpha-deployment/README.md
 [terraform-slice-3-plan]:
   archive/2026-07-28-terraform-slice-3/260728-terraform-slice-3-private-database-secret-containers-implementation.md
 [terraform-slice-3-verification]:
@@ -170,10 +155,6 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
   archive/2026-07-26-first-production-launch-human-blocked-steps/260716-first-production-launch-human-blocked-steps.md
 [account-mutation-clock-plan]:
   archive/2026-07-26-postgresql-account-mutation-clock-source/260726-postgresql-account-mutation-clock-source.md
-[terraform-slice-4]:
-  plans/260728-terraform-slice-4-replacement-ec2-transient-runtime-implementation.md
-[terraform-slice-5]:
-  plans/260728-terraform-slice-5-cloudflare-prefix-list-automation-implementation.md
 [ponytail-campaign-plan]:
   archive/2026-07-18-ponytail-codebase-reduction/260717-campaign-plan.md
 [ponytail-campaign-ledger]:
@@ -198,5 +179,3 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
   archive/2026-07-17-daangn-canonical-role-urls/260717-daangn-canonical-role-urls.md
 [daangn-canonical-plan]:
   archive/2026-07-17-daangn-canonical-role-urls/260717-daangn-canonical-role-urls-plan.md
-[two-window-authorization]:
-  decisions/260727-two-window-first-production-launch-authorization.md

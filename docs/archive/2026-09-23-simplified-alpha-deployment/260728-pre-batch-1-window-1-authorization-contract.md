@@ -299,6 +299,6 @@ DNS restoration. This contract never authorizes deletion of the prior stack.
 [human-steps]:
   260726-terraform-first-production-launch-human-blocked-steps.md
 [roadmap]:
-  ../plans/260726-terraform-first-production-launch-roadmap.md
+  260726-terraform-first-production-launch-roadmap.md
 [two-window]:
-  ../decisions/260727-two-window-first-production-launch-authorization.md
+  260727-two-window-first-production-launch-authorization.md

@@ -1833,4 +1833,4 @@ be rotated or renamed before rerunning.
 - [GitHub Actions OIDC for AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)
 - [Pinning GitHub Actions to full commit SHAs](https://docs.github.com/en/actions/how-tos/administering-github-actions/managing-custom-actions)
 
-[roadmap]: ../../plans/260726-terraform-first-production-launch-roadmap.md
+[roadmap]: ../2026-09-23-simplified-alpha-deployment/260726-terraform-first-production-launch-roadmap.md

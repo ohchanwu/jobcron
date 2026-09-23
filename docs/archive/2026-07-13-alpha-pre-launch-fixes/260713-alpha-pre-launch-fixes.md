@@ -2,7 +2,7 @@
 
 **Status:** Ready for implementation<br>
 **Verified:** 2026-07-13 against the working tree based on `241f499`<br>
-**Human handoff:** [Terraform-first production launch human-blocked steps](../../specs/260726-terraform-first-production-launch-human-blocked-steps.md)
+**Historical human handoff:** [Terraform-first production launch human-blocked steps](../2026-09-23-simplified-alpha-deployment/260726-terraform-first-production-launch-human-blocked-steps.md)
 
 ## Context
 

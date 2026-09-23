@@ -42,7 +42,7 @@ as authorization for those operations.
   criteria are satisfied; otherwise leave it open for the authorization-gated
   work.
 - Follow the approved
-  [convergence specification](../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
+  [convergence specification](../../specs/260714-postgresql-local-convergence-user-ai-credentials.md).
 - Current production reality is a blank application host: the EC2 instance has
   the application `.env`, but no Docker installation, app deployment, owner, or
   legacy credential volume.

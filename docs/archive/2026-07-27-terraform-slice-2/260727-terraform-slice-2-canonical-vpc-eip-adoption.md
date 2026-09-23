@@ -465,12 +465,12 @@ unless inventory is ambiguous or another stop condition fires.
 - Scheduled or GitHub-driven production applies
 
 [human-spec]:
-  ../../specs/260726-terraform-first-production-launch-human-blocked-steps.md
+  ../2026-09-23-simplified-alpha-deployment/260726-terraform-first-production-launch-human-blocked-steps.md
 [implementation-plan]:
   260727-terraform-slice-2-canonical-vpc-eip-adoption-implementation.md
 [roadmap]:
-  ../../plans/260726-terraform-first-production-launch-roadmap.md
+  ../2026-09-23-simplified-alpha-deployment/260726-terraform-first-production-launch-roadmap.md
 [terraform-spec]:
-  ../../specs/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
+  ../2026-09-23-simplified-alpha-deployment/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
 [two-window-decision]:
-  ../../decisions/260727-two-window-first-production-launch-authorization.md
+  ../2026-09-23-simplified-alpha-deployment/260727-two-window-first-production-launch-authorization.md

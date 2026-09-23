@@ -1233,4 +1233,4 @@ created EIP address are present in the protected production state.
 [slice-2-spec]:
   260727-terraform-slice-2-canonical-vpc-eip-adoption.md
 [two-window-decision]:
-  ../../decisions/260727-two-window-first-production-launch-authorization.md
+  ../2026-09-23-simplified-alpha-deployment/260727-two-window-first-production-launch-authorization.md

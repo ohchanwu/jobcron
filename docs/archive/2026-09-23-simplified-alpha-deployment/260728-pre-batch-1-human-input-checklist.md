@@ -317,5 +317,5 @@ traffic, deletion of rollback resources, or closure of the rollback window.
 
 [human-steps]: 260726-terraform-first-production-launch-human-blocked-steps.md
 [contract]: 260728-pre-batch-1-window-1-authorization-contract.md
-[roadmap]: ../plans/260726-terraform-first-production-launch-roadmap.md
-[two-window]: ../decisions/260727-two-window-first-production-launch-authorization.md
+[roadmap]: 260726-terraform-first-production-launch-roadmap.md
+[two-window]: 260727-two-window-first-production-launch-authorization.md

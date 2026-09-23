@@ -168,24 +168,24 @@ manual deployment assumptions are archived, and the human explicitly closes
 the rollback window.
 
 [human-spec]:
-  ../specs/260726-terraform-first-production-launch-human-blocked-steps.md
+  260726-terraform-first-production-launch-human-blocked-steps.md
 [two-window-decision]:
-  ../decisions/260727-two-window-first-production-launch-authorization.md
+  260727-two-window-first-production-launch-authorization.md
 [slice-1-plan]:
-  ../archive/2026-07-26-terraform-slice-1/260726-terraform-slice-1-identity-state-bootstrap-ci.md
+  ../2026-07-26-terraform-slice-1/260726-terraform-slice-1-identity-state-bootstrap-ci.md
 [slice-1-verification]:
-  ../archive/2026-07-26-terraform-slice-1/260726-terraform-slice-1-verification.md
+  ../2026-07-26-terraform-slice-1/260726-terraform-slice-1-verification.md
 [slice-2-spec]:
-  ../archive/2026-07-27-terraform-slice-2/260727-terraform-slice-2-canonical-vpc-eip-adoption.md
+  ../2026-07-27-terraform-slice-2/260727-terraform-slice-2-canonical-vpc-eip-adoption.md
 [slice-2-plan]:
-  ../archive/2026-07-27-terraform-slice-2/260727-terraform-slice-2-canonical-vpc-eip-adoption-implementation.md
+  ../2026-07-27-terraform-slice-2/260727-terraform-slice-2-canonical-vpc-eip-adoption-implementation.md
 [slice-2-verification]:
-  ../archive/2026-07-27-terraform-slice-2/260727-terraform-slice-2-verification.md
+  ../2026-07-27-terraform-slice-2/260727-terraform-slice-2-verification.md
 [slice-3-plan]:
-  ../archive/2026-07-28-terraform-slice-3/260728-terraform-slice-3-private-database-secret-containers-implementation.md
+  ../2026-07-28-terraform-slice-3/260728-terraform-slice-3-private-database-secret-containers-implementation.md
 [slice-3-verification]:
-  ../archive/2026-07-28-terraform-slice-3/260728-terraform-slice-3-verification.md
+  ../2026-07-28-terraform-slice-3/260728-terraform-slice-3-verification.md
 [slice-4-plan]:
   260728-terraform-slice-4-replacement-ec2-transient-runtime-implementation.md
 [terraform-spec]:
-  ../specs/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md
+  260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md

@@ -116,7 +116,6 @@ func TestProductionComposeOperatorDocsUseFailClosedInspector(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(".."))
 	for _, name := range []string{
 		filepath.Join("deploy", "production", "HUMAN_DEPLOY_GUIDE.md"),
-		filepath.Join("docs", "plans", "260715-postgresql-convergence-slice-5-first-production-deployment.md"),
 	} {
 		contents, err := os.ReadFile(filepath.Join(repoRoot, name))
 		if err != nil {
@@ -228,7 +227,7 @@ func TestProductionSurfacesUseExistingDailyScrapeTimeVariable(t *testing.T) {
 		filepath.Join("deploy", "production", "README.md"),
 		filepath.Join("deploy", "production", "compose.yaml"),
 		filepath.Join("deploy", "production", "compose_test.go"),
-		filepath.Join("docs", "plans", "260715-postgresql-convergence-slice-5-first-production-deployment.md"),
+		filepath.Join("docs", "specs", "260923-human-assisted-alpha-deployment.md"),
 		filepath.Join("scripts", "verify-production-compose.sh"),
 		filepath.Join("scripts", "verify_production_compose_test.go"),
 	} {

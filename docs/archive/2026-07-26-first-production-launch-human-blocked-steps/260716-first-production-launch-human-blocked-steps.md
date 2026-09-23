@@ -273,7 +273,7 @@ human explicitly closes the rollback window.
 [convergence-spec]:
   ../../specs/260714-postgresql-local-convergence-user-ai-credentials.md
 [slice-5-plan]:
-  ../../plans/260715-postgresql-convergence-slice-5-first-production-deployment.md
+  ../2026-09-23-simplified-alpha-deployment/260715-postgresql-convergence-slice-5-first-production-deployment.md
 [deploy-guide]: ../../../deploy/production/HUMAN_DEPLOY_GUIDE.md
 [replacement-spec]:
-  ../../specs/260726-terraform-first-production-launch-human-blocked-steps.md
+  ../2026-09-23-simplified-alpha-deployment/260726-terraform-first-production-launch-human-blocked-steps.md

@@ -56,6 +56,6 @@
 
 ## Remaining Human Boundary
 
-The [active human-blocked launch checklist](../../specs/260726-terraform-first-production-launch-human-blocked-steps.md)
+The [historical human-blocked launch checklist](../2026-09-23-simplified-alpha-deployment/260726-terraform-first-production-launch-human-blocked-steps.md)
 owns AWS, DNS, Docker Hub, production secrets, owner identity, import approval,
 API-key entry, go-live, and rollback. None of those actions were executed.

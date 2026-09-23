@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go, `database/sql`, pgx, POSIX shell, Git, PostgreSQL integration tests.
 
-**Spec:** [Terraform-first production launch human-blocked steps](../specs/260726-terraform-first-production-launch-human-blocked-steps.md), with the exact acceptance blockers recorded by Witness in durable verdict `hq-eil2` on thread `thread-7d7bb04fd73e`.
+**Spec:** [Terraform-first production launch human-blocked steps](260726-terraform-first-production-launch-human-blocked-steps.md), with the exact acceptance blockers recorded by Witness in durable verdict `hq-eil2` on thread `thread-7d7bb04fd73e`.
 
 **Global Constraints:** Keep production stopped. Do not mutate AWS, Cloudflare, the production host, production PostgreSQL, or private credentials. Do not push. Commit locally only after Tier B verification, staged secret scanning, and publication review. Rebind Guzzle only after Witness approves the exact successor SHA.
 

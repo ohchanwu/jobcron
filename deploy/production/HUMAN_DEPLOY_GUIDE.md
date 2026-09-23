@@ -1,5 +1,11 @@
 # Human deploy guide for jobcron.app production
 
+> **Alpha launch:** Use the
+> [human-assisted alpha deployment specification](../../docs/specs/260923-human-assisted-alpha-deployment.md)
+> as the controlling runbook. This document preserves detailed private-runtime
+> procedures that may be selected during that attended run; it is not a mandate
+> to execute the superseded multi-slice launch end to end.
+
 This is a private Slice 4 replacement-host sequence. It does not authorize a
 public cutover. Use only the approved commit, private controller artifacts, and
 short-lived operator credentials. Never put secrets, identifiers, addresses,
