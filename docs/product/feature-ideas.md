@@ -257,3 +257,54 @@ This is structurally identical to 원티드 (already noted under "Additional scr
 **Why not now.** The clean fix is to fold the posting's `content_hash` into the Stage-2 cache key, which makes a JD edit a natural cache miss that the scrape-time auto-rate / 재평가 recompute. That's a migration + key change touching `ai_scores`, `UpsertAIScore`/`AIScore`/the batch reads, the T5 prune, and `scoreAll`'s merge — bigger than T7's scope. Lower priority because JD edits are infrequent and the stale delta degrades gracefully (the gate already verified its quotes against the JD-at-the-time; a now-missing quote just means a slightly stale chip until the next goal edit / model switch rotates the key).
 
 **Build trigger.** If JD edits turn out to be common enough that stale Stage-2 chips are noticed, or when `ai_scores` is next migrated for another reason (bundle the key change in).
+
+---
+
+## Subdomain per job category
+
+**What.** Have separate clones of this service with different scrapers for different job fields hosted on different subdomains.
+
+**Why we want it.** If we want to expand in the far future.
+
+**Why not now.** The dev product will serve as a PoC for this expansion.
+
+**Build trigger.** If the dev product proves successful and profitable, we may expand.
+
+---
+
+## Event calendar for stuff like 취업 박람회s
+
+**What.** An event calendar for events that would be useful to the job seeker's situation.
+
+**Why we want it.** Makes the job seeker's life easier: they don't have to search for the events themselves
+
+**Why not now.** Let's focus on creating & polishing the job posting UI and AI scoring features. Gradatim ferociter.
+
+**Build trigger.** If the 공고 listing/filter/scoring features are fully developed, we can progress to this.
+
+---
+
+## 자격요건을 수집해서 통계화 및 분석한다 (공부방법 설정)
+
+**What.** find common 자격요건/우대조건s among 채용 공고s that the user bookmarks and compare it with the user's profile to see the user's weak points.
+
+**Why we want it.** Makes the user's life easier by identifying the areas they should study / invest time in.
+
+**Why not now.** Let's focus on creating & polishing the job posting UI and AI scoring features. Gradatim ferociter.
+
+**Build trigger.** If the 공고 listing/filter/scoring features are fully developed, we can progress to this.
+
+- I think this is higher value than the event calendar, and probably less effort too since it integrates features we'd already have (profile data, JD data scraping, AI analysis), so prob do this before the event calendar.
+- The same idea was independently suggested by two different people, which is an indicator of high value.
+
+---
+
+## 공고별 (회사/포털) 지원 방식을 수집해
+
+**What.** Find the various formats required by companies/portals and automatically tailor a user's resume and/or CV to match this.
+
+**Why we want it.** Makes the user's life easier by easing the drudgery of adapting their documents.
+
+**Why not now.** Let's focus on creating & polishing the job posting UI and AI scoring features. Gradatim ferociter.
+
+**Build trigger.** If the 공고 listing/filter/scoring features and the qualification gap features are fully developed, we can progress to this.
