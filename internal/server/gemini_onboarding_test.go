@@ -79,21 +79,47 @@ func TestProfileGeminiOnboardingCopyAndSafeLinks(t *testing.T) {
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
 	body := rec.Body.String()
 
+	if !strings.Contains(body, "추천: Google Gemini") {
+		t.Errorf("profile onboarding missing recommendation title %q", "추천: Google Gemini")
+	}
 	for _, want := range []string{
-		"추천: Google Gemini",
-		"무과금 API 등급(unpaid API tier)",
-		"2~5분",
-		"Google이 제공 여부와 사용 한도를 결정",
 		`href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"`,
 		`<span class="sr-only">새 탭에서 열림</span>`,
 		`href="/guides/gemini-api-key"`,
-		"프롬프트와 응답을 제품 개선에 사용할 수",
-		"이력서나 민감한 정보, 기밀 정보, 개인 식별 정보",
-		"암호화",
-		"Google AI Studio에서 폐기",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profile onboarding missing %q", want)
+		}
+	}
+
+	asideStart := strings.Index(body, `<aside class="ai-onboarding"`)
+	asideEnd := strings.Index(body, `</aside>`)
+	if asideStart < 0 || asideEnd < asideStart {
+		t.Fatal("Gemini onboarding aside missing")
+	}
+	aside := body[asideStart:asideEnd]
+
+	// The two paragraphs must match the approved guide copy exactly
+	// (web/gemini-api-key-guide.html, "Gemini 무료 등급 안내" callout).
+	for _, want := range []string{
+		"Gemini에는 시작하기 좋은 무료 API 등급이 있습니다. gemini-3.5-flash-lite 기준 약 하루 500회의 API 요청을 사용할 수 있어요. 같은 Google 프로젝트를 Jobcron에서만 사용한다면 사용 한도에 걸릴 가능성은 낮아요. 같은 프로젝트의 API 키를 다른 용도로 함께 쓰면 한도에 도달할 수 있어요. 드물게 한도에 도달하면 다음 할당량 초기화까지 기다리거나 유료 등급이 연결된 프로젝트의 키를 사용하세요.",
+		"무료 등급에서는 Google이 프롬프트와 응답을 제품 개선에 사용할 수 있어요. AI 프로필 입력란에 민감, 기밀, 개인 식별 정보를 넣을 때 주의하세요.",
+	} {
+		if !strings.Contains(aside, want) {
+			t.Errorf("profile onboarding must carry the approved guide paragraph, missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{
+		"무과금",
+		"unpaid API tier",
+		"2~5분",
+		"Google이 제공 여부와 사용 한도를 결정",
+		"이력서나",
+		"암호화",
+		"Google AI Studio에서 폐기",
+	} {
+		if strings.Contains(aside, unwanted) {
+			t.Errorf("profile onboarding unexpectedly keeps replaced copy %q", unwanted)
 		}
 	}
 	if strings.Contains(body, "연결 테스트") || strings.Contains(body, "/api/ai/test") {
