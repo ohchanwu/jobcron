@@ -232,7 +232,7 @@ jq -n '{
 
 cat >"$fixture_root/replacement-user-data" <<'EOF'
 #!/bin/bash
-/opt/jobcron/compose.yaml 7fde13860b93a4c4b5b519b3ff2004604c8876c12858f0a370dc1496e598577e
+/opt/jobcron/compose.yaml 28470a096ae9430633174abf7b631c0b41540dfed9003a07a91280a8c703d5a8
 /opt/jobcron/Caddyfile 3b52c1f296b4fa709ae4ce50aced61f23a4d1d00ff7939d5f6b0f8a193c863f6
 /opt/jobcron/jobcron-runtime.sh 94afa9a407b5921f9fd32eb5e206720e1f71165676e419dc02b537c485020bdf
 /etc/systemd/system/jobcron.service f450f85dd50c75250b0c5ae4c40cbcc61da8453356b3b89cec8abe9c647e10dd

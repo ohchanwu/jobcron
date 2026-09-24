@@ -135,6 +135,25 @@ func TestProductionComposeOperatorDocsUseFailClosedInspector(t *testing.T) {
 	}
 }
 
+func TestProductionGuideTreatsPrivateOriginListenerAsNonPublic(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "deploy", "production", "HUMAN_DEPLOY_GUIDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ToLower(string(contents))
+	if strings.Contains(text, "unhealthy container, public\nlistener") {
+		t.Fatal("production guide contradicts the required private-phase Caddy host listener")
+	}
+	for _, required := range []string{
+		"unexpected external reachability",
+		"unexpected security-group ingress",
+	} {
+		if !strings.Contains(text, required) {
+			t.Errorf("production guide does not narrow the stop condition to %q", required)
+		}
+	}
+}
+
 func TestProductionDocsUseTransientSSMOperations(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(".."))
 	for _, name := range []string{
@@ -343,27 +362,27 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 			),
 		},
 		{
-			name:     "Caddy omits private TLS port",
+			name:     "Caddy omits origin HTTPS port",
 			contract: "services.caddy.ports",
 			mutate: replaceOnce(
-				"    ports:\n      - target: 443\n        published: \"8443\"\n        host_ip: 127.0.0.1\n        protocol: tcp",
+				"    ports:\n      - target: 443\n        published: \"443\"\n        host_ip: 0.0.0.0\n        protocol: tcp",
 				"    ports: []",
 			),
 		},
 		{
-			name:     "Caddy publishes on all interfaces",
+			name:     "Caddy binds only loopback",
 			contract: "services.caddy.ports",
 			mutate: replaceOnce(
-				"    ports:\n      - target: 443\n        published: \"8443\"\n        host_ip: 127.0.0.1\n        protocol: tcp",
-				"    ports:\n      - target: 443\n        published: \"8443\"\n        host_ip: 0.0.0.0\n        protocol: tcp",
+				"    ports:\n      - target: 443\n        published: \"443\"\n        host_ip: 0.0.0.0\n        protocol: tcp",
+				"    ports:\n      - target: 443\n        published: \"443\"\n        host_ip: 127.0.0.1\n        protocol: tcp",
 			),
 		},
 		{
 			name:     "Caddy publishes an extra port",
 			contract: "services.caddy.ports",
 			mutate: replaceOnce(
-				"    ports:\n      - target: 443\n        published: \"8443\"\n        host_ip: 127.0.0.1\n        protocol: tcp",
-				"    ports:\n      - target: 443\n        published: \"8443\"\n        host_ip: 127.0.0.1\n        protocol: tcp\n      - \"8080:8080\"",
+				"    ports:\n      - target: 443\n        published: \"443\"\n        host_ip: 0.0.0.0\n        protocol: tcp",
+				"    ports:\n      - target: 443\n        published: \"443\"\n        host_ip: 0.0.0.0\n        protocol: tcp\n      - \"8080:8080\"",
 			),
 		},
 		{

@@ -143,11 +143,11 @@ func TestProductionComposeNeverPullsDuringComposeStart(t *testing.T) {
 	}
 }
 
-func TestProductionComposeBindsOnlyLoopbackPorts(t *testing.T) {
+func TestProductionComposePublishesOnlyPrivateAppAndOriginHTTPSPorts(t *testing.T) {
 	config := renderCompose(t)
 	want := map[string]composePort{
 		"app":   {HostIP: "127.0.0.1", Published: "7777", Target: 7777},
-		"caddy": {HostIP: "127.0.0.1", Published: "8443", Target: 443},
+		"caddy": {HostIP: "0.0.0.0", Published: "443", Target: 443},
 	}
 	for service, expected := range want {
 		ports := config.Services[service].Ports

@@ -76,9 +76,12 @@ JOBCRON_STAGE1_SPONSOR_USER_ID='1' \
 docker compose config
 ```
 
-The rendered config must publish only loopback host ports `7777` and `8443`;
-include the database, session, credential-key, production, no-open, scheduler,
-and signup settings; and contain no app filesystem or legacy credential volume.
+The rendered config must keep the app on loopback host port `7777` and publish
+only Caddy on host TCP `443`. During private deployment the origin security
+group has no ingress and the reserved EIP remains unattached; at cutover its
+only ingress is Cloudflare-prefix-list TCP `443`. The config must include the
+database, session, credential-key, production, no-open, scheduler, and signup
+settings; and contain no app filesystem or legacy credential volume.
 It must not include demo mode, an admin token, a Worknet key, or a
 caller-supplied trusted-proxy header. Caddy and the app receive the same proxy
 secret so only Caddy can supply the client address used by authentication rate
@@ -86,10 +89,11 @@ limits.
 
 ## Private operations and recovery
 
-Private verification uses Session Manager port forwarding to the loopback app
-and Caddy ports. The operator checks real user behavior, the Origin CA
-certificate, lower-privilege RDS access, reboot recovery, and the absence of
-public ingress before recording sanitized evidence.
+Private verification uses Session Manager port forwarding to the app on host
+port `7777` and Caddy on host port `443`. The operator checks real user
+behavior, the Origin CA certificate, lower-privilege RDS access, reboot
+recovery, and the absence of public ingress before recording sanitized
+evidence.
 
 Slice 5 discovers the origin security group through the fixed
 `jobcron:edge-target = origin-security-group` tag and derives the canonical VPC
