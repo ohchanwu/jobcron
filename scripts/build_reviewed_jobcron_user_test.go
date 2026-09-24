@@ -88,7 +88,7 @@ func TestReviewedJobcronUserBuildIgnoresReplacementRefs(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "cmd", "jobcron-user", "main.go"), []byte("package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"replaced\") }\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	gitRun(t, repo, "commit", "-qam", "replacement")
+	gitRun(t, repo, "-c", "user.name=review-test", "-c", "user.email=review@example.invalid", "commit", "-qam", "replacement")
 	replacementSHA := gitOutput(t, repo, "rev-parse", "HEAD")
 	gitRun(t, repo, "reset", "--hard", reviewedSHA)
 	gitRun(t, repo, "replace", reviewedSHA, replacementSHA)
