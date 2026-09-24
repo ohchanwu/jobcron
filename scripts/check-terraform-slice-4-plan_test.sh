@@ -3,8 +3,13 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checker="$repo_root/scripts/check-terraform-slice-4-plan.sh"
+ci_workflow="$repo_root/.github/workflows/ci.yml"
 fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
+
+grep -Fqx \
+  '        run: bash scripts/check-terraform-slice-4-plan_test.sh' \
+  "$ci_workflow"
 
 failures=0
 generic_error="Terraform saved plan violates the Slice 4 contract"

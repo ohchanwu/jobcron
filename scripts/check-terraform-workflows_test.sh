@@ -86,8 +86,8 @@ remove_exact_line() {
   local file="$1"
   local target="$2"
 
-  awk -v target="$target" '
-    $0 == target && !removed {
+  TARGET="$target" awk '
+    $0 == ENVIRON["TARGET"] && !removed {
       removed = 1
       next
     }

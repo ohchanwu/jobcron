@@ -37,7 +37,7 @@ jobs:
       - name: production image publication contract
         run: bash scripts/check-production-image-workflow_test.sh
       - name: Terraform Slice 4 saved-plan contract
-        run: sh scripts/check-terraform-slice-4-plan_test.sh
+        run: bash scripts/check-terraform-slice-4-plan_test.sh
       - name: production transient runtime contract
         run: |
           sh -n deploy/production/jobcron-runtime.sh
