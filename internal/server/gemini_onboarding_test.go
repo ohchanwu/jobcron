@@ -208,6 +208,22 @@ func TestGeminiGuideMobileHeaderStylesAreScopedAndAllowWrapping(t *testing.T) {
 			t.Errorf("mobile overflow regression: styles missing %q", want)
 		}
 	}
+
+	subnoteStart := strings.Index(styles, `.guide-subnote {`)
+	if subnoteStart < 0 {
+		t.Fatal("guide subnote style block missing")
+	}
+	subnoteEnd := strings.Index(styles[subnoteStart:], `}`)
+	if subnoteEnd < 0 {
+		t.Fatal("guide subnote style block missing closing brace")
+	}
+	subnoteStyles := styles[subnoteStart : subnoteStart+subnoteEnd]
+	if !strings.Contains(subnoteStyles, `color: var(--ink);`) {
+		t.Fatalf("guide subnote must use the high-contrast ink token; block=%q", subnoteStyles)
+	}
+	if strings.Contains(subnoteStyles, `color: var(--ink-soft);`) {
+		t.Fatalf("guide subnote must not use the low-contrast ink-soft token; block=%q", subnoteStyles)
+	}
 }
 
 func TestProductionGeminiGuideAuthCSRFAndReadOnlyContract(t *testing.T) {
