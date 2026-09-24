@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ohchanwu/jobcron/internal/auth"
 	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
@@ -82,6 +85,7 @@ func TestProfileGeminiOnboardingCopyAndSafeLinks(t *testing.T) {
 		"2~5분",
 		"Google이 제공 여부와 사용 한도를 결정",
 		`href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"`,
+		`<span class="sr-only">새 탭에서 열림</span>`,
 		`href="/guides/gemini-api-key"`,
 		"프롬프트와 응답을 제품 개선에 사용할 수",
 		"이력서나 민감한 정보, 기밀 정보, 개인 식별 정보",
@@ -122,6 +126,7 @@ func TestGeminiAPIKeyGuideIsCompleteAndNoSyntheticTestRouteExists(t *testing.T) 
 		"프롬프트와 응답",
 		`href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"`,
 		`href="https://aistudio.google.com/app/usage" target="_blank" rel="noopener noreferrer"`,
+		`<span class="sr-only">새 탭에서 열림</span>`,
 		`href="/profile"`,
 		"동영상 없이도",
 	} {
@@ -138,5 +143,79 @@ func TestGeminiAPIKeyGuideIsCompleteAndNoSyntheticTestRouteExists(t *testing.T) 
 				t.Fatalf("synthetic test route %s status=%d, want 404", path, testRec.Code)
 			}
 		})
+	}
+}
+
+func TestGeminiGuideMobileHeaderStylesAreScopedAndAllowWrapping(t *testing.T) {
+	srv, _ := newTestServer(t, &fakeScraper{})
+
+	guideRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(guideRec, httptest.NewRequest(http.MethodGet, "/guides/gemini-api-key", nil))
+	guide := guideRec.Body.String()
+	for _, want := range []string{`<header class="guide-header">`, `class="guide-title"`} {
+		if !strings.Contains(guide, want) {
+			t.Fatalf("guide header missing scoped hook %q", want)
+		}
+	}
+
+	stylesRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(stylesRec, httptest.NewRequest(http.MethodGet, "/static/styles.css", nil))
+	styles := stylesRec.Body.String()
+	for _, want := range []string{
+		`.guide-header .guide-title { min-width: 0; }`,
+		`.guide-header h1`,
+		`white-space: normal`,
+		`.guide-header .head-right { flex: 0 0 auto; }`,
+	} {
+		if !strings.Contains(styles, want) {
+			t.Errorf("mobile overflow regression: styles missing %q", want)
+		}
+	}
+}
+
+func TestProductionGeminiGuideAuthCSRFAndReadOnlyContract(t *testing.T) {
+	srv, st := newTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	ctx := context.Background()
+	hash := "$argon2id$v=19$m=65536,t=3,p=2$HnaitXE81jwvEnc/8ZDBNQ$bSyeYlt4Gm57RgICVNGJDc9qXFyISc+SkuiTHec9BQM"
+	user, err := st.CreateOwnerUser(ctx, "guide@example.invalid", hash)
+	if err != nil {
+		t.Fatalf("CreateOwnerUser: %v", err)
+	}
+	const sessionValue = "guide-session-token"
+	if err := st.CreateSession(ctx, user.ID, auth.HashSessionToken(sessionValue), time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	unauth := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(unauth, httptest.NewRequest(http.MethodGet, "/guides/gemini-api-key", nil))
+	if unauth.Code != http.StatusSeeOther || unauth.Header().Get("Location") != "/login" {
+		t.Fatalf("anonymous guide status=%d location=%q, want 303 /login", unauth.Code, unauth.Header().Get("Location"))
+	}
+
+	const csrfCookieValue = "guide-csrf-cookie"
+	sessionCookie := &http.Cookie{Name: sessionCookieName, Value: sessionValue}
+	getReq := httptest.NewRequest(http.MethodGet, "/guides/gemini-api-key", nil)
+	getReq.AddCookie(sessionCookie)
+	getReq.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfCookieValue})
+	authenticated := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(authenticated, getReq)
+	if authenticated.Code != http.StatusOK {
+		t.Fatalf("authenticated guide status=%d, want 200; body=%q", authenticated.Code, authenticated.Body.String())
+	}
+	wantToken := html.EscapeString(srv.csrfToken(csrfCookieValue, sessionValue))
+	if !strings.Contains(authenticated.Body.String(), `action="/logout"`) ||
+		!strings.Contains(authenticated.Body.String(), `name="csrf_token" value="`+wantToken+`"`) {
+		t.Fatal("guide logout did not receive session-bound CSRF state")
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/guides/gemini-api-key", nil)
+	postReq.AddCookie(sessionCookie)
+	postReq.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfCookieValue})
+	postReq.Header.Set(csrfHeaderName, srv.csrfToken(csrfCookieValue, sessionValue))
+	postRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST guide status=%d, want 405 (no state-changing guide route)", postRec.Code)
 	}
 }

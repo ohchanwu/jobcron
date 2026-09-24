@@ -64,28 +64,46 @@ func TestRerateSurfacesProviderError(t *testing.T) {
 func TestProviderFailureMessageClassifies(t *testing.T) {
 	const privateMarker = "private-provider-output-marker"
 	cases := []struct {
-		err     error
-		wantSub string
+		name   string
+		err    error
+		want   []string
+		reject []string
 	}{
-		{&ai.APIError{Status: http.StatusUnauthorized, Body: privateMarker}, "AI 키를 확인해주세요"},
-		{&ai.APIError{Status: http.StatusForbidden, Body: privateMarker}, "AI 키를 확인해주세요"},
-		{&ai.APIError{Status: http.StatusBadRequest, Body: `{"error":{"status":"INVALID_ARGUMENT","message":"API key not valid: ` + privateMarker + `"}}`}, "AI 키를 확인해주세요"},
-		{&ai.APIError{Status: http.StatusBadRequest, Body: privateMarker}, "선택한 모델이 이 제공자와 맞지 않아요"},
-		{&ai.APIError{Status: http.StatusNotFound, Body: privateMarker}, "선택한 모델이 이 제공자와 맞지 않아요"},
-		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"insufficient_quota","detail":"` + privateMarker + `"}}`}, "결제"},
-		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","detail":"` + privateMarker + `"}}`}, "사용 한도를 초과"},
-		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"rate_limit_exceeded","detail":"` + privateMarker + `"}}`}, "잠시"},
-		{&ai.APIError{Status: http.StatusInternalServerError, Body: privateMarker}, "(500)"},
-		{errors.New("malformed provider output: " + privateMarker), "AI 분석에 실패했어요"},
+		{name: "unauthorized", err: &ai.APIError{Status: http.StatusUnauthorized, Body: privateMarker}, want: []string{"AI 키를 확인해주세요"}},
+		{name: "forbidden", err: &ai.APIError{Status: http.StatusForbidden, Body: privateMarker}, want: []string{"AI 키를 확인해주세요"}},
+		{name: "structured invalid key", err: &ai.APIError{Status: http.StatusBadRequest, Body: `{"error":{"status":"INVALID_ARGUMENT","message":"API key not valid: ` + privateMarker + `"}}`}, want: []string{"AI 키를 확인해주세요"}},
+		{name: "structured failed precondition region", err: &ai.APIError{Status: http.StatusBadRequest, Body: `{"error":{"status":"FAILED_PRECONDITION","message":"Gemini API is not available in your region","details":[{"reason":"REGION_NOT_SUPPORTED","metadata":{"private":"` + privateMarker + `"}}]}}`}, want: []string{"계정·결제·지역"}, reject: []string{"선택한 모델"}},
+		{name: "structured failed precondition billing", err: &ai.APIError{Status: http.StatusBadRequest, Body: `{"error":{"status":"FAILED_PRECONDITION","details":[{"reason":"BILLING_DISABLED","private":"` + privateMarker + `"}]}}`}, want: []string{"계정·결제·지역"}, reject: []string{"선택한 모델"}},
+		{name: "legacy failed precondition account", err: &ai.APIError{Status: http.StatusBadRequest, Body: `FAILED_PRECONDITION: account prerequisite missing ` + privateMarker}, want: []string{"계정·결제·지역"}, reject: []string{"선택한 모델"}},
+		{name: "unclassified bad request", err: &ai.APIError{Status: http.StatusBadRequest, Body: privateMarker}, want: []string{"선택한 모델이 이 제공자와 맞지 않아요"}},
+		{name: "not found", err: &ai.APIError{Status: http.StatusNotFound, Body: privateMarker}, want: []string{"선택한 모델이 이 제공자와 맞지 않아요"}},
+		{name: "legacy quota", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"insufficient_quota","detail":"` + privateMarker + `"}}`}, want: []string{"결제"}, reject: []string{"잠시 후 다시"}},
+		{name: "structured quota", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","details":[{"reason":"QUOTA_EXCEEDED","metadata":{"private":"` + privateMarker + `"}}]}}`}, want: []string{"사용량·할당량"}, reject: []string{"잠시 후 다시"}},
+		{name: "structured quota failure detail", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","private":"` + privateMarker + `"}]}]}}`}, want: []string{"사용량·할당량"}, reject: []string{"잠시 후 다시"}},
+		{name: "structured transient rate limit", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","details":[{"reason":"RATE_LIMIT_EXCEEDED","metadata":{"private":"` + privateMarker + `"}}]}}`}, want: []string{"잠시 후 다시"}, reject: []string{"사용 한도를 초과"}},
+		{name: "structured retry detail", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"5s","private":"` + privateMarker + `"}]}}`}, want: []string{"잠시 후 다시"}, reject: []string{"사용 한도를 초과", "계속되면"}},
+		{name: "legacy transient rate limit", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"rate_limit_exceeded","detail":"` + privateMarker + `"}}`}, want: []string{"잠시 후 다시"}, reject: []string{"사용 한도를 초과"}},
+		{name: "ambiguous resource exhausted", err: &ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","detail":"` + privateMarker + `"}}`}, want: []string{"잠시 후", "계속되면", "사용량·할당량"}, reject: []string{"사용 한도를 초과"}},
+		{name: "server error", err: &ai.APIError{Status: http.StatusInternalServerError, Body: privateMarker}, want: []string{"(500)"}},
+		{name: "non API error", err: errors.New("malformed provider output: " + privateMarker), want: []string{"AI 분석에 실패했어요"}},
 	}
 	for _, tc := range cases {
-		got := providerFailureMessage(tc.err)
-		if !strings.Contains(got, tc.wantSub) {
-			t.Errorf("providerFailureMessage(%v) = %q, want substring %q", tc.err, got, tc.wantSub)
-		}
-		if strings.Contains(got, privateMarker) {
-			t.Errorf("providerFailureMessage leaked provider output: %q", got)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := providerFailureMessage(tc.err)
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("providerFailureMessage(%v) = %q, want substring %q", tc.err, got, want)
+				}
+			}
+			for _, reject := range tc.reject {
+				if strings.Contains(got, reject) {
+					t.Errorf("providerFailureMessage(%v) = %q, reject substring %q", tc.err, got, reject)
+				}
+			}
+			if strings.Contains(got, privateMarker) {
+				t.Errorf("providerFailureMessage leaked provider output: %q", got)
+			}
+		})
 	}
 }
 

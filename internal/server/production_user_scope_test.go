@@ -1873,6 +1873,108 @@ func newPostgresTestServer(t *testing.T, f *fakeScraper) (*Server, *storage.Stor
 	return New(st, f), st
 }
 
+func TestProfilePostChangingOnlyProviderModelPreservesProfileAndCredentials(t *testing.T) {
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	userID, sessionCookie := createSessionUser(t, st, "provider-switch@example.invalid", "provider-switch-session")
+	ctx := context.Background()
+	minScore := 37
+	before := profile.Profile{
+		Stacks:               []profile.StackPref{{Name: "Go", Weight: 31}, {Name: "PostgreSQL", Weight: 19}},
+		Location:             profile.LocationPref{Cities: []string{"서울", "부산"}, Weight: 13, RemoteOK: true},
+		CareerYears:          2,
+		CareerWeight:         23,
+		SalaryFloorKRW:       52000000,
+		SalaryWeight:         9,
+		MaxEducation:         profile.EducationBachelor,
+		Dealbreakers:         []string{"야근", "파견"},
+		JobLikes:             "분산 시스템",
+		JobDislikes:          "광고 최적화",
+		ShortTermGoals:       "Go 숙련",
+		LongTermGoals:        "기술 리드",
+		MinScore:             &minScore,
+		AIProvider:           "anthropic",
+		AIModel:              "claude-sonnet-4-6",
+		AIDailyTokenCap:      543210,
+		AIPerCallCap:         17,
+		ScheduledAIEnabled:   true,
+		AIMonthlyUSDCapCents: 901,
+		AIDailyUSDCapCents:   41,
+		AIRunUSDCapCents:     21,
+	}
+	beforeJSON, err := profile.Marshal(before)
+	if err != nil {
+		t.Fatalf("marshal profile: %v", err)
+	}
+	if _, _, err := st.SaveProfileForUser(ctx, userID, beforeJSON); err != nil {
+		t.Fatalf("SaveProfileForUser: %v", err)
+	}
+
+	providers := []string{"anthropic", "openai", "gemini"}
+	credentialsBefore := make(map[string]storage.EncryptedAICredential, len(providers))
+	for i, providerName := range providers {
+		credential := storage.EncryptedAICredential{
+			UserID: userID, Provider: providerName,
+			Ciphertext:        bytes.Repeat([]byte{byte(0x31 + i)}, 32),
+			Nonce:             bytes.Repeat([]byte{byte(0x61 + i)}, 12),
+			EncryptionVersion: 1,
+		}
+		if err := st.UpsertUserAICredential(ctx, credential); err != nil {
+			t.Fatalf("seed %s credential: %v", providerName, err)
+		}
+		stored, found, err := st.UserAICredential(ctx, userID, providerName)
+		if err != nil || !found {
+			t.Fatalf("read seeded %s credential: found=%v err=%v", providerName, found, err)
+		}
+		credentialsBefore[providerName] = stored
+	}
+
+	form := url.Values{
+		"career_years": {"2"}, "career_weight": {"23"},
+		"salary_floor_man": {"5200"}, "salary_weight": {"9"}, "min_score": {"37"},
+		"max_education": {fmt.Sprint(int(profile.EducationBachelor))},
+		"stacks":        {"Go,31\nPostgreSQL,19"}, "cities": {"서울, 부산"}, "location_weight": {"13"}, "remote_ok": {"on"},
+		"dealbreakers": {"야근\n파견"}, "job_likes": {"분산 시스템"}, "job_dislikes": {"광고 최적화"},
+		"short_term_goals": {"Go 숙련"}, "long_term_goals": {"기술 리드"}, "source_jumpit": {"on"},
+		"ai_provider": {"gemini"}, "ai_model": {"gemini-3.5-flash-lite"},
+		"ai_daily_token_cap": {"543210"}, "ai_per_call_cap": {"17"}, "scheduled_ai_enabled": {"on"},
+		"ai_monthly_usd_cap_cents": {"901"}, "ai_daily_usd_cap_cents": {"41"}, "ai_run_usd_cap_cents": {"21"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(sessionCookie)
+	addCSRFToRequest(req, srv, sessionCookie)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/briefing" {
+		t.Fatalf("profile switch status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+
+	afterJSON, _, found, err := st.ProfileForUser(ctx, userID)
+	if err != nil || !found {
+		t.Fatalf("ProfileForUser after switch: found=%v err=%v", found, err)
+	}
+	after, err := profile.Unmarshal(afterJSON)
+	if err != nil {
+		t.Fatalf("unmarshal saved profile: %v", err)
+	}
+	want := before
+	want.AIProvider = "gemini"
+	want.AIModel = "gemini-3.5-flash-lite"
+	if !reflect.DeepEqual(after, want) {
+		t.Fatalf("profile switch changed fields beyond provider/model:\nafter=%+v\nwant=%+v", after, want)
+	}
+	for _, providerName := range providers {
+		afterCredential, found, err := st.UserAICredential(ctx, userID, providerName)
+		if err != nil || !found {
+			t.Fatalf("%s credential after switch: found=%v err=%v", providerName, found, err)
+		}
+		if !reflect.DeepEqual(afterCredential, credentialsBefore[providerName]) {
+			t.Fatalf("%s credential changed during provider/model-only switch", providerName)
+		}
+	}
+}
+
 func createSessionUser(t *testing.T, st *storage.Store, email, rawToken string) (int64, *http.Cookie) {
 	t.Helper()
 	ctx := context.Background()

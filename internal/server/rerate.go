@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -29,38 +30,93 @@ func (e *providerCallError) Error() string { return e.err.Error() }
 func (e *providerCallError) Unwrap() error { return e.err }
 
 // providerFailureMessage maps an AI provider failure to a calm Korean message.
-// An *ai.APIError is classified by HTTP status — 401/403 reads as a key problem,
-// 400/404 as a model/provider mismatch, 429 as a usage cap — so the BYOK user who
-// just switched provider learns exactly what to fix. Transport/parse errors fall
-// back to a generic retry line. Always non-empty.
+// It uses provider-neutral HTTP status plus structured status/reason/detail
+// signals when present. Provider bodies are classification input only and are
+// never returned to the user. Transport/parse errors fall back to a generic
+// retry line. Always non-empty.
 func providerFailureMessage(err error) string {
 	var apiErr *ai.APIError
 	if errors.As(err, &apiErr) {
-		body := strings.ToLower(apiErr.Body)
+		signals := providerErrorSignals(apiErr.Body)
 		switch apiErr.Status {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return "AI 키를 확인해주세요 — 키가 올바르지 않거나 권한·지역 제한이 있어요."
 		case http.StatusBadRequest:
-			if strings.Contains(body, "api key not valid") || strings.Contains(body, "api_key_invalid") {
+			if signals.contains("api key not valid", "api_key_invalid", "invalid api key") {
 				return "AI 키를 확인해주세요 — 키가 올바르지 않거나 권한이 없어요."
+			}
+			if signals.contains("failed_precondition", "region_not_supported", "not available in your region", "billing_disabled", "billing required", "account prerequisite") {
+				return "AI 제공자 사용 조건을 확인해주세요 — 계정·결제·지역 설정에서 필요한 조건을 먼저 완료해야 해요."
 			}
 			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
 		case http.StatusNotFound:
 			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
 		case http.StatusTooManyRequests:
-			// Providers overload 429 for persistent quota exhaustion and transient
-			// rate limiting. The former needs account/quota action, not a blind retry.
-			if strings.Contains(body, "insufficient_quota") {
+			// Providers overload 429 for persistent quota exhaustion, transient
+			// rate limiting, and ambiguous RESOURCE_EXHAUSTED responses.
+			if signals.contains("rate_limit_exceeded", "rate limit exceeded", "retryinfo") {
+				return "요청이 잠시 몰렸어요 — 잠시 후 다시 시도해 주세요."
+			}
+			if signals.contains("insufficient_quota", "billing_disabled", "billing required") {
 				return "AI 제공자 사용 한도를 초과했어요 — 제공자 계정의 결제·요금제를 확인해주세요."
 			}
-			if strings.Contains(body, "resource_exhausted") || strings.Contains(body, "exceeded your current quota") {
+			if signals.contains("quota_exceeded", "exceeded your current quota", "quotafailure") {
 				return "AI 제공자 사용 한도를 초과했어요 — 제공자 사용량·할당량을 확인해주세요."
+			}
+			if signals.contains("resource_exhausted") {
+				return "요청이 잠시 몰렸을 수 있어요 — 잠시 후 다시 시도하고, 계속되면 제공자 사용량·할당량을 확인해주세요."
 			}
 			return "요청이 잠시 몰렸어요 — 잠시 후 다시 시도해 주세요."
 		}
 		return fmt.Sprintf("AI 제공자가 오류를 반환했어요 (%d) — 설정을 확인해 주세요.", apiErr.Status)
 	}
 	return "AI 분석에 실패했어요 — 키와 모델 설정을 확인하거나 잠시 후 다시 시도해 주세요."
+}
+
+type providerErrorSignalSet string
+
+func (s providerErrorSignalSet) contains(markers ...string) bool {
+	text := string(s)
+	for _, marker := range markers {
+		if strings.Contains(text, strings.ToLower(marker)) {
+			return true
+		}
+	}
+	return false
+}
+
+// providerErrorSignals extracts only classification fields from structured
+// provider errors. Unknown fields (which can contain prompts, keys, or other
+// private output) are ignored. Malformed/legacy bodies remain supported as a
+// lower-cased classifier input; neither representation is ever surfaced.
+func providerErrorSignals(body string) providerErrorSignalSet {
+	var payload any
+	if json.Unmarshal([]byte(body), &payload) != nil {
+		return providerErrorSignalSet(strings.ToLower(body))
+	}
+	var values []string
+	var walk func(any)
+	walk = func(value any) {
+		switch value := value.(type) {
+		case map[string]any:
+			for key, child := range value {
+				switch strings.ToLower(key) {
+				case "status", "reason", "type", "message", "@type", "quotaid", "quotametric":
+					if text, ok := child.(string); ok {
+						values = append(values, strings.ToLower(text))
+					}
+				case "error", "details", "violations", "metadata":
+					walk(child)
+				}
+			}
+		case []any:
+			for _, child := range value {
+				walk(child)
+			}
+		}
+	}
+	walk(payload)
+	return providerErrorSignalSet(strings.Join(values, "\n"))
 }
 
 // rerateWorkers bounds how many visible rows a 재평가 press analyzes
