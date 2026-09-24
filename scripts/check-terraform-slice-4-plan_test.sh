@@ -25,14 +25,14 @@ output_changes=1
 sensitive_outputs=1
 destroy_or_replace=1
 aggregate_cost=PASS
-slice3_checkpoint=PASS
+current_reconciliation_checkpoint=PASS
 PASS'
 expected_combined_recovery_output='resource_changes=2
 output_changes=1
 sensitive_outputs=1
 destroy_or_replace=1
 aggregate_cost=PASS
-slice3_checkpoint=PASS
+current_reconciliation_checkpoint=PASS
 PASS'
 
 expect_verified() {
@@ -125,7 +125,7 @@ EOF
     "$checker" \
     "$fixture_root/plan-replacement-valid.json" \
     "$fixture_root/cost-valid.json" \
-    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/current-checkpoint-replacement-valid.json" \
     "$fixture_root/replacement-user-data" 2>&1)"; then
     printf 'FAIL: failed stat probe stdout contaminated file mode\n' >&2
     failures=$((failures + 1))
@@ -150,7 +150,7 @@ expect_replacement_rejected() {
   output="$("$checker" \
     "$plan" \
     "$fixture_root/cost-valid.json" \
-    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/current-checkpoint-replacement-valid.json" \
     "$user_data" 2>&1)"
   rc=$?
   set -e
@@ -174,7 +174,7 @@ expect_combined_recovery_verified() {
   if ! output="$("$checker" \
     "$fixture_root/plan-combined-recovery-valid.json" \
     "$fixture_root/cost-valid.json" \
-    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/current-checkpoint-combined-valid.json" \
     "$fixture_root/replacement-user-data" \
     combined-recovery 2>&1)"; then
     printf 'FAIL: rejected valid combined recovery fixture\n' >&2
@@ -200,7 +200,7 @@ expect_combined_recovery_rejected() {
   output="$("$checker" \
     "$plan" \
     "$fixture_root/cost-valid.json" \
-    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/current-checkpoint-combined-valid.json" \
     "$fixture_root/replacement-user-data" \
     "$mode" 2>&1)"
   rc=$?
@@ -515,6 +515,73 @@ jq -n --arg checked_at "$now" '{
   old_resource_changes: 0
 }' >"$fixture_root/checkpoint-valid.json"
 
+jq -n --arg checked_at "$now" '{
+  schema_version: "human-assisted-reconciliation-v1",
+  checked_at: $checked_at,
+  commit: {
+    sha: "0123456789abcdef0123456789abcdef01234567",
+    exact: true,
+    clean: true
+  },
+  selected_state_resources: {
+    bootstrap_host: {
+      terraform_address: "aws_instance.replacement_host",
+      managed: true
+    },
+    database: {
+      terraform_address: "aws_db_instance.production",
+      managed: true
+    }
+  },
+  bootstrap_host: {
+    disposition: "replace",
+    human_approved: true
+  },
+  legacy_rollback_host: {retained: true},
+  managed_eip: {
+    terraform_address: "aws_eip.origin",
+    state_presence: "present",
+    unattached: true
+  },
+  origin: {
+    ingress_rule_count: 0,
+    phase: "private"
+  },
+  rds: {
+    status: "available",
+    publicly_accessible: false,
+    storage_encrypted: true,
+    deletion_protection: true,
+    backup_retention_days: 7,
+    latest_restorable_time_observed: true
+  },
+  runtime_secret: {
+    container_exists: true,
+    terraform_manages_versions: false,
+    observed_version_count: 1
+  },
+  recovery_bucket: {
+    encrypted: true,
+    versioned: true,
+    public_access_blocked: true,
+    tls_only: true,
+    lifecycle_verified: true
+  },
+  state_backend: {
+    remote: true,
+    encrypted: true,
+    lockfile_enabled: true
+  },
+  public_cutover: {
+    approved: false,
+    performed: false
+  }
+}' >"$fixture_root/current-checkpoint-replacement-valid.json"
+
+jq '.managed_eip.state_presence = "absent"' \
+  "$fixture_root/current-checkpoint-replacement-valid.json" \
+  >"$fixture_root/current-checkpoint-combined-valid.json"
+
 plan_mutation() {
   local name="$1"
   local filter="$2"
@@ -554,6 +621,47 @@ checkpoint_mutation() {
     "$fixture_root/checkpoint-$name.json"
 }
 
+current_checkpoint_mutation() {
+  local name="$1"
+  local filter="$2"
+  local mode="${3:-replacement}"
+  local source="$fixture_root/current-checkpoint-replacement-valid.json"
+  local plan="$fixture_root/plan-replacement-valid.json"
+  local output
+  local rc
+
+  if [[ "$mode" == combined-recovery ]]; then
+    source="$fixture_root/current-checkpoint-combined-valid.json"
+    plan="$fixture_root/plan-combined-recovery-valid.json"
+  fi
+  jq "$filter" "$source" >"$fixture_root/current-checkpoint-$mode-$name.json"
+
+  set +e
+  if [[ "$mode" == combined-recovery ]]; then
+    output="$("$checker" "$plan" "$fixture_root/cost-valid.json" \
+      "$fixture_root/current-checkpoint-$mode-$name.json" \
+      "$fixture_root/replacement-user-data" combined-recovery 2>&1)"
+  else
+    output="$("$checker" "$plan" "$fixture_root/cost-valid.json" \
+      "$fixture_root/current-checkpoint-$mode-$name.json" \
+      "$fixture_root/replacement-user-data" 2>&1)"
+  fi
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    printf 'FAIL: accepted %s current reconciliation checkpoint\n' "$name" >&2
+    failures=$((failures + 1))
+    return
+  fi
+  if [[ "$output" != "$generic_error" ]]; then
+    printf 'FAIL: %s current checkpoint emitted non-generic output\n' "$name" >&2
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'PASS: rejected %s current reconciliation checkpoint\n' "$name"
+}
+
 expect_verified \
   "exact Slice 4" \
   "$fixture_root/plan-valid.json" \
@@ -564,7 +672,7 @@ expect_replacement_verified \
   "exact Slice 4 replacement" \
   "$fixture_root/plan-replacement-valid.json" \
   "$fixture_root/cost-valid.json" \
-  "$fixture_root/checkpoint-valid.json" \
+  "$fixture_root/current-checkpoint-replacement-valid.json" \
   "$fixture_root/replacement-user-data"
 
 expect_replacement_verified_with_noisy_failed_stat_probe
@@ -837,6 +945,77 @@ checkpoint_mutation "Slice 3 destroy" \
   '.destroy_or_replace = 1'
 checkpoint_mutation "old resource change" \
   '.old_resource_changes = 1'
+
+current_checkpoint_mutation "stale evidence" \
+  '.checked_at = "2000-01-01T00:00:00Z"'
+current_checkpoint_mutation "future evidence" \
+  '.checked_at = "2999-01-01T00:00:00Z"'
+current_checkpoint_mutation "wrong schema" \
+  '.schema_version = "human-assisted-reconciliation-v2"'
+current_checkpoint_mutation "dirty commit" '.commit.clean = false'
+current_checkpoint_mutation "inexact commit" '.commit.exact = false'
+current_checkpoint_mutation "malformed commit" '.commit.sha = "not-a-commit"'
+current_checkpoint_mutation "unmanaged bootstrap host" \
+  '.selected_state_resources.bootstrap_host.managed = false'
+current_checkpoint_mutation "renamed bootstrap address" \
+  '.selected_state_resources.bootstrap_host.terraform_address = "aws_instance.renamed"'
+current_checkpoint_mutation "unmanaged database" \
+  '.selected_state_resources.database.managed = false'
+current_checkpoint_mutation "renamed database address" \
+  '.selected_state_resources.database.terraform_address = "aws_db_instance.renamed"'
+current_checkpoint_mutation "unapproved host disposition" \
+  '.bootstrap_host.human_approved = false'
+current_checkpoint_mutation "wrong host disposition" \
+  '.bootstrap_host.disposition = "retain"'
+current_checkpoint_mutation "rollback host not retained" \
+  '.legacy_rollback_host.retained = false'
+current_checkpoint_mutation "replacement EIP absent" \
+  '.managed_eip.state_presence = "absent"'
+current_checkpoint_mutation "renamed EIP address" \
+  '.managed_eip.terraform_address = "aws_eip.renamed"'
+current_checkpoint_mutation "combined EIP present" \
+  '.managed_eip.state_presence = "present"' combined-recovery
+current_checkpoint_mutation "EIP attached" '.managed_eip.unattached = false'
+current_checkpoint_mutation "origin ingress" '.origin.ingress_rule_count = 1'
+current_checkpoint_mutation "public origin phase" '.origin.phase = "public"'
+current_checkpoint_mutation "RDS unavailable" '.rds.status = "stopped"'
+current_checkpoint_mutation "public RDS" '.rds.publicly_accessible = true'
+current_checkpoint_mutation "unencrypted RDS" '.rds.storage_encrypted = false'
+current_checkpoint_mutation "unprotected RDS" '.rds.deletion_protection = false'
+current_checkpoint_mutation "RDS backups disabled" '.rds.backup_retention_days = 0'
+current_checkpoint_mutation "missing RDS restorable metadata" \
+  '.rds.latest_restorable_time_observed = false'
+current_checkpoint_mutation "missing runtime secret container" \
+  '.runtime_secret.container_exists = false'
+current_checkpoint_mutation "Terraform-managed secret versions" \
+  '.runtime_secret.terraform_manages_versions = true'
+current_checkpoint_mutation "nonnumeric secret version count" \
+  '.runtime_secret.observed_version_count = "1"'
+current_checkpoint_mutation "negative secret version count" \
+  '.runtime_secret.observed_version_count = -1'
+current_checkpoint_mutation "unsafe recovery bucket" \
+  '.recovery_bucket.public_access_blocked = false'
+current_checkpoint_mutation "unencrypted recovery bucket" \
+  '.recovery_bucket.encrypted = false'
+current_checkpoint_mutation "unversioned recovery bucket" \
+  '.recovery_bucket.versioned = false'
+current_checkpoint_mutation "non-TLS recovery bucket" \
+  '.recovery_bucket.tls_only = false'
+current_checkpoint_mutation "unverified recovery lifecycle" \
+  '.recovery_bucket.lifecycle_verified = false'
+current_checkpoint_mutation "unsafe state backend" \
+  '.state_backend.lockfile_enabled = false'
+current_checkpoint_mutation "local state backend" '.state_backend.remote = false'
+current_checkpoint_mutation "unencrypted state backend" \
+  '.state_backend.encrypted = false'
+current_checkpoint_mutation "public cutover approved" '.public_cutover.approved = true'
+current_checkpoint_mutation "public cutover performed" '.public_cutover.performed = true'
+current_checkpoint_mutation "missing field" 'del(.rds.status)'
+current_checkpoint_mutation "renamed field" \
+  '.runtime_secret.version_count = .runtime_secret.observed_version_count |
+   del(.runtime_secret.observed_version_count)'
+current_checkpoint_mutation "unexpected top-level field" '.unexpected = true'
+current_checkpoint_mutation "unexpected nested field" '.rds.unexpected = true'
 
 printf '{malformed' >"$fixture_root/plan-malformed.json"
 expect_rejected \

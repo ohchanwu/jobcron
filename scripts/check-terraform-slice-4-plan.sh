@@ -323,40 +323,153 @@ jq -e '
   ($cost.aggregate.one_time_upper_bound <= 200)
 ' "$cost_json" >/dev/null 2>&1 || fail
 
-jq -e '
-  [
-    "aws_db_instance.production",
-    "aws_security_group.origin",
-    "aws_security_group.database",
-    "aws_vpc_security_group_ingress_rule.database_postgresql_from_origin",
-    "aws_secretsmanager_secret.runtime",
-    "aws_s3_bucket.recovery",
-    "aws_s3_bucket_lifecycle_configuration.recovery"
-  ] as $required_addresses |
-  (.checked_at | type == "string") and
-  ((try (.checked_at | fromdateiso8601) catch null) as $checked |
-    ($checked != null) and
-    ((now - $checked) >= 0) and
-    ((now - $checked) <= 86400)) and
-  (.commit | type == "string") and
-  (.commit | test("^[0-9a-f]{40}$")) and
-  (.verdict == "PASS") and
-  (.post_apply_plan == "clean") and
-  (.addresses | type == "array") and
-  ([.addresses[]] | sort == ($required_addresses | sort)) and
-  ([.addresses[]] | length == (unique | length)) and
-  (.private_rds == true) and
-  (.runtime_secret_versions == 0) and
-  (.recovery_bucket | type == "object") and
-  (.recovery_bucket.encrypted == true) and
-  (.recovery_bucket.versioned == true) and
-  (.recovery_bucket.public_access_blocked == true) and
-  (.recovery_bucket.verified_retention_days >= 14) and
-  (.recovery_bucket.unverified_retention_days >= 90) and
-  (.recovery_lifecycle_verdict == "PASS") and
-  (.destroy_or_replace == 0) and
-  (.old_resource_changes == 0)
-' "$checkpoint_json" >/dev/null 2>&1 || fail
+if [[ "$mode" == create ]]; then
+  jq -e '
+    [
+      "aws_db_instance.production",
+      "aws_security_group.origin",
+      "aws_security_group.database",
+      "aws_vpc_security_group_ingress_rule.database_postgresql_from_origin",
+      "aws_secretsmanager_secret.runtime",
+      "aws_s3_bucket.recovery",
+      "aws_s3_bucket_lifecycle_configuration.recovery"
+    ] as $required_addresses |
+    (.checked_at | type == "string") and
+    ((try (.checked_at | fromdateiso8601) catch null) as $checked |
+      ($checked != null) and
+      ((now - $checked) >= 0) and
+      ((now - $checked) <= 86400)) and
+    (.commit | type == "string") and
+    (.commit | test("^[0-9a-f]{40}$")) and
+    (.verdict == "PASS") and
+    (.post_apply_plan == "clean") and
+    (.addresses | type == "array") and
+    ([.addresses[]] | sort == ($required_addresses | sort)) and
+    ([.addresses[]] | length == (unique | length)) and
+    (.private_rds == true) and
+    (.runtime_secret_versions == 0) and
+    (.recovery_bucket | type == "object") and
+    (.recovery_bucket.encrypted == true) and
+    (.recovery_bucket.versioned == true) and
+    (.recovery_bucket.public_access_blocked == true) and
+    (.recovery_bucket.verified_retention_days >= 14) and
+    (.recovery_bucket.unverified_retention_days >= 90) and
+    (.recovery_lifecycle_verdict == "PASS") and
+    (.destroy_or_replace == 0) and
+    (.old_resource_changes == 0)
+  ' "$checkpoint_json" >/dev/null 2>&1 || fail
+else
+  jq -e --arg mode "$mode" '
+    (. | type == "object") and
+    (keys == [
+      "bootstrap_host",
+      "checked_at",
+      "commit",
+      "legacy_rollback_host",
+      "managed_eip",
+      "origin",
+      "public_cutover",
+      "rds",
+      "recovery_bucket",
+      "runtime_secret",
+      "schema_version",
+      "selected_state_resources",
+      "state_backend"
+    ]) and
+    (.schema_version == "human-assisted-reconciliation-v1") and
+    (.checked_at | type == "string") and
+    ((try (.checked_at | fromdateiso8601) catch null) as $checked |
+      ($checked != null) and
+      ((now - $checked) >= 0) and
+      ((now - $checked) <= 86400)) and
+    (.commit | type == "object") and
+    (.commit | keys == ["clean", "exact", "sha"]) and
+    (.commit.sha | type == "string") and
+    (.commit.sha | test("^[0-9a-f]{40}$")) and
+    (.commit.exact == true) and
+    (.commit.clean == true) and
+    (.selected_state_resources | type == "object") and
+    (.selected_state_resources | keys == ["bootstrap_host", "database"]) and
+    (.selected_state_resources.bootstrap_host | type == "object") and
+    (.selected_state_resources.bootstrap_host | keys == ["managed", "terraform_address"]) and
+    (.selected_state_resources.bootstrap_host.terraform_address == "aws_instance.replacement_host") and
+    (.selected_state_resources.bootstrap_host.managed == true) and
+    (.selected_state_resources.database | type == "object") and
+    (.selected_state_resources.database | keys == ["managed", "terraform_address"]) and
+    (.selected_state_resources.database.terraform_address == "aws_db_instance.production") and
+    (.selected_state_resources.database.managed == true) and
+    (.bootstrap_host | type == "object") and
+    (.bootstrap_host | keys == ["disposition", "human_approved"]) and
+    (.bootstrap_host.disposition == "replace") and
+    (.bootstrap_host.human_approved == true) and
+    (.legacy_rollback_host | type == "object") and
+    (.legacy_rollback_host | keys == ["retained"]) and
+    (.legacy_rollback_host.retained == true) and
+    (.managed_eip | type == "object") and
+    (.managed_eip | keys == ["state_presence", "terraform_address", "unattached"]) and
+    (.managed_eip.terraform_address == "aws_eip.origin") and
+    (.managed_eip.unattached == true) and
+    (if $mode == "combined-recovery" then
+       .managed_eip.state_presence == "absent"
+     else
+       .managed_eip.state_presence == "present"
+     end) and
+    (.origin | type == "object") and
+    (.origin | keys == ["ingress_rule_count", "phase"]) and
+    (.origin.ingress_rule_count == 0) and
+    (.origin.phase == "private") and
+    (.rds | type == "object") and
+    (.rds | keys == [
+      "backup_retention_days",
+      "deletion_protection",
+      "latest_restorable_time_observed",
+      "publicly_accessible",
+      "status",
+      "storage_encrypted"
+    ]) and
+    (.rds.status == "available") and
+    (.rds.publicly_accessible == false) and
+    (.rds.storage_encrypted == true) and
+    (.rds.deletion_protection == true) and
+    (.rds.backup_retention_days | type == "number") and
+    (.rds.backup_retention_days | floor == .) and
+    (.rds.backup_retention_days >= 1) and
+    (.rds.latest_restorable_time_observed == true) and
+    (.runtime_secret | type == "object") and
+    (.runtime_secret | keys == [
+      "container_exists",
+      "observed_version_count",
+      "terraform_manages_versions"
+    ]) and
+    (.runtime_secret.container_exists == true) and
+    (.runtime_secret.terraform_manages_versions == false) and
+    (.runtime_secret.observed_version_count | type == "number") and
+    (.runtime_secret.observed_version_count | floor == .) and
+    (.runtime_secret.observed_version_count >= 0) and
+    (.recovery_bucket | type == "object") and
+    (.recovery_bucket | keys == [
+      "encrypted",
+      "lifecycle_verified",
+      "public_access_blocked",
+      "tls_only",
+      "versioned"
+    ]) and
+    (.recovery_bucket.encrypted == true) and
+    (.recovery_bucket.versioned == true) and
+    (.recovery_bucket.public_access_blocked == true) and
+    (.recovery_bucket.tls_only == true) and
+    (.recovery_bucket.lifecycle_verified == true) and
+    (.state_backend | type == "object") and
+    (.state_backend | keys == ["encrypted", "lockfile_enabled", "remote"]) and
+    (.state_backend.remote == true) and
+    (.state_backend.encrypted == true) and
+    (.state_backend.lockfile_enabled == true) and
+    (.public_cutover | type == "object") and
+    (.public_cutover | keys == ["approved", "performed"]) and
+    (.public_cutover.approved == false) and
+    (.public_cutover.performed == false)
+  ' "$checkpoint_json" >/dev/null 2>&1 || fail
+fi
 
 if [[ "$mode" == combined-recovery ]]; then
   resource_changes=2
@@ -369,11 +482,17 @@ else
   destroy_or_replace=0
 fi
 
+if [[ "$mode" == create ]]; then
+  checkpoint_label=slice3_checkpoint
+else
+  checkpoint_label=current_reconciliation_checkpoint
+fi
+
 printf '%s\n' \
   "resource_changes=$resource_changes" \
   'output_changes=1' \
   'sensitive_outputs=1' \
   "destroy_or_replace=$destroy_or_replace" \
   'aggregate_cost=PASS' \
-  'slice3_checkpoint=PASS' \
+  "$checkpoint_label=PASS" \
   'PASS'

@@ -118,6 +118,22 @@ replacement, unrelated resource change, or secret value.
 The human must approve this exact private-infrastructure plan before apply.
 Regenerating the plan invalidates that approval.
 
+Replacement and combined-recovery plan review must consume a fresh (at most 24
+hours old), exact-key, value-blind current reconciliation checkpoint rather
+than the superseded Slice 3 completion checkpoint. It binds the clean exact
+commit; the selected Terraform-managed bootstrap host and database; the human-
+approved host replacement and retained legacy rollback host; zero origin
+ingress in the private phase; available private encrypted deletion-protected
+RDS with backups and observed restorable metadata; the existing runtime-secret
+container as unmanaged-by-Terraform with a numeric observed version count; safe
+recovery bucket and remote encrypted locked state backend; and no approved or
+performed public cutover. Replacement-only requires the managed EIP present
+and unattached; combined recovery requires it absent so the reviewed plan may
+create it unattached. The checkpoint never asserts secret contents and must not
+require a zero version count. The historical create-mode contract remains
+unchanged for compatibility. Any missing, false, stale, renamed, malformed, or
+unexpected checkpoint field is a no-go.
+
 ### 4. Deploy privately
 
 Apply only the approved plan. Run schema migration through the private operator

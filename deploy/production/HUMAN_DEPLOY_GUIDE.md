@@ -17,29 +17,43 @@ the replacement host has no key pair or inbound rule, and runtime values exist
 on the host only below `/run/jobcron`. Stop immediately on any mismatch; never
 infer or substitute a selector.
 
-## 1. Verify the exact Slice 3 checkpoint
+## 1. Record the current reconciliation checkpoint
 
-Confirm the private checkpoint is current and reports:
+For replacement and combined-recovery plans, create fresh value-blind evidence
+in the protected controller directory. The checker accepts only
+`schema_version = "human-assisted-reconciliation-v1"`, rejects unexpected or
+renamed keys at every object boundary, and requires `checked_at` to be a valid
+UTC timestamp no more than 24 hours old and not in the future. Record only:
 
-- the exact reviewed Slice 3 commit and resource interface;
-- private RDS and its unchanged origin-group PostgreSQL rule;
-- an empty runtime-secret container with zero versions;
-- an encrypted, versioned, public-blocked recovery bucket;
-- the reviewed recovery lifecycle: verified off-cloud copies expire after 14
-  days, all current versions after 90 days, and the resulting noncurrent data
-  version one day later;
-- the origin security group is the only resource tagged
-  `jobcron:edge-target = origin-security-group`, while the canonical VPC stays
-  untagged and is derived from that group's `vpc_id`;
-- the reviewed normalization-only state action completed with 0 added,
-  0 changed, and 0 destroyed;
-- the final refresh inspection contained exactly one update-only AWS-managed
-  recovery-observation field, zero resource changes, and zero output changes;
-  this is accepted irreducible observation drift and must not be reapplied; and
-- zero destroy, replace, or old-resource actions.
+- `commit`: a 40-lowercase-hex `sha` with `exact` and `clean` both true;
+- `selected_state_resources`: the managed Terraform addresses
+  `aws_instance.replacement_host` and `aws_db_instance.production`;
+- `bootstrap_host`: disposition `replace` with `human_approved = true`, plus a
+  retained `legacy_rollback_host`;
+- `managed_eip`: address `aws_eip.origin`, `unattached = true`, and
+  `state_presence = "present"` for replacement-only or `"absent"` for
+  combined recovery;
+- `origin`: zero ingress rules and phase `private`;
+- `rds`: status `available`, not publicly accessible, encrypted,
+  deletion-protected, positive integral backup retention, and observed latest-
+  restorable-time metadata;
+- `runtime_secret`: the container exists, Terraform does not manage versions,
+  and `observed_version_count` is a nonnegative integer. The count may be
+  nonzero and proves no secret content;
+- `recovery_bucket`: encrypted, versioned, public-blocked, TLS-only, with its
+  lifecycle verified;
+- `state_backend`: remote, encrypted, and lockfile-enabled; and
+- `public_cutover`: neither approved nor performed.
 
-Stop if any field, address, lifecycle rule, or freshness check differs. Preserve
-the old host, old database, reserved EIP, prior image, and recovery materials.
+Do not include account IDs, resource IDs, endpoints, secret values, or
+restorable timestamps. A false, missing, stale, malformed, renamed, or extra
+field is a stop condition. Preserve the selected legacy host, database, prior
+image, and recovery materials.
+
+The three-argument create mode is a compatibility boundary for the historical
+Slice 3 launch path and still requires its original exact checkpoint, including
+an empty zero-version secret container. Do not use that historical checkpoint
+for replacement or combined recovery.
 
 ## 2. Publish the immutable private image
 
@@ -109,14 +123,14 @@ rm -f "$render_json"
 
 Create the saved plan with the explicit
 `-replace=aws_instance.replacement_host` option, render its JSON without
-printing it, then run the same checker with the private rendered bootstrap as
-the fourth argument:
+printing it, then run the checker with the current reconciliation checkpoint
+and private rendered bootstrap as the third and fourth arguments:
 
 ```sh
 scripts/check-terraform-slice-4-plan.sh \
   "$TF_SLICE4_PLAN_JSON" \
   "$TF_AGGREGATE_COST_JSON" \
-  "$TF_SLICE3_CHECKPOINT_JSON" \
+  "$TF_CURRENT_RECONCILIATION_CHECKPOINT_JSON" \
   "$TF_SLICE4_RENDERED_USER_DATA"
 ```
 
@@ -131,15 +145,16 @@ a rendered bootstrap that is not a regular mode-`0600` file. Remove the
 rendered file after the exact saved-plan digest receives independent approval;
 regenerating either artifact invalidates that approval.
 
-If refresh confirms that the deleted address was exactly the Terraform-managed
-`aws_eip.origin`, and the approved saved plan combines its recovery with the
-explicit host replacement, add the exact fifth argument `combined-recovery`:
+If current reconciliation confirms that the deleted address was exactly the
+Terraform-managed `aws_eip.origin`, and the approved saved plan combines its
+recovery with the explicit host replacement, set `managed_eip.state_presence`
+to `"absent"` and add the exact fifth argument `combined-recovery`:
 
 ```sh
 scripts/check-terraform-slice-4-plan.sh \
   "$TF_SLICE4_PLAN_JSON" \
   "$TF_AGGREGATE_COST_JSON" \
-  "$TF_SLICE3_CHECKPOINT_JSON" \
+  "$TF_CURRENT_RECONCILIATION_CHECKPOINT_JSON" \
   "$TF_SLICE4_RENDERED_USER_DATA" \
   combined-recovery
 ```
