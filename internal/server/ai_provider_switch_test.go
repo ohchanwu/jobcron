@@ -40,7 +40,9 @@ func TestRerateSurfacesProviderError(t *testing.T) {
 		{"bad model 404", http.StatusNotFound, `{"error":{"code":"model_not_found"}}`, "선택한 모델이 이 제공자와 맞지 않아요"},
 		{"bad model 400", http.StatusBadRequest, `{"error":{"message":"bad request"}}`, "선택한 모델이 이 제공자와 맞지 않아요"},
 		{"bad key 401", http.StatusUnauthorized, `{"error":{"message":"invalid api key"}}`, "AI 키를 확인해주세요"},
+		{"Gemini bad key 400", http.StatusBadRequest, `{"error":{"status":"INVALID_ARGUMENT","message":"API key not valid. Please pass a valid API key."}}`, "AI 키를 확인해주세요"},
 		{"no quota 429", http.StatusTooManyRequests, `{"error":{"type":"insufficient_quota"}}`, "결제"},
+		{"Gemini exhausted quota 429", http.StatusTooManyRequests, `{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"You exceeded your current quota"}}`, "사용 한도를 초과"},
 		{"rate limited 429", http.StatusTooManyRequests, `{"error":{"type":"rate_limit_exceeded"}}`, "잠시"},
 	}
 	for _, tc := range cases {
@@ -67,9 +69,11 @@ func TestProviderFailureMessageClassifies(t *testing.T) {
 	}{
 		{&ai.APIError{Status: http.StatusUnauthorized, Body: privateMarker}, "AI 키를 확인해주세요"},
 		{&ai.APIError{Status: http.StatusForbidden, Body: privateMarker}, "AI 키를 확인해주세요"},
+		{&ai.APIError{Status: http.StatusBadRequest, Body: `{"error":{"status":"INVALID_ARGUMENT","message":"API key not valid: ` + privateMarker + `"}}`}, "AI 키를 확인해주세요"},
 		{&ai.APIError{Status: http.StatusBadRequest, Body: privateMarker}, "선택한 모델이 이 제공자와 맞지 않아요"},
 		{&ai.APIError{Status: http.StatusNotFound, Body: privateMarker}, "선택한 모델이 이 제공자와 맞지 않아요"},
 		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"insufficient_quota","detail":"` + privateMarker + `"}}`}, "결제"},
+		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"status":"RESOURCE_EXHAUSTED","detail":"` + privateMarker + `"}}`}, "사용 한도를 초과"},
 		{&ai.APIError{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"rate_limit_exceeded","detail":"` + privateMarker + `"}}`}, "잠시"},
 		{&ai.APIError{Status: http.StatusInternalServerError, Body: privateMarker}, "(500)"},
 		{errors.New("malformed provider output: " + privateMarker), "AI 분석에 실패했어요"},

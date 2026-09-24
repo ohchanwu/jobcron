@@ -1054,6 +1054,35 @@ form.login-form input {
 .source-toggles .field-hint,
 .ai-goals .field-hint { margin-bottom: 0.7rem; }
 .source-toggles .check { margin-top: 0.4rem; }
+.ai-onboarding {
+  margin: 0.9rem 0 1.4rem;
+  padding: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+.ai-onboarding p { margin: 0.45rem 0 0; line-height: 1.55; font-size: 0.88rem; }
+.ai-onboarding .ai-onboarding-title { margin: 0; color: var(--accent); font-weight: 700; }
+.ai-onboarding-actions { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.8rem; }
+.ai-onboarding-actions a,
+.guide-main a { color: var(--accent); font-weight: 600; text-underline-offset: 0.2em; }
+.ai-onboarding .ai-onboarding-note { color: var(--ink-soft); font-size: 0.8rem; }
+.guide-main { margin-top: 1.5rem; max-width: 48rem; }
+.guide-lead { color: var(--ink-soft); font-size: 1rem; line-height: 1.7; }
+.guide-main section { margin-top: 2rem; }
+.guide-main h2 { margin: 0 0 0.75rem; font-family: var(--serif); font-size: 1.45rem; font-weight: 500; }
+.guide-main p,
+.guide-steps li,
+.guide-troubleshooting dd { line-height: 1.7; }
+.guide-callout { padding: 1rem 1.1rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--accent-soft); }
+.guide-callout p { margin: 0.55rem 0 0; }
+.guide-steps { padding-left: 1.4rem; }
+.guide-steps li { padding-left: 0.35rem; margin-top: 0.8rem; }
+.guide-troubleshooting { display: grid; gap: 0.75rem; margin: 0; }
+.guide-troubleshooting div { padding: 0.9rem 1rem; border-left: 3px solid var(--rule); }
+.guide-troubleshooting dt { font-weight: 700; }
+.guide-troubleshooting dd { margin: 0.25rem 0 0; color: var(--ink-soft); }
+.guide-footer { margin: 2.25rem 0; }
 .ai-key-delete {
   display: flex;
   align-items: center;

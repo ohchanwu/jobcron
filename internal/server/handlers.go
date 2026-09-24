@@ -34,6 +34,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /profile", s.handleProfileForm)
 	mux.HandleFunc("POST /profile", s.handleProfileSave)
 	mux.HandleFunc("POST /profile/ai-key/delete", s.handleAIKeyDelete)
+	mux.HandleFunc("GET /guides/gemini-api-key", s.handleGeminiAPIKeyGuide)
 	mux.HandleFunc("GET /account", s.handleAccount)
 	mux.HandleFunc("POST /account/password", s.handleAccountPassword)
 	mux.HandleFunc("POST /account/delete", s.handleAccountDelete)
@@ -78,6 +79,14 @@ type briefingStatus struct {
 type navView struct {
 	Active    string
 	CSRFToken string
+}
+
+type guidePage struct {
+	CSRFToken string
+}
+
+func (s *Server) handleGeminiAPIKeyGuide(w http.ResponseWriter, r *http.Request) {
+	s.renderWithRequest(w, r, "gemini-api-key-guide.html", guidePage{})
 }
 
 // handleBriefingStatus reports whether the current browser has a briefing to
@@ -482,6 +491,9 @@ func (s *Server) handleProfileForm(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	} else {
+		p.AIProvider = "gemini"
+		p.AIModel = ai.DefaultModel("gemini")
 	}
 	form := toProfileForm(p)
 	form.ProfileRequired = r.URL.Query().Get("reason") == "profile-required"

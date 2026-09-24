@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemini API 키 설정 가이드 — 오늘의 채용 브리핑</title>
+  <link rel="canonical" href="/guides/gemini-api-key">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body data-demo="{{demoMode}}">
+  <div class="wrap">
+    <header>
+      <div>
+        <p class="eyebrow">AI 설정 가이드</p>
+        <h1>Gemini API 키 설정 가이드</h1>
+      </div>
+      <div class="head-right">
+        <button id="theme-toggle" class="theme-toggle" type="button" title="테마 (자동·낮·밤)"></button>
+      </div>
+    </header>
+
+    {{template "primaryNav" (navData "profile" .CSRFToken)}}
+
+    <main class="guide-main">
+      <p class="guide-lead">동영상 없이도 이 안내만 따라 첫 평가까지 완료할 수 있어요. Google 화면의 이름이나 위치는 바뀔 수 있지만 필요한 단계는 같아요.</p>
+
+      <section class="guide-callout" aria-labelledby="before-starting">
+        <h2 id="before-starting">시작하기 전에</h2>
+        <p>Gemini에는 시작하기 좋은 <strong>무과금 API 등급(unpaid API tier)</strong>이 있지만 영구 제공이나 고정 요청 수를 보장하지 않아요. Google이 지역별 제공 여부와 사용 한도를 정합니다.</p>
+        <p>무과금 등급에서는 Google이 프롬프트와 응답을 제품 개선에 사용할 수 있어요. AI 프로필 입력란에는 이력서나 민감한 정보, 기밀 정보, 개인 식별 정보를 넣지 마세요.</p>
+      </section>
+
+      <section aria-labelledby="setup-steps">
+        <h2 id="setup-steps">설정 순서</h2>
+        <ol class="guide-steps">
+          <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio에 로그인 <span aria-hidden="true">↗</span></a>하세요.</li>
+          <li>안내에 따라 프로젝트를 만들거나 선택하세요.</li>
+          <li><strong>API 키 만들기</strong>를 선택하세요.</li>
+          <li>표시된 API 키를 복사하세요. 채팅, 메모, 화면 캡처에 남기지 마세요.</li>
+          <li><a href="/profile">Jobcron 프로필 설정</a>에서 Google Gemini를 선택하고 API 키 입력란에 붙여넣으세요.</li>
+          <li>모델에서 <strong>gemini-3.5-flash-lite (Flash-Lite)</strong>를 선택한 뒤 저장하세요.</li>
+          <li>브리핑에서 첫 실제 AI 평가를 실행하세요. 이 요청이 저장한 키, 선택 모델, Google 엔드포인트, Jobcron의 정상 요청 경로를 함께 확인하는 유일한 연결 확인이에요. 별도의 연결 테스트 버튼이나 요청은 없어요.</li>
+        </ol>
+      </section>
+
+      <section aria-labelledby="evaluation-result">
+        <h2 id="evaluation-result">첫 실제 AI 평가 결과</h2>
+        <p>성공하면 공고에 근거가 포함된 AI 분석이 표시돼요. 실패해도 일반 점수는 계속 사용할 수 있고, 아래 메시지에 따라 설정을 바로잡은 뒤 실제 평가를 다시 실행하면 됩니다.</p>
+        <dl class="guide-troubleshooting">
+          <div><dt>잘못된 키 또는 권한 없음</dt><dd>“AI 키를 확인해주세요”가 표시돼요. 키를 다시 복사하거나 새 키로 교체하세요.</dd></div>
+          <div><dt>할당량 소진 또는 HTTP 429</dt><dd><a href="https://aistudio.google.com/app/usage" target="_blank" rel="noopener noreferrer">Google AI Studio 사용량·할당량 화면 <span aria-hidden="true">↗</span></a>을 확인하고 한도가 회복될 때까지 기다리세요.</dd></div>
+          <div><dt>모델 불일치</dt><dd>프로필의 제공자가 Gemini이고 모델이 Flash-Lite인지 확인하세요.</dd></div>
+          <div><dt>지역 제한</dt><dd>Google 계정 또는 프로젝트에서 Gemini API를 사용할 수 있는 지역인지 Google 안내를 확인하세요.</dd></div>
+        </dl>
+      </section>
+
+      <section aria-labelledby="key-privacy">
+        <h2 id="key-privacy">키 보관·교체·폐기</h2>
+        <p>키는 Jobcron 서버에서 Google Gemini로 직접 요청할 때만 사용하고 데이터베이스에 저장하기 전에 암호화해요. 저장된 키 원문은 브라우저에 다시 표시하지 않아요.</p>
+        <p>키를 교체하려면 프로필에 새 키를 저장하세요. 사용을 끝내려면 Jobcron에서 저장된 키를 삭제하고 Google AI Studio에서도 키를 폐기하세요. Jobcron은 Google의 데이터 보관 정책을 통제하지 않아요.</p>
+      </section>
+
+      <p class="guide-footer"><a href="/profile">프로필 설정으로 돌아가기 <span aria-hidden="true">→</span></a></p>
+    </main>
+  </div>
+  <script src="/static/theme.js"></script>
+  <script src="/static/briefing-notification.js"></script>
+</body>
+</html>

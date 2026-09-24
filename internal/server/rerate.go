@@ -36,18 +36,25 @@ func (e *providerCallError) Unwrap() error { return e.err }
 func providerFailureMessage(err error) string {
 	var apiErr *ai.APIError
 	if errors.As(err, &apiErr) {
+		body := strings.ToLower(apiErr.Body)
 		switch apiErr.Status {
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return "AI 키를 확인해주세요 — 키가 올바르지 않거나 권한이 없어요."
-		case http.StatusBadRequest, http.StatusNotFound:
+			return "AI 키를 확인해주세요 — 키가 올바르지 않거나 권한·지역 제한이 있어요."
+		case http.StatusBadRequest:
+			if strings.Contains(body, "api key not valid") || strings.Contains(body, "api_key_invalid") {
+				return "AI 키를 확인해주세요 — 키가 올바르지 않거나 권한이 없어요."
+			}
+			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
+		case http.StatusNotFound:
 			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
 		case http.StatusTooManyRequests:
-			// OpenAI overloads 429 for two very different situations. A persistent
-			// billing/credit problem (insufficient_quota) must NOT read as "retry
-			// later" — the user needs to fix billing, not wait. A transient
-			// rate-limit does retry. Distinguish on the error body.
-			if strings.Contains(apiErr.Body, "insufficient_quota") {
+			// Providers overload 429 for persistent quota exhaustion and transient
+			// rate limiting. The former needs account/quota action, not a blind retry.
+			if strings.Contains(body, "insufficient_quota") {
 				return "AI 제공자 사용 한도를 초과했어요 — 제공자 계정의 결제·요금제를 확인해주세요."
+			}
+			if strings.Contains(body, "resource_exhausted") || strings.Contains(body, "exceeded your current quota") {
+				return "AI 제공자 사용 한도를 초과했어요 — 제공자 사용량·할당량을 확인해주세요."
 			}
 			return "요청이 잠시 몰렸어요 — 잠시 후 다시 시도해 주세요."
 		}

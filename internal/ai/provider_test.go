@@ -80,9 +80,9 @@ func TestDefaultModelUsesFirstRegistryEntry(t *testing.T) {
 
 func TestProviderRegistryIncludesOpenAIAndGemini(t *testing.T) {
 	wantProviders := []ProviderInfo{
+		{ID: "gemini", Label: "Google Gemini", KeyPlaceholder: "AIza...", Recommended: true},
 		{ID: "anthropic", Label: "Anthropic (Claude)", KeyPlaceholder: "sk-ant-..."},
 		{ID: "openai", Label: "OpenAI", KeyPlaceholder: "sk-..."},
-		{ID: "gemini", Label: "Google Gemini", KeyPlaceholder: "AIza..."},
 	}
 	if got := Providers(); !slices.Equal(got, wantProviders) {
 		t.Fatalf("Providers() = %#v, want %#v", got, wantProviders)

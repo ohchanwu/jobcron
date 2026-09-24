@@ -138,6 +138,9 @@ func withCSRFToken(data any, token string) any {
 	case profileForm:
 		v.CSRFToken = token
 		return v
+	case guidePage:
+		v.CSRFToken = token
+		return v
 	case archiveView:
 		v.CSRFToken = token
 		return v

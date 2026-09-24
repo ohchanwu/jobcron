@@ -146,6 +146,7 @@ type ProviderInfo struct {
 	ID             string `json:"id"`
 	Label          string `json:"label"`
 	KeyPlaceholder string `json:"keyPlaceholder"`
+	Recommended    bool   `json:"recommended,omitempty"`
 }
 
 // New constructs a live provider for the given name ("anthropic" | "openai" |
@@ -204,9 +205,9 @@ func ModelsByProvider() map[string][]string {
 }
 
 var providers = []ProviderInfo{
+	{ID: "gemini", Label: "Google Gemini", KeyPlaceholder: "AIza...", Recommended: true},
 	{ID: "anthropic", Label: "Anthropic (Claude)", KeyPlaceholder: "sk-ant-..."},
 	{ID: "openai", Label: "OpenAI", KeyPlaceholder: "sk-..."},
-	{ID: "gemini", Label: "Google Gemini", KeyPlaceholder: "AIza..."},
 }
 
 // Providers lists the selectable providers for the settings UI, in display
