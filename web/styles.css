@@ -1081,7 +1081,6 @@ form.login-form input {
 .guide-main { margin-top: 1.5rem; max-width: 48rem; font-size: 1rem; }
 .guide-header .guide-title { min-width: 0; }
 .guide-header .head-right { flex: 0 0 auto; }
-.guide-lead { color: var(--ink-soft); font-size: 1rem; line-height: 1.7; }
 .guide-main section { margin-top: 2rem; }
 .guide-main h2 { margin: 0 0 0.75rem; font-family: var(--serif); font-size: 1.45rem; font-weight: 500; }
 .guide-main p,
@@ -1103,7 +1102,7 @@ form.login-form input {
 .guide-troubleshooting { display: grid; gap: 0.75rem; margin: 0; }
 .guide-troubleshooting div { padding: 0.9rem 1rem; border-left: 3px solid var(--rule); }
 .guide-troubleshooting dt { font-weight: 700; }
-.guide-troubleshooting dd { margin: 0.25rem 0 0; color: var(--ink-soft); }
+.guide-troubleshooting dd { margin: 0.25rem 0 0; color: var(--ink); }
 .guide-footer { margin: 2.25rem 0; }
 .ai-key-delete {
   display: flex;

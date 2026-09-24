@@ -112,7 +112,7 @@ func TestGeminiAPIKeyGuideIsCompleteAndNoSyntheticTestRouteExists(t *testing.T) 
 	for _, want := range []string{
 		"Gemini API 키 설정 가이드",
 		`<section class="guide-callout" aria-label="Gemini 무료 등급 안내">`,
-		"Gemini에는 시작하기 좋은 무료 API 등급이 있습니다. gemini-3.5-flash-lite 기준 약 하루 500회의 API 요청을 사용할 수 있어요.",
+		"Gemini에는 시작하기 좋은 무료 API 등급이 있습니다. gemini-3.5-flash-lite 기준 약 하루 500회의 API 요청을 사용할 수 있어요. 같은 Google 프로젝트를 Jobcron에서만 사용한다면 사용 한도에 걸릴 가능성은 낮아요. 같은 프로젝트의 API 키를 다른 용도로 함께 쓰면 한도에 도달할 수 있어요. 드물게 한도에 도달하면 다음 할당량 초기화까지 기다리거나 유료 등급이 연결된 프로젝트의 키를 사용하세요.",
 		"무료 등급에서는 Google이 프롬프트와 응답을 제품 개선에 사용할 수 있어요. AI 프로필 입력란에 민감, 기밀, 개인 식별 정보를 넣을 때 주의하세요.",
 		"Google AI Studio에 로그인",
 		"API 키 만들기",
@@ -130,13 +130,13 @@ func TestGeminiAPIKeyGuideIsCompleteAndNoSyntheticTestRouteExists(t *testing.T) 
 		`href="https://aistudio.google.com/app/usage" target="_blank" rel="noopener noreferrer"`,
 		`<span class="sr-only">새 탭에서 열림</span>`,
 		`href="/profile"`,
-		"동영상 없이도",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("guide missing %q", want)
 		}
 	}
 	for _, unwanted := range []string{
+		"동영상 없이도 이 안내만 따라 첫 평가까지 완료할 수 있어요. Google 화면의 이름이나 위치는 바뀔 수 있지만 필요한 단계는 같아요.",
 		"시작하기 전에",
 		"영구 제공이나 고정 요청 수를 보장하지 않아요",
 		"키 보관·교체·폐기",
@@ -223,6 +223,22 @@ func TestGeminiGuideMobileHeaderStylesAreScopedAndAllowWrapping(t *testing.T) {
 	}
 	if strings.Contains(subnoteStyles, `color: var(--ink-soft);`) {
 		t.Fatalf("guide subnote must not use the low-contrast ink-soft token; block=%q", subnoteStyles)
+	}
+
+	troubleshootingStart := strings.Index(styles, `.guide-troubleshooting dd { margin:`)
+	if troubleshootingStart < 0 {
+		t.Fatal("guide troubleshooting description style block missing")
+	}
+	troubleshootingEnd := strings.Index(styles[troubleshootingStart:], `}`)
+	if troubleshootingEnd < 0 {
+		t.Fatal("guide troubleshooting description style block missing closing brace")
+	}
+	troubleshootingStyles := styles[troubleshootingStart : troubleshootingStart+troubleshootingEnd]
+	if !strings.Contains(troubleshootingStyles, `color: var(--ink);`) {
+		t.Fatalf("guide troubleshooting descriptions must use the high-contrast ink token; block=%q", troubleshootingStyles)
+	}
+	if strings.Contains(troubleshootingStyles, `color: var(--ink-soft);`) {
+		t.Fatalf("guide troubleshooting descriptions must not use the low-contrast ink-soft token; block=%q", troubleshootingStyles)
 	}
 }
 
