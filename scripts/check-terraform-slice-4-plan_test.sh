@@ -796,9 +796,124 @@ expect_recovery_invocation_rejected \
   "${recovery_args[@]}" "$reviewed_sha"
 git -C "$checked_repo" config --unset core.attributesFile
 
+git -C "$checked_repo" config extensions.worktreeConfig true
+printf '[core]\n\texcludesFile = /tmp/hostile-worktree-excludes\n' \
+  >"$checked_repo/.git/config.worktree"
+expect_recovery_invocation_rejected \
+  "hostile worktree Git configuration" \
+  "${recovery_args[@]}" "$reviewed_sha"
+rm -f "$checked_repo/.git/config.worktree"
+expect_recovery_invocation_rejected \
+  "enabled worktree Git configuration extension" \
+  "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" config --unset extensions.worktreeConfig
+
+git -C "$checked_repo" config status.showUntrackedFiles no
+expect_recovery_invocation_rejected \
+  "hostile status control" \
+  "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" config --unset status.showUntrackedFiles
+
+git -C "$checked_repo" config remote.origin.promisor true
+expect_recovery_invocation_rejected \
+  "promisor remote control" \
+  "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" config --unset remote.origin.promisor
+
 expect_recovery_invocation_rejected \
   "unknown six-argument recovery mode" \
   "${recovery_args[@]}" "$reviewed_sha" combined-recover
+
+# Caller-controlled PATH tool wrappers must never be able to forge a PASS:
+# every external tool the checker consults is resolved from root-owned system
+# directories, so a hostile wrapper directory on PATH is silently ignored and
+# the real tools still reject hostile inputs.
+hostile_wrapper_bin="$fixture_root/hostile-tool-wrappers"
+mkdir -p "$hostile_wrapper_bin"
+for tool in jq grep stat sha256sum sha1sum shasum awk; do
+  printf '#!/bin/sh\nexit 0\n' >"$hostile_wrapper_bin/$tool"
+  chmod 0755 "$hostile_wrapper_bin/$tool"
+done
+cat >"$hostile_wrapper_bin/grep" <<'EOF'
+#!/bin/sh
+for arg in "$@"; do
+  if [ "$arg" = "required deployment asset missing" ]; then
+    exit 1
+  fi
+done
+exit 0
+EOF
+cat >"$hostile_wrapper_bin/stat" <<'EOF'
+#!/bin/sh
+printf '600\n'
+exit 0
+EOF
+for tool in sha256sum sha1sum shasum; do
+  cat >"$hostile_wrapper_bin/$tool" <<'EOF'
+#!/bin/sh
+printf 'forged  wrapped-input\n'
+exit 0
+EOF
+done
+cat >"$hostile_wrapper_bin/awk" <<'EOF'
+#!/bin/sh
+read -r first _rest || exit 1
+printf '%s\n' "$first"
+EOF
+cat >"$hostile_wrapper_bin/env" <<'EOF'
+#!/bin/sh
+exec /usr/bin/env "$@"
+EOF
+chmod 0755 "$hostile_wrapper_bin/grep" "$hostile_wrapper_bin/stat" \
+  "$hostile_wrapper_bin/sha256sum" "$hostile_wrapper_bin/sha1sum" \
+  "$hostile_wrapper_bin/shasum" "$hostile_wrapper_bin/awk" \
+  "$hostile_wrapper_bin/env"
+
+jq '(.resource_changes[] |
+  select(.address == "aws_instance.replacement_host") |
+  .change.after.user_data) = "forged"' \
+  "$fixture_root/plan-replacement-valid.json" \
+  >"$fixture_root/plan-wrapper-forged.json"
+
+wrapper_output=
+wrapper_rc=0
+set +e
+wrapper_output="$(PATH="$hostile_wrapper_bin:$PATH" \
+  "$checker" \
+  "$fixture_root/plan-wrapper-forged.json" \
+  "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-replacement-valid.json" \
+  "$fixture_root/replacement-user-data" \
+  "$reviewed_sha" 2>&1)"
+wrapper_rc=$?
+set -e
+if [[ "$wrapper_rc" -eq 0 ]]; then
+  printf 'FAIL: accepted hostile plan through caller PATH tool wrappers\n' >&2
+  failures=$((failures + 1))
+elif [[ "$wrapper_output" != "$generic_error" ]]; then
+  printf 'FAIL: PATH wrapper rejection disclosed a non-generic error\n' >&2
+  failures=$((failures + 1))
+else
+  printf 'PASS: rejected hostile plan despite caller PATH tool wrappers\n'
+fi
+
+if wrapper_output="$(PATH="$hostile_wrapper_bin:$PATH" \
+  "$checker" \
+  "$fixture_root/plan-replacement-valid.json" \
+  "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-replacement-valid.json" \
+  "$fixture_root/replacement-user-data" \
+  "$reviewed_sha" 2>&1)"; then
+  if [[ "$wrapper_output" != "$expected_replacement_output" ]]; then
+    printf 'FAIL: valid fixture through PATH wrappers emitted unexpected output\n' >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: verified valid fixture while ignoring caller PATH tool wrappers\n'
+  fi
+else
+  printf 'FAIL: rejected valid fixture because of caller PATH tool wrappers\n' >&2
+  failures=$((failures + 1))
+fi
 
 combined_recovery_plan_mutation() {
   local name="$1"

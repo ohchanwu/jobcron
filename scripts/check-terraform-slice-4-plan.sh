@@ -1,10 +1,86 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 fail() {
   printf 'Terraform saved plan violates the Slice 4 contract\n' >&2
   exit 1
 }
+
+# Trust boundary: the checker must not consult caller-controlled executables.
+# Whenever the ambient PATH holds anything outside root-owned, non-group- or
+# other-writable system directories (or BASH_ENV/ENV is set), re-exec self
+# under a sanitized environment with PATH restricted to exactly those trusted
+# directories. Wrappers planted anywhere else on the ambient PATH are thereby
+# ignored, not trusted. The stat probes used to build the trusted PATH are
+# themselves absolute-path invocations, so they cannot be wrapped either.
+slice4_stat_bin=/usr/bin/stat
+[[ -x "$slice4_stat_bin" ]] || slice4_stat_bin=/bin/stat
+[[ -x "$slice4_stat_bin" ]] || fail
+if "$slice4_stat_bin" -f '%u' / >/dev/null 2>&1; then
+  slice4_stat_bsd=yes
+else
+  slice4_stat_bsd=no
+fi
+
+slice4_dir_trusted() {
+  local dir="$1" uid mode
+
+  if [[ "$slice4_stat_bsd" == yes ]]; then
+    uid="$("$slice4_stat_bin" -L -f '%u' "$dir" 2>/dev/null)" || return 1
+    mode="$("$slice4_stat_bin" -L -f '%Lp' "$dir" 2>/dev/null)" || return 1
+  else
+    uid="$("$slice4_stat_bin" -c '%u' "$dir" 2>/dev/null)" || return 1
+    mode="$("$slice4_stat_bin" -c '%a' "$dir" 2>/dev/null)" || return 1
+  fi
+  [[ "$uid" == 0 ]] || return 1
+  case "$mode" in
+    '' | *[!0-7]*) return 1 ;;
+  esac
+  (( (8#$mode & 8#22) == 0 )) || return 1
+  return 0
+}
+
+slice4_trusted_path() {
+  local dir sanitized=''
+
+  for dir in /usr/local/bin /usr/bin /bin; do
+    if [[ -d "$dir" ]] && slice4_dir_trusted "$dir"; then
+      if [[ -n "$sanitized" ]]; then
+        sanitized="$sanitized:$dir"
+      else
+        sanitized="$dir"
+      fi
+    fi
+  done
+  case ":$sanitized:" in
+    *:/usr/bin:* | *:/bin:*) ;;
+    *) return 1 ;;
+  esac
+  printf '%s\n' "$sanitized"
+}
+
+slice4_path_untrusted() {
+  local dir
+
+  [[ -n "${BASH_ENV:-}${ENV:-}" ]] && return 0
+  local IFS=:
+  for dir in $PATH; do
+    [[ -z "$dir" ]] && return 0
+    [[ -d "$dir" ]] || return 0
+    slice4_dir_trusted "$dir" || return 0
+  done
+  return 1
+}
+
+trusted_path="$(slice4_trusted_path)" || fail
+if slice4_path_untrusted || [[ ":$PATH:" != ":$trusted_path:" ]]; then
+  [[ -x /usr/bin/env ]] || fail
+  [[ -x /bin/bash ]] || fail
+  exec /usr/bin/env -i \
+    PATH="$trusted_path" \
+    /bin/bash "$0" "$@" || fail
+fi
+export PATH="$trusted_path"
 
 [[ "$#" -eq 3 || "$#" -eq 5 || "$#" -eq 6 ]] || fail
 
@@ -60,10 +136,16 @@ if [[ "$#" -ge 5 ]]; then
   git_root="$(run_git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || fail
   [[ "$git_root" == "$repo_root" ]] || fail
   if run_git -C "$repo_root" config --local --name-only --get-regexp \
-    '^(alias\.|core\.(attributesfile|excludesfile|hookspath|sshcommand|fsmonitor|worktree)$|diff\.external$|filter\.|include\.|includeif\.)' \
+    '^(alias\.|core\.(attributesfile|excludesfile|hookspath|sshcommand|fsmonitor|worktree)$|diff\.external$|filter\.|include\.|includeif\.|extensions\.|status\.showuntrackedfiles$|remote\..*\.(promisor|partialclonefilter)$)' \
     >/dev/null 2>&1; then
     fail
   fi
+  git_dir="$(run_git -C "$repo_root" rev-parse --git-dir 2>/dev/null)" || fail
+  case "$git_dir" in
+    /*) ;;
+    *) git_dir="$repo_root/$git_dir" ;;
+  esac
+  [[ ! -e "$git_dir/config.worktree" ]] || fail
   [[ -f "$repo_root/scripts/check-terraform-slice-4-plan.sh" &&
     ! -L "$repo_root/scripts/check-terraform-slice-4-plan.sh" ]] || fail
   run_git -C "$repo_root" ls-files --error-unmatch -- \

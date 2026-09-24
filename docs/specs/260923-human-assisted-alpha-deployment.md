@@ -141,9 +141,13 @@ recovery adds the separate final literal `combined-recovery`. `REVIEWED_SHA` is
 a full lowercase 40-hex commit and must equal both `checkpoint.commit.sha` and
 the literal `HEAD` of the clean checkout containing the tracked checker and
 exact tracked bootstrap assets. Tracked, staged, or untracked changes,
-replacement refs, hostile local Git controls, or ambient Git configuration are
-a no-go; the check runs with replacement objects, hooks, external attributes,
-and excludes neutralized and fails without disclosing paths or values.
+replacement refs, hostile local or worktree Git controls (including enabled
+extensions, promisor remotes, and untracked-file hiding), or ambient Git
+configuration are a no-go; the check runs with replacement objects, hooks,
+external attributes, and excludes neutralized and fails without disclosing
+paths or values. The checker re-executes itself under a sanitized environment
+whose PATH admits only root-owned, non-writable system tool directories, so
+caller-controlled PATH wrappers cannot forge any verdict.
 
 ### 4. Deploy privately
 

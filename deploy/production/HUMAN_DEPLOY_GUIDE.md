@@ -154,7 +154,18 @@ tracked/staged/untracked state, no replacement refs or hostile local Git
 configuration, and the checker plus every bootstrap asset at the script's own
 repository root as tracked files in that checkout. Git replacement objects,
 hooks, ambient configuration, external attributes, and excludes are disabled
-or rejected for this boundary. Failures emit only the generic contract error.
+or rejected for this boundary, as are enabled Git extensions, per-worktree
+configuration files, promisor remotes, and untracked-file hiding. Failures
+emit only the generic contract error.
+
+The checker also establishes its own executable trust boundary: unless the
+ambient PATH already consists solely of root-owned, non-group- or
+other-writable system tool directories, it re-executes itself with
+`PATH` restricted to exactly those directories (`/usr/bin`, `/bin`, and
+`/usr/local/bin` only when that directory is root-owned and non-writable) and
+a cleared environment. Caller-supplied PATH tool wrappers therefore cannot
+forge a verdict, and the run fails closed if a required trusted tool is
+absent. It requires `bash` at `/bin/bash`.
 
 If current reconciliation confirms that the deleted address was exactly the
 Terraform-managed `aws_eip.origin`, and the approved saved plan combines its
