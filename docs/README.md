@@ -37,6 +37,7 @@ Use this index instead of recursively loading the entire documentation tree.
 
 - [Human-assisted alpha deployment][human-assisted-alpha-deployment]
 - [Gemini BYOK onboarding](specs/260924-gemini-byok-onboarding.md)
+  - [Implementation plan](plans/260924-gemini-byok-onboarding-implementation.md)
 
 ## Recently Archived
 
