@@ -90,6 +90,43 @@ expect_replacement_verified() {
   printf 'PASS: verified %s fixture\n' "$name"
 }
 
+expect_replacement_verified_with_noisy_failed_stat_probe() {
+  local stat_bin="$fixture_root/noisy-stat-bin"
+  local output
+
+  mkdir -p "$stat_bin"
+  cat >"$stat_bin/stat" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == -f ]]; then
+  printf 'synthetic GNU stat filesystem output\n'
+  exit 1
+fi
+if [[ "$1" == -c && "$2" == '%a' ]]; then
+  printf '600\n'
+  exit 0
+fi
+exit 2
+EOF
+  chmod +x "$stat_bin/stat"
+
+  if ! output="$(PATH="$stat_bin:$PATH" \
+    "$checker" \
+    "$fixture_root/plan-replacement-valid.json" \
+    "$fixture_root/cost-valid.json" \
+    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/replacement-user-data" 2>&1)"; then
+    printf 'FAIL: failed stat probe stdout contaminated file mode\n' >&2
+    failures=$((failures + 1))
+    return
+  fi
+  if [[ "$output" != "$expected_replacement_output" ]]; then
+    printf 'FAIL: noisy failed stat probe emitted unexpected output\n' >&2
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'PASS: ignored stdout from failed stat probe\n'
+}
+
 expect_replacement_rejected() {
   local name="$1"
   local plan="$2"
@@ -440,6 +477,8 @@ expect_replacement_verified \
   "$fixture_root/cost-valid.json" \
   "$fixture_root/checkpoint-valid.json" \
   "$fixture_root/replacement-user-data"
+
+expect_replacement_verified_with_noisy_failed_stat_probe
 
 replacement_plan_mutation() {
   local name="$1"
