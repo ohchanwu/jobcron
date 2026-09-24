@@ -53,15 +53,17 @@ func providerFailureMessage(err error) string {
 			return "선택한 모델이 이 제공자와 맞지 않아요 — 설정에서 모델을 확인해주세요."
 		case http.StatusTooManyRequests:
 			// Providers overload 429 for persistent quota exhaustion, transient
-			// rate limiting, and ambiguous RESOURCE_EXHAUSTED responses.
-			if signals.contains("rate_limit_exceeded", "rate limit exceeded", "retryinfo") {
-				return "요청이 잠시 몰렸어요 — 잠시 후 다시 시도해 주세요."
-			}
+			// rate limiting, and ambiguous RESOURCE_EXHAUSTED responses. Persistent
+			// quota markers take precedence because Gemini may include RetryInfo
+			// alongside QuotaFailure when the quota cannot recover by waiting.
 			if signals.contains("insufficient_quota", "billing_disabled", "billing required") {
 				return "AI 제공자 사용 한도를 초과했어요 — 제공자 계정의 결제·요금제를 확인해주세요."
 			}
 			if signals.contains("quota_exceeded", "exceeded your current quota", "quotafailure") {
 				return "AI 제공자 사용 한도를 초과했어요 — 제공자 사용량·할당량을 확인해주세요."
+			}
+			if signals.contains("rate_limit_exceeded", "rate limit exceeded", "retryinfo") {
+				return "요청이 잠시 몰렸어요 — 잠시 후 다시 시도해 주세요."
 			}
 			if signals.contains("resource_exhausted") {
 				return "요청이 잠시 몰렸을 수 있어요 — 잠시 후 다시 시도하고, 계속되면 제공자 사용량·할당량을 확인해주세요."
