@@ -145,6 +145,30 @@ sanitize_logs() {
 		-e 's/(([Aa]uthorization|[Cc]ookie|[Pp]assword|[Ss]ecret|[Tt]oken)=[[:space:]]*)[^[:space:]",}]+/\1[redacted]/g'
 }
 
+percent_decode() {
+	encoded=$1
+	decoded=
+	while [ -n "$encoded" ]; do
+		case $encoded in
+		%??*)
+			hex=${encoded#%}
+			hex=${hex%"${hex#??}"}
+			case $hex in *[!0-9A-Fa-f]*) return 1 ;; esac
+			value=$((0x$hex))
+			[ "$value" -ne 0 ] || return 1
+			octal=$(printf '%03o' "$value")
+			decoded=$decoded$(printf '%b' "\0$octal")
+			encoded=${encoded#???}
+			;;
+		*)
+			decoded=$decoded${encoded%"${encoded#?}"}
+			encoded=${encoded#?}
+			;;
+		esac
+	done
+	printf '%s' "$decoded"
+}
+
 archive() {
 	[ -f "$run_dir/compose.env" ] || fail
 	[ -n "${JOBCRON_RECOVERY_BUCKET:-}" ] || fail
@@ -161,7 +185,7 @@ archive() {
 	database_endpoint=${connection%%/*}
 	database_port=${database_endpoint##*:}
 	[ "$database_port" -ge 1 ] 2>/dev/null && [ "$database_port" -le 65535 ] 2>/dev/null || fail
-	database_password=$(printf '%b' "$(printf '%s' "$encoded_password" | sed 's/%/\\x/g')")
+	database_password=$(percent_decode "$encoded_password") || fail
 	[ -n "$database_password" ] || fail
 	password_free_url="postgres://$database_user@$connection"
 	now=${JOBCRON_NOW:-$(date -u +%Y%m%dT%H%M%SZ)}
