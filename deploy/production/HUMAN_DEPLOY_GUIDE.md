@@ -374,8 +374,11 @@ systemd recreated complete files with modes `0700` and `0600`, no secret or TLS
 key persisted elsewhere, and the already-present approved digest starts without
 another registry token.
 
-Any incomplete secret, wrong mode, failed pull, unhealthy container, public
-listener, or failed user-path check is a stop condition.
+Any incomplete secret, wrong mode, failed pull, unhealthy container, or failed
+user-path check is a stop condition. Unexpected external reachability or
+unexpected security-group ingress is also a stop condition. The intentional
+Caddy listener on host TCP `443` is not public while the origin security group
+has no ingress and the reserved EIP remains unattached.
 
 ## 12. Verify recovery manifests and restore
 

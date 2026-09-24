@@ -135,6 +135,25 @@ func TestProductionComposeOperatorDocsUseFailClosedInspector(t *testing.T) {
 	}
 }
 
+func TestProductionGuideTreatsPrivateOriginListenerAsNonPublic(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "deploy", "production", "HUMAN_DEPLOY_GUIDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ToLower(string(contents))
+	if strings.Contains(text, "unhealthy container, public\nlistener") {
+		t.Fatal("production guide contradicts the required private-phase Caddy host listener")
+	}
+	for _, required := range []string{
+		"unexpected external reachability",
+		"unexpected security-group ingress",
+	} {
+		if !strings.Contains(text, required) {
+			t.Errorf("production guide does not narrow the stop condition to %q", required)
+		}
+	}
+}
+
 func TestProductionDocsUseTransientSSMOperations(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(".."))
 	for _, name := range []string{
