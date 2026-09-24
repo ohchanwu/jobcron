@@ -111,19 +111,21 @@ func TestGeminiAPIKeyGuideIsCompleteAndNoSyntheticTestRouteExists(t *testing.T) 
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Gemini API 키 설정 가이드",
+		`<section class="guide-callout" aria-label="Gemini 무료 등급 안내">`,
+		"Gemini에는 시작하기 좋은 무료 API 등급이 있습니다. gemini-3.5-flash-lite 기준 약 하루 500회의 API 요청을 사용할 수 있어요.",
+		"무료 등급에서는 Google이 프롬프트와 응답을 제품 개선에 사용할 수 있어요. AI 프로필 입력란에 민감, 기밀, 개인 식별 정보를 넣을 때 주의하세요.",
 		"Google AI Studio에 로그인",
-		"프로젝트를 만들거나 선택",
 		"API 키 만들기",
+		`class="guide-subnote guide-subnote-optional"`,
+		"프로젝트가 없을 때만 프로젝트를 만들거나 선택하라는 안내가 표시돼요.",
+		`class="guide-subnote guide-subnote-advisory"`,
+		"채팅, 메모, 화면 캡처에 남기지 마세요.",
 		"Flash-Lite",
 		"첫 실제 AI 평가",
-		"별도의 연결 테스트",
 		"잘못된 키",
 		"HTTP 429",
 		"모델",
 		"지역",
-		"폐기",
-		"암호화",
-		"프롬프트와 응답",
 		`href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"`,
 		`href="https://aistudio.google.com/app/usage" target="_blank" rel="noopener noreferrer"`,
 		`<span class="sr-only">새 탭에서 열림</span>`,
@@ -133,6 +135,35 @@ func TestGeminiAPIKeyGuideIsCompleteAndNoSyntheticTestRouteExists(t *testing.T) 
 		if !strings.Contains(body, want) {
 			t.Errorf("guide missing %q", want)
 		}
+	}
+	for _, unwanted := range []string{
+		"시작하기 전에",
+		"영구 제공이나 고정 요청 수를 보장하지 않아요",
+		"키 보관·교체·폐기",
+		"이 요청이 저장한 키, 선택 모델, Google 엔드포인트, Jobcron의 정상 요청 경로를 함께 확인하는 유일한 연결 확인이에요.",
+		"별도의 연결 테스트 버튼이나 요청은 없어요.",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("guide unexpectedly contains removed copy %q", unwanted)
+		}
+	}
+
+	stepsStart := strings.Index(body, `<ol class="guide-steps">`)
+	stepsEnd := strings.Index(body, `</ol>`)
+	if stepsStart < 0 || stepsEnd < stepsStart {
+		t.Fatal("guide setup steps list missing")
+	}
+	steps := body[stepsStart:stepsEnd]
+	if got := strings.Count(steps, "<li>"); got != 6 {
+		t.Fatalf("numbered setup steps = %d, want 6 (project selection must be an unnumbered subnote)", got)
+	}
+	if !strings.Contains(steps, `<li><strong>API 키 만들기</strong>를 선택하세요.`) ||
+		!strings.Contains(steps, `<p class="guide-subnote guide-subnote-optional">프로젝트가 없을 때만`) {
+		t.Fatal("project guidance must be nested beneath the API key creation step")
+	}
+	if !strings.Contains(steps, `<li>표시된 API 키를 복사하세요.`) ||
+		!strings.Contains(steps, `<p class="guide-subnote guide-subnote-advisory">채팅, 메모, 화면 캡처에 남기지 마세요.</p>`) {
+		t.Fatal("key handling warning must be an advisory subnote beneath the copy step")
 	}
 
 	for _, path := range []string{"/api/ai/test", "/api/ai/connection-test", "/profile/ai-key/test"} {
@@ -162,6 +193,12 @@ func TestGeminiGuideMobileHeaderStylesAreScopedAndAllowWrapping(t *testing.T) {
 	srv.Handler().ServeHTTP(stylesRec, httptest.NewRequest(http.MethodGet, "/static/styles.css", nil))
 	styles := stylesRec.Body.String()
 	for _, want := range []string{
+		`.guide-main { margin-top: 1.5rem; max-width: 48rem; font-size: 1rem; }`,
+		`.guide-main h2 { margin: 0 0 0.75rem; font-family: var(--serif); font-size: 1.45rem; font-weight: 500; }`,
+		`.guide-subnote {`,
+		`overflow-wrap: anywhere`,
+		`.guide-subnote-optional`,
+		`.guide-subnote-advisory`,
 		`.guide-header .guide-title { min-width: 0; }`,
 		`.guide-header h1`,
 		`white-space: normal`,

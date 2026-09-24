@@ -1078,7 +1078,7 @@ form.login-form input {
 .ai-onboarding-actions a,
 .guide-main a { color: var(--accent); font-weight: 600; text-underline-offset: 0.2em; }
 .ai-onboarding .ai-onboarding-note { color: var(--ink-soft); font-size: 0.8rem; }
-.guide-main { margin-top: 1.5rem; max-width: 48rem; }
+.guide-main { margin-top: 1.5rem; max-width: 48rem; font-size: 1rem; }
 .guide-header .guide-title { min-width: 0; }
 .guide-header .head-right { flex: 0 0 auto; }
 .guide-lead { color: var(--ink-soft); font-size: 1rem; line-height: 1.7; }
@@ -1091,6 +1091,15 @@ form.login-form input {
 .guide-callout p { margin: 0.55rem 0 0; }
 .guide-steps { padding-left: 1.4rem; }
 .guide-steps li { padding-left: 0.35rem; margin-top: 0.8rem; }
+.guide-subnote {
+  margin: 0.55rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.guide-subnote-optional { border-left-style: dashed; }
+.guide-subnote-advisory { border-left-color: var(--accent); background: var(--accent-soft); }
 .guide-troubleshooting { display: grid; gap: 0.75rem; margin: 0; }
 .guide-troubleshooting div { padding: 0.9rem 1rem; border-left: 3px solid var(--rule); }
 .guide-troubleshooting dt { font-weight: 700; }
