@@ -134,6 +134,17 @@ require a zero version count. The historical create-mode contract remains
 unchanged for compatibility. Any missing, false, stale, renamed, malformed, or
 unexpected checkpoint field is a no-go.
 
+The controller invocation boundary is unambiguous: historical create mode is
+exactly `PLAN COST SLICE3_CHECKPOINT`; replacement mode is exactly
+`PLAN COST CURRENT_CHECKPOINT RENDERED_USER_DATA REVIEWED_SHA`; and combined
+recovery adds the separate final literal `combined-recovery`. `REVIEWED_SHA` is
+a full lowercase 40-hex commit and must equal both `checkpoint.commit.sha` and
+the literal `HEAD` of the clean checkout containing the tracked checker and
+exact tracked bootstrap assets. Tracked, staged, or untracked changes,
+replacement refs, hostile local Git controls, or ambient Git configuration are
+a no-go; the check runs with replacement objects, hooks, external attributes,
+and excludes neutralized and fails without disclosing paths or values.
+
 ### 4. Deploy privately
 
 Apply only the approved plan. Run schema migration through the private operator

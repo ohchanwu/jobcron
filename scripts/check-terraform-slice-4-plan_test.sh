@@ -2,10 +2,31 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-checker="$repo_root/scripts/check-terraform-slice-4-plan.sh"
+source_checker="$repo_root/scripts/check-terraform-slice-4-plan.sh"
 ci_workflow="$repo_root/.github/workflows/ci.yml"
 fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
+
+checked_repo="$fixture_root/checked-repo"
+mkdir -p "$checked_repo/scripts" \
+  "$checked_repo/deploy/production/systemd"
+cp "$source_checker" "$checked_repo/scripts/check-terraform-slice-4-plan.sh"
+for asset in \
+  deploy/production/compose.yaml \
+  deploy/production/Caddyfile \
+  deploy/production/jobcron-runtime.sh \
+  deploy/production/systemd/jobcron.service \
+  deploy/production/systemd/jobcron-recovery.service \
+  deploy/production/systemd/jobcron-recovery.timer; do
+  cp "$repo_root/$asset" "$checked_repo/$asset"
+done
+git -C "$checked_repo" init -q
+git -C "$checked_repo" add .
+git -C "$checked_repo" \
+  -c user.name='Slice 4 test' -c user.email='slice4@example.invalid' \
+  commit -qm 'reviewed fixture checkout'
+checker="$checked_repo/scripts/check-terraform-slice-4-plan.sh"
+reviewed_sha="$(git -C "$checked_repo" rev-parse HEAD)"
 
 grep -Fqx \
   '        run: bash scripts/check-terraform-slice-4-plan_test.sh' \
@@ -89,7 +110,8 @@ expect_replacement_verified() {
   local user_data="$5"
   local output
 
-  if ! output="$("$checker" "$plan" "$cost" "$checkpoint" "$user_data" 2>&1)"; then
+  if ! output="$("$checker" "$plan" "$cost" "$checkpoint" "$user_data" \
+    "$reviewed_sha" 2>&1)"; then
     printf 'FAIL: rejected valid %s fixture\n' "$name" >&2
     failures=$((failures + 1))
     return
@@ -126,7 +148,8 @@ EOF
     "$fixture_root/plan-replacement-valid.json" \
     "$fixture_root/cost-valid.json" \
     "$fixture_root/current-checkpoint-replacement-valid.json" \
-    "$fixture_root/replacement-user-data" 2>&1)"; then
+    "$fixture_root/replacement-user-data" \
+    "$reviewed_sha" 2>&1)"; then
     printf 'FAIL: failed stat probe stdout contaminated file mode\n' >&2
     failures=$((failures + 1))
     return
@@ -151,7 +174,8 @@ expect_replacement_rejected() {
     "$plan" \
     "$fixture_root/cost-valid.json" \
     "$fixture_root/current-checkpoint-replacement-valid.json" \
-    "$user_data" 2>&1)"
+    "$user_data" \
+    "$reviewed_sha" 2>&1)"
   rc=$?
   set -e
 
@@ -176,6 +200,7 @@ expect_combined_recovery_verified() {
     "$fixture_root/cost-valid.json" \
     "$fixture_root/current-checkpoint-combined-valid.json" \
     "$fixture_root/replacement-user-data" \
+    "$reviewed_sha" \
     combined-recovery 2>&1)"; then
     printf 'FAIL: rejected valid combined recovery fixture\n' >&2
     failures=$((failures + 1))
@@ -202,7 +227,32 @@ expect_combined_recovery_rejected() {
     "$fixture_root/cost-valid.json" \
     "$fixture_root/current-checkpoint-combined-valid.json" \
     "$fixture_root/replacement-user-data" \
+    "$reviewed_sha" \
     "$mode" 2>&1)"
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    printf 'FAIL: accepted %s\n' "$name" >&2
+    failures=$((failures + 1))
+    return
+  fi
+  if [[ "$output" != "$generic_error" ]]; then
+    printf 'FAIL: %s disclosed input or emitted a non-generic error\n' "$name" >&2
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'PASS: rejected %s without private output\n' "$name"
+}
+
+expect_recovery_invocation_rejected() {
+  local name="$1"
+  shift
+  local output
+  local rc
+
+  set +e
+  output="$("$checker" "$@" 2>&1)"
   rc=$?
   set -e
 
@@ -515,11 +565,11 @@ jq -n --arg checked_at "$now" '{
   old_resource_changes: 0
 }' >"$fixture_root/checkpoint-valid.json"
 
-jq -n --arg checked_at "$now" '{
+jq -n --arg checked_at "$now" --arg reviewed_sha "$reviewed_sha" '{
   schema_version: "human-assisted-reconciliation-v1",
   checked_at: $checked_at,
   commit: {
-    sha: "0123456789abcdef0123456789abcdef01234567",
+    sha: $reviewed_sha,
     exact: true,
     clean: true
   },
@@ -640,11 +690,12 @@ current_checkpoint_mutation() {
   if [[ "$mode" == combined-recovery ]]; then
     output="$("$checker" "$plan" "$fixture_root/cost-valid.json" \
       "$fixture_root/current-checkpoint-$mode-$name.json" \
-      "$fixture_root/replacement-user-data" combined-recovery 2>&1)"
+      "$fixture_root/replacement-user-data" "$reviewed_sha" \
+      combined-recovery 2>&1)"
   else
     output="$("$checker" "$plan" "$fixture_root/cost-valid.json" \
       "$fixture_root/current-checkpoint-$mode-$name.json" \
-      "$fixture_root/replacement-user-data" 2>&1)"
+      "$fixture_root/replacement-user-data" "$reviewed_sha" 2>&1)"
   fi
   rc=$?
   set -e
@@ -678,6 +729,76 @@ expect_replacement_verified \
 expect_replacement_verified_with_noisy_failed_stat_probe
 
 expect_combined_recovery_verified
+
+recovery_args=(
+  "$fixture_root/plan-replacement-valid.json"
+  "$fixture_root/cost-valid.json"
+  "$fixture_root/current-checkpoint-replacement-valid.json"
+  "$fixture_root/replacement-user-data"
+)
+expect_recovery_invocation_rejected \
+  "ambiguous historical four-argument recovery invocation" \
+  "${recovery_args[@]}"
+expect_recovery_invocation_rejected \
+  "mode token in reviewed-SHA position" \
+  "${recovery_args[@]}" combined-recovery
+expect_recovery_invocation_rejected \
+  "malformed reviewed SHA" \
+  "${recovery_args[@]}" not-a-commit
+wrong_reviewed_sha=0123456789abcdef0123456789abcdef01234567
+if [[ "$wrong_reviewed_sha" == "$reviewed_sha" ]]; then
+  wrong_reviewed_sha=89abcdef0123456789abcdef0123456789abcdef
+fi
+expect_recovery_invocation_rejected \
+  "reviewed SHA different from checkout" \
+  "${recovery_args[@]}" "$wrong_reviewed_sha"
+
+jq --arg sha "$wrong_reviewed_sha" '.commit.sha = $sha' \
+  "$fixture_root/current-checkpoint-replacement-valid.json" \
+  >"$fixture_root/current-checkpoint-mismatched-sha.json"
+expect_recovery_invocation_rejected \
+  "checkpoint SHA different from reviewed SHA" \
+  "$fixture_root/plan-replacement-valid.json" \
+  "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-mismatched-sha.json" \
+  "$fixture_root/replacement-user-data" \
+  "$reviewed_sha"
+
+printf 'untracked\n' >"$checked_repo/untracked"
+expect_recovery_invocation_rejected \
+  "untracked reviewed checkout" "${recovery_args[@]}" "$reviewed_sha"
+rm "$checked_repo/untracked"
+
+printf '\n' >>"$checked_repo/deploy/production/Caddyfile"
+expect_recovery_invocation_rejected \
+  "dirty reviewed checkout" "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" checkout -q -- deploy/production/Caddyfile
+
+printf '\n' >>"$checked_repo/deploy/production/Caddyfile"
+git -C "$checked_repo" add deploy/production/Caddyfile
+expect_recovery_invocation_rejected \
+  "staged reviewed checkout" "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" reset -q --hard HEAD
+
+replacement_tree="$(git -C "$checked_repo" rev-parse 'HEAD^{tree}')"
+replacement_commit="$(printf 'replacement fixture\n' | git -C "$checked_repo" \
+  -c user.name='Slice 4 test' -c user.email='slice4@example.invalid' \
+  commit-tree "$replacement_tree")"
+git -C "$checked_repo" replace "$reviewed_sha" "$replacement_commit"
+expect_recovery_invocation_rejected \
+  "replacement ref in reviewed repository" \
+  "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" replace -d "$reviewed_sha" >/dev/null
+
+git -C "$checked_repo" config core.attributesFile /tmp/hostile-attributes
+expect_recovery_invocation_rejected \
+  "hostile local Git configuration" \
+  "${recovery_args[@]}" "$reviewed_sha"
+git -C "$checked_repo" config --unset core.attributesFile
+
+expect_recovery_invocation_rejected \
+  "unknown six-argument recovery mode" \
+  "${recovery_args[@]}" "$reviewed_sha" combined-recover
 
 combined_recovery_plan_mutation() {
   local name="$1"

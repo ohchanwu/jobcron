@@ -102,7 +102,8 @@ scripts/check-terraform-slice-4-plan.sh \
 Require the exact five creates, one sensitive output create, no other action,
 fresh aggregate cost within both ceilings, and a passing Slice 3 checkpoint.
 An independent reviewer must approve the exact commit and saved-plan digest.
-Regenerating the plan invalidates that review.
+Regenerating the plan invalidates that review. This historical create mode is
+the only three-argument invocation.
 
 If an independently approved recovery must replace an already-created host,
 do not reuse the create-plan verdict and do not infer that updating `user_data`
@@ -123,15 +124,17 @@ rm -f "$render_json"
 
 Create the saved plan with the explicit
 `-replace=aws_instance.replacement_host` option, render its JSON without
-printing it, then run the checker with the current reconciliation checkpoint
-and private rendered bootstrap as the third and fourth arguments:
+printing it, then run the checker with the current reconciliation checkpoint,
+private rendered bootstrap, and independently reviewed full lowercase 40-hex
+commit as the third through fifth arguments:
 
 ```sh
 scripts/check-terraform-slice-4-plan.sh \
   "$TF_SLICE4_PLAN_JSON" \
   "$TF_AGGREGATE_COST_JSON" \
   "$TF_CURRENT_RECONCILIATION_CHECKPOINT_JSON" \
-  "$TF_SLICE4_RENDERED_USER_DATA"
+  "$TF_SLICE4_RENDERED_USER_DATA" \
+  "$JOBCRON_REVIEWED_SHA"
 ```
 
 This mode requires exactly one destroy-then-create action for the replacement
@@ -145,10 +148,19 @@ a rendered bootstrap that is not a regular mode-`0600` file. Remove the
 rendered file after the exact saved-plan digest receives independent approval;
 regenerating either artifact invalidates that approval.
 
+The checkpoint commit SHA must equal the explicit reviewed SHA exactly. The
+checker also requires that SHA to be the checkout's literal `HEAD`, a clean
+tracked/staged/untracked state, no replacement refs or hostile local Git
+configuration, and the checker plus every bootstrap asset at the script's own
+repository root as tracked files in that checkout. Git replacement objects,
+hooks, ambient configuration, external attributes, and excludes are disabled
+or rejected for this boundary. Failures emit only the generic contract error.
+
 If current reconciliation confirms that the deleted address was exactly the
 Terraform-managed `aws_eip.origin`, and the approved saved plan combines its
 recovery with the explicit host replacement, set `managed_eip.state_presence`
-to `"absent"` and add the exact fifth argument `combined-recovery`:
+to `"absent"` and add the separate exact sixth argument `combined-recovery`
+after the reviewed SHA:
 
 ```sh
 scripts/check-terraform-slice-4-plan.sh \
@@ -156,6 +168,7 @@ scripts/check-terraform-slice-4-plan.sh \
   "$TF_AGGREGATE_COST_JSON" \
   "$TF_CURRENT_RECONCILIATION_CHECKPOINT_JSON" \
   "$TF_SLICE4_RENDERED_USER_DATA" \
+  "$JOBCRON_REVIEWED_SHA" \
   combined-recovery
 ```
 

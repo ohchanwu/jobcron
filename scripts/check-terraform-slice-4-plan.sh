@@ -6,13 +6,14 @@ fail() {
   exit 1
 }
 
-[[ "$#" -eq 3 || "$#" -eq 4 || "$#" -eq 5 ]] || fail
+[[ "$#" -eq 3 || "$#" -eq 5 || "$#" -eq 6 ]] || fail
 
 plan_json="$1"
 cost_json="$2"
 checkpoint_json="$3"
 mode=create
 expected_user_data_hash=
+reviewed_sha=
 
 file_mode() {
   local mode
@@ -32,21 +33,58 @@ digest() {
   fi
 }
 
-if [[ "$#" -ge 4 ]]; then
+if [[ "$#" -ge 5 ]]; then
   mode=replacement
   rendered_user_data="$4"
-  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  reviewed_sha="$5"
+  [[ "$reviewed_sha" =~ ^[0-9a-f]{40}$ ]] || fail
 
-  if [[ "$#" -eq 5 ]]; then
-    [[ "$5" == combined-recovery ]] || fail
+  if [[ "$#" -eq 6 ]]; then
+    [[ "$6" == combined-recovery ]] || fail
     mode=combined-recovery
   fi
+
+  repo_root="$(CDPATH='' cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || fail
+
+  run_git() {
+    env -i PATH=/usr/bin:/bin HOME=/dev/null \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null \
+      GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 \
+      git -c core.hooksPath=/dev/null \
+        -c core.attributesFile=/dev/null \
+        -c core.excludesFile=/dev/null \
+        -c core.fsmonitor=false \
+        "$@"
+  }
+
+  git_root="$(run_git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || fail
+  [[ "$git_root" == "$repo_root" ]] || fail
+  if run_git -C "$repo_root" config --local --name-only --get-regexp \
+    '^(alias\.|core\.(attributesfile|excludesfile|hookspath|sshcommand|fsmonitor|worktree)$|diff\.external$|filter\.|include\.|includeif\.)' \
+    >/dev/null 2>&1; then
+    fail
+  fi
+  [[ -f "$repo_root/scripts/check-terraform-slice-4-plan.sh" &&
+    ! -L "$repo_root/scripts/check-terraform-slice-4-plan.sh" ]] || fail
+  run_git -C "$repo_root" ls-files --error-unmatch -- \
+    scripts/check-terraform-slice-4-plan.sh >/dev/null 2>&1 || fail
+  [[ "$(run_git -C "$repo_root" rev-parse HEAD 2>/dev/null)" == \
+    "$reviewed_sha" ]] || fail
+  run_git -C "$repo_root" cat-file -e "$reviewed_sha^{commit}" \
+    2>/dev/null || fail
+  [[ -z "$(run_git -C "$repo_root" status --porcelain=v1 \
+    --untracked-files=all 2>/dev/null)" ]] || fail
+  [[ -z "$(run_git -C "$repo_root" for-each-ref \
+    --format='%(refname)' refs/replace 2>/dev/null)" ]] || fail
 
   [[ -f "$rendered_user_data" && ! -L "$rendered_user_data" ]] || fail
   [[ "$(file_mode "$rendered_user_data")" == 600 ]] || fail
   [[ -s "$rendered_user_data" ]] || fail
 
   while IFS='|' read -r target source; do
+    [[ -f "$repo_root/$source" && ! -L "$repo_root/$source" ]] || fail
+    run_git -C "$repo_root" ls-files --error-unmatch -- "$source" \
+      >/dev/null 2>&1 || fail
     asset_digest="$(digest "$repo_root/$source")" || fail
     grep -F "$target" "$rendered_user_data" >/dev/null 2>&1 || fail
     grep -F "$asset_digest" "$rendered_user_data" >/dev/null 2>&1 || fail
@@ -359,7 +397,7 @@ if [[ "$mode" == create ]]; then
     (.old_resource_changes == 0)
   ' "$checkpoint_json" >/dev/null 2>&1 || fail
 else
-  jq -e --arg mode "$mode" '
+  jq -e --arg mode "$mode" --arg reviewed_sha "$reviewed_sha" '
     (. | type == "object") and
     (keys == [
       "bootstrap_host",
@@ -386,6 +424,7 @@ else
     (.commit | keys == ["clean", "exact", "sha"]) and
     (.commit.sha | type == "string") and
     (.commit.sha | test("^[0-9a-f]{40}$")) and
+    (.commit.sha == $reviewed_sha) and
     (.commit.exact == true) and
     (.commit.clean == true) and
     (.selected_state_resources | type == "object") and
