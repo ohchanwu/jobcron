@@ -36,6 +36,7 @@ Use this index instead of recursively loading the entire documentation tree.
   records needed for the current task.
 
 - [Human-assisted alpha deployment][human-assisted-alpha-deployment]
+- [Gemini BYOK onboarding](specs/260924-gemini-byok-onboarding.md)
 
 ## Recently Archived
 
