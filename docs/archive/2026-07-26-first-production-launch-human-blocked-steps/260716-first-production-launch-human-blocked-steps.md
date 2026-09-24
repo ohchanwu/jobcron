@@ -271,7 +271,7 @@ entered a public artifact, the authenticated production path passes, and the
 human explicitly closes the rollback window.
 
 [convergence-spec]:
-  ../../specs/260714-postgresql-local-convergence-user-ai-credentials.md
+  ../2026-09-24-postgresql-convergence-spec/260714-postgresql-local-convergence-user-ai-credentials.md
 [slice-5-plan]:
   ../2026-09-23-simplified-alpha-deployment/260715-postgresql-convergence-slice-5-first-production-deployment.md
 [deploy-guide]: ../../../deploy/production/HUMAN_DEPLOY_GUIDE.md

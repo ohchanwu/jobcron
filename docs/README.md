@@ -31,13 +31,11 @@ Use this index instead of recursively loading the entire documentation tree.
 
 ## Implementation Work
 
-Read this index before opening plans, specifications, or implementation
-reports. Load only the active files listed here and the concise decision
-records needed for the current task.
+- Read this index before opening plans, specifications, or implementation
+  reports. Load only the active files listed here and the concise decision
+  records needed for the current task.
 
 - [Human-assisted alpha deployment][human-assisted-alpha-deployment]
-- [Hermes orchestration transition][hermes-orchestration-transition]
-- [PostgreSQL local convergence and per-user AI credentials](specs/260714-postgresql-local-convergence-user-ai-credentials.md)
 
 ## Recently Archived
 
@@ -45,6 +43,8 @@ Archived files are completed evidence. Do not scan this tree; open an entry
 only when the active task or a human explicitly names it. See
 [archive guidance](archive/AGENTS.md).
 
+- [Completed PostgreSQL convergence specification][postgresql-convergence-spec-archive]
+- [Completed Hermes orchestration transition adapter][hermes-orchestration-transition]
 - [Superseded first-production deployment records][simplified-alpha-deployment-archive]
 - [Terraform Slice 3 implementation archive][terraform-slice-3-plan]
 - [Terraform Slice 3 verification][terraform-slice-3-verification]
@@ -162,7 +162,9 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 [ponytail-campaign-verification]:
   archive/2026-07-18-ponytail-codebase-reduction/260718-verification.md
 [hermes-orchestration-transition]:
-  specs/260919-hermes-orchestration-transition.md
+  archive/2026-09-24-hermes-orchestration-transition/260919-hermes-orchestration-transition.md
+[postgresql-convergence-spec-archive]:
+  archive/2026-09-24-postgresql-convergence-spec/260714-postgresql-local-convergence-user-ai-credentials.md
 [contextual-dealbreaker-spec]:
   archive/2026-07-18-contextual-dealbreaker-validation/260718-stage-1-contextual-dealbreaker-validation-and-exclusion-evidence.md
 [contextual-dealbreaker-plan]:

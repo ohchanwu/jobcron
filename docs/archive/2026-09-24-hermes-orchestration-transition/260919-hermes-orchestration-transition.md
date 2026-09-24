@@ -1,8 +1,17 @@
 # Jobcron Hermes Orchestration Transition
 
+> **Archived 2026-09-24 — do not follow for current work.** The transition this
+> adapter records is completed and validated. Details below are obsolete: the
+> active Superpowers work index no longer exists after the docs taxonomy
+> migration, and Ponytail `full` inheritance is no longer current — Hermes
+> profiles do not run Ponytail as a plugin, and current task-scoped policy
+> lives in the canonical `multi-agent-coding-orchestrator` skill. Current
+> workers follow repository `AGENTS.md` and that canonical skill; live profile
+> selection and authority remain Kanban/task policy, not this document.
+
 ## Status and scope
 
-**Status: operational; local repository adoption validated.**
+**Status: archived; the transition it records is complete and was validated.**
 
 This document is Jobcron's repository adapter for the canonical Hermes skill
 `multi-agent-coding-orchestrator`. The skill defines shared multi-agent policy;

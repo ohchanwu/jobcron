@@ -4,7 +4,7 @@
 - **Last updated:** 2026-07-24
 - **Status:** Completed and archived; implementation shipped
 - **Depends on:**
-  [`260714-postgresql-local-convergence-user-ai-credentials.md`](../../specs/260714-postgresql-local-convergence-user-ai-credentials.md)
+  [`260714-postgresql-local-convergence-user-ai-credentials.md`](../2026-09-24-postgresql-convergence-spec/260714-postgresql-local-convergence-user-ai-credentials.md)
 - **Related:**
   [`260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md`](../2026-09-23-simplified-alpha-deployment/260719-terraform-aws-foundation-and-cloudflare-ingress-automation.md)
 

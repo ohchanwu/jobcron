@@ -522,7 +522,7 @@ overview.
 - [Stable architectural decisions](README.md#stable-decisions)
 
 [postgres-credential-spec]:
-  specs/260714-postgresql-local-convergence-user-ai-credentials.md
+  archive/2026-09-24-postgresql-convergence-spec/260714-postgresql-local-convergence-user-ai-credentials.md
 [dealbreaker-provenance-spec]:
   archive/2026-07-25-contextual-dealbreaker-match-provenance/260725-contextual-dealbreaker-match-provenance-contract.md
 [stage1-context-spec]:

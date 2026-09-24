@@ -1,8 +1,23 @@
 # PostgreSQL Local Convergence And Per-User AI Credentials
 
 **Date:** 2026-07-14
-**Status:** Active; repository preparation complete, production rollout pending
+**Status:** Archived 2026-09-24. Completed for repository implementation; retained as historical evidence only.
 **Scope:** Writable local app, production credential storage, and user-scoped AI state
+
+> **Archived specification — not an operator runbook.** This work is completed
+> and archived for repository implementation. Slices 1 through 4 and the
+> repository-owned preparation in Slice 5 landed in the codebase; the current
+> code and PostgreSQL migrations are the evidence. The actual production
+> import and cutover, authenticated browser journey, paid AI-provider check,
+> and container-recreation checks were not completed under this historical
+> specification. The remaining live alpha rollout is governed by the active
+> [human-assisted alpha deployment specification](../../specs/260923-human-assisted-alpha-deployment.md).
+>
+> **Historical accuracy:** the baseline statements, source line references, old
+> SSH/EC2 sequence, owner-only assumptions, screenshot instructions, and the
+> end-to-end Definition of Done below describe the design and implementation
+> period (July 2026) and may not match the current code or the live cloud
+> state. They are preserved as written; this document is not current guidance.
 
 ## Context
 
@@ -20,7 +35,7 @@ the only writable application database, migrates existing local state once, and
 stores one encrypted AI credential per user and provider.
 
 This work starts before public launch. It supersedes only the timing in
-[`260714-hosted-first-local-database-convergence.md`](../decisions/260714-hosted-first-local-database-convergence.md):
+[`260714-hosted-first-local-database-convergence.md`](../../decisions/260714-hosted-first-local-database-convergence.md):
 the accepted convergence outcome remains, but it is no longer deferred until
 after launch.
 
@@ -148,7 +163,7 @@ credentials`.
 - Secure deletion guarantees for an old SQLite or `ai_keys.json` file on SSDs.
 
 The subsequent account expansion and remaining public-signup follow-up are recorded in
-[`260715-multi-user-account-expansion.md`](../archive/2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md).
+[`260715-multi-user-account-expansion.md`](../2026-07-22-multi-user-account-expansion/260715-multi-user-account-expansion.md).
 
 ## Target Architecture
 
@@ -351,7 +366,7 @@ paid calls occur only after commit.
 and is reusable when content hash and AI version match.
 
 Using `ai_extractions` as a compact, cross-model Stage-2 input is deferred to the
-[feature ideas document](../product/feature-ideas.md#cross-model-ai-extraction-reuse-for-token-efficient-stage-2-scoring).
+[feature ideas document](../../product/feature-ideas.md#cross-model-ai-extraction-reuse-for-token-efficient-stage-2-scoring).
 Cross-model reuse is allowed in principle; it first needs a provider-neutral
 extraction schema and its own schema/prompt version so compatibility is not
 incorrectly inferred from the model vendor alone.
