@@ -27,6 +27,13 @@ destroy_or_replace=1
 aggregate_cost=PASS
 slice3_checkpoint=PASS
 PASS'
+expected_combined_recovery_output='resource_changes=2
+output_changes=1
+sensitive_outputs=1
+destroy_or_replace=1
+aggregate_cost=PASS
+slice3_checkpoint=PASS
+PASS'
 
 expect_verified() {
   local name="$1"
@@ -145,6 +152,57 @@ expect_replacement_rejected() {
     "$fixture_root/cost-valid.json" \
     "$fixture_root/checkpoint-valid.json" \
     "$user_data" 2>&1)"
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    printf 'FAIL: accepted %s\n' "$name" >&2
+    failures=$((failures + 1))
+    return
+  fi
+  if [[ "$output" != "$generic_error" ]]; then
+    printf 'FAIL: %s disclosed input or emitted a non-generic error\n' "$name" >&2
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'PASS: rejected %s without private output\n' "$name"
+}
+
+expect_combined_recovery_verified() {
+  local output
+
+  if ! output="$("$checker" \
+    "$fixture_root/plan-combined-recovery-valid.json" \
+    "$fixture_root/cost-valid.json" \
+    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/replacement-user-data" \
+    combined-recovery 2>&1)"; then
+    printf 'FAIL: rejected valid combined recovery fixture\n' >&2
+    failures=$((failures + 1))
+    return
+  fi
+  if [[ "$output" != "$expected_combined_recovery_output" ]]; then
+    printf 'FAIL: valid combined recovery fixture emitted unexpected output\n' >&2
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'PASS: verified exact combined EIP recovery and host replacement fixture\n'
+}
+
+expect_combined_recovery_rejected() {
+  local name="$1"
+  local plan="$2"
+  local mode="${3:-combined-recovery}"
+  local output
+  local rc
+
+  set +e
+  output="$("$checker" \
+    "$plan" \
+    "$fixture_root/cost-valid.json" \
+    "$fixture_root/checkpoint-valid.json" \
+    "$fixture_root/replacement-user-data" \
+    "$mode" 2>&1)"
   rc=$?
   set -e
 
@@ -343,6 +401,32 @@ jq --arg user_data_hash "$replacement_user_data_hash" '
   }
 ' "$fixture_root/plan-valid.json" >"$fixture_root/plan-replacement-valid.json"
 
+jq '
+  .resource_changes |= map(
+    if .address == "aws_eip.origin" then
+      .change = {
+        actions: ["create"],
+        importing: null,
+        before: null,
+        after: {
+          domain: "vpc",
+          instance: null,
+          network_interface: null,
+          associate_with_private_ip: null
+        },
+        after_unknown: {
+          id: true,
+          allocation_id: true,
+          public_ip: true
+        }
+      }
+    else
+      .
+    end
+  )
+' "$fixture_root/plan-replacement-valid.json" \
+  >"$fixture_root/plan-combined-recovery-valid.json"
+
 jq -n --arg checked_at "$now" '{
   checked_at: $checked_at,
   currency: "USD",
@@ -484,6 +568,90 @@ expect_replacement_verified \
   "$fixture_root/replacement-user-data"
 
 expect_replacement_verified_with_noisy_failed_stat_probe
+
+expect_combined_recovery_verified
+
+combined_recovery_plan_mutation() {
+  local name="$1"
+  local filter="$2"
+
+  jq "$filter" "$fixture_root/plan-combined-recovery-valid.json" \
+    >"$fixture_root/plan-combined-recovery-$name.json"
+  expect_combined_recovery_rejected \
+    "$name combined recovery plan" \
+    "$fixture_root/plan-combined-recovery-$name.json"
+}
+
+combined_recovery_plan_mutation "missing-eip-create" \
+  '.resource_changes |= map(select(.address != "aws_eip.origin"))'
+combined_recovery_plan_mutation "eip-no-op" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.actions) = ["no-op"]'
+combined_recovery_plan_mutation "eip-replace" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.actions) = ["delete", "create"]'
+combined_recovery_plan_mutation "eip-has-before-state" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.before) = {domain: "vpc"}'
+combined_recovery_plan_mutation "eip-missing-before" \
+  'del(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.before)'
+combined_recovery_plan_mutation "eip-wrong-domain" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after.domain) = "standard"'
+combined_recovery_plan_mutation "eip-missing-domain" \
+  'del(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after.domain)'
+combined_recovery_plan_mutation "eip-unknown-domain" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after_unknown.domain) = true'
+combined_recovery_plan_mutation "eip-action-reason" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .action_reason) = "replace_by_request"'
+combined_recovery_plan_mutation "eip-instance-association" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after.instance) = "i-synthetic"'
+combined_recovery_plan_mutation "eip-missing-instance-control" \
+  'del(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after.instance)'
+combined_recovery_plan_mutation "eip-network-interface-association" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after.network_interface) = "eni-synthetic"'
+combined_recovery_plan_mutation "eip-private-ip-association" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after.associate_with_private_ip) = "10.0.0.1"'
+combined_recovery_plan_mutation "eip-unknown-instance-association" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.after_unknown.instance) = true'
+combined_recovery_plan_mutation "eip-import" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .change.importing) = {id: "eipalloc-synthetic"}'
+combined_recovery_plan_mutation "eip-move" \
+  '(.resource_changes[] | select(.address == "aws_eip.origin") |
+    .previous_address) = "aws_eip.old"'
+combined_recovery_plan_mutation "host-no-op" \
+  '(.resource_changes[] | select(.address == "aws_instance.replacement_host") |
+    .change.actions) = ["no-op"]'
+combined_recovery_plan_mutation "host-wrong-replace-reason" \
+  '(.resource_changes[] | select(.address == "aws_instance.replacement_host") |
+    .action_reason) = "replace_because_cannot_update"'
+combined_recovery_plan_mutation "host-ami-change" \
+  '(.resource_changes[] | select(.address == "aws_instance.replacement_host") |
+    .change.after.ami) = "ami-unreviewed"'
+combined_recovery_plan_mutation "additional-create" \
+  '(.resource_changes[] | select(.address == "aws_iam_role.replacement_host") |
+    .change.actions) = ["create"]'
+combined_recovery_plan_mutation "additional-replacement" \
+  '(.resource_changes[] | select(.address == "aws_iam_role.replacement_host") |
+    .change.actions) = ["delete", "create"]'
+combined_recovery_plan_mutation "unexpected-output" \
+  '.output_changes.unexpected = .output_changes.replacement_instance_id'
+combined_recovery_plan_mutation "diagnostic" \
+  '.diagnostics = [{summary: "synthetic warning"}]'
+expect_combined_recovery_rejected \
+  "unknown combined recovery mode" \
+  "$fixture_root/plan-combined-recovery-valid.json" \
+  combined-recover
 
 replacement_plan_mutation() {
   local name="$1"

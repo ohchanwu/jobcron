@@ -131,6 +131,25 @@ a rendered bootstrap that is not a regular mode-`0600` file. Remove the
 rendered file after the exact saved-plan digest receives independent approval;
 regenerating either artifact invalidates that approval.
 
+If refresh confirms that the deleted address was exactly the Terraform-managed
+`aws_eip.origin`, and the approved saved plan combines its recovery with the
+explicit host replacement, add the exact fifth argument `combined-recovery`:
+
+```sh
+scripts/check-terraform-slice-4-plan.sh \
+  "$TF_SLICE4_PLAN_JSON" \
+  "$TF_AGGREGATE_COST_JSON" \
+  "$TF_SLICE3_CHECKPOINT_JSON" \
+  "$TF_SLICE4_RENDERED_USER_DATA" \
+  combined-recovery
+```
+
+This fail-closed mode accepts exactly the unattached VPC-scoped
+`aws_eip.origin` create and the explicitly requested replacement-host
+destroy-then-create. Every other protected resource must be a no-op. Do not use
+this mode for an EIP import, EIP replacement, association, any second create or
+replacement, or any plan with another drift action.
+
 ## 4. Apply only the reviewed replacement-host plan
 
 Recheck the saved-plan digest, then apply the binary plan exactly once:

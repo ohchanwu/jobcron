@@ -6,7 +6,7 @@ fail() {
   exit 1
 }
 
-[[ "$#" -eq 3 || "$#" -eq 4 ]] || fail
+[[ "$#" -eq 3 || "$#" -eq 4 || "$#" -eq 5 ]] || fail
 
 plan_json="$1"
 cost_json="$2"
@@ -32,10 +32,15 @@ digest() {
   fi
 }
 
-if [[ "$#" -eq 4 ]]; then
+if [[ "$#" -ge 4 ]]; then
   mode=replacement
   rendered_user_data="$4"
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+  if [[ "$#" -eq 5 ]]; then
+    [[ "$5" == combined-recovery ]] || fail
+    mode=combined-recovery
+  fi
 
   [[ -f "$rendered_user_data" && ! -L "$rendered_user_data" ]] || fail
   [[ "$(file_mode "$rendered_user_data")" == 600 ]] || fail
@@ -115,6 +120,7 @@ jq -e --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_hash
     "aws_s3_bucket_lifecycle_configuration.recovery"
   ] as $allowed_noops |
   ([.resource_changes[] | select(.address == "aws_instance.replacement_host")][0] // {}) as $instance |
+  ([.resource_changes[] | select(.address == "aws_eip.origin")][0] // {}) as $eip |
   (.resource_changes | type == "array") and
   ([.resource_changes[].address] | length == (unique | length)) and
   (
@@ -143,7 +149,7 @@ jq -e --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_hash
           )
         )
       )
-    elif $mode == "replacement" then
+    elif ($mode == "replacement" or $mode == "combined-recovery") then
       ([.resource_changes[].address] | sort == (($allowed_creates + $allowed_noops) | sort)) and
       all(
         .resource_changes[];
@@ -155,10 +161,34 @@ jq -e --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_hash
           if .address == "aws_instance.replacement_host" then
             (.action_reason == "replace_by_request") and
             (.change.actions == ["delete", "create"])
+          elif ($mode == "combined-recovery" and .address == "aws_eip.origin") then
+            (.action_reason // null) == null and
+            (.change.actions == ["create"])
           else
             .change.actions == ["no-op"]
           end
         )
+      ) and
+      (
+        if $mode == "combined-recovery" then
+          ($eip.change | has("before")) and
+          ($eip.change.before == null) and
+          ($eip.change.after | type == "object") and
+          ($eip.change.after | has("domain")) and
+          ($eip.change.after.domain == "vpc") and
+          ($eip.change.after | has("instance")) and
+          ($eip.change.after.instance == null) and
+          ($eip.change.after | has("network_interface")) and
+          ($eip.change.after.network_interface == null) and
+          ($eip.change.after | has("associate_with_private_ip")) and
+          ($eip.change.after.associate_with_private_ip == null) and
+          (($eip.change.after_unknown.domain // false) == false) and
+          (($eip.change.after_unknown.instance // false) == false) and
+          (($eip.change.after_unknown.network_interface // false) == false) and
+          (($eip.change.after_unknown.associate_with_private_ip // false) == false)
+        else
+          true
+        end
       ) and
       ($instance.change.before | type == "object") and
       ($instance.change.after | type == "object") and
@@ -328,7 +358,10 @@ jq -e '
   (.old_resource_changes == 0)
 ' "$checkpoint_json" >/dev/null 2>&1 || fail
 
-if [[ "$mode" == replacement ]]; then
+if [[ "$mode" == combined-recovery ]]; then
+  resource_changes=2
+  destroy_or_replace=1
+elif [[ "$mode" == replacement ]]; then
   resource_changes=1
   destroy_or_replace=1
 else
