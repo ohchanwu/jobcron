@@ -81,7 +81,7 @@ package_privacy_blocks="$(
       getline
       if ($0 != "            --header \"Accept: application/vnd.github+json\" \\") next
       getline
-      if ($0 != "            --header \"Authorization: Bearer ${GHCR_TOKEN}\" \\") next
+      if ($0 != "            --header \"Authorization: Bearer $GHCR_TOKEN\" \\") next
       getline
       if ($0 != "            --header \"X-GitHub-Api-Version: 2022-11-28\" \\") next
       getline

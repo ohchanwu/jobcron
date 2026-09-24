@@ -36,15 +36,16 @@ replace_action_pin() {
 
 remove_line() {
   local line="$1"
-  awk -v line="$line" '$0 != line' "$fixture" >"$fixture.tmp"
+  LINE="$line" awk '$0 != ENVIRON["LINE"]' "$fixture" >"$fixture.tmp"
   mv "$fixture.tmp" "$fixture"
 }
 
 remove_first_line() {
   local line="$1"
-  awk -v line="$line" '
-    !removed && $0 == line { removed = 1; next }
+  LINE="$line" awk '
+    !removed && $0 == ENVIRON["LINE"] { removed = 1; next }
     { print }
+    END { if (!removed) exit 1 }
   ' "$fixture" >"$fixture.tmp"
   mv "$fixture.tmp" "$fixture"
 }
@@ -52,10 +53,10 @@ remove_first_line() {
 insert_after() {
   local line="$1"
   local addition="$2"
-  awk -v line="$line" -v addition="$addition" '
+  LINE="$line" ADDITION="$addition" awk '
     { print }
-    !inserted && $0 == line {
-      print addition
+    !inserted && $0 == ENVIRON["LINE"] {
+      print ENVIRON["ADDITION"]
       inserted = 1
     }
     END { if (!inserted) exit 1 }
@@ -144,6 +145,15 @@ if ! run_checker; then
   exit 1
 fi
 
+if [[ "$(grep -Fxc '            --header "Authorization: Bearer $GHCR_TOKEN" \' "$workflow")" != "2" ]]; then
+  printf 'FAIL: package visibility requests do not use GHCR_TOKEN authorization exactly twice\n' >&2
+  exit 1
+fi
+if grep -Fq 'Authorization: Bearer ***' "$workflow"; then
+  printf 'FAIL: package visibility requests use masked literal authorization\n' >&2
+  exit 1
+fi
+
 expect_rejected "missing packages write permission" \
   remove_line "  packages: write" || failures=$((failures + 1))
 expect_rejected "broader contents permission" \
@@ -210,6 +220,9 @@ expect_rejected "extra package response output" \
   insert_after \
   '            --output "$package_response" \' \
   '            --output "$package_response" \' ||
+  failures=$((failures + 1))
+expect_rejected "masked package authorization" \
+  replace_all 'Authorization: Bearer $GHCR_TOKEN' 'Authorization: Bearer ***' ||
   failures=$((failures + 1))
 expect_rejected "package response output after endpoint URL" \
   move_package_output_after_url 1 || failures=$((failures + 1))
@@ -312,8 +325,17 @@ package_mode="$FAKE_PACKAGE_MODE_PRE"
 if ((call_count == 2)); then
   package_mode="$FAKE_PACKAGE_MODE_POST"
 fi
+authorized=0
 while (($#)); do
+  if [[ "$1" == "--header" ]]; then
+    if [[ "$2" == "Authorization: Bearer $GHCR_TOKEN" ]]; then
+      authorized=1
+    fi
+    shift 2
+    continue
+  fi
   if [[ "$1" == "--output" ]]; then
+    ((authorized == 1)) || exit 65
     case "$package_mode" in
       private)
         printf '{"visibility":"private"}\n' >"$2"

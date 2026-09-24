@@ -63,7 +63,7 @@ jobs:
 
           curl --fail --silent --show-error \
             --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer ${GHCR_TOKEN}" \
+            --header "Authorization: Bearer $GHCR_TOKEN" \
             --header "X-GitHub-Api-Version: 2022-11-28" \
             --output "$package_response" \
             "https://api.github.com/users/${GITHUB_REPOSITORY_OWNER}/packages/container/jobcron"
@@ -90,7 +90,7 @@ jobs:
 
           curl --fail --silent --show-error \
             --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer ${GHCR_TOKEN}" \
+            --header "Authorization: Bearer $GHCR_TOKEN" \
             --header "X-GitHub-Api-Version: 2022-11-28" \
             --output "$package_response" \
             "https://api.github.com/users/${GITHUB_REPOSITORY_OWNER}/packages/container/jobcron"
