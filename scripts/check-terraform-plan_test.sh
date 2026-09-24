@@ -214,7 +214,7 @@ for action in no-op update delete; do
 done
 
 jq -n '{
-  resource_changes: (
+  resource_changes: ((
     [
       "aws_iam_policy.production_slice3_read",
       "aws_iam_role_policy_attachment.production_slice3_read"
@@ -236,11 +236,11 @@ jq -n '{
         after: {name: "existing-test-only-role"}
       }
     }
-  ]
+  ])
 }' >"$fixture_root/slice3-bootstrap-valid.json"
 
 jq -n '{
-  resource_changes: (
+  resource_changes: ((
     [
       "aws_subnet.database[\"database_a\"]",
       "aws_subnet.database[\"database_b\"]",
@@ -278,7 +278,7 @@ jq -n '{
         after: {value: "existing-test-only-value"}
       }
     }
-  ]
+  ])
 }' >"$fixture_root/slice3-production-valid.json"
 
 for mode in bootstrap production; do

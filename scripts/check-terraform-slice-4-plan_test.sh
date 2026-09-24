@@ -123,7 +123,7 @@ now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 jq -n '{
   format_version: "1.2",
-  resource_changes: (
+  resource_changes: ((
     [
       "aws_iam_role.replacement_host",
       "aws_iam_role_policy_attachment.replacement_host_ssm",
@@ -181,7 +181,7 @@ jq -n '{
         after: {synthetic: true}
       }
     })
-  ),
+  )),
   output_changes: {
     replacement_instance_id: {
       actions: ["create"],
