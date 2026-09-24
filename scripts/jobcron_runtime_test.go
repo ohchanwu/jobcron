@@ -379,6 +379,34 @@ func TestJobcronRuntimeArchiveIsWriteOnlyAndSanitized(t *testing.T) {
 	}
 }
 
+func TestJobcronRuntimeArchivePreservesEncodedNewlinesInPassword(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		encoded string
+		decoded string
+	}{
+		{name: "middle", encoded: "a%0Ab", decoded: "a\nb"},
+		{name: "only", encoded: "%0A", decoded: "\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newRuntimeFixture(t)
+			fixture.env = append(fixture.env, "FAKE_EXPECTED_DATABASE_PASSWORD="+test.decoded)
+			databaseURL := "postgres://app:" + test.encoded + "@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require"
+			secret := replaceRuntimeSecret(t, "DATABASE_URL", databaseURL)
+			if result := fixture.run(t, secret, "prepare"); result.err != nil {
+				t.Fatalf("prepare: %v\n%s", result.err, result.output)
+			}
+			result := fixture.run(t, secret, "archive")
+			if result.err != nil {
+				t.Fatalf("archive failed: %v\n%s", result.err, result.output)
+			}
+			if strings.Contains(result.output, test.encoded) || strings.Contains(readFile(t, fixture.logPath), test.encoded) {
+				t.Fatal("archive disclosed encoded database password")
+			}
+		})
+	}
+}
+
 func TestJobcronRuntimeArchiveRejectsUnsafeDatabaseURLBeforeDump(t *testing.T) {
 	for _, databaseURL := range []string{
 		"postgres://app:secret@db.example.invalid:5432/jobcron?sslmode=require",

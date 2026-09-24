@@ -147,7 +147,6 @@ sanitize_logs() {
 
 percent_decode() {
 	encoded=$1
-	decoded=
 	while [ -n "$encoded" ]; do
 		case $encoded in
 		%??*)
@@ -157,16 +156,15 @@ percent_decode() {
 			value=$((0x$hex))
 			[ "$value" -ne 0 ] || return 1
 			octal=$(printf '%03o' "$value")
-			decoded=$decoded$(printf '%b' "\0$octal")
+			printf '%b' "\0$octal"
 			encoded=${encoded#???}
 			;;
 		*)
-			decoded=$decoded${encoded%"${encoded#?}"}
+			printf '%s' "${encoded%"${encoded#?}"}"
 			encoded=${encoded#?}
 			;;
 		esac
 	done
-	printf '%s' "$decoded"
 }
 
 archive() {
@@ -185,7 +183,8 @@ archive() {
 	database_endpoint=${connection%%/*}
 	database_port=${database_endpoint##*:}
 	[ "$database_port" -ge 1 ] 2>/dev/null && [ "$database_port" -le 65535 ] 2>/dev/null || fail
-	database_password=$(percent_decode "$encoded_password") || fail
+	database_password=$(percent_decode "$encoded_password" && printf '%s' x) || fail
+	database_password=${database_password%x}
 	[ -n "$database_password" ] || fail
 	password_free_url="postgres://$database_user@$connection"
 	now=${JOBCRON_NOW:-$(date -u +%Y%m%dT%H%M%SZ)}
