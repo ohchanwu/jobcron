@@ -347,15 +347,17 @@ Compose in that order. Confirm:
 - the current and previous digests remain available;
 - both containers are healthy with bounded JSON log rotation;
 - the app uses TLS and the lower-privilege role; and
-- host publication is limited to loopback ports `7777` and `8443`.
+- the app is published only on loopback port `7777`, Caddy is the sole listener
+  on host TCP `443`, the origin security group still has no ingress, and the
+  reserved EIP remains unattached.
 
 Run `/opt/jobcron/jobcron-runtime.sh verify-local-state` and record only its
 value-blind booleans and counts.
 
 ## 10. Complete private verification
 
-Forward trusted-Mac ports through Session Manager to host loopback ports `7777`
-and `8443`. With the required headless browser workflow, walk the login page,
+Forward trusted-Mac ports through Session Manager to host ports `7777` and
+`443`. With the required headless browser workflow, walk the login page,
 owner login, dashboard, profile read/save, archive, one cohort-safe scrape or
 re-rate, logout, and failed-session reuse. Verify expected content and state,
 not only an HTTP status.

@@ -83,11 +83,11 @@ check_contract "services.app.ports must bind only loopback 7777" '
 	$ports[0].target == 7777 and
 	$ports[0].protocol == "tcp"
 '
-check_contract "services.caddy.ports must bind only loopback 8443 to 443" '
+check_contract "services.caddy.ports must publish only host TCP 443" '
 	(.services.caddy.ports // []) as $ports |
 	($ports | length) == 1 and
-	$ports[0].host_ip == "127.0.0.1" and
-	($ports[0].published | tostring) == "8443" and
+	$ports[0].host_ip == "0.0.0.0" and
+	($ports[0].published | tostring) == "443" and
 	$ports[0].target == 443 and
 	$ports[0].protocol == "tcp"
 '
