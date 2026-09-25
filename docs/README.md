@@ -36,8 +36,6 @@ Use this index instead of recursively loading the entire documentation tree.
   records needed for the current task.
 
 - [Human-assisted alpha deployment][human-assisted-alpha-deployment]
-- [Gemini BYOK onboarding](specs/260924-gemini-byok-onboarding.md)
-  - [Implementation plan](plans/260924-gemini-byok-onboarding-implementation.md)
 
 ## Recently Archived
 
@@ -60,6 +58,8 @@ only when the active task or a human explicitly names it. See
 - [Contextual dealbreaker match-provenance contract][dealbreaker-provenance-spec]
 - [Contextual dealbreaker match-provenance implementation][dealbreaker-provenance-plan]
 - [AI re-rate blocker surfacing](archive/2026-07-25-ai-rerate-blocker-surfacing/260725-ai-rerate-blocker-surfacing-plan.md)
+- [Gemini BYOK onboarding specification][gemini-byok-spec-archive]
+- [Gemini BYOK onboarding implementation record][gemini-byok-plan-archive]
 - [Multi-user account expansion specification][multi-user-account-spec]
 - [Multi-user account expansion implementation][multi-user-account-plan]
 - [Contextual dealbreaker validation specification][contextual-dealbreaker-spec]
@@ -138,6 +138,10 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 [local-only-submit-formula]: learnings/260719-local-only-polecat-submit-formula.md
 [human-assisted-alpha-deployment]:
   specs/260923-human-assisted-alpha-deployment.md
+[gemini-byok-spec-archive]:
+  archive/2026-09-25-gemini-byok-onboarding/260924-gemini-byok-onboarding.md
+[gemini-byok-plan-archive]:
+  archive/2026-09-25-gemini-byok-onboarding/260924-gemini-byok-onboarding-implementation.md
 [simplified-alpha-deployment-archive]:
   archive/2026-09-23-simplified-alpha-deployment/README.md
 [terraform-slice-3-plan]:
