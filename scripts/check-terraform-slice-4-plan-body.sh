@@ -93,8 +93,8 @@ if [[ "$#" -ge 5 ]]; then
   [[ "$reviewed_sha" =~ ^[0-9a-f]{40}$ ]] || fail
 
   if [[ "$#" -eq 6 ]]; then
-    [[ "$6" == combined-recovery ]] || fail
-    mode=combined-recovery
+    [[ "$6" == combined-recovery || "$6" == initial-deployment ]] || fail
+    mode="$6"
   fi
 
   repo_root="$(CDPATH='' cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || fail
@@ -183,10 +183,30 @@ fi
 command -v jq >/dev/null 2>&1 || fail
 [[ -f "$plan_json" && -f "$cost_json" && -f "$checkpoint_json" ]] || fail
 
+if [[ "$mode" == initial-deployment ]]; then
+  # The lean lane removes invented history, not private-evidence protections.
+  for artifact in "$plan_json" "$cost_json" "$checkpoint_json" "$rendered_user_data"; do
+    [[ -f "$artifact" && ! -L "$artifact" ]] || fail
+    [[ "$(file_mode "$artifact")" == 600 ]] || fail
+    artifact_dir="$(dirname "$artifact")"
+    [[ "$(file_mode "$artifact_dir")" == 700 ]] || fail
+    if [[ "$slice4_stat_bsd" == yes ]]; then
+      artifact_owner="$(stat -f '%u' "$artifact")" || fail
+    else
+      artifact_owner="$(stat -c '%u' "$artifact")" || fail
+    fi
+    [[ "$artifact_owner" == "$EUID" ]] || fail
+  done
+fi
+
 # Slurp forces one evaluation even on empty input (jq 1.6 otherwise exits 0),
 # and rejects streams before applying policy to the same parsed document.
-jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_hash" '
+jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_hash" \
+  --slurpfile checkpoint "$checkpoint_json" '
   (if length == 1 then .[0] else error("invalid") end) |
+  (if ($checkpoint | length) == 1 then $checkpoint[0] else error("invalid") end) as $checkpoint |
+  ($mode == "combined-recovery" or
+    ($mode == "initial-deployment" and $checkpoint.managed_eip.state_presence == "absent")) as $create_eip |
   [
     "aws_iam_role.replacement_host",
     "aws_iam_role_policy_attachment.replacement_host_ssm",
@@ -253,7 +273,7 @@ jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_has
           )
         )
       )
-    elif ($mode == "replacement" or $mode == "combined-recovery") then
+    elif ($mode == "replacement" or $mode == "combined-recovery" or $mode == "initial-deployment") then
       ([.resource_changes[].address] | sort == (($allowed_creates + $allowed_noops) | sort)) and
       all(
         .resource_changes[];
@@ -265,7 +285,7 @@ jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_has
           if .address == "aws_instance.replacement_host" then
             (.action_reason == "replace_by_request") and
             (.change.actions == ["delete", "create"])
-          elif ($mode == "combined-recovery" and .address == "aws_eip.origin") then
+          elif ($create_eip and .address == "aws_eip.origin") then
             (.action_reason // null) == null and
             (.change.actions == ["create"])
           else
@@ -274,7 +294,7 @@ jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_has
         )
       ) and
       (
-        if $mode == "combined-recovery" then
+        if $create_eip then
           ($eip.change | has("before")) and
           ($eip.change.before == null) and
           ($eip.change.after | type == "object") and
@@ -345,6 +365,52 @@ jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_has
       false
     end
   ) and
+  (if $mode == "initial-deployment" then
+    def after($address): [.resource_changes[] | select(.address == $address)][0].change.after;
+    def no_unknown: type == "object" and all(.. | scalars; . == false);
+    after("aws_security_group.origin") as $origin |
+    after("aws_security_group.database") as $database_sg |
+    after("aws_vpc_security_group_ingress_rule.database_postgresql_from_origin") as $ingress |
+    after("aws_db_instance.production") as $rds |
+    all(.resource_changes[] | select(.change.actions == ["no-op"]);
+      (.change.before | type == "object" and length > 0) and
+      .change.before == .change.after and
+      ((.change.after_unknown // {}) | no_unknown)) and
+    ($origin.id | type == "string" and length > 0) and
+    ($origin.ingress == []) and
+    ($database_sg.id | type == "string" and length > 0) and
+    ($database_sg.ingress | type == "array" and length <= 1 and
+      all(.[]; .from_port == 5432 and .to_port == 5432 and .protocol == "tcp" and
+        .security_groups == [$origin.id] and .cidr_blocks == [] and
+        .ipv6_cidr_blocks == [] and .prefix_list_ids == [] and .self == false)) and
+    ($instance.change.after.vpc_security_group_ids == [$origin.id]) and
+    ($ingress.security_group_id == $database_sg.id) and
+    ($ingress.referenced_security_group_id == $origin.id) and
+    ($ingress.from_port == 5432 and $ingress.to_port == 5432 and $ingress.ip_protocol == "tcp") and
+    ($ingress.cidr_ipv4 == null and $ingress.cidr_ipv6 == null and $ingress.prefix_list_id == null) and
+    ($rds.publicly_accessible == false and $rds.storage_encrypted == true and
+      $rds.deletion_protection == true and $rds.manage_master_user_password == true) and
+    ($rds.backup_retention_period | type == "number" and floor == . and . >= 1) and
+    ($rds.vpc_security_group_ids == [$database_sg.id]) and
+    ($eip.change.after.domain == "vpc") and
+    ($eip.change.after | has("instance") and has("network_interface") and has("associate_with_private_ip")) and
+    ($eip.change.after.instance == null and $eip.change.after.network_interface == null and
+      $eip.change.after.associate_with_private_ip == null) and
+    # Refresh may report the reconciled missing EIP, never unrelated drift.
+    ((.resource_drift // []) | type == "array" and length <= 1 and
+      all(.[]; $create_eip and .address == "aws_eip.origin" and
+        (.previous_address // null) == null and
+        .change.actions == ["delete"] and (.change.before | type == "object") and
+        .change.after == null and (.change.importing // null) == null)) and
+    # Defense in depth over all plan sections (including embedded prior state).
+    # Arbitrary secret detection still requires the independent private review.
+    all(.. | objects | to_entries[];
+      if (.key | test("^(password|master_password|secret_string|secret_binary|private_key|token|session_secret|database_url)$"; "i")) then
+        # Terraform sensitivity masks contain booleans, never credential bytes.
+        (.value == null or (.value | type) == "boolean" or .value == "")
+      else true end) and
+    all(.. | strings; test("-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----|postgres(ql)?://[^ /:]+:[^ /@]+@"; "i") | not)
+  else true end) and
   all(
     .resource_changes[];
     all(
@@ -468,11 +534,10 @@ else
   jq -es --arg mode "$mode" --arg reviewed_sha "$reviewed_sha" '
     (if length == 1 then .[0] else error("invalid") end) |
     (. | type == "object") and
-    (keys == [
+    (keys == ([
       "bootstrap_host",
       "checked_at",
       "commit",
-      "legacy_rollback_host",
       "managed_eip",
       "origin",
       "public_cutover",
@@ -482,8 +547,10 @@ else
       "schema_version",
       "selected_state_resources",
       "state_backend"
-    ]) and
-    (.schema_version == "human-assisted-reconciliation-v1") and
+    ] + (if $mode == "initial-deployment" then
+      ["evidence_security", "initial_deployment"] else ["legacy_rollback_host"] end) | sort)) and
+    (.schema_version == (if $mode == "initial-deployment" then
+      "human-assisted-initial-deployment-v1" else "human-assisted-reconciliation-v1" end)) and
     (.checked_at | type == "string") and
     ((try (.checked_at | fromdateiso8601) catch null) as $checked |
       ($checked != null) and
@@ -508,16 +575,37 @@ else
     (.selected_state_resources.database.managed == true) and
     (.bootstrap_host | type == "object") and
     (.bootstrap_host | keys == ["disposition", "human_approved"]) and
-    (.bootstrap_host.disposition == "replace") and
+    (.bootstrap_host.disposition == (if $mode == "initial-deployment" then
+      "replace-disposable-bootstrap" else "replace" end)) and
     (.bootstrap_host.human_approved == true) and
-    (.legacy_rollback_host | type == "object") and
-    (.legacy_rollback_host | keys == ["retained"]) and
-    (.legacy_rollback_host.retained == true) and
+    (if $mode == "initial-deployment" then
+      (.initial_deployment == {
+        prior_service_exists: false,
+        prior_production_data_exists: false,
+        prior_image_exists: false,
+        legacy_rollback_host_exists: false,
+        bootstrap_service_running: false,
+        bootstrap_contains_production_data: false,
+        database_unused: true,
+        rollback: "stop-private-runtime-leave-public-routing-unchanged"
+      }) and
+      (.evidence_security == {
+        state_secret_free: true,
+        plan_secret_free: true,
+        shared_evidence_secret_free: true
+      })
+    else
+      (.legacy_rollback_host | type == "object") and
+      (.legacy_rollback_host | keys == ["retained"]) and
+      (.legacy_rollback_host.retained == true)
+    end) and
     (.managed_eip | type == "object") and
     (.managed_eip | keys == ["state_presence", "terraform_address", "unattached"]) and
     (.managed_eip.terraform_address == "aws_eip.origin") and
     (.managed_eip.unattached == true) and
-    (if $mode == "combined-recovery" then
+    (if $mode == "initial-deployment" then
+       (.managed_eip.state_presence == "absent" or .managed_eip.state_presence == "present")
+     elif $mode == "combined-recovery" then
        .managed_eip.state_presence == "absent"
      else
        .managed_eip.state_presence == "present"
@@ -579,7 +667,10 @@ else
   ' "$checkpoint_json" >/dev/null 2>&1 || fail
 fi
 
-if [[ "$mode" == combined-recovery ]]; then
+if [[ "$mode" == initial-deployment ]]; then
+  resource_changes="$(jq -er '[.resource_changes[] | select(.change.actions != ["no-op"])] | length' "$plan_json")" || fail
+  destroy_or_replace=1
+elif [[ "$mode" == combined-recovery ]]; then
   resource_changes=2
   destroy_or_replace=1
 elif [[ "$mode" == replacement ]]; then

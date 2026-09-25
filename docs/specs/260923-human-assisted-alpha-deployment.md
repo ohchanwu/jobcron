@@ -19,6 +19,31 @@ approve external changes.
 
 The goal is a safe small release, not a generalized deployment platform.
 
+## Initial-deployment profile
+
+This launch is an **initial deployment**, not restoration of a previous Jobcron
+service. No prior production service, production data, rollback host, or prior
+deployed image exists. The Terraform-managed bootstrap host runs no Jobcron
+service and contains no production data; the selected RDS database is unused.
+Verify those facts during fresh discovery. If any is false or unknown, stop:
+this profile is not a shortcut for replacing an existing deployment.
+
+Use the explicit `initial-deployment` controller mode and
+`human-assisted-initial-deployment-v1` checkpoint described in the
+[production human guide](../../deploy/production/HUMAN_DEPLOY_GUIDE.md#initial-deployment-lean-lane).
+It rejects legacy-host assertions rather than requesting invented evidence.
+Before public writes, rollback means stopping the private runtime and leaving
+public routing unchanged; there is no former service to restore.
+
+For this profile only, prior-image migration lineage, prior-production SQLite
+import, and old-service/data preservation are N/A. Snapshotting the empty unused
+database, the exhaustive six-object recovery/log-retention matrix, and extra
+adversarial local Git/PATH/object/full-toolchain manifests are deferred. Existing
+automatic checker protections stay enabled; no new manifest is an operator
+prerequisite. Once schema/data exists, one verified off-host dump, checksum, and
+disposable restore is mandatory before public writes. Never defer protection of
+data that actually exists.
+
 ## Target architecture
 
 Use the existing supported AWS design selected after live discovery:
@@ -40,7 +65,7 @@ The human operator:
 
 - completes AWS or registry authentication;
 - inspects sensitive console values without copying them into tracked output;
-- confirms the account, region, resources, costs, DNS, and rollback target;
+- confirms the account, region, resources, costs, DNS, and applicable rollback procedure;
 - supplies or enters secrets through approved private channels; and
 - explicitly approves each mutation boundary below.
 
@@ -82,7 +107,8 @@ All gates are mandatory:
 - Production secrets are absent from Git, image layers, Terraform state,
   command arguments, shared output, and persistent host files.
 - The application uses a lower-privilege database role over TLS.
-- A pre-change RDS snapshot is available before migration or import.
+- A pre-change RDS snapshot is available before migration or import of existing
+  data; the verified empty unused initial database is exempt.
 - Private acceptance passes before public exposure.
 - An off-host database dump is checksum-verified and restored successfully into
   a disposable database before cutover.
@@ -96,7 +122,10 @@ one.
 ### 1. Morning preflight
 
 Reconcile live cloud state, recovered controller inputs, DNS, backups, and the
-rollback target. Start the selected resources and wait for healthy status.
+applicable rollback procedure. Start the selected resources and wait for healthy
+status. Do not execute obsolete ignored selector helpers or infer a legacy host
+from a resource name. Retire those helpers in the working checkout; reconstruct
+only necessary selectors from authoritative state and live resources.
 
 Stop the launch if the intended architecture and data cannot be identified
 unambiguously by the morning cutoff agreed at the start of the session.
@@ -118,6 +147,26 @@ replacement, unrelated resource change, or secret value.
 The human must approve this exact private-infrastructure plan before apply.
 Regenerating the plan invalidates that approval.
 
+Initial deployment permits only an explicit, human-approved destroy-then-create
+of `aws_instance.replacement_host` with `replace_by_request`, plus creation of
+the unattached VPC `aws_eip.origin` **only if freshly reconciled as absent**.
+All other addresses in the controller's exact protected inventory must be
+no-ops. The disposable host replacement replays the reviewed bootstrap (updating
+EC2 user data alone does not replay cloud-init); it destroys the unused root
+volume, not a legacy service. This is an explicit tradeoff, not permission for
+general destruction. Existing AMI, sizing, subnet, role, and security-group
+bindings remain unchanged. A present EIP must stay unattached and unchanged.
+The checker also rejects public/broad ingress, database replacement, secret
+payloads, unknown security controls, DNS/Cloudflare/routing actions and unrelated
+drift. Independent private secret review remains necessary; a keyword check
+cannot prove arbitrary data secret-free.
+
+Keep the fresh saved binary plan, its JSON, aggregate cost evidence and SHA-256
+digest in owner-only storage. Bind independent review to the exact release and
+binary digest, then obtain **separate apply approval**. A passing checker is
+neither CI evidence nor authorization to apply or cut over. The encrypted,
+locked remote backend and fresh state/live reconciliation are mandatory.
+
 Replacement and combined-recovery plan review must consume a fresh (at most 24
 hours old), exact-key, value-blind current reconciliation checkpoint rather
 than the superseded Slice 3 completion checkpoint. It binds the clean exact
@@ -137,7 +186,9 @@ unexpected checkpoint field is a no-go.
 The controller invocation boundary is unambiguous: historical create mode is
 exactly `PLAN COST SLICE3_CHECKPOINT`; replacement mode is exactly
 `PLAN COST CURRENT_CHECKPOINT RENDERED_USER_DATA REVIEWED_SHA`; and combined
-recovery adds the separate final literal `combined-recovery`. `REVIEWED_SHA` is
+recovery adds the separate final literal `combined-recovery`. Initial deployment
+uses the same five arguments followed by the literal `initial-deployment`, with
+its own checkpoint schema (never a legacy checkpoint). `REVIEWED_SHA` is
 a full lowercase 40-hex commit and must equal both `checkpoint.commit.sha` and
 the literal `HEAD` of the clean checkout containing the tracked checker and
 exact tracked bootstrap assets. Tracked, staged, or untracked changes,
@@ -208,14 +259,18 @@ back to a writable stale SQLite database.
 
 ## Rollback
 
-Before public writes, stop the new runtime or leave it isolated. If migration or
-import is wrong, restore the pre-change snapshot before accepting traffic.
+Before public writes, stop the new runtime or leave it isolated and leave public
+routing unchanged. For initial deployment there is no former service to restore.
+If migration or import of existing data is wrong, restore the pre-change snapshot
+before accepting traffic.
 
 After public writes, retain PostgreSQL and roll the application back only to a
 schema-compatible immutable image. For database failure, take the service
 unavailable and recover using RDS point-in-time recovery, the retained snapshot,
 or the verified dump. Preserve prior hosts, databases, images, source data, and
-recovery material until the human closes the rollback window.
+recovery material **where they exist** until the human closes the rollback window.
+The first release has no prior deployed image: take it unavailable and fix
+forward or restore verified PostgreSQL data, never invent an image rollback.
 
 ## Deferred until after alpha launch
 

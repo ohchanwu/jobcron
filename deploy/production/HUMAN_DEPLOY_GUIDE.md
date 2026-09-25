@@ -6,7 +6,8 @@
 > procedures that may be selected during that attended run; it is not a mandate
 > to execute the superseded multi-slice launch end to end.
 
-This is a private Slice 4 replacement-host sequence. It does not authorize a
+This guide supports an explicit lean initial deployment and the historical
+private Slice 4 replacement-host sequence. Neither authorizes a
 public cutover. Use only the approved commit, private controller artifacts, and
 short-lived operator credentials. Never put secrets, identifiers, addresses,
 personal data, screenshots, or raw logs in Git, issues, chat, or shared command
@@ -16,6 +17,123 @@ All host access uses AWS Systems Manager Session Manager. RDS remains private,
 the replacement host has no key pair or inbound rule, and runtime values exist
 on the host only below `/run/jobcron`. Stop immediately on any mismatch; never
 infer or substitute a selector.
+
+## Initial-deployment lean lane
+
+Use this lane only after live/state reconciliation confirms there has never
+been a Jobcron production service, production data, prior deployed image, or
+legacy rollback host. The managed bootstrap is disposable: no Jobcron service
+runs there and it contains no production data. The selected RDS is unused.
+Unknown or contrary evidence is a stop condition, not permission to fabricate
+legacy selectors. Obsolete ignored selector scripts are retired for this lane;
+do not execute them or copy their assertions into the new checkpoint.
+
+Keep a mode-`0700` controller directory outside the clean release checkout and
+mode-`0600` regular files owned by the operator. Use `umask 077`. Reconcile the
+remote encrypted, lockfile-enabled backend against live resources immediately
+before planning. Populate the common exact fields listed in section 1 from
+observed facts, with these **only** schema differences:
+
+- `schema_version` is `human-assisted-initial-deployment-v1`.
+- `bootstrap_host` is exactly
+  `{"disposition":"replace-disposable-bootstrap","human_approved":true}`.
+  This approves the proposed disposable-host action, not plan apply.
+- Omit `legacy_rollback_host` entirely. It is forbidden even with `retained=false`.
+- Add exactly `initial_deployment` with these fields:
+  `prior_service_exists=false`, `prior_production_data_exists=false`,
+  `prior_image_exists=false`, `legacy_rollback_host_exists=false`,
+  `bootstrap_service_running=false`, `bootstrap_contains_production_data=false`,
+  `database_unused=true`, and
+  `rollback="stop-private-runtime-leave-public-routing-unchanged"`.
+- Add exactly `evidence_security` with `state_secret_free=true`,
+  `plan_secret_free=true`, and `shared_evidence_secret_free=true`. These are
+  private inspection results, never guesses or claims about secret contents.
+- `managed_eip.state_presence` may be `present` or `absent`, based on fresh
+  reconciliation. A present EIP must remain unattached and unchanged; only an
+  absent one may be created unattached. No legacy-host provenance is required.
+
+All other exact fields, freshness (at most 24 hours, never future), clean exact
+SHA binding, protected resources, cost ceilings, runtime-secret version count,
+RDS protections, recovery bucket protections and no-cutover assertions remain
+mandatory. A nonzero runtime-secret version count is valid; do not read secret
+contents to establish that count. Inspect state and plan privately for secret
+payloads without sharing them. The checker's credential-field/PEM/URL guards
+are defense in depth, not an exhaustive secret scanner.
+
+Follow sections 2 and 3 for immutable-image publication, synthetic Compose
+validation and exact bootstrap rendering. Generate a **fresh binary saved
+plan** with `-replace=aws_instance.replacement_host`, its JSON and fresh aggregate
+cost evidence, then invoke directly:
+
+```sh
+scripts/check-terraform-slice-4-plan.sh \
+  "$TF_SLICE4_PLAN_JSON" \
+  "$TF_AGGREGATE_COST_JSON" \
+  "$TF_CURRENT_RECONCILIATION_CHECKPOINT_JSON" \
+  "$TF_SLICE4_RENDERED_USER_DATA" \
+  "$JOBCRON_REVIEWED_SHA" \
+  initial-deployment
+```
+
+The allowlist is one requested destroy-then-create of the disposable managed
+bootstrap, plus **only when absent** one VPC EIP create. All other resources in
+the exact controller inventory must be known no-ops; the only output transition
+is the sensitive replacement instance ID. The checker retains the reviewed
+bootstrap hash, unchanged AMI/type/subnet/profile/security-group binding, IMDSv2,
+encrypted 8 GiB root disk, keyless host and private-phase checks. Updating EC2
+user data does not replay cloud-init, so replacement intentionally discards the
+unused bootstrap root volume to install the reviewed runtime. It is not a claim
+that an old service is being replaced. No additional deletion/replacement,
+database replacement, public ingress, EIP association, DNS/Cloudflare change,
+secret version or unrelated drift is allowed. Refresh may report only the
+already-reconciled missing EIP deletion; it is not an extra planned destruction.
+
+Record the binary plan's SHA-256 digest privately. Independent review binds that
+digest and the exact clean release with green CI and immutable private image.
+Regenerating the plan or bootstrap invalidates review. Obtain separate explicit
+apply approval before section 4; a checker `PASS` is not approval. Keep existing
+automatic Git/PATH protections, but additional adversarial environment/object
+audits and full-toolchain manifests are deferred, not new launch prerequisites.
+
+For initial deployment only, select these branches in the remaining procedure:
+
+- Section 6: initialize the empty RDS schema using `jobcron-user` built from the
+  exact clean reviewed release, not the historical lineage/backfill recipe.
+  Build `./cmd/jobcron-user` with `GOTOOLCHAIN=local CGO_ENABLED=0 go build
+  -mod=readonly -trimpath -o "$migration_bin" ./cmd/jobcron-user` on the trusted
+  operator machine; keep the binary outside the checkout. Check the checkout's
+  full SHA/clean status before and after building and verify `go version -m`
+  reports that exact `vcs.revision` and `vcs.modified=false`. Record its SHA-256
+  digest privately. Run `"$migration_bin" migrate --database-url
+  "$JOBCRON_MASTER_DATABASE_URL"` through the section-6 TLS tunnel and silent
+  password prompt, with `JOBCRON_DATABASE_PASSWORD` unset. **Do not supply**
+  `--backfill-legacy-migration-tree`, a previous-image commit, or a full-toolchain
+  manifest. A legacy migration ledger or existing data contradicts this lane:
+  stop rather than backfill it. Snapshotting the verified empty unused DB is
+  deferred; an existing-data migration still requires its snapshot.
+- Section 7: no production SQLite import; create the initial owner through the
+  private `jobcron-user create-owner` path. Keep least-privilege role setup,
+  private RDS, TLS, and credential handling unchanged.
+- Sections 9–11: no prior image or old stack must be invented. Keep the current
+  immutable image, fail-closed startup, private functional acceptance,
+  access-code rejection, exactly one scheduler, persistence after container
+  recreation and reboot checks. Record sanitized acceptance results.
+- Section 12: after initial schema/data exists, require **one off-host
+  `database.dump` plus `database.dump.sha256`, checksum verification and a
+  successful disposable restore**, comparing schema and representative row
+  counts. The existing archive service may generate these; copy the two exact
+  objects privately to the trusted Mac, validate the checksum manifest names
+  only `database.dump`, and verify with `shasum -a 256 -c database.dump.sha256`.
+  Do not mark the whole six-object set `macbook-copy=verified` after a partial
+  copy. The exhaustive six-object/log-retention matrix is deferred. Do not
+  publish dumps/logs or skip the off-host restore; preserve the
+  credential-encryption key separately using an approved private backup path.
+- Section 13: preserve the current DB, image and recovery material. There is no
+  legacy host, prior image or prior production data to preserve. On failure stop
+  privately and leave public routing unchanged. Public writes require separate
+  attended EIP/DNS/Cloudflare/cutover approval; after writes, PostgreSQL remains
+  authoritative, and a failure may require unavailability and recovery rather
+  than a nonexistent old service.
 
 ## 1. Record the current reconciliation checkpoint
 
@@ -47,8 +165,10 @@ UTC timestamp no more than 24 hours old and not in the future. Record only:
 
 Do not include account IDs, resource IDs, endpoints, secret values, or
 restorable timestamps. A false, missing, stale, malformed, renamed, or extra
-field is a stop condition. Preserve the selected legacy host, database, prior
-image, and recovery materials.
+field is a stop condition. In these historical recovery modes, preserve the
+selected legacy host, database, prior image, and recovery materials. Initial
+deployment instead uses the exact differences above; never reuse this legacy
+checkpoint unchanged.
 
 The three-argument create mode is a compatibility boundary for the historical
 Slice 3 launch path and still requires its original exact checkpoint, including
@@ -200,7 +320,8 @@ replacement, or any plan with another drift action.
 
 ## 4. Apply only the reviewed replacement-host plan
 
-Recheck the saved-plan digest, then apply the binary plan exactly once:
+Obtain separate explicit apply approval. Recheck the saved-plan digest, then
+apply the binary plan exactly once:
 
 ```sh
 terraform -chdir=infra/terraform/production apply -input=false \
@@ -210,7 +331,7 @@ terraform -chdir=infra/terraform/production apply -input=false \
 Verify value-blind that Session Manager sees the host; port `22`, a key pair,
 and inbound rules are absent; IMDSv2 and the encrypted 8 GiB root volume are
 enforced; IAM is limited to runtime-secret read and new recovery-object writes;
-the reserved EIP is unattached; old resources are unchanged; and
+the reserved EIP is unattached; other protected resources are unchanged; and
 `jobcron.service` is installed but stopped. A fresh Terraform plan must then be
 clean.
 
@@ -232,6 +353,10 @@ verification. Do not capture the commands or resolved parameters in tracked
 evidence.
 
 ## 6. Apply schema migrations through the private tunnel
+
+Initial deployment uses the no-lineage branch above. The following full recipe
+is only for a deployment with an existing version-only migration ledger and a
+real previous deployed image; do not execute it for an unused initial database.
 
 Before the first runtime start, bind the migration binary to the full exact SHA
 approved by independent review. Refuse a different HEAD, any tracked or
@@ -411,7 +536,7 @@ Compose in that order. Confirm:
 
 - the registry token and temporary Docker configuration are removed;
 - no home-directory Docker credential exists;
-- the current and previous digests remain available;
+- the current digest (and previous digest, if one exists) remains available;
 - both containers are healthy with bounded JSON log rotation;
 - the app uses TLS and the lower-privilege role; and
 - the app is published only on loopback port `7777`, Caddy is the sole listener
@@ -449,6 +574,9 @@ has no ingress and the reserved EIP remains unattached.
 
 ## 12. Verify recovery manifests and restore
 
+The exhaustive procedure below is for the historical recovery lane. Initial
+deployment uses the dump/checksum/disposable-restore minimum above instead.
+
 Run `jobcron-recovery.service` once and enable its timer only after that run
 succeeds. The service uploads a custom-format database dump, sanitized Jobcron
 and Caddy logs, and one SHA-256 recovery manifest for each artifact.
@@ -477,10 +605,13 @@ conditions.
 
 ## 13. Stop before public cutover
 
-Run a final no-change Terraform plan and confirm the old host, old database,
-reserved EIP, prior image, and recovery materials remain available. Confirm no
+Run a final no-change Terraform plan and confirm the database, reserved EIP,
+current image, and recovery materials remain available. For historical recovery
+also preserve the old host and prior image. Confirm no
 Cloudflare, DNS, public ingress, or public traffic change occurred.
 
 Do not associate the reserved EIP, change edge configuration, or accept public
-traffic. Keep the rollback window open. Slice 5 may begin only from the exact
-private checkpoint after every stop condition above is clear.
+traffic. Keep the rollback window open. Initial deployment proceeds only under
+the active specification's separate attended cutover approval. Historical
+Slice 5 may begin only from the exact private checkpoint after every applicable
+stop condition above is clear.

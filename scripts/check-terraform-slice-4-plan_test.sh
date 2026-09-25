@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_checker="$repo_root/scripts/check-terraform-slice-4-plan.sh"
@@ -715,6 +716,141 @@ current_checkpoint_mutation() {
   printf 'PASS: rejected %s current reconciliation checkpoint\n' "$name"
 }
 
+# Initial deployment is deliberately not a retained-legacy-host assertion.
+jq '
+  del(.legacy_rollback_host) |
+  .schema_version = "human-assisted-initial-deployment-v1" |
+  .bootstrap_host.disposition = "replace-disposable-bootstrap" |
+  .initial_deployment = {
+    prior_service_exists: false,
+    prior_production_data_exists: false,
+    prior_image_exists: false,
+    legacy_rollback_host_exists: false,
+    bootstrap_service_running: false,
+    bootstrap_contains_production_data: false,
+    database_unused: true,
+    rollback: "stop-private-runtime-leave-public-routing-unchanged"
+  } |
+  .evidence_security = {
+    state_secret_free: true,
+    plan_secret_free: true,
+    shared_evidence_secret_free: true
+  }
+' "$fixture_root/current-checkpoint-combined-valid.json" \
+  >"$fixture_root/current-checkpoint-initial-valid.json"
+
+# A real initial plan still contains the full protected no-op inventory.
+jq '
+  .resource_changes |= map(
+    if .address == "aws_security_group.origin" then
+      .change.before = {id: "sg-origin", ingress: []} | .change.after = .change.before
+    elif .address == "aws_security_group.database" then
+      .change.before = {id: "sg-database", ingress: [{from_port:5432,to_port:5432,
+        protocol:"tcp",security_groups:["sg-origin"],cidr_blocks:[],ipv6_cidr_blocks:[],
+        prefix_list_ids:[],self:false}]} | .change.after = .change.before
+    elif .address == "aws_vpc_security_group_ingress_rule.database_postgresql_from_origin" then
+      .change.before = {security_group_id: "sg-database", referenced_security_group_id: "sg-origin",
+        from_port: 5432, to_port: 5432, ip_protocol: "tcp", cidr_ipv4: null, cidr_ipv6: null,
+        prefix_list_id: null} | .change.after = .change.before
+    elif .address == "aws_db_instance.production" then
+      .change.before = {publicly_accessible: false, storage_encrypted: true,
+        deletion_protection: true, backup_retention_period: 7, manage_master_user_password: true,
+        password: null, vpc_security_group_ids: ["sg-database"]} | .change.after = .change.before |
+      .change.before_sensitive = {password:true} | .change.after_sensitive = {password:true}
+    else . end
+  )
+' "$fixture_root/plan-combined-recovery-valid.json" >"$fixture_root/plan-initial-valid.json"
+
+expect_initial_verified() {
+  local output plan="${1:-$fixture_root/plan-initial-valid.json}"
+  local checkpoint="${2:-$fixture_root/current-checkpoint-initial-valid.json}"
+  local expected="${3:-$expected_combined_recovery_output}"
+  if ! output="$("$checker" "$plan" \
+    "$fixture_root/cost-valid.json" \
+    "$checkpoint" \
+    "$fixture_root/replacement-user-data" "$reviewed_sha" \
+    initial-deployment 2>&1)" || [[ "$output" != "$expected" ]]; then
+    printf 'FAIL: rejected truthful initial deployment\n' >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: verified truthful initial deployment\n'
+  fi
+}
+expect_initial_verified
+
+jq '.resource_drift = [{address:"aws_eip.origin", change:{actions:["delete"],before:{domain:"vpc"},after:null}}]' \
+  "$fixture_root/plan-initial-valid.json" >"$fixture_root/plan-initial-drift.json"
+expect_initial_verified "$fixture_root/plan-initial-drift.json"
+jq '(.resource_changes[] | select(.address == "aws_eip.origin") | .change) |=
+  (.actions = ["no-op"] | .before = .after | .after_unknown = {})' \
+  "$fixture_root/plan-initial-valid.json" >"$fixture_root/plan-initial-present.json"
+jq '.managed_eip.state_presence = "present"' \
+  "$fixture_root/current-checkpoint-initial-valid.json" >"$fixture_root/checkpoint-initial-present.json"
+expect_initial_verified "$fixture_root/plan-initial-present.json" \
+  "$fixture_root/checkpoint-initial-present.json" "$expected_replacement_output"
+
+initial_mutation() {
+  local slot="$1" name="$2" filter="$3"
+  local args=("$fixture_root/plan-initial-valid.json" "$fixture_root/cost-valid.json"
+    "$fixture_root/current-checkpoint-initial-valid.json"
+    "$fixture_root/replacement-user-data" "$reviewed_sha" initial-deployment)
+  jq "$filter" "${args[$slot]}" >"$fixture_root/initial-mutation.json"
+  args[$slot]="$fixture_root/initial-mutation.json"
+  expect_recovery_invocation_rejected "initial $name" "${args[@]}"
+}
+initial_mutation 0 'broad no-op ingress' '(.resource_changes[] | select(.address == "aws_security_group.origin") | .change) |= (.before.ingress = [{from_port:443,to_port:443,cidr_blocks:["0.0.0.0/0"]}] | .after = .before)'
+initial_mutation 0 'no-op hides a change' '.resource_changes[0].change.after.extra = true'
+initial_mutation 0 'no-op unknowns' '.resource_changes[0].change.after_unknown.policy = true'
+initial_mutation 0 'malformed no-op unknowns' '.resource_changes[0].change.after_unknown.policy = "unknown"'
+initial_mutation 0 'public no-op RDS' '(.resource_changes[] | select(.address == "aws_db_instance.production") | .change) |= (.before.publicly_accessible = true | .after = .before)'
+initial_mutation 0 'credential in plan state' '.prior_state.values.root_module.resources = [{values:{password:"PRIVATE_VALUE"}}]'
+initial_mutation 0 'unrelated refreshed drift' '.resource_drift = [{address:"aws_db_instance.production",change:{actions:["update"]}}]'
+initial_mutation 0 'database replacement' '(.resource_changes[] | select(.address == "aws_db_instance.production") | .change.actions) = ["delete","create"]'
+initial_mutation 0 'unrequested host replacement' '(.resource_changes[] | select(.address == "aws_instance.replacement_host") | .action_reason) = "replace_because_cannot_update"'
+initial_mutation 0 'public database CIDR' '(.resource_changes[] | select(.address == "aws_security_group.database") | .change) |= (.before.ingress[0].cidr_blocks = ["0.0.0.0/0"] | .after = .before)'
+initial_mutation 0 'EIP association' '(.resource_changes[] | select(.address == "aws_eip.origin") | .change.after.instance) = "i-private"'
+initial_mutation 0 'EIP unknown association' '(.resource_changes[] | select(.address == "aws_eip.origin") | .change.after_unknown.instance) = true'
+initial_mutation 0 'unexpected output' '.output_changes.secret = {actions:["create"],after:"PRIVATE_VALUE",after_sensitive:true}'
+initial_mutation 0 'secret version' '.resource_changes += [{address:"aws_secretsmanager_secret_version.runtime",change:{actions:["create"]}}]'
+for address in aws_eip_association.origin cloudflare_record.origin aws_route53_record.origin aws_vpc_security_group_ingress_rule.public aws_instance.unrelated; do
+  initial_mutation 0 "$address" ".resource_changes += [{address:\"$address\",change:{actions:[\"create\"]}}]"
+done
+initial_mutation 1 'stale cost' '.checked_at = "2000-01-01T00:00:00Z"'
+initial_mutation 1 'cost ceiling' '.aggregate.recurring_monthly_upper_bound = 101'
+
+for field in prior_service_exists prior_production_data_exists prior_image_exists legacy_rollback_host_exists bootstrap_service_running bootstrap_contains_production_data; do
+  initial_mutation 2 "$field" ".initial_deployment.$field = true"
+done
+initial_mutation 2 'used database' '.initial_deployment.database_unused = false'
+initial_mutation 2 'invented legacy host' '.legacy_rollback_host = {retained:true}'
+initial_mutation 2 'secret evidence' '.evidence_security.state_secret_free = false'
+initial_mutation 2 'missing fact' 'del(.initial_deployment.bootstrap_service_running)'
+initial_mutation 2 'extra fact' '.initial_deployment.provenance = "invented"'
+initial_mutation 2 'legacy schema' '.schema_version = "human-assisted-reconciliation-v1"'
+initial_mutation 2 'legacy disposition' '.bootstrap_host.disposition = "replace"'
+initial_mutation 2 'wrong EIP presence' '.managed_eip.state_presence = "present"'
+initial_mutation 2 'stale reconciliation' '.checked_at = "2000-01-01T00:00:00Z"'
+initial_mutation 2 'wrong SHA' '.commit.sha = "0000000000000000000000000000000000000000"'
+initial_mutation 2 'unapproved destruction' '.bootstrap_host.human_approved = false'
+initial_mutation 2 'state locking disabled' '.state_backend.lockfile_enabled = false'
+initial_mutation 2 'public cutover' '.public_cutover.approved = true'
+initial_mutation 2 'unknown field' '.unexpected = true'
+
+# Initial evidence cannot be substituted into either historical recovery lane.
+expect_recovery_invocation_rejected 'initial checkpoint in replacement mode' \
+  "$fixture_root/plan-replacement-valid.json" "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-initial-valid.json" "$fixture_root/replacement-user-data" "$reviewed_sha"
+expect_recovery_invocation_rejected 'initial checkpoint in combined mode' \
+  "$fixture_root/plan-combined-recovery-valid.json" "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-initial-valid.json" "$fixture_root/replacement-user-data" "$reviewed_sha" combined-recovery
+
+chmod 0644 "$fixture_root/current-checkpoint-initial-valid.json"
+expect_recovery_invocation_rejected 'initial non-private checkpoint' \
+  "$fixture_root/plan-initial-valid.json" "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-initial-valid.json" \
+  "$fixture_root/replacement-user-data" "$reviewed_sha" initial-deployment
+chmod 0600 "$fixture_root/current-checkpoint-initial-valid.json"
+
 expect_verified \
   "exact Slice 4" \
   "$fixture_root/plan-valid.json" \
@@ -764,7 +900,7 @@ expect_rejected "empty plan/cost/checkpoint (jq 1.6)" \
 
 # Each artifact must contain exactly one JSON document, not a stream whose
 # last result can hide an earlier failure. Keep the other inputs valid.
-for json_mode in create replacement combined-recovery; do
+for json_mode in create replacement combined-recovery initial-deployment; do
   json_plan="$fixture_root/plan-valid.json"
   json_checkpoint="$fixture_root/checkpoint-valid.json"
   if [[ "$json_mode" == replacement ]]; then
@@ -773,6 +909,9 @@ for json_mode in create replacement combined-recovery; do
   elif [[ "$json_mode" == combined-recovery ]]; then
     json_plan="$fixture_root/plan-combined-recovery-valid.json"
     json_checkpoint="$fixture_root/current-checkpoint-combined-valid.json"
+  elif [[ "$json_mode" == initial-deployment ]]; then
+    json_plan="$fixture_root/plan-initial-valid.json"
+    json_checkpoint="$fixture_root/current-checkpoint-initial-valid.json"
   fi
   for json_slot in 0 1 2; do
     json_args=("$json_plan" "$fixture_root/cost-valid.json" "$json_checkpoint")
@@ -780,8 +919,8 @@ for json_mode in create replacement combined-recovery; do
     if [[ "$json_mode" != create ]]; then
       json_args+=("$fixture_root/replacement-user-data" "$reviewed_sha")
     fi
-    if [[ "$json_mode" == combined-recovery ]]; then
-      json_args+=(combined-recovery)
+    if [[ "$json_mode" == combined-recovery || "$json_mode" == initial-deployment ]]; then
+      json_args+=("$json_mode")
     fi
     for json_shape in empty whitespace malformed valid-then-malformed duplicate invalid-then-valid valid-then-invalid null array; do
       json_bad="$fixture_root/json-boundary-input"

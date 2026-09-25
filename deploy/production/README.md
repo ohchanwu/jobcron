@@ -5,20 +5,29 @@
 > This directory remains the technical runtime reference; its earlier Slice 4
 > sequencing is not independent authorization to execute every step.
 
-## Slice 4 status
+## Deployment modes
 
 This directory now implements the replacement-host runtime, but running it is a
-separate human-authorized operation. The operator must begin from the exact
-Slice 3 checkpoint, publish the approved private `linux/arm64` image through the
-repository workflow, and record its immutable digest in private evidence.
+separate human-authorized operation. For the first deployment use the
+[initial-deployment lean lane](HUMAN_DEPLOY_GUIDE.md#initial-deployment-lean-lane):
+fresh `human-assisted-initial-deployment-v1` reconciliation, no prior service or
+data, no invented legacy host, and explicit replacement of the disposable
+managed bootstrap. The checker permits only that action and, if reconciled
+absent, creation of the unattached EIP; all other protected resources are no-ops.
+Replacement and combined-recovery modes retain their existing legacy-host
+requirements. The three-argument historical create mode still uses the exact
+Slice 3 checkpoint. Every mode must publish the approved private `linux/arm64`
+image through the repository workflow, and record its immutable digest in private
+evidence.
 Terraform may apply only the independently reviewed saved plan accepted by
 `scripts/check-terraform-slice-4-plan.sh`.
 
-The verified Slice 3 checkpoint provides private database subnets, a
+The private foundation provides private database subnets, a
 VPC-local-only database route table, security-group-only PostgreSQL access, an
-encrypted private RDS instance, an empty runtime-secret container, and a
-protected recovery bucket. The secret remains empty until this Slice 4
-sequence writes its first version outside Terraform. Verified off-cloud
+encrypted private RDS instance, a runtime-secret container, and a
+protected recovery bucket. Only historical create mode requires an empty
+container; current reconciliation records its observed numeric version count.
+Secret versions are always written outside Terraform. Verified off-cloud
 recovery objects expire after 14 days, all current versions expire after 90
 days, and the resulting noncurrent data version expires one day later.
 
@@ -103,10 +112,18 @@ from that group's `vpc_id`. The canonical VPC intentionally remains untagged.
 container logs, and SHA-256 recovery manifests. The trusted Mac runs
 `scripts/pull-production-recovery.sh` to copy missing objects, verify every
 manifest, and apply only the `macbook-copy=verified` tag. Restore verification
-uses a disposable database and bounded schema and row-count comparisons.
+uses a disposable database and bounded schema and row-count comparisons. Initial
+deployment may instead verify one off-host database dump and checksum with a
+disposable restore before public writes; the exhaustive six-object/log-retention
+matrix is deferred, not the restore gate. Empty-unused-DB snapshots and extra
+adversarial toolchain manifests are deferred in that lane; prior-image lineage
+and production-data import are N/A. Existing automated safety checks remain.
 
 Stop conditions include any checkpoint mismatch, unapproved saved-plan action,
 private value in shared output, public ingress, incomplete runtime secret,
 failed private user path, failed recovery verification, or less than 2 GiB free
-after normal pruning. Keep the old host, old database, reserved EIP, prior
-image, and recovery materials throughout the rollback window.
+after normal pruning. Keep the database, reserved EIP, current image and recovery
+materials throughout the rollback window; preserve an old host or prior image
+only where one exists. Initial deployment failure means stopping privately and
+leaving public routing unchanged. Separate exact-plan apply approval and attended
+cutover approval remain mandatory.
