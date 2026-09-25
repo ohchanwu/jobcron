@@ -145,9 +145,14 @@ replacement refs, hostile local or worktree Git controls (including enabled
 extensions, promisor remotes, and untracked-file hiding), or ambient Git
 configuration are a no-go; the check runs with replacement objects, hooks,
 external attributes, and excludes neutralized and fails without disclosing
-paths or values. The checker re-executes itself under a sanitized environment
-whose PATH admits only root-owned, non-writable system tool directories, so
-caller-controlled PATH wrappers cannot forge any verdict.
+paths or values. Invoke the checker directly: its privileged Bash launcher
+ignores exported functions, startup files and inherited shell options, then
+unconditionally starts the tracked validation body in a cleared environment.
+Its PATH admits only root-owned, non-writable system tool directories, so
+caller-controlled functions and PATH wrappers cannot forge any verdict. Each
+plan, cost and checkpoint artifact must parse as exactly one JSON document
+before semantic validation of that same document. Empty, whitespace-only,
+malformed and multiple-document inputs fail generically, including on jq 1.6.
 
 ### 4. Deploy privately
 

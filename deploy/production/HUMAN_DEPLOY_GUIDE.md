@@ -158,14 +158,23 @@ or rejected for this boundary, as are enabled Git extensions, per-worktree
 configuration files, promisor remotes, and untracked-file hiding. Failures
 emit only the generic contract error.
 
-The checker also establishes its own executable trust boundary: unless the
-ambient PATH already consists solely of root-owned, non-group- or
-other-writable system tool directories, it re-executes itself with
-`PATH` restricted to exactly those directories (`/usr/bin`, `/bin`, and
-`/usr/local/bin` only when that directory is root-owned and non-writable) and
-a cleared environment. Caller-supplied PATH tool wrappers therefore cannot
-forge a verdict, and the run fails closed if a required trusted tool is
-absent. It requires `bash` at `/bin/bash`.
+Execute `scripts/check-terraform-slice-4-plan.sh` directly as shown, not by
+sourcing it or passing it to an ambient shell. Its `/bin/bash -p` launcher
+ignores exported functions, startup files (`BASH_ENV`/`ENV`), and inherited
+shell options before unconditionally starting the adjacent tracked
+`check-terraform-slice-4-plan-body.sh` with a cleared environment. Both files
+belong to the reviewed checkout. Validation restricts `PATH` to root-owned,
+non-group- or other-writable system tool directories (`/usr/bin`, `/bin`, and
+`/usr/local/bin` only when trusted). Caller-supplied functions and PATH wrappers
+cannot forge a verdict; a missing required trusted tool fails closed. Both
+stages require Bash at `/bin/bash`; do not invoke the internal body directly.
+
+Every plan, cost, and checkpoint file must contain exactly one valid JSON
+document. Empty, whitespace-only, malformed, or multiple-document files fail
+with the same generic error, including on jq 1.6. The document-count boundary
+and semantic checks use the same parse; no input values or parser errors are
+printed. Keep these artifacts in the protected controller directory and do
+not modify them during review.
 
 If current reconciliation confirms that the deleted address was exactly the
 Terraform-managed `aws_eip.origin`, and the approved saved plan combines its

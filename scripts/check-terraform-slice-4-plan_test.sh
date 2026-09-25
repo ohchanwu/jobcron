@@ -11,6 +11,8 @@ checked_repo="$fixture_root/checked-repo"
 mkdir -p "$checked_repo/scripts" \
   "$checked_repo/deploy/production/systemd"
 cp "$source_checker" "$checked_repo/scripts/check-terraform-slice-4-plan.sh"
+cp "$repo_root/scripts/check-terraform-slice-4-plan-body.sh" \
+  "$checked_repo/scripts/check-terraform-slice-4-plan-body.sh"
 for asset in \
   deploy/production/compose.yaml \
   deploy/production/Caddyfile \
@@ -729,6 +731,142 @@ expect_replacement_verified \
 expect_replacement_verified_with_noisy_failed_stat_probe
 
 expect_combined_recovery_verified
+
+# Exercise the exported-function bypass with both possible trusted PATHs.
+# Use malformed nonempty JSON so jq 1.6 and newer have the same rejection.
+printf '{invalid' >"$fixture_root/ambient-invalid.json"
+cat >"$fixture_root/ambient-caller.sh" <<'EOF'
+#!/bin/bash
+jq() { return 0; }
+export -f jq
+exec "$@"
+EOF
+for ambient_path in /usr/bin:/bin /usr/local/bin:/usr/bin:/bin; do
+  ambient_output=
+  ambient_rc=0
+  ambient_output="$(PATH="$ambient_path" /bin/bash \
+    "$fixture_root/ambient-caller.sh" "$checker" \
+    "$fixture_root/ambient-invalid.json" \
+    "$fixture_root/ambient-invalid.json" \
+    "$fixture_root/ambient-invalid.json" 2>&1)" || ambient_rc=$?
+  if [[ "$ambient_rc" -eq 0 || "$ambient_output" != "$generic_error" ]]; then
+    printf 'FAIL: exported jq function bypassed generic rejection\n' >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: rejected malformed inputs despite exported jq function\n'
+  fi
+done
+
+: >"$fixture_root/empty-input"
+expect_rejected "empty plan/cost/checkpoint (jq 1.6)" \
+  "$fixture_root/empty-input" "$fixture_root/empty-input" \
+  "$fixture_root/empty-input"
+
+# Each artifact must contain exactly one JSON document, not a stream whose
+# last result can hide an earlier failure. Keep the other inputs valid.
+for json_mode in create replacement combined-recovery; do
+  json_plan="$fixture_root/plan-valid.json"
+  json_checkpoint="$fixture_root/checkpoint-valid.json"
+  if [[ "$json_mode" == replacement ]]; then
+    json_plan="$fixture_root/plan-replacement-valid.json"
+    json_checkpoint="$fixture_root/current-checkpoint-replacement-valid.json"
+  elif [[ "$json_mode" == combined-recovery ]]; then
+    json_plan="$fixture_root/plan-combined-recovery-valid.json"
+    json_checkpoint="$fixture_root/current-checkpoint-combined-valid.json"
+  fi
+  for json_slot in 0 1 2; do
+    json_args=("$json_plan" "$fixture_root/cost-valid.json" "$json_checkpoint")
+    json_source="${json_args[$json_slot]}"
+    if [[ "$json_mode" != create ]]; then
+      json_args+=("$fixture_root/replacement-user-data" "$reviewed_sha")
+    fi
+    if [[ "$json_mode" == combined-recovery ]]; then
+      json_args+=(combined-recovery)
+    fi
+    for json_shape in empty whitespace malformed valid-then-malformed duplicate invalid-then-valid valid-then-invalid null array; do
+      json_bad="$fixture_root/json-boundary-input"
+      case "$json_shape" in
+        empty) : >"$json_bad" ;;
+        whitespace) printf ' \t\r\n' >"$json_bad" ;;
+        malformed) printf '{"PRIVATE_VALUE":' >"$json_bad" ;;
+        valid-then-malformed)
+          cp "$json_source" "$json_bad"
+          printf '\n{"PRIVATE_VALUE":' >>"$json_bad" ;;
+        duplicate) jq -s '.[]' "$json_source" "$json_source" >"$json_bad" ;;
+        invalid-then-valid)
+          printf '{"PRIVATE_VALUE":true}\n' >"$json_bad"
+          jq . "$json_source" >>"$json_bad" ;;
+        valid-then-invalid)
+          cp "$json_source" "$json_bad"
+          printf '\n{"PRIVATE_VALUE":true}\n' >>"$json_bad" ;;
+        null) printf 'null\n' >"$json_bad" ;;
+        array) jq -s . "$json_source" >"$json_bad" ;;
+      esac
+      json_args[json_slot]="$json_bad"
+      expect_recovery_invocation_rejected \
+        "$json_mode JSON slot $json_slot $json_shape" "${json_args[@]}"
+    done
+  done
+done
+
+# Direct execution must ignore startup files, imported functions and exported
+# shell options before even the launcher's first command. A marker catches
+# startup execution even if its stdout would be swallowed by a later command.
+cat >"$fixture_root/hostile-startup.sh" <<'EOF'
+printf 'PRIVATE_VALUE startup executed\n'
+printf 'executed\n' >"$AMBIENT_MARKER"
+jq() { return 0; }
+export -f jq
+EOF
+cat >"$fixture_root/ambient-state-caller.sh" <<'EOF'
+#!/bin/bash
+jq() { printf 'PRIVATE_VALUE forged jq\n'; return 0; }
+export -f jq
+exec /usr/bin/env SHELLOPTS=xtrace:verbose:nounset \
+  BASHOPTS=extdebug:failglob BASH_ENV="$AMBIENT_STARTUP" \
+  ENV="$AMBIENT_STARTUP" "$@"
+EOF
+for ambient_mode in create replacement combined-recovery; do
+  ambient_plan="$fixture_root/plan-valid.json"
+  ambient_checkpoint="$fixture_root/checkpoint-valid.json"
+  ambient_expected="$expected_output"
+  if [[ "$ambient_mode" == replacement ]]; then
+    ambient_plan="$fixture_root/plan-replacement-valid.json"
+    ambient_checkpoint="$fixture_root/current-checkpoint-replacement-valid.json"
+    ambient_expected="$expected_replacement_output"
+  elif [[ "$ambient_mode" == combined-recovery ]]; then
+    ambient_plan="$fixture_root/plan-combined-recovery-valid.json"
+    ambient_checkpoint="$fixture_root/current-checkpoint-combined-valid.json"
+    ambient_expected="$expected_combined_recovery_output"
+  fi
+  for ambient_case in valid invalid; do
+    ambient_args=("$ambient_plan" "$fixture_root/cost-valid.json" "$ambient_checkpoint")
+    if [[ "$ambient_case" == invalid ]]; then
+      ambient_args[0]="$fixture_root/ambient-invalid.json"
+    fi
+    if [[ "$ambient_mode" != create ]]; then
+      ambient_args+=("$fixture_root/replacement-user-data" "$reviewed_sha")
+    fi
+    if [[ "$ambient_mode" == combined-recovery ]]; then
+      ambient_args+=(combined-recovery)
+    fi
+    ambient_rc=0
+    ambient_output="$(AMBIENT_STARTUP="$fixture_root/hostile-startup.sh" \
+      AMBIENT_MARKER="$fixture_root/startup-executed" PATH=/usr/bin:/bin \
+      /bin/bash "$fixture_root/ambient-state-caller.sh" \
+      "$checker" "${ambient_args[@]}" 2>&1)" || ambient_rc=$?
+    if [[ -e "$fixture_root/startup-executed" ]] ||
+      { [[ "$ambient_case" == valid ]] &&
+        [[ "$ambient_rc" -ne 0 || "$ambient_output" != "$ambient_expected" ]]; } ||
+      { [[ "$ambient_case" == invalid ]] &&
+        [[ "$ambient_rc" -eq 0 || "$ambient_output" != "$generic_error" ]]; }; then
+      printf 'FAIL: %s %s ambient startup boundary\n' "$ambient_mode" "$ambient_case" >&2
+      failures=$((failures + 1))
+    else
+      printf 'PASS: %s %s ignores ambient startup state\n' "$ambient_mode" "$ambient_case"
+    fi
+  done
+done
 
 recovery_args=(
   "$fixture_root/plan-replacement-valid.json"
