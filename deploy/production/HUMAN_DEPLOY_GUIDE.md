@@ -99,10 +99,14 @@ For initial deployment only, select these branches in the remaining procedure:
 
 - Section 6: initialize the empty RDS schema using `jobcron-user` built from the
   exact clean reviewed release, not the historical lineage/backfill recipe.
-  Build `./cmd/jobcron-user` with `GOTOOLCHAIN=local CGO_ENABLED=0 go build
-  -mod=readonly -trimpath -o "$migration_bin" ./cmd/jobcron-user` on the trusted
-  operator machine; keep the binary outside the checkout. Check the checkout's
-  full SHA/clean status before and after building and verify `go version -m`
+  Select an installed Go version satisfying `go.mod`, setting `JOBCRON_GO_BINARY`
+  to that distribution's absolute `bin/go` path (not an older launcher that
+  relies on automatic toolchain switching). No full-toolchain manifest is needed.
+  Build with `GOTOOLCHAIN=local CGO_ENABLED=0 "$JOBCRON_GO_BINARY" build
+  -buildvcs=true -mod=readonly -trimpath -o "$migration_bin" ./cmd/jobcron-user`
+  on the trusted operator machine; keep the binary outside the checkout.
+  Check the checkout's full SHA/clean status before and after building and verify
+  `"$JOBCRON_GO_BINARY" version -m "$migration_bin"`
   reports that exact `vcs.revision` and `vcs.modified=false`. Record its SHA-256
   digest privately. Run `"$migration_bin" migrate --database-url
   "$JOBCRON_MASTER_DATABASE_URL"` through the section-6 TLS tunnel and silent
