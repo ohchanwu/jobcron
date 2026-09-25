@@ -102,9 +102,14 @@ For initial deployment only, select these branches in the remaining procedure:
   Select an installed Go version satisfying `go.mod`, setting `JOBCRON_GO_BINARY`
   to that distribution's absolute `bin/go` path (not an older launcher that
   relies on automatic toolchain switching). No full-toolchain manifest is needed.
-  Build with `GOTOOLCHAIN=local CGO_ENABLED=0 "$JOBCRON_GO_BINARY" build
+  Build with `GIT_DIR="$(git rev-parse --absolute-git-dir)"
+  GIT_WORK_TREE="$(git rev-parse --show-toplevel)"
+  GOTOOLCHAIN=local CGO_ENABLED=0 "$JOBCRON_GO_BINARY" build
   -buildvcs=true -mod=readonly -trimpath -o "$migration_bin" ./cmd/jobcron-user`
   on the trusted operator machine; keep the binary outside the checkout.
+  The explicit Git paths bind Go's VCS probes to this checkout: when a worktree
+  is nested under another checkout, automatic probing can stamp the outer
+  repository's commit instead. Never accept a mismatched build stamp.
   Check the checkout's full SHA/clean status before and after building and verify
   `"$JOBCRON_GO_BINARY" version -m "$migration_bin"`
   reports that exact `vcs.revision` and `vcs.modified=false`. Record its SHA-256
