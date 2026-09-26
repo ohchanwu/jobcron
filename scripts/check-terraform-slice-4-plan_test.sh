@@ -387,7 +387,9 @@ else
   replacement_user_data_hash="$(shasum "$fixture_root/replacement-user-data" | awk '{print $1}')"
 fi
 
-jq --arg user_data_hash "$replacement_user_data_hash" '
+# AWS provider 6.33.0 plans contain plaintext, not the pre-v6 SHA-1 value.
+# --rawfile preserves the final newline that shell substitution would remove.
+jq --rawfile user_data "$fixture_root/replacement-user-data" '
   .resource_changes |= map(
     if .address == "aws_instance.replacement_host" then
       .action_reason = "replace_by_request" |
@@ -402,7 +404,7 @@ jq --arg user_data_hash "$replacement_user_data_hash" '
           key_name: null,
           associate_public_ip_address: true,
           vpc_security_group_ids: ["sg-origin"],
-          user_data: "old-user-data-hash"
+          user_data: "#!/bin/bash\n# disposable bootstrap\n"
         },
         after: {
           ami: "ami-reviewed-arm64",
@@ -423,7 +425,7 @@ jq --arg user_data_hash "$replacement_user_data_hash" '
             volume_size: 8,
             delete_on_termination: true
           }],
-          user_data: $user_data_hash
+          user_data: $user_data
         },
         after_unknown: {
           id: true,
@@ -1284,6 +1286,41 @@ replacement_plan_mutation() {
     "$name replacement plan" \
     "$fixture_root/plan-replacement-$name.json"
 }
+
+# Exercise the same provider-v6 boundary in all three replacement lanes.
+# In particular, the old hash-only fixture must now fail rather than silently
+# admitting a second representation. Every rejection must remain value-blind.
+for user_data_filter in \
+  ".change.after.user_data = \"$replacement_user_data_hash\"" \
+  '.change.after.user_data |= . + "# PRIVATE_VALUE injected command\n"' \
+  '.change.after.user_data |= sub("systemctl stop"; "systemctl start")' \
+  '.change.after.user_data |= rtrimstr("\n")' \
+  '.change.after.user_data |= . + "\n"' \
+  '.change.after.user_data |= gsub("\n"; "\r\n")' \
+  '.change.after.user_data |= @base64' \
+  '.change.after.user_data = null' \
+  'del(.change.after.user_data)' \
+  '.change.after.user_data = {}' \
+  '.change.after.user_data = ""' \
+  '.change.after_unknown.user_data = true' \
+  '.change.before.user_data = .change.after.user_data'; do
+  user_data_mutation="(.resource_changes[] | select(.address == \"aws_instance.replacement_host\")) |= ($user_data_filter)"
+  replacement_plan_mutation 'provider-v6-user-data' "$user_data_mutation"
+  combined_recovery_plan_mutation 'provider-v6-user-data' "$user_data_mutation"
+  initial_mutation 0 'provider-v6-user-data' "$user_data_mutation"
+done
+
+# A matching render cannot legitimize a recognizable secret in initial mode.
+cp "$fixture_root/replacement-user-data" "$fixture_root/user-data-secret"
+printf '\n# postgresql://synthetic:PRIVATE_VALUE@invalid/db\n' >>"$fixture_root/user-data-secret"
+jq --rawfile payload "$fixture_root/user-data-secret" \
+  '(.resource_changes[] | select(.address == "aws_instance.replacement_host") |
+    .change.after.user_data) = $payload' \
+  "$fixture_root/plan-initial-valid.json" >"$fixture_root/plan-user-data-secret.json"
+expect_recovery_invocation_rejected 'initial matching user-data secret' \
+  "$fixture_root/plan-user-data-secret.json" "$fixture_root/cost-valid.json" \
+  "$fixture_root/current-checkpoint-initial-valid.json" "$fixture_root/user-data-secret" \
+  "$reviewed_sha" initial-deployment
 
 replacement_plan_mutation "wrong-action-order" \
   '(.resource_changes[] | select(.address == "aws_instance.replacement_host") |

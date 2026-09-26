@@ -66,6 +66,7 @@ cost_json="$2"
 checkpoint_json="$3"
 mode=create
 expected_user_data_hash=
+rendered_user_data=/dev/null
 reviewed_sha=
 
 file_mode() {
@@ -183,6 +184,22 @@ fi
 command -v jq >/dev/null 2>&1 || fail
 [[ -f "$plan_json" && -f "$cost_json" && -f "$checkpoint_json" ]] || fail
 
+if [[ "$mode" != create ]]; then
+  # Provider 6.33.0 exposes plaintext user_data. Hash its exact decoded bytes,
+  # without jq/shell adding or stripping newlines; never print the payload.
+  planned_user_data_hash="$(
+    jq -esj '
+      if length != 1 then error("invalid") else .[0] end |
+      [.resource_changes[] | select(.address == "aws_instance.replacement_host")] |
+      if length != 1 then error("invalid") else .[0].change.after.user_data end |
+      if type == "string" and length > 0 then . else error("invalid") end
+    ' "$plan_json" 2>/dev/null | {
+      if command -v sha1sum >/dev/null 2>&1; then sha1sum; else shasum; fi
+    } | awk '{print $1}'
+  )" || fail
+  [[ "$planned_user_data_hash" == "$expected_user_data_hash" ]] || fail
+fi
+
 if [[ "$mode" == initial-deployment ]]; then
   # The lean lane removes invented history, not private-evidence protections.
   for artifact in "$plan_json" "$cost_json" "$checkpoint_json" "$rendered_user_data"; do
@@ -201,7 +218,7 @@ fi
 
 # Slurp forces one evaluation even on empty input (jq 1.6 otherwise exits 0),
 # and rejects streams before applying policy to the same parsed document.
-jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_hash" \
+jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
   --slurpfile checkpoint "$checkpoint_json" '
   (if length == 1 then .[0] else error("invalid") end) |
   (if ($checkpoint | length) == 1 then $checkpoint[0] else error("invalid") end) as $checkpoint |
@@ -348,7 +365,9 @@ jq -es --arg mode "$mode" --arg expected_user_data_hash "$expected_user_data_has
       ($instance.change.after.root_block_device[0].volume_size == 8) and
       ($instance.change.after.root_block_device[0].delete_on_termination == true) and
       ($instance.change.before.user_data | type == "string") and
-      ($instance.change.after.user_data == $expected_user_data_hash) and
+      # Exact equality in addition to the digest binding above; no hash-only
+      # fallback, base64 decoding, whitespace trimming, or normalization.
+      ($instance.change.after.user_data == $expected_user_data) and
       ($instance.change.before.user_data != $instance.change.after.user_data) and
       (($instance.change.after_unknown.key_name // false) == false) and
       (($instance.change.after_unknown.associate_public_ip_address // false) == false) and
