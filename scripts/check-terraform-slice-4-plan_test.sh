@@ -778,7 +778,269 @@ expect_initial_verified() {
     printf 'PASS: verified truthful initial deployment\n'
   fi
 }
+# Synthetic independent observations and pre-refresh state, never real evidence.
+export TF_INITIAL_LIVE_HOST_JSON="$fixture_root/live-host.json"
+export TF_INITIAL_LIVE_RDS_JSON="$fixture_root/live-rds.json"
+export TF_INITIAL_CURRENT_STATE_JSON="$fixture_root/current-state.json"
+export TF_INITIAL_TFVARS_JSON="$fixture_root/reconstructed.tfvars.json"
+python3 - "$fixture_root" <<'PY'
+import copy
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+def save(name, value):
+    (root / name).write_text(json.dumps(value))
+
+p = json.loads((root / 'plan-initial-valid.json').read_text())
+changes = {r['address']: r['change'] for r in p['resource_changes']}
+host = 'aws_instance.replacement_host'
+db = 'aws_db_instance.production'
+role = 'aws_iam_role.replacement_host'
+profile = 'aws_iam_instance_profile.replacement_host'
+attachment = 'aws_iam_role_policy_attachment.replacement_host_ssm'
+policy = 'aws_iam_role_policy.replacement_host_runtime'
+ssm = 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+for address, change in changes.items():
+    if change['before'] is not None:
+        change['before'].setdefault('id', address)
+        if address != host:
+            change['after'] = copy.deepcopy(change['before'])
+changes[host]['before'].update(id='i-synthetic', public_ip='192.0.2.1',
+    public_dns='old.example.invalid', tags=None,
+    root_block_device=[dict(changes[host]['after']['root_block_device'][0], tags=None)])
+changes[db]['before'].update(id='db-synthetic-resource', identifier='synthetic-db',
+    latest_restorable_time='2026-09-25T01:00:00Z')
+changes[role]['before'].update(name='jobcron-replacement-host', id='jobcron-replacement-host',
+    tags=None, inline_policy=None, managed_policy_arns=None)
+changes[profile]['before'].update(name='jobcron-replacement-host', role='jobcron-replacement-host', tags=None)
+changes[attachment]['before'].update(role='jobcron-replacement-host', policy_arn=ssm)
+changes[policy]['before'].update(role='jobcron-replacement-host', name='jobcron-replacement-host-runtime')
+for address in (db, role, profile, attachment, policy):
+    changes[address]['after'] = copy.deepcopy(changes[address]['before'])
+inputs = {'replacement_host_ami_id': 'ami-reviewed-arm64',
+    'replacement_public_subnet_key': 'public_a',
+    'canonical_network_config': {'synthetic': True},
+    'private_database_config': {'database_identifier': 'synthetic-db'}}
+changes['aws_subnet.public["public_a"]']['before']['id'] = 'subnet-reviewed-public'
+changes['aws_subnet.public["public_a"]']['after']['id'] = 'subnet-reviewed-public'
+p['variables'] = {k: {'value': v} for k, v in inputs.items()}
+p['configuration'] = {'root_module': {'resources': [
+    {'address': a, 'expressions': {}} for a in changes]}}
+config = {r['address']: r['expressions'] for r in p['configuration']['root_module']['resources']}
+config[attachment].update(policy_arn={'constant_value': ssm},
+    role={'references': [role + '.name', role]})
+config[policy]['role'] = {'references': [role + '.id', role]}
+save('plan-initial-valid.json', p)
+save('current-state.json', {'format_version': '1.0', 'values': {'root_module': {'resources': [
+    {'address': a, 'mode': 'managed', 'values': c['before']}
+    for a, c in changes.items() if c['before'] is not None]}}})
+save('live-host.json', {'Reservations': [{'Instances': [{'InstanceId': 'i-synthetic',
+    'PublicIpAddress': '192.0.2.2', 'PublicDnsName': 'new.example.invalid'}]}]})
+save('live-rds.json', {'DBInstances': [{'DBInstanceIdentifier': 'synthetic-db',
+    'DbiResourceId': 'db-synthetic-resource', 'LatestRestorableTime': '2026-09-25T01:05:00+00:00'}]})
+save('reconstructed.tfvars.json', inputs)
+drifts = []
+for address in (db, role, profile, host):
+    before = copy.deepcopy(changes[address]['before'])
+    after = copy.deepcopy(before)
+    if address == db:
+        after['latest_restorable_time'] = '2026-09-25T01:05:00Z'
+    else:
+        after['tags'] = {}
+    if address == role:
+        after.update(inline_policy=[], managed_policy_arns=[ssm])
+    if address == host:
+        after.update(public_ip='192.0.2.2', public_dns='new.example.invalid')
+        after['root_block_device'][0]['tags'] = {}
+    drifts.append({'address': address, 'change': {'actions': ['update'],
+        'before': before, 'after': after, 'after_unknown': {}}})
+    changes[address]['before'] = after
+    if address != host:
+        changes[address]['after'] = copy.deepcopy(after)
+p['resource_drift'] = drifts
+save('plan-initial-refresh.json', p)
+PY
 expect_initial_verified
+expect_initial_verified "$fixture_root/plan-initial-refresh.json"
+
+# Mutation tests keep drift.after and planned before/no-op values consistent so
+# source binding and the attribute allowlist, not an incidental mismatch, decide.
+python3 - "$fixture_root" "$checker" "$reviewed_sha" <<'PY'
+import copy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+root, checker, sha = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+baseline = json.loads((root / 'plan-initial-refresh.json').read_text())
+host, db = 'aws_instance.replacement_host', 'aws_db_instance.production'
+role, profile = 'aws_iam_role.replacement_host', 'aws_iam_instance_profile.replacement_host'
+attachment = 'aws_iam_role_policy_attachment.replacement_host_ssm'
+policy = 'aws_iam_role_policy.replacement_host_runtime'
+env_files = {'TF_INITIAL_LIVE_HOST_JSON': 'live-host.json',
+    'TF_INITIAL_LIVE_RDS_JSON': 'live-rds.json',
+    'TF_INITIAL_CURRENT_STATE_JSON': 'current-state.json',
+    'TF_INITIAL_TFVARS_JSON': 'reconstructed.tfvars.json'}
+evidence = {k: json.loads((root / v).read_text()) for k, v in env_files.items()}
+
+def record(p, section, address):
+    return next(r for r in p[section] if r['address'] == address)
+
+def drift_after(p, address, key, value):
+    record(p, 'resource_drift', address)['change']['after'][key] = value
+
+def planned(p, address, key, value):
+    change = record(p, 'resource_changes', address)['change']
+    change['before'][key] = value
+    change['after'][key] = value
+
+def run(name, mutate, accept=False):
+    p, e = copy.deepcopy(baseline), copy.deepcopy(evidence)
+    mutate(p, e)
+    for d in p['resource_drift']:
+        c = record(p, 'resource_changes', d['address'])['change'] if d['address'] in {r['address'] for r in p['resource_changes']} else None
+        if c:
+            c['before'] = copy.deepcopy(d['change']['after'])
+            if c['actions'] == ['no-op']:
+                c['after'] = copy.deepcopy(c['before'])
+    path = root / 'refresh-mutation.json'
+    path.write_text(json.dumps(p))
+    env = dict(os.environ)
+    for key, value in e.items():
+        f = root / ('mutation-' + env_files[key])
+        f.write_text(json.dumps(value))
+        env[key] = str(f)
+    result = subprocess.run([checker, str(path), str(root / 'cost-valid.json'),
+        str(root / 'current-checkpoint-initial-valid.json'), str(root / 'replacement-user-data'),
+        sha, 'initial-deployment'], env=env, capture_output=True, text=True)
+    valid = result.returncode == 0 if accept else (
+        result.returncode != 0 and result.stdout == '' and
+        result.stderr == 'Terraform saved plan violates the Slice 4 contract\n')
+    if not valid:
+        sys.exit('FAIL: refresh mutation ' + name)
+    print('PASS: refresh mutation ' + name)
+
+run('independent four-resource refresh', lambda p, e: None, True)
+def raw_state(p, e):
+    resources = []
+    for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']:
+        base = r['address'].split('[')[0]
+        kind, name = base.split('.')
+        instance = {'attributes': r['values']}
+        if '[' in r['address']:
+            instance['index_key'] = json.loads(r['address'].split('[', 1)[1][:-1])
+        existing = next((x for x in resources if x['type'] == kind and x['name'] == name), None)
+        if existing:
+            existing['instances'].append(instance)
+        else:
+            resources.append({'mode': 'managed', 'type': kind, 'name': name, 'instances': [instance]})
+    e['TF_INITIAL_CURRENT_STATE_JSON'] = {'version': 4, 'resources': resources}
+run('raw Terraform state snapshot', raw_state, True)
+run('unchanged unbound managed policy', lambda p, e: (
+    record(p, 'resource_drift', role)['change']['before'].update(managed_policy_arns=['unexpected']),
+    drift_after(p, role, 'managed_policy_arns', ['unexpected']),
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == role)['values'].update(managed_policy_arns=['unexpected'])))
+run('inline policy retained nonempty', lambda p, e: (
+    record(p, 'resource_drift', role)['change']['before'].update(inline_policy=[{'name': 'unexpected'}]),
+    drift_after(p, role, 'inline_policy', [{'name': 'unexpected'}]),
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == role)['values'].update(inline_policy=[{'name': 'unexpected'}])))
+run('unrefreshed IAM attachment state substitution', lambda p, e:
+    planned(p, attachment, 'id', 'different-attachment'))
+run('configured root tags', lambda p, e:
+    next(r for r in p['configuration']['root_module']['resources'] if r['address'] == host)
+        ['expressions'].update(root_block_device=[{'tags': {'constant_value': {}}}]))
+for address, key, value in [
+    (host, 'public_ip', '192.0.2.99'), (host, 'public_dns', 'other.example.invalid'),
+    (host, 'tags', {'Name': 'unexpected'}), (profile, 'tags', {'Name': 'unexpected'}),
+    (role, 'tags', {'Name': 'unexpected'}), (role, 'inline_policy', [{'name': 'unexpected'}]),
+    (role, 'managed_policy_arns', ['arn:aws:iam::aws:policy/AdministratorAccess']),
+    (role, 'managed_policy_arns', []), (db, 'latest_restorable_time', '2026-09-25T01:06:00Z'),
+    (db, 'latest_restorable_time', 'not-a-time'), (db, 'allocated_storage', 21),
+    (db, 'publicly_accessible', True), (db, 'storage_encrypted', 1),
+    (db, 'identifier', 'other'), (host, 'iam_instance_profile', 'other'),
+    (profile, 'role', 'other'), (role, 'assume_role_policy', 'unexpected'),
+    (role, 'password', 'PRIVATE_VALUE'), (host, 'user_data', '# changed'),
+]:
+    run(address + ' ' + key, lambda p, e, a=address, k=key, v=value: drift_after(p, a, k, v))
+for key, value in [('volume_size', 9), ('encrypted', 1), ('tags', {'Name': 'unexpected'}),
+                   ('volume_id', 'other')]:
+    run('root disk ' + key, lambda p, e, k=key, v=value:
+        record(p, 'resource_drift', host)['change']['after']['root_block_device'][0].update({k: v}))
+for address in (host, db, role, profile):
+    run('extra drift attr ' + address, lambda p, e, a=address: drift_after(p, a, 'unexpected', True))
+    run('unknown drift ' + address, lambda p, e, a=address:
+        record(p, 'resource_drift', a)['change'].update(after_unknown={'id': True}))
+    run('drift import ' + address, lambda p, e, a=address:
+        record(p, 'resource_drift', a)['change'].update(importing={'id': 'unexpected'}))
+    run('drift move ' + address, lambda p, e, a=address:
+        record(p, 'resource_drift', a).update(previous_address='old'))
+    run('coupled planned update ' + address, lambda p, e, a=address:
+        record(p, 'resource_changes', a)['change'].update(actions=['update']))
+run('database replacement', lambda p, e:
+    record(p, 'resource_changes', db)['change'].update(actions=['delete', 'create']))
+run('extra drift resource', lambda p, e: p['resource_drift'].append({
+    'address': 'aws_route53_record.origin', 'change': {'actions': ['update'], 'before': {}, 'after': {}}}))
+run('duplicate drift', lambda p, e: p['resource_drift'].append(copy.deepcopy(p['resource_drift'][0])))
+run('missing drift with changed state', lambda p, e: p['resource_drift'].pop())
+run('altered attachment binding', lambda p, e: planned(p, attachment, 'role', 'other'))
+run('altered runtime policy binding', lambda p, e: planned(p, policy, 'role', 'other'))
+run('configured public IP', lambda p, e:
+    next(r for r in p['configuration']['root_module']['resources'] if r['address'] == host)
+        ['expressions'].update(public_ip={'constant_value': '192.0.2.2'}))
+for key in env_files:
+    run('extra evidence secret ' + key, lambda p, e, k=key: e[k].update(password='PRIVATE_VALUE'))
+    run('missing evidence structure ' + key, lambda p, e, k=key: e[k].clear())
+run('host identity', lambda p, e: e['TF_INITIAL_LIVE_HOST_JSON']['Reservations'][0]['Instances'][0].update(InstanceId='other'))
+run('extra reservation', lambda p, e: e['TF_INITIAL_LIVE_HOST_JSON']['Reservations'].append({'Instances': []}))
+run('extra instance', lambda p, e: e['TF_INITIAL_LIVE_HOST_JSON']['Reservations'][0]['Instances'].append({}))
+run('missing host IP', lambda p, e: e['TF_INITIAL_LIVE_HOST_JSON']['Reservations'][0]['Instances'][0].pop('PublicIpAddress'))
+run('malformed host DNS', lambda p, e: e['TF_INITIAL_LIVE_HOST_JSON']['Reservations'][0]['Instances'][0].update(PublicDnsName=[]))
+run('database identity', lambda p, e: e['TF_INITIAL_LIVE_RDS_JSON']['DBInstances'][0].update(DBInstanceIdentifier='other'))
+run('database resource identity', lambda p, e: e['TF_INITIAL_LIVE_RDS_JSON']['DBInstances'][0].update(DbiResourceId='other'))
+run('extra database', lambda p, e: e['TF_INITIAL_LIVE_RDS_JSON']['DBInstances'].append({}))
+run('missing database time', lambda p, e: e['TF_INITIAL_LIVE_RDS_JSON']['DBInstances'][0].pop('LatestRestorableTime'))
+run('normalized RFC3339 timezone', lambda p, e:
+    e['TF_INITIAL_LIVE_RDS_JSON']['DBInstances'][0].update(LatestRestorableTime='2026-09-25T10:05:00.000000+09:00'), True)
+run('wrong reconstructed AMI', lambda p, e: e['TF_INITIAL_TFVARS_JSON'].update(replacement_host_ami_id='other'))
+run('unknown reconstructed input', lambda p, e: e['TF_INITIAL_TFVARS_JSON'].update(other=True))
+run('omitted default subnet input', lambda p, e: e['TF_INITIAL_TFVARS_JSON'].pop('replacement_public_subnet_key'), True)
+run('missing state resource', lambda p, e: e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources'].pop())
+run('duplicate state resource', lambda p, e: e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources'].append(
+    copy.deepcopy(e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources'][0])))
+
+# Each environment input has the same generic, value-blind filesystem/JSON gate.
+args = [checker, str(root / 'plan-initial-refresh.json'), str(root / 'cost-valid.json'),
+    str(root / 'current-checkpoint-initial-valid.json'), str(root / 'replacement-user-data'), sha, 'initial-deployment']
+for key, filename in env_files.items():
+    for case in ('missing', 'unset', 'directory', 'symlink', 'public', 'empty', 'stream', 'duplicate-key', 'malformed', 'null'):
+        env = dict(os.environ)
+        bad = root / 'bad-evidence'
+        if bad.exists() or bad.is_symlink():
+            bad.unlink()
+        if case == 'unset':
+            env.pop(key)
+        else:
+            env[key] = str(bad)
+        if case == 'directory':
+            env[key] = str(root)
+        elif case == 'symlink':
+            bad.symlink_to(root / filename)
+        elif case not in ('missing', 'unset'):
+            content = {'empty': '', 'stream': '{}\n{}', 'duplicate-key': '{"x":1,"x":2}',
+                'malformed': '{"PRIVATE_VALUE":', 'null': 'null'}.get(case, (root / filename).read_text())
+            bad.write_text(content)
+            bad.chmod(0o644 if case == 'public' else 0o600)
+        result = subprocess.run(args, env=env, capture_output=True, text=True)
+        if result.returncode == 0 or result.stdout or result.stderr != 'Terraform saved plan violates the Slice 4 contract\n':
+            sys.exit('FAIL: evidence boundary ' + key + ' ' + case)
+        print('PASS: evidence boundary ' + key + ' ' + case)
+PY
 
 jq '.resource_drift = [{address:"aws_eip.origin", change:{actions:["delete"],before:{domain:"vpc"},after:null}}]' \
   "$fixture_root/plan-initial-valid.json" >"$fixture_root/plan-initial-drift.json"

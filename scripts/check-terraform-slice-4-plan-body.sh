@@ -415,12 +415,8 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
     ($eip.change.after | has("instance") and has("network_interface") and has("associate_with_private_ip")) and
     ($eip.change.after.instance == null and $eip.change.after.network_interface == null and
       $eip.change.after.associate_with_private_ip == null) and
-    # Refresh may report the reconciled missing EIP, never unrelated drift.
-    ((.resource_drift // []) | type == "array" and length <= 1 and
-      all(.[]; $create_eip and .address == "aws_eip.origin" and
-        (.previous_address // null) == null and
-        .change.actions == ["delete"] and (.change.before | type == "object") and
-        .change.after == null and (.change.importing // null) == null)) and
+    # Refresh is checked separately against independent owner-only observations
+    # below. Planned actions remain subject to the exact allowlist above.
     # Defense in depth over all plan sections (including embedded prior state).
     # Arbitrary secret detection still requires the independent private review.
     all(.. | objects | to_entries[];
@@ -465,6 +461,245 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
     )
   )
 ' "$plan_json" >/dev/null 2>&1 || fail
+
+if [[ "$mode" == initial-deployment ]]; then
+  # Only these four paths cross the launcher's cleared environment. No values
+  # are printed or passed as arguments. Frozen observations are review evidence,
+  # not a substitute for attended freshness revalidation before apply.
+  python3 -I - "$plan_json" "$checkpoint_json" >/dev/null 2>&1 <<'PY' || fail
+import datetime
+import ipaddress
+import json
+import os
+import re
+import stat
+import sys
+
+
+def require(value):
+    if not value:
+        raise ValueError("invalid")
+
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result)
+        result[key] = value
+    return result
+
+
+def equal(left, right):
+    # Python equates True with 1; Terraform JSON security controls must not.
+    return json.dumps(left, sort_keys=True) == json.dumps(right, sort_keys=True)
+
+
+def load(path):
+    # Open without following a final symlink, then check the opened inode.
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd) as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600)
+        require(info.st_uid == os.geteuid())
+        parent = os.stat(os.path.dirname(os.path.abspath(path)))
+        require(parent.st_uid == os.geteuid() and stat.S_IMODE(parent.st_mode) == 0o700)
+        value = json.load(stream, object_pairs_hook=unique_object,
+                          parse_constant=lambda _: require(False))
+    require(type(value) is dict)
+    secret_free(value)
+    return value
+
+
+def secret_free(value):
+    if type(value) is dict:
+        for key, item in value.items():
+            if re.fullmatch(r'password|master_password|secret_string|secret_binary|private_key|token|session_secret|database_url', key, re.I):
+                require(item is None or type(item) is bool or item == "")
+            secret_free(item)
+    elif type(value) is list:
+        for item in value:
+            secret_free(item)
+    elif type(value) is str:
+        require(not re.search(r'-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----|postgres(ql)?://[^ /:]+:[^ /@]+@', value, re.I))
+
+
+def text(value):
+    require(type(value) is str and bool(value.strip()))
+    return value
+
+
+def one(values):
+    require(type(values) is list and len(values) == 1 and type(values[0]) is dict)
+    return values[0]
+
+
+def indexed(records):
+    require(type(records) is list)
+    result = {}
+    for record in records:
+        address = text(record['address'])
+        require(address not in result)
+        result[address] = record
+    return result
+
+
+def instant(value):
+    require(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})', text(value)))
+    return datetime.datetime.fromisoformat(value.replace('Z', '+00:00'))
+
+
+def known(value):
+    if type(value) is dict:
+        return all(known(v) for v in value.values())
+    if type(value) is list:
+        return all(known(v) for v in value)
+    return value is False
+
+
+def unconfigured_tags(value):
+    if type(value) is dict:
+        return 'tags' not in value and all(unconfigured_tags(v) for v in value.values())
+    if type(value) is list:
+        return all(unconfigured_tags(v) for v in value)
+    return True
+
+
+plan = load(sys.argv[1])
+checkpoint = load(sys.argv[2])
+live_host = one(one(load(os.environ['TF_INITIAL_LIVE_HOST_JSON'])['Reservations'])['Instances'])
+live_db = one(load(os.environ['TF_INITIAL_LIVE_RDS_JSON'])['DBInstances'])
+state = load(os.environ['TF_INITIAL_CURRENT_STATE_JSON'])
+inputs = load(os.environ['TF_INITIAL_TFVARS_JSON'])
+changes = indexed(plan['resource_changes'])
+drifts = indexed(plan.get('resource_drift', []))
+config = indexed(plan['configuration']['root_module']['resources'])
+require(not plan['configuration']['root_module'].get('module_calls'))
+# Accept the two Terraform snapshot representations, preserving attribute
+# values exactly. This never rewrites/normalizes the saved plan or evidence.
+if 'values' in state:
+    require(state['format_version'] == '1.0' and 'resources' not in state)
+    module = state['values']['root_module']
+    require(not module.get('child_modules'))
+    resources = indexed(module['resources'])
+else:
+    require(type(state['version']) is int and state['version'] == 4)
+    records = []
+    groups = set()
+    for resource in state['resources']:
+        require(not resource.get('module') and resource['mode'] == 'managed')
+        base = text(resource['type']) + '.' + text(resource['name'])
+        require(base not in groups)
+        groups.add(base)
+        require(type(resource['instances']) is list and resource['instances'])
+        for instance in resource['instances']:
+            require(not instance.get('deposed') and instance.get('status', 'ready') == 'ready')
+            address = base
+            if 'index_key' in instance:
+                require(type(instance['index_key']) in (str, int))
+                address += '[' + json.dumps(instance['index_key']) + ']'
+            records.append({'address': address, 'mode': 'managed', 'values': instance['attributes']})
+    resources = indexed(records)
+require(set(resources) - {'aws_eip.origin'} == set(changes) - {'aws_eip.origin'})
+require(all(r['mode'] == 'managed' for r in resources.values()))
+for address, resource in resources.items():
+    if address != 'aws_eip.origin' and address not in drifts:
+        require(equal(resource['values'], changes[address]['change']['before']))
+expected_inputs = {'canonical_network_config', 'private_database_config',
+                   'replacement_host_ami_id', 'replacement_public_subnet_key'}
+require(set(inputs) in (expected_inputs, expected_inputs - {'replacement_public_subnet_key'}))
+declared = dict(inputs)
+declared.setdefault('replacement_public_subnet_key', 'public_a')
+require(set(plan['variables']) == expected_inputs)
+require(all(equal(plan['variables'][k]['value'], v) for k, v in declared.items()))
+host = 'aws_instance.replacement_host'
+db = 'aws_db_instance.production'
+role = 'aws_iam_role.replacement_host'
+profile = 'aws_iam_instance_profile.replacement_host'
+attachment = 'aws_iam_role_policy_attachment.replacement_host_ssm'
+runtime_policy = 'aws_iam_role_policy.replacement_host_runtime'
+host_before = changes[host]['change']['before']
+db_before = changes[db]['change']['before']
+require(text(live_host['InstanceId']) == text(host_before['id']) == resources[host]['values']['id'])
+require(text(live_db['DBInstanceIdentifier']) == text(db_before['identifier']) == resources[db]['values']['identifier'])
+require(text(live_db['DbiResourceId']) == text(db_before['id']) == resources[db]['values']['id'])
+ipaddress.IPv4Address(text(live_host['PublicIpAddress']))
+text(live_host['PublicDnsName'])
+instant(live_db['LatestRestorableTime'])
+require(host_before['ami'] == text(declared['replacement_host_ami_id']))
+require(db_before['identifier'] == declared['private_database_config']['database_identifier'])
+subnet = 'aws_subnet.public[' + json.dumps(declared['replacement_public_subnet_key']) + ']'
+require(host_before['subnet_id'] == changes[subnet]['change']['before']['id'])
+
+allowed = {db: {'latest_restorable_time'}, profile: {'tags'},
+           role: {'tags', 'inline_policy', 'managed_policy_arns'},
+           host: {'public_ip', 'public_dns', 'root_block_device', 'tags'}}
+for address, drift in drifts.items():
+    require(drift.get('previous_address') is None and drift.get('action_reason') is None)
+    change = drift['change']
+    require(change.get('importing') is None and not change.get('replace_paths'))
+    require(known(change.get('after_unknown', {})))
+    before, after = change['before'], change['after']
+    if address == 'aws_eip.origin':
+        require(checkpoint['managed_eip']['state_presence'] == 'absent')
+        require(change['actions'] == ['delete'] and type(before) is dict and after is None)
+        require(changes[address]['change']['actions'] == ['create'])
+        continue
+    require(address in allowed and change['actions'] == ['update'])
+    require(type(before) is dict and type(after) is dict and set(before) == set(after))
+    require(text(before['id']) == after['id'])
+    require(equal(before, resources[address]['values']))
+    require(equal(after, changes[address]['change']['before']))
+    if address != host:
+        require(changes[address]['change']['actions'] == ['no-op'])
+        require(equal(after, changes[address]['change']['after']))
+    else:
+        require(changes[address]['change']['actions'] == ['delete', 'create'])
+        require(changes[address]['action_reason'] == 'replace_by_request')
+    changed = {k for k in before if not equal(before[k], after[k])}
+    require(changed and changed <= allowed[address])
+    if address == role:
+        require(before['inline_policy'] in (None, []) and after['inline_policy'] == [])
+        ssm = 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        require(after['managed_policy_arns'] == [ssm])
+        attached = changes[attachment]['change']['after']
+        policy = changes[runtime_policy]['change']['after']
+        require(after['name'] == after['id'] == 'jobcron-replacement-host')
+        require(attached['role'] == policy['role'] == after['name'])
+        require(attached['policy_arn'] == ssm)
+        require(changes[profile]['change']['after']['role'] == after['name'])
+        require(host_before['iam_instance_profile'] == changes[profile]['change']['after']['name'])
+        require(config[attachment]['expressions']['policy_arn'] == {'constant_value': ssm})
+        require(config[attachment]['expressions']['role']['references'] ==
+                ['aws_iam_role.replacement_host.name', 'aws_iam_role.replacement_host'])
+        require(config[runtime_policy]['expressions']['role']['references'] ==
+                ['aws_iam_role.replacement_host.id', 'aws_iam_role.replacement_host'])
+    expressions = config[address]['expressions']
+    require(type(expressions) is dict)
+    for key in changed:
+        # These fields are unconfigured in the pinned production module. A
+        # configured value is not a computed-refresh exemption.
+        if key != 'root_block_device':
+            require(key not in expressions)
+        if key == 'tags':
+            require(before[key] is None and after[key] == {})
+        elif key == 'root_block_device':
+            require(unconfigured_tags(expressions.get(key, {})))
+            old, new = one(before[key]), one(after[key])
+            require(set(old) == set(new) and old['tags'] is None and new['tags'] == {})
+            require(equal({k: v for k, v in old.items() if k != 'tags'},
+                          {k: v for k, v in new.items() if k != 'tags'}))
+        elif key == 'inline_policy':
+            require(before[key] is None and after[key] == [])
+        elif key == 'managed_policy_arns':
+            require(before[key] in (None, []))
+        elif key == 'public_ip':
+            require(after[key] == live_host['PublicIpAddress'])
+        elif key == 'public_dns':
+            require(after[key] == live_host['PublicDnsName'])
+        elif key == 'latest_restorable_time':
+            require(instant(after[key]) == instant(live_db['LatestRestorableTime']))
+PY
+fi
 
 jq -es '
   (if length == 1 then .[0] else error("invalid") end) |
