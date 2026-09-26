@@ -648,7 +648,9 @@ else:
             instance = one(resource['instances'])
             require('index_key' not in instance and not instance.get('deposed'))
             require(instance.get('status', 'ready') == 'ready')
-            require(instance['sensitive_attributes'] == [])
+            # The provider marks SSM value sensitive even for this public AMI.
+            # Admit only its canonical path; the public-value gates below still apply.
+            require(instance['sensitive_attributes'] == [[{'type': 'get_attr', 'value': 'value'}]])
             attrs = instance['attributes']
             public_ami = '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64'
             require(type(attrs) is dict and set(attrs) <= {

@@ -979,8 +979,9 @@ def ami_data(p, e):
             'id': '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
             'name': '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
             'type': 'String', 'value': 'ami-0123456789abcdef0', 'insecure_value': None,
-            'with_decryption': True}, 'sensitive_attributes': []}]})
-run('preserved public AMI data source', ami_data, True)
+            'with_decryption': True},
+            'sensitive_attributes': [[{'type': 'get_attr', 'value': 'value'}]]}]})
+run('preserved public AMI data source with canonical value annotation', ami_data, True)
 def unassociated_eip(p, e):
     c = record(p, 'resource_changes', 'aws_eip.origin')['change']
     for key in ('instance', 'network_interface'):
@@ -1069,9 +1070,22 @@ for key, value in [('value', 'ami-wrong'), ('value', None), ('type', 'SecureStri
         ('insecure_value', 'PRIVATE_VALUE'), ('password', 'PRIVATE_VALUE'), ('sensitive', True)]:
     provider_run('unsafe AMI data ' + key, lambda p, e, k=key, v=value:
         data_record(e)['instances'][0]['attributes'].update({k: v}))
-for value in (None, True, [['value']], [{'type': 'get_attr', 'value': 'value'}]):
+for value in (None, True, [], [[]], [['value']], [{'type': 'get_attr', 'value': 'value'}],
+        [[{'type': 'get_attr', 'value': 'name'}]],
+        [[{'type': 'get_attr', 'value': '*'}]],
+        [[{'type': 'index', 'value': 'value'}]],
+        [[{'type': 'get_attr', 'value': 0}]],
+        [[{'type': 'get_attr', 'value': 'value', 'extra': True}]],
+        [[{'type': 'get_attr'}]], [[{'value': 'value'}]],
+        [[{'type': 'get_attr', 'value': 'value'}, {'type': 'index', 'value': 0}]],
+        [[{'type': 'get_attr', 'value': 'value'}], [{'type': 'get_attr', 'value': 'value'}]],
+        [[{'type': 'get_attr', 'value': 'value'}], [{'type': 'get_attr', 'value': 'insecure_value'}]]):
     provider_run('sensitive AMI data ' + str(value), lambda p, e, v=value:
         data_record(e)['instances'][0].update(sensitive_attributes=v))
+provider_run('missing AMI sensitivity annotation', lambda p, e:
+    data_record(e)['instances'][0].pop('sensitive_attributes'))
+provider_run('valid but mismatched AMI data value', lambda p, e:
+    data_record(e)['instances'][0]['attributes'].update(value='ami-fedcba98765432100'))
 for timestamp in ('2026-09-25T01:05:59Z', 'not-a-time', None):
     provider_run('invalid plan generation time ' + str(timestamp), lambda p, e, v=timestamp: p.update(timestamp=v))
 provider_run('missing plan generation time', lambda p, e: p.pop('timestamp'))
