@@ -32,6 +32,10 @@ Open an archived file only when the active task or the human explicitly names
 that file. `.superpowers/sdd/` is ephemeral and should contain only the current
 execution's ignored artifacts.
 
+For the private production-plan structural inventory, read
+`docs/operations/260926-private-plan-shape.md` before using the
+`scripts/private_plan_shape*.py` tools.
+
 ## Design docs — peers, newest wins on conflict
 
 Design docs live in `~/.gstack/projects/jobcron/`. They are **peers, not a hierarchy** — no single doc is "the source of truth." On a _minor_ contradiction between docs, prefer the **newest** one (older docs may be outdated), use your judgement, and log the choice for review; on a _significant_ contradiction, surface it for review before proceeding.
