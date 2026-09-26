@@ -125,6 +125,7 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 - [Public demo deployment](../deploy/demo/README.md)
 - [Public demo human guide](../deploy/demo/HUMAN_DEPLOY_GUIDE.md)
 - [Production deployment](../deploy/production/README.md)
+- [Private plan structural diagnostic (D1)](operations/260926-private-plan-shape.md)
 - [Production human guide](../deploy/production/HUMAN_DEPLOY_GUIDE.md)
   - [Lean initial deployment: no prior service, data, or rollback host](../deploy/production/HUMAN_DEPLOY_GUIDE.md#initial-deployment-lean-lane)
 
