@@ -237,11 +237,24 @@ class InventoryTest(unittest.TestCase):
             writer.append(register_path, manifest_path, 0, "approved", "independent_review",
                           "reviewer-sol", "default-orchestrator", "2026-09-26T00:00:00Z")
             first = shape.parse(Path(register_path).read_bytes())
+            original_bytes = Path(register_path).read_bytes()
+            with mock.patch.object(writer.os, "replace", side_effect=OSError("synthetic_crash")):
+                with self.assertRaises(OSError):
+                    writer.append(register_path, manifest_path, 1, "retired", "superseded",
+                                  "reviewer-sol", "default-orchestrator", "2026-09-26T00:01:00Z")
+            self.assertEqual(Path(register_path).read_bytes(), original_bytes)
             with self.assertRaises(shape.ShapeError):
                 writer.append(register_path, manifest_path, 0, "retired", "superseded",
                               "reviewer-sol", "default-orchestrator", "2026-09-26T00:01:00Z")
-            writer.append(register_path, manifest_path, 1, "retired", "superseded",
-                          "reviewer-sol", "default-orchestrator", "2026-09-26T00:01:00Z")
+            def retire(_):
+                try:
+                    writer.append(register_path, manifest_path, 1, "retired", "superseded",
+                                  "reviewer-sol", "default-orchestrator", "2026-09-26T00:01:00Z")
+                    return "recorded"
+                except shape.ShapeError:
+                    return "stale"
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                self.assertEqual(sorted(pool.map(retire, range(2))), ["recorded", "stale"])
             final = shape.parse(Path(register_path).read_bytes())
             self.assertEqual(final["events"][:-1], first["events"])
             self.assertEqual(review.status(final, binding, Path(manifest_path).read_bytes())[0], "retired")
