@@ -317,15 +317,17 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
           ($eip.change.after | type == "object") and
           ($eip.change.after | has("domain")) and
           ($eip.change.after.domain == "vpc") and
-          ($eip.change.after | has("instance")) and
+          (if $mode == "initial-deployment" then true else $eip.change.after | has("instance") end) and
           ($eip.change.after.instance == null) and
-          ($eip.change.after | has("network_interface")) and
+          (if $mode == "initial-deployment" then true else $eip.change.after | has("network_interface") end) and
           ($eip.change.after.network_interface == null) and
           ($eip.change.after | has("associate_with_private_ip")) and
           ($eip.change.after.associate_with_private_ip == null) and
           (($eip.change.after_unknown.domain // false) == false) and
-          (($eip.change.after_unknown.instance // false) == false) and
-          (($eip.change.after_unknown.network_interface // false) == false) and
+          (if $mode == "initial-deployment" then true else
+            (($eip.change.after_unknown.instance // false) == false) and
+            (($eip.change.after_unknown.network_interface // false) == false)
+          end) and
           (($eip.change.after_unknown.associate_with_private_ip // false) == false)
         else
           true
@@ -345,7 +347,9 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
       ($instance.change.before.iam_instance_profile | type == "string") and
       ($instance.change.before.iam_instance_profile | length > 0) and
       ($instance.change.after.iam_instance_profile == $instance.change.before.iam_instance_profile) and
-      ($instance.change.before.key_name == null) and
+      (($instance.change.before.key_name == null) or
+        ($mode == "initial-deployment" and $instance.change.before.key_name == "" and
+          $instance.change.after_unknown.key_name == true)) and
       ($instance.change.after.key_name == null) and
       ($instance.change.before.associate_public_ip_address == true) and
       ($instance.change.after.associate_public_ip_address == true) and
@@ -369,15 +373,19 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
       # fallback, base64 decoding, whitespace trimming, or normalization.
       ($instance.change.after.user_data == $expected_user_data) and
       ($instance.change.before.user_data != $instance.change.after.user_data) and
-      (($instance.change.after_unknown.key_name // false) == false) and
+      ((($instance.change.after_unknown.key_name // false) == false) or
+        ($mode == "initial-deployment" and $instance.change.before.key_name == "" and
+          $instance.change.after_unknown.key_name == true)) and
       (($instance.change.after_unknown.associate_public_ip_address // false) == false) and
       (($instance.change.after_unknown.ami // false) == false) and
       (($instance.change.after_unknown.instance_type // false) == false) and
       (($instance.change.after_unknown.subnet_id // false) == false) and
       (($instance.change.after_unknown.iam_instance_profile // false) == false) and
-      (($instance.change.after_unknown.vpc_security_group_ids // false) == false) and
-      (($instance.change.after_unknown.metadata_options // false) == false) and
-      (($instance.change.after_unknown.root_block_device // false) == false) and
+      (if $mode == "initial-deployment" then true else
+        (($instance.change.after_unknown.vpc_security_group_ids // false) == false) and
+        (($instance.change.after_unknown.metadata_options // false) == false) and
+        (($instance.change.after_unknown.root_block_device // false) == false)
+      end) and
       (($instance.change.after_unknown.user_data // false) == false) and
       ((.diagnostics // []) == [])
     else
@@ -412,7 +420,10 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
     ($rds.backup_retention_period | type == "number" and floor == . and . >= 1) and
     ($rds.vpc_security_group_ids == [$database_sg.id]) and
     ($eip.change.after.domain == "vpc") and
-    ($eip.change.after | has("instance") and has("network_interface") and has("associate_with_private_ip")) and
+    (if $create_eip then true else
+      $eip.change.after | has("instance") and has("network_interface")
+    end) and
+    ($eip.change.after | has("associate_with_private_ip")) and
     ($eip.change.after.instance == null and $eip.change.after.network_interface == null and
       $eip.change.after.associate_with_private_ip == null) and
     # Refresh is checked separately against independent owner-only observations
@@ -463,7 +474,7 @@ jq -es --arg mode "$mode" --rawfile expected_user_data "$rendered_user_data" \
 ' "$plan_json" >/dev/null 2>&1 || fail
 
 if [[ "$mode" == initial-deployment ]]; then
-  # Only these four paths cross the launcher's cleared environment. No values
+  # Only these five paths cross the launcher's cleared environment. No values
   # are printed or passed as arguments. Frozen observations are review evidence,
   # not a substitute for attended freshness revalidation before apply.
   python3 -I - "$plan_json" "$checkpoint_json" >/dev/null 2>&1 <<'PY' || fail
@@ -564,12 +575,54 @@ def unconfigured_tags(value):
     return True
 
 
+def has_key(value, key):
+    if type(value) is dict:
+        return key in value or any(has_key(v, key) for v in value.values())
+    if type(value) is list:
+        return any(has_key(v, key) for v in value)
+    return False
+
+
+def unknown_mask(mask, after, allowed, expressions, path=()):
+    # A partially known collection is a structure, not a boolean. Only exact
+    # computed paths may be true; known controls remain checked by jq above.
+    if type(mask) is bool:
+        if mask:
+            require(path in allowed and after is None)
+            if path == ('key_name',):
+                require(expressions.get('key_name', {'constant_value': None}) == {'constant_value': None})
+            else:
+                require(not has_key(expressions.get(path[0], {}), path[-1]) if len(path) > 1
+                        else path[0] not in expressions)
+        return
+    if type(mask) is dict:
+        require(type(after) is dict)
+        for key, item in mask.items():
+            child = path + (key,)
+            require(key in after or child in allowed)
+            unknown_mask(item, after.get(key), allowed, expressions, child)
+    elif type(mask) is list:
+        require(type(after) is list and len(mask) == len(after))
+        for index, item in enumerate(mask):
+            unknown_mask(item, after[index], allowed, expressions, path + (index,))
+    else:
+        require(False)
+
+
 plan = load(sys.argv[1])
 checkpoint = load(sys.argv[2])
 live_host = one(one(load(os.environ['TF_INITIAL_LIVE_HOST_JSON'])['Reservations'])['Instances'])
 live_db = one(load(os.environ['TF_INITIAL_LIVE_RDS_JSON'])['DBInstances'])
 state = load(os.environ['TF_INITIAL_CURRENT_STATE_JSON'])
 inputs = load(os.environ['TF_INITIAL_TFVARS_JSON'])
+live_addresses = load(os.environ['TF_INITIAL_LIVE_ADDRESSES_JSON'])
+require(set(live_addresses) == {'Addresses'} and type(live_addresses['Addresses']) is list)
+allocations = set()
+for address in live_addresses['Addresses']:
+    require(type(address) is dict)
+    allocation = text(address['AllocationId'])
+    require(re.fullmatch(r'eipalloc-[0-9a-f]+', allocation) and allocation not in allocations)
+    allocations.add(allocation)
 changes = indexed(plan['resource_changes'])
 drifts = indexed(plan.get('resource_drift', []))
 config = indexed(plan['configuration']['root_module']['resources'])
@@ -586,10 +639,27 @@ else:
     records = []
     groups = set()
     for resource in state['resources']:
-        require(not resource.get('module') and resource['mode'] == 'managed')
-        base = text(resource['type']) + '.' + text(resource['name'])
+        require(not resource.get('module') and resource['mode'] in ('managed', 'data'))
+        base = ('data.' if resource['mode'] == 'data' else '') + text(resource['type']) + '.' + text(resource['name'])
         require(base not in groups)
         groups.add(base)
+        if resource['mode'] == 'data':
+            require(base == 'data.aws_ssm_parameter.amazon_linux_2023_arm64')
+            instance = one(resource['instances'])
+            require('index_key' not in instance and not instance.get('deposed'))
+            require(instance.get('status', 'ready') == 'ready')
+            require(instance['sensitive_attributes'] == [])
+            attrs = instance['attributes']
+            public_ami = '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64'
+            require(type(attrs) is dict and set(attrs) <= {
+                'id', 'name', 'arn', 'data_type', 'region', 'type', 'value',
+                'insecure_value', 'version', 'with_decryption'})
+            require(attrs['id'] == attrs['name'] == public_ami and attrs['type'] == 'String')
+            require(text(attrs['value']) == text(inputs['replacement_host_ami_id']))
+            require(re.fullmatch(r'ami-([0-9a-f]{8}|[0-9a-f]{17})', attrs['value']))
+            require(attrs.get('insecure_value') in (None, '', attrs['value']))
+            require(type(attrs['with_decryption']) is bool)
+            continue
         require(type(resource['instances']) is list and resource['instances'])
         for instance in resource['instances']:
             require(not instance.get('deposed') and instance.get('status', 'ready') == 'ready')
@@ -601,6 +671,21 @@ else:
     resources = indexed(records)
 require(set(resources) - {'aws_eip.origin'} == set(changes) - {'aws_eip.origin'})
 require(all(r['mode'] == 'managed' for r in resources.values()))
+eip = 'aws_eip.origin'
+if changes[eip]['change']['actions'] == ['create']:
+    allocation = text(resources[eip]['values']['id'])
+    require(re.fullmatch(r'eipalloc-[0-9a-f]+', allocation))
+    require(resources[eip]['values']['allocation_id'] == allocation and allocation not in allocations)
+    require(config[eip]['expressions'] == {'domain': {'constant_value': 'vpc'}})
+    require(not any(a.startswith('aws_eip_association.') for a in set(config) | set(changes) | set(resources)))
+    eip_computed = {(k,) for k in (
+        'id', 'allocation_id', 'arn', 'association_id', 'carrier_ip', 'customer_owned_ip',
+        'instance', 'network_interface', 'ipam_pool_id', 'network_border_group',
+        'private_dns', 'private_ip', 'ptr_record', 'public_dns', 'public_ip',
+        'public_ipv4_pool', 'tags_all')}
+    unknown_mask(changes[eip]['change'].get('after_unknown', {}),
+                 changes[eip]['change']['after'], eip_computed, config[eip]['expressions'])
+    require(changes[eip]['change']['after'].get('association_id') is None)
 for address, resource in resources.items():
     if address != 'aws_eip.origin' and address not in drifts:
         require(equal(resource['values'], changes[address]['change']['before']))
@@ -619,6 +704,31 @@ attachment = 'aws_iam_role_policy_attachment.replacement_host_ssm'
 runtime_policy = 'aws_iam_role_policy.replacement_host_runtime'
 host_before = changes[host]['change']['before']
 db_before = changes[db]['change']['before']
+# Pinned AWS 6.33.0 computed fields, excluding the configured AMI, instance
+# size, profile, subnet, public-IP switch and all IMDS/root security controls.
+# Whole unconfigured computed blocks may be unknown; partial root/metadata
+# blocks admit only the named computed leaves, never the whole block.
+host_computed = {(k,) for k in (
+    'id', 'arn', 'availability_zone', 'capacity_reservation_specification',
+    'cpu_options', 'disable_api_stop', 'disable_api_termination', 'ebs_block_device',
+    'ebs_optimized', 'enclave_options', 'enable_primary_ipv6', 'ephemeral_block_device',
+    'host_id', 'host_resource_group_arn', 'instance_initiated_shutdown_behavior',
+    'instance_lifecycle', 'instance_market_options', 'instance_state', 'ipv6_address_count',
+    'ipv6_addresses', 'key_name', 'maintenance_options', 'monitoring', 'network_interface',
+    'outpost_arn', 'password_data', 'placement_group', 'placement_group_id',
+    'placement_partition_number', 'primary_network_interface_id', 'primary_network_interface',
+    'private_dns', 'private_dns_name_options', 'private_ip', 'public_dns', 'public_ip',
+    'secondary_private_ips', 'secondary_network_interface', 'security_groups',
+    'spot_instance_request_id', 'tags_all', 'tenancy', 'user_data_base64')}
+host_computed |= {('root_block_device', 0, k) for k in
+                  ('device_name', 'iops', 'kms_key_id', 'tags_all', 'throughput', 'volume_id')}
+host_computed.add(('metadata_options', 0, 'instance_metadata_tags'))
+unknown_mask(changes[host]['change'].get('after_unknown', {}),
+             changes[host]['change']['after'], host_computed, config[host]['expressions'])
+if host_before.get('key_name') == '':
+    require('KeyName' not in live_host)
+    require(config[host]['expressions'].get('key_name', {'constant_value': None}) == {'constant_value': None})
+    require(not any(a.startswith('aws_key_pair.') for a in set(config) | set(changes) | set(resources)))
 require(text(live_host['InstanceId']) == text(host_before['id']) == resources[host]['values']['id'])
 require(text(live_db['DBInstanceIdentifier']) == text(db_before['identifier']) == resources[db]['values']['identifier'])
 require(text(live_db['DbiResourceId']) == text(db_before['id']) == resources[db]['values']['id'])
@@ -643,6 +753,7 @@ for address, drift in drifts.items():
         require(checkpoint['managed_eip']['state_presence'] == 'absent')
         require(change['actions'] == ['delete'] and type(before) is dict and after is None)
         require(changes[address]['change']['actions'] == ['create'])
+        require(equal(before, resources[address]['values']))
         continue
     require(address in allowed and change['actions'] == ['update'])
     require(type(before) is dict and type(after) is dict and set(before) == set(after))
@@ -697,7 +808,7 @@ for address, drift in drifts.items():
         elif key == 'public_dns':
             require(after[key] == live_host['PublicDnsName'])
         elif key == 'latest_restorable_time':
-            require(instant(after[key]) == instant(live_db['LatestRestorableTime']))
+            require(instant(live_db['LatestRestorableTime']) <= instant(after[key]) <= instant(plan['timestamp']))
 PY
 fi
 

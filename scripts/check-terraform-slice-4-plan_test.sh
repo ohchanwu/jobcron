@@ -781,6 +781,7 @@ expect_initial_verified() {
 # Synthetic independent observations and pre-refresh state, never real evidence.
 export TF_INITIAL_LIVE_HOST_JSON="$fixture_root/live-host.json"
 export TF_INITIAL_LIVE_RDS_JSON="$fixture_root/live-rds.json"
+export TF_INITIAL_LIVE_ADDRESSES_JSON="$fixture_root/live-addresses.json"
 export TF_INITIAL_CURRENT_STATE_JSON="$fixture_root/current-state.json"
 export TF_INITIAL_TFVARS_JSON="$fixture_root/reconstructed.tfvars.json"
 python3 - "$fixture_root" <<'PY'
@@ -794,6 +795,7 @@ def save(name, value):
     (root / name).write_text(json.dumps(value))
 
 p = json.loads((root / 'plan-initial-valid.json').read_text())
+p['timestamp'] = '2026-09-25T01:08:00Z'
 changes = {r['address']: r['change'] for r in p['resource_changes']}
 host = 'aws_instance.replacement_host'
 db = 'aws_db_instance.production'
@@ -810,6 +812,7 @@ for address, change in changes.items():
 changes[host]['before'].update(id='i-synthetic', public_ip='192.0.2.1',
     public_dns='old.example.invalid', tags=None,
     root_block_device=[dict(changes[host]['after']['root_block_device'][0], tags=None)])
+changes[host]['before']['ami'] = changes[host]['after']['ami'] = 'ami-0123456789abcdef0'
 changes[db]['before'].update(id='db-synthetic-resource', identifier='synthetic-db',
     latest_restorable_time='2026-09-25T01:00:00Z')
 changes[role]['before'].update(name='jobcron-replacement-host', id='jobcron-replacement-host',
@@ -819,7 +822,7 @@ changes[attachment]['before'].update(role='jobcron-replacement-host', policy_arn
 changes[policy]['before'].update(role='jobcron-replacement-host', name='jobcron-replacement-host-runtime')
 for address in (db, role, profile, attachment, policy):
     changes[address]['after'] = copy.deepcopy(changes[address]['before'])
-inputs = {'replacement_host_ami_id': 'ami-reviewed-arm64',
+inputs = {'replacement_host_ami_id': 'ami-0123456789abcdef0',
     'replacement_public_subnet_key': 'public_a',
     'canonical_network_config': {'synthetic': True},
     'private_database_config': {'database_identifier': 'synthetic-db'}}
@@ -829,13 +832,18 @@ p['variables'] = {k: {'value': v} for k, v in inputs.items()}
 p['configuration'] = {'root_module': {'resources': [
     {'address': a, 'expressions': {}} for a in changes]}}
 config = {r['address']: r['expressions'] for r in p['configuration']['root_module']['resources']}
+config['aws_eip.origin']['domain'] = {'constant_value': 'vpc'}
 config[attachment].update(policy_arn={'constant_value': ssm},
     role={'references': [role + '.name', role]})
 config[policy]['role'] = {'references': [role + '.id', role]}
 save('plan-initial-valid.json', p)
 save('current-state.json', {'format_version': '1.0', 'values': {'root_module': {'resources': [
     {'address': a, 'mode': 'managed', 'values': c['before']}
-    for a, c in changes.items() if c['before'] is not None]}}})
+    for a, c in changes.items() if c['before'] is not None] + [
+    {'address': 'aws_eip.origin', 'mode': 'managed', 'values': {
+        'id': 'eipalloc-0123456789abcdef0', 'allocation_id': 'eipalloc-0123456789abcdef0',
+        'domain': 'vpc'}}]}}})
+save('live-addresses.json', {'Addresses': []})
 save('live-host.json', {'Reservations': [{'Instances': [{'InstanceId': 'i-synthetic',
     'PublicIpAddress': '192.0.2.2', 'PublicDnsName': 'new.example.invalid'}]}]})
 save('live-rds.json', {'DBInstances': [{'DBInstanceIdentifier': 'synthetic-db',
@@ -883,6 +891,7 @@ attachment = 'aws_iam_role_policy_attachment.replacement_host_ssm'
 policy = 'aws_iam_role_policy.replacement_host_runtime'
 env_files = {'TF_INITIAL_LIVE_HOST_JSON': 'live-host.json',
     'TF_INITIAL_LIVE_RDS_JSON': 'live-rds.json',
+    'TF_INITIAL_LIVE_ADDRESSES_JSON': 'live-addresses.json',
     'TF_INITIAL_CURRENT_STATE_JSON': 'current-state.json',
     'TF_INITIAL_TFVARS_JSON': 'reconstructed.tfvars.json'}
 evidence = {k: json.loads((root / v).read_text()) for k, v in env_files.items()}
@@ -925,6 +934,28 @@ def run(name, mutate, accept=False):
     print('PASS: refresh mutation ' + name)
 
 run('independent four-resource refresh', lambda p, e: None, True)
+run('RDS recovery progresses before plan generation', lambda p, e:
+    drift_after(p, db, 'latest_restorable_time', '2026-09-25T01:06:00Z'), True)
+def keyless(p, e):
+    d = record(p, 'resource_drift', host)['change']
+    d['before']['key_name'] = d['after']['key_name'] = ''
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == host)['values']['key_name'] = ''
+    record(p, 'resource_changes', host)['change']['after_unknown']['key_name'] = True
+    # Terraform may serialize an explicit null expression or omit it.
+    record(p['configuration']['root_module'], 'resources', host)['expressions']['key_name'] = {'constant_value': None}
+run('provider keyless empty-to-unknown', keyless, True)
+def collection_masks(p, e):
+    c = record(p, 'resource_changes', host)['change']
+    c['after_unknown'].update(
+        vpc_security_group_ids=[False],
+        metadata_options=[{'http_endpoint': False, 'http_tokens': False,
+            'http_put_response_hop_limit': False, 'instance_metadata_tags': True}],
+        root_block_device=[{'encrypted': False, 'volume_size': False,
+            'volume_type': False, 'delete_on_termination': False,
+            'device_name': True, 'volume_id': True, 'iops': True,
+            'kms_key_id': True, 'throughput': True, 'tags_all': True}])
+run('provider collection-shaped computed masks', collection_masks, True)
 def raw_state(p, e):
     resources = []
     for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']:
@@ -940,6 +971,127 @@ def raw_state(p, e):
             resources.append({'mode': 'managed', 'type': kind, 'name': name, 'instances': [instance]})
     e['TF_INITIAL_CURRENT_STATE_JSON'] = {'version': 4, 'resources': resources}
 run('raw Terraform state snapshot', raw_state, True)
+def ami_data(p, e):
+    raw_state(p, e)
+    e['TF_INITIAL_CURRENT_STATE_JSON']['resources'].append({
+        'mode': 'data', 'type': 'aws_ssm_parameter', 'name': 'amazon_linux_2023_arm64',
+        'instances': [{'attributes': {
+            'id': '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
+            'name': '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
+            'type': 'String', 'value': 'ami-0123456789abcdef0', 'insecure_value': None,
+            'with_decryption': True}, 'sensitive_attributes': []}]})
+run('preserved public AMI data source', ami_data, True)
+def unassociated_eip(p, e):
+    c = record(p, 'resource_changes', 'aws_eip.origin')['change']
+    for key in ('instance', 'network_interface'):
+        c['after'].pop(key)
+        c['after_unknown'][key] = True
+run('provider unknown unattached EIP with live absence', unassociated_eip, True)
+run('provider omitted EIP associations without unknown mask', lambda p, e: (
+    record(p, 'resource_changes', 'aws_eip.origin')['change']['after'].pop('instance'),
+    record(p, 'resource_changes', 'aws_eip.origin')['change']['after'].pop('network_interface')), True)
+
+# Each relaxed provider representation remains source-bound and fail-closed.
+def provider_shape(p, e):
+    keyless(p, e)
+    collection_masks(p, e)
+    unassociated_eip(p, e)
+    ami_data(p, e)
+    drift_after(p, db, 'latest_restorable_time', '2026-09-25T01:06:00Z')
+run('combined provider-v6 shape', provider_shape, True)
+def provider_run(name, mutate, accept=False):
+    run(name, lambda p, e: (provider_shape(p, e), mutate(p, e)), accept)
+provider_run('omitted null key configuration', lambda p, e:
+    record(p['configuration']['root_module'], 'resources', host)['expressions'].pop('key_name'), True)
+for value in ('synthetic-key', '', None, False):
+    provider_run('live KeyName present ' + repr(value), lambda p, e, v=value:
+        e['TF_INITIAL_LIVE_HOST_JSON']['Reservations'][0]['Instances'][0].update(KeyName=v))
+for expr in ({'constant_value': 'key'}, {'references': ['aws_key_pair.other.key_name']}, {}):
+    provider_run('configured key ' + str(expr), lambda p, e, v=expr:
+        record(p['configuration']['root_module'], 'resources', host)['expressions'].update(key_name=v))
+for address in ('aws_key_pair.other', 'aws_eip_association.other'):
+    provider_run('extra configuration ' + address, lambda p, e, a=address:
+        p['configuration']['root_module']['resources'].append({'address': a, 'expressions': {}}))
+    provider_run('extra planned action ' + address, lambda p, e, a=address:
+        p['resource_changes'].append({'address': a, 'change': {'actions': ['create'], 'after': {}}}))
+for key, value in [('metadata_options', True), ('root_block_device', True),
+        ('vpc_security_group_ids', [True]), ('vpc_security_group_ids', []),
+        ('root_block_device', {}), ('root_block_device', [False, False]),
+        ('root_block_device', [{'encrypted': True}]),
+        ('root_block_device', [{'volume_size': True}]),
+        ('root_block_device', [{'unexpected': True}]),
+        ('metadata_options', [{'http_tokens': True}]),
+        ('metadata_options', [{'instance_metadata_tags': 1}]),
+        ('metadata_options', [{'http_endpoint': 'false'}]),
+        ('unexpected', True), ('unexpected', {'leaf': True}), ('user_data', True)]:
+    provider_run('invalid unknown mask ' + key + str(value), lambda p, e, k=key, v=value:
+        record(p, 'resource_changes', host)['change']['after_unknown'].update({k: v}))
+provider_run('configured computed root leaf', lambda p, e:
+    record(p['configuration']['root_module'], 'resources', host)['expressions'].update(
+        root_block_device=[{'iops': {'constant_value': 3000}}]))
+provider_run('unknown field with known value', lambda p, e:
+    record(p, 'resource_changes', host)['change']['after'].update(public_ip='192.0.2.9'))
+for key in ('instance', 'network_interface', 'associate_with_private_ip', 'association_id'):
+    provider_run('EIP attached ' + key, lambda p, e, k=key:
+        record(p, 'resource_changes', 'aws_eip.origin')['change']['after'].update({k: 'attached'}))
+provider_run('EIP unexpected unknown', lambda p, e:
+    record(p, 'resource_changes', 'aws_eip.origin')['change']['after_unknown'].update(unexpected=True))
+provider_run('configured EIP attachment', lambda p, e:
+    record(p['configuration']['root_module'], 'resources', 'aws_eip.origin')['expressions'].update(
+        instance={'references': [host + '.id', host]}))
+provider_run('live allocation still exists', lambda p, e:
+    e['TF_INITIAL_LIVE_ADDRESSES_JSON']['Addresses'].append({'AllocationId': 'eipalloc-0123456789abcdef0'}))
+provider_run('unrelated live allocation', lambda p, e:
+    e['TF_INITIAL_LIVE_ADDRESSES_JSON']['Addresses'].append({'AllocationId': 'eipalloc-fedcba98765432100'}), True)
+provider_run('state allocation identity mismatch', lambda p, e:
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['resources'] if r['type'] == 'aws_eip')
+        ['instances'][0]['attributes'].update(allocation_id='eipalloc-fedcba98765432100'))
+provider_run('missing state allocation identity', lambda p, e:
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['resources'] if r['type'] == 'aws_eip')
+        ['instances'][0]['attributes'].pop('allocation_id'))
+for records in ([{}], [{'AllocationId': None}], [{'AllocationId': 1}],
+        [{'AllocationId': 'not-an-allocation'}], [{'AllocationId': 'eipalloc-ab'}, {'AllocationId': 'eipalloc-ab'}]):
+    provider_run('ambiguous allocation records ' + str(records), lambda p, e, v=records:
+        e['TF_INITIAL_LIVE_ADDRESSES_JSON'].update(Addresses=v))
+for key in ('NextToken', 'IsTruncated', 'Error', 'unexpected'):
+    provider_run('partial or invalid address response ' + key, lambda p, e, k=key:
+        e['TF_INITIAL_LIVE_ADDRESSES_JSON'].update({k: 'synthetic'}))
+def data_record(e):
+    return next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['resources'] if r['mode'] == 'data')
+for key, value in [('name', 'other'), ('type', 'aws_secretsmanager_secret_version'), ('module', 'module.other')]:
+    provider_run('extra or moved data source ' + key, lambda p, e, k=key, v=value: data_record(e).update({k: v}))
+provider_run('duplicate data source', lambda p, e:
+    e['TF_INITIAL_CURRENT_STATE_JSON']['resources'].append(copy.deepcopy(data_record(e))))
+provider_run('extra data source instance', lambda p, e:
+    data_record(e)['instances'].append(copy.deepcopy(data_record(e)['instances'][0])))
+for key, value in [('value', 'ami-wrong'), ('value', None), ('type', 'SecureString'),
+        ('name', '/private/parameter'), ('id', '/private/parameter'),
+        ('insecure_value', 'PRIVATE_VALUE'), ('password', 'PRIVATE_VALUE'), ('sensitive', True)]:
+    provider_run('unsafe AMI data ' + key, lambda p, e, k=key, v=value:
+        data_record(e)['instances'][0]['attributes'].update({k: v}))
+for value in (None, True, [['value']], [{'type': 'get_attr', 'value': 'value'}]):
+    provider_run('sensitive AMI data ' + str(value), lambda p, e, v=value:
+        data_record(e)['instances'][0].update(sensitive_attributes=v))
+for timestamp in ('2026-09-25T01:05:59Z', 'not-a-time', None):
+    provider_run('invalid plan generation time ' + str(timestamp), lambda p, e, v=timestamp: p.update(timestamp=v))
+provider_run('missing plan generation time', lambda p, e: p.pop('timestamp'))
+provider_run('observed recovery later than refresh', lambda p, e:
+    e['TF_INITIAL_LIVE_RDS_JSON']['DBInstances'][0].update(LatestRestorableTime='2026-09-25T01:07:00Z'))
+provider_run('refresh recovery after plan generation', lambda p, e:
+    drift_after(p, db, 'latest_restorable_time', '2026-09-25T01:08:01Z'))
+provider_run('time ordering with equivalent offsets', lambda p, e:
+    p.update(timestamp='2026-09-25T10:08:00+09:00'), True)
+def non_ami_value(p, e):
+    value = 'PRIVATE_VALUE'
+    data_record(e)['instances'][0]['attributes']['value'] = value
+    e['TF_INITIAL_TFVARS_JSON']['replacement_host_ami_id'] = value
+    p['variables']['replacement_host_ami_id']['value'] = value
+    for section in ('resource_drift', 'resource_changes'):
+        c = record(p, section, host)['change']
+        c['before']['ami'] = c['after']['ami'] = value
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['resources']
+         if r['type'] == 'aws_instance')['instances'][0]['attributes']['ami'] = value
+provider_run('self-consistent non-AMI data value', non_ami_value)
 run('unchanged unbound managed policy', lambda p, e: (
     record(p, 'resource_drift', role)['change']['before'].update(managed_policy_arns=['unexpected']),
     drift_after(p, role, 'managed_policy_arns', ['unexpected']),
@@ -960,7 +1112,9 @@ for address, key, value in [
     (host, 'tags', {'Name': 'unexpected'}), (profile, 'tags', {'Name': 'unexpected'}),
     (role, 'tags', {'Name': 'unexpected'}), (role, 'inline_policy', [{'name': 'unexpected'}]),
     (role, 'managed_policy_arns', ['arn:aws:iam::aws:policy/AdministratorAccess']),
-    (role, 'managed_policy_arns', []), (db, 'latest_restorable_time', '2026-09-25T01:06:00Z'),
+    (role, 'managed_policy_arns', []), (db, 'latest_restorable_time', '2026-09-25T01:04:59Z'),
+    (db, 'latest_restorable_time', '2026-09-25T01:08:01Z'),
+    (db, 'latest_restorable_time', '2999-01-01T00:00:00Z'),
     (db, 'latest_restorable_time', 'not-a-time'), (db, 'allocated_storage', 21),
     (db, 'publicly_accessible', True), (db, 'storage_encrypted', 1),
     (db, 'identifier', 'other'), (host, 'iam_instance_profile', 'other'),
@@ -1042,7 +1196,7 @@ for key, filename in env_files.items():
         print('PASS: evidence boundary ' + key + ' ' + case)
 PY
 
-jq '.resource_drift = [{address:"aws_eip.origin", change:{actions:["delete"],before:{domain:"vpc"},after:null}}]' \
+jq '.resource_drift = [{address:"aws_eip.origin", change:{actions:["delete"],before:{domain:"vpc",id:"eipalloc-0123456789abcdef0",allocation_id:"eipalloc-0123456789abcdef0"},after:null}}]' \
   "$fixture_root/plan-initial-valid.json" >"$fixture_root/plan-initial-drift.json"
 expect_initial_verified "$fixture_root/plan-initial-drift.json"
 jq '(.resource_changes[] | select(.address == "aws_eip.origin") | .change) |=
@@ -1073,7 +1227,7 @@ initial_mutation 0 'database replacement' '(.resource_changes[] | select(.addres
 initial_mutation 0 'unrequested host replacement' '(.resource_changes[] | select(.address == "aws_instance.replacement_host") | .action_reason) = "replace_because_cannot_update"'
 initial_mutation 0 'public database CIDR' '(.resource_changes[] | select(.address == "aws_security_group.database") | .change) |= (.before.ingress[0].cidr_blocks = ["0.0.0.0/0"] | .after = .before)'
 initial_mutation 0 'EIP association' '(.resource_changes[] | select(.address == "aws_eip.origin") | .change.after.instance) = "i-private"'
-initial_mutation 0 'EIP unknown association' '(.resource_changes[] | select(.address == "aws_eip.origin") | .change.after_unknown.instance) = true'
+initial_mutation 0 'EIP unknown private-IP control' '(.resource_changes[] | select(.address == "aws_eip.origin") | .change.after_unknown.associate_with_private_ip) = true'
 initial_mutation 0 'unexpected output' '.output_changes.secret = {actions:["create"],after:"PRIVATE_VALUE",after_sensitive:true}'
 initial_mutation 0 'secret version' '.resource_changes += [{address:"aws_secretsmanager_secret_version.runtime",change:{actions:["create"]}}]'
 for address in aws_eip_association.origin cloudflare_record.origin aws_route53_record.origin aws_vpc_security_group_ingress_rule.public aws_instance.unrelated; do

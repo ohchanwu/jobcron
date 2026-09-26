@@ -2,9 +2,12 @@
 # Privileged startup ignores exported functions, BASH_ENV and shell options.
 # Always cross a clean process boundary; no environment/argument sentinel can
 # skip it. Invoke this entry point directly, not through an ambient shell.
-# Initial-deployment additionally requires four read-only evidence paths:
+# Initial-deployment additionally requires five read-only evidence paths:
 # TF_INITIAL_LIVE_HOST_JSON: AWS describe-instances, exactly one reservation/host
 # TF_INITIAL_LIVE_RDS_JSON: AWS describe-db-instances, exactly one DB
+# TF_INITIAL_LIVE_ADDRESSES_JSON: complete DescribeAddresses {"Addresses": [...]}
+# in the reconciled account/region; no matching state-bound origin AllocationId
+# when creating the absent EIP. Not a NotFound or paginated/partial response.
 # TF_INITIAL_CURRENT_STATE_JSON: pre-refresh Terraform show JSON or raw v4 state
 # TF_INITIAL_TFVARS_JSON: independently reconstructed production input JSON
 # Use owner-owned 0600 regular non-symlink files in owner-owned 0700 directories.
@@ -16,6 +19,7 @@
 exec /usr/bin/env -i PATH=/usr/bin:/bin \
   TF_INITIAL_LIVE_HOST_JSON="${TF_INITIAL_LIVE_HOST_JSON-}" \
   TF_INITIAL_LIVE_RDS_JSON="${TF_INITIAL_LIVE_RDS_JSON-}" \
+  TF_INITIAL_LIVE_ADDRESSES_JSON="${TF_INITIAL_LIVE_ADDRESSES_JSON-}" \
   TF_INITIAL_CURRENT_STATE_JSON="${TF_INITIAL_CURRENT_STATE_JSON-}" \
   TF_INITIAL_TFVARS_JSON="${TF_INITIAL_TFVARS_JSON-}" \
   /bin/bash --noprofile --norc -p \
