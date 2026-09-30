@@ -934,6 +934,60 @@ def run(name, mutate, accept=False):
     print('PASS: refresh mutation ' + name)
 
 run('independent four-resource refresh', lambda p, e: None, True)
+def inline_projection(p, e):
+    # Independently managed policy projected into the provider's computed role
+    # block, not a new IAM permission or an inline policy configured on the role.
+    payload = json.dumps({'Version': '2012-10-17', 'Statement': [
+        {'Effect': 'Allow', 'Action': ['secretsmanager:GetSecretValue'],
+         'Resource': ['arn:aws:secretsmanager:us-east-1:111122223333:secret:synthetic']}]})
+    planned(p, policy, 'policy', payload)
+    state = e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+    next(r for r in state if r['address'] == policy)['values']['policy'] = payload
+    next(r for r in state if r['address'] == role)['values']['inline_policy'] = []
+    record(p, 'resource_drift', role)['change']['before']['inline_policy'] = []
+    drift_after(p, role, 'inline_policy', [
+        {'name': 'jobcron-replacement-host-runtime', 'policy': payload}])
+run('independent runtime policy computed projection', inline_projection, True)
+def projection_run(name, mutate, accept=False):
+    run(name, lambda p, e: (inline_projection(p, e), mutate(p, e)), accept)
+def projected_policy(p):
+    return record(p, 'resource_drift', role)['change']['after']['inline_policy'][0]
+projection_run('equivalent policy JSON formatting', lambda p, e:
+    projected_policy(p).update(policy=json.dumps(json.loads(projected_policy(p)['policy']), indent=2, sort_keys=True)), True)
+projection_run('null-to-singleton policy projection', lambda p, e: (
+    record(p, 'resource_drift', role)['change']['before'].update(inline_policy=None),
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == role)['values'].update(inline_policy=None)), True)
+for value in (None, {}, 'policy', [None], [{'name': 'unexpected'}]):
+    projection_run('malformed projection ' + repr(value), lambda p, e, v=value:
+        drift_after(p, role, 'inline_policy', v))
+projection_run('duplicate projected policy', lambda p, e:
+    record(p, 'resource_drift', role)['change']['after']['inline_policy'].append(copy.deepcopy(projected_policy(p))))
+for key, value in [('name', 'other'), ('name', None), ('extra', True),
+        ('policy', '{}'), ('policy', '{'), ('policy', '[]'), ('policy', 'null'),
+        ('policy', '{"Statement":[],"Statement":[]}'), ('policy', '{"x":NaN}'),
+        ('policy', '{"token":"PRIVATE_SYNTHETIC_CANARY"}')]:
+    projection_run('invalid projected policy ' + key + repr(value), lambda p, e, k=key, v=value:
+        projected_policy(p).update({k: v}))
+projection_run('configured role inline policy', lambda p, e:
+    record(p['configuration']['root_module'], 'resources', role)['expressions'].update(inline_policy=[]))
+projection_run('unknown projected policy', lambda p, e:
+    record(p, 'resource_drift', role)['change']['after_unknown'].update(inline_policy=[{'policy': True}]))
+projection_run('changed standalone policy action', lambda p, e:
+    record(p, 'resource_changes', policy)['change'].update(actions=['update']))
+projection_run('independent policy payload mismatch', lambda p, e:
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == policy)['values'].update(policy='{}'))
+projection_run('matching plan policy cannot replace source evidence', lambda p, e: (
+    projected_policy(p).update(policy='{}'), planned(p, policy, 'policy', '{}')))
+projection_run('independent policy name mismatch', lambda p, e:
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == policy)['values'].update(name='different'))
+projection_run('policy role substitution', lambda p, e: planned(p, policy, 'role', 'different'))
+projection_run('preexisting nonempty projection', lambda p, e: (
+    record(p, 'resource_drift', role)['change']['before'].update(inline_policy=[copy.deepcopy(projected_policy(p))]),
+    next(r for r in e['TF_INITIAL_CURRENT_STATE_JSON']['values']['root_module']['resources']
+         if r['address'] == role)['values'].update(inline_policy=[copy.deepcopy(projected_policy(p))])))
 run('RDS recovery progresses before plan generation', lambda p, e:
     drift_after(p, db, 'latest_restorable_time', '2026-09-25T01:06:00Z'), True)
 def keyless(p, e):
@@ -994,6 +1048,7 @@ run('provider omitted EIP associations without unknown mask', lambda p, e: (
 
 # Each relaxed provider representation remains source-bound and fail-closed.
 def provider_shape(p, e):
+    inline_projection(p, e)
     keyless(p, e)
     collection_masks(p, e)
     unassociated_eip(p, e)

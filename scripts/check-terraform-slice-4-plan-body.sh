@@ -771,11 +771,30 @@ for address, drift in drifts.items():
     changed = {k for k in before if not equal(before[k], after[k])}
     require(changed and changed <= allowed[address])
     if address == role:
-        require(before['inline_policy'] in (None, []) and after['inline_policy'] == [])
+        require(before['inline_policy'] in (None, []))
         ssm = 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
         require(after['managed_policy_arns'] == [ssm])
         attached = changes[attachment]['change']['after']
         policy = changes[runtime_policy]['change']['after']
+        if after['inline_policy'] != []:
+            # AWS 6.33.0 also projects the separately managed runtime policy
+            # into this unconfigured computed block. Bind it to independent
+            # pre-refresh state, not merely another value in the same plan.
+            projected = one(after['inline_policy'])
+            require(set(projected) == {'name', 'policy'})
+            require(runtime_policy not in drifts)
+            require(changes[runtime_policy]['change']['actions'] == ['no-op'])
+            source_policy = resources[runtime_policy]['values']
+            require(equal(source_policy, policy))
+            require(text(projected['name']) == text(source_policy['name']))
+            def policy_document(value):
+                document = json.loads(text(value), object_pairs_hook=unique_object,
+                                      parse_constant=lambda _: require(False))
+                require(type(document) is dict)
+                secret_free(document)
+                return document
+            require(equal(policy_document(projected['policy']),
+                          policy_document(source_policy['policy'])))
         require(after['name'] == after['id'] == 'jobcron-replacement-host')
         require(attached['role'] == policy['role'] == after['name'])
         require(attached['policy_arn'] == ssm)
@@ -802,7 +821,9 @@ for address, drift in drifts.items():
             require(equal({k: v for k, v in old.items() if k != 'tags'},
                           {k: v for k, v in new.items() if k != 'tags'}))
         elif key == 'inline_policy':
-            require(before[key] is None and after[key] == [])
+            # Exact empty/singleton projection checked above, including the
+            # independent source policy and unchanged role/policy actions.
+            require(address == role and before[key] in (None, []))
         elif key == 'managed_policy_arns':
             require(before[key] in (None, []))
         elif key == 'public_ip':
