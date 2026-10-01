@@ -42,6 +42,11 @@ func TestJobcronRuntimePrepareFailsClosed(t *testing.T) {
 		assertMode(t, filepath.Join(fixture.runDir, "compose.env"), 0o600)
 		assertMode(t, filepath.Join(fixture.runDir, "caddy", "origin.crt"), 0o600)
 		assertMode(t, filepath.Join(fixture.runDir, "caddy", "origin.key"), 0o600)
+		proxyHeader := filepath.Join(fixture.runDir, "caddy", "proxy-header")
+		assertMode(t, proxyHeader, 0o600)
+		if got, want := readFile(t, proxyHeader), "header_up X-Jobcron-Proxy "+runtimeSecretFields["JOBCRON_PROXY_SECRET"]+"\n"; got != want {
+			t.Fatal("proxy header does not exactly match the restricted expected form")
+		}
 		composeEnv := readFile(t, filepath.Join(fixture.runDir, "compose.env"))
 		for key, value := range runtimeSecretFields {
 			if strings.HasPrefix(key, "ORIGIN_CA_") {

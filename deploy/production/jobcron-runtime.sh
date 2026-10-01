@@ -321,11 +321,30 @@ verify_secrets() {
 	check_runtime_custody
 	inspection=$(mktemp -d "$run_dir/.inspect.XXXXXX")
 	trap 'rm -rf -- "$inspection"' EXIT HUP INT TERM
+	proxy_secret=$run_dir/secrets/JOBCRON_PROXY_SECRET
+	proxy_header=$run_dir/caddy/proxy-header
+	for file in "$proxy_secret" "$proxy_header"; do
+		[ ! -L "$file" ] && [ -f "$file" ] && [ -s "$file" ] || fail
+		[ "$(mode "$file")" = 600 ] && [ "$(owner "$file")" = "$(id -u)" ] || fail
+		[ "$(findmnt -n -o FSTYPE --target "$file" 2>/dev/null)" = tmpfs ] || fail
+	done
+	jq -n -e --rawfile secret "$proxy_secret" '
+		($secret | length) >= 16 and ($secret | length) <= 128 and
+		($secret | (contains("\n") or contains("\r") or contains("\u0000")) | not) and
+		($secret | test("^[A-Za-z0-9_-]+$"))
+	' >/dev/null 2>&1 || fail
+	printf 'header_up X-Jobcron-Proxy %s\n' "$(cat "$proxy_secret")" >"$inspection/expected-proxy-header"
+	chmod 600 "$inspection/expected-proxy-header"
+	cmp -s "$inspection/expected-proxy-header" "$proxy_header" || fail
 	for service in app caddy; do
 		container=$(cd "$deploy_dir" && docker compose --env-file "$run_dir/compose.env" ps -q "$service" 2>/dev/null) || fail
 		[ -n "$container" ] || fail
 		docker inspect "$container" >"$inspection/$service.json" 2>/dev/null || fail
 		jq -e 'type == "array" and length == 1 and (.[0].Config.Env | type == "array")' "$inspection/$service.json" >/dev/null 2>&1 || fail
+		jq -e '.[0].HostConfig.Ulimits |
+			map(select(.Name == "core")) as $core |
+			($core | length) == 1 and $core[0].Hard == 0 and $core[0].Soft == 0
+		' "$inspection/$service.json" >/dev/null 2>&1 || fail
 		for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_SIGNUP_ACCESS_CODE JOBCRON_PROXY_SECRET; do
 			file=$run_dir/secrets/$name
 			[ ! -L "$file" ] && [ -f "$file" ] && [ -s "$file" ] || fail

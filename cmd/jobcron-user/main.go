@@ -63,6 +63,9 @@ func runMigrateCommand(ctx context.Context, args []string, env envMap, in io.Rea
 	if fs.NArg() != 0 {
 		return errors.New("user: unexpected positional arguments")
 	}
+	if err := rejectProductionDatabaseFlag(env, fs); err != nil {
+		return err
+	}
 	var err error
 	rawDatabaseURL, err = databaseInput(env, rawDatabaseURL)
 	if err != nil {
@@ -139,6 +142,9 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := rejectProductionDatabaseFlag(env, fs); err != nil {
+		return err
+	}
 	var err error
 	databaseURL, err = databaseInput(env, databaseURL)
 	if err != nil {
@@ -202,6 +208,9 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := rejectProductionDatabaseFlag(env, fs); err != nil {
+		return err
+	}
 	var err error
 	databaseURL, err = databaseInput(env, databaseURL)
 	if err != nil {
@@ -251,6 +260,12 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 func databaseInput(env envMap, flagValue string) (string, error) {
 	_, direct := env["DATABASE_URL"]
 	_, file := env["DATABASE_URL_FILE"]
+	if env["JOBCRON_ENV"] == "production" {
+		if direct || !file {
+			return "", errors.New("user: production requires DATABASE_URL_FILE")
+		}
+		return config.Secret(env, "DATABASE_URL")
+	}
 	if flagValue != "" && (direct || file) {
 		return "", errors.New("user: ambiguous database input")
 	}
@@ -258,6 +273,22 @@ func databaseInput(env envMap, flagValue string) (string, error) {
 		return config.Secret(env, "DATABASE_URL")
 	}
 	return flagValue, nil
+}
+
+func rejectProductionDatabaseFlag(env envMap, fs *flag.FlagSet) error {
+	if env["JOBCRON_ENV"] != "production" {
+		return nil
+	}
+	provided := false
+	fs.Visit(func(current *flag.Flag) {
+		if current.Name == "database-url" {
+			provided = true
+		}
+	})
+	if provided {
+		return errors.New("user: production requires DATABASE_URL_FILE")
+	}
+	return nil
 }
 
 func openUserStore(databaseURL string) (*storage.Store, error) {

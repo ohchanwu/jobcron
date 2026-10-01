@@ -30,15 +30,21 @@ type composeConfig struct {
 }
 
 type composeService struct {
-	Image       string            `yaml:"image"`
-	PullPolicy  string            `yaml:"pull_policy"`
-	Build       any               `yaml:"build"`
-	Command     []string          `yaml:"command"`
-	Environment map[string]string `yaml:"environment"`
-	Volumes     []composeVolume   `yaml:"volumes"`
-	Ports       []composePort     `yaml:"ports"`
-	Networks    map[string]any    `yaml:"networks"`
-	Logging     composeLogging    `yaml:"logging"`
+	Image       string                   `yaml:"image"`
+	PullPolicy  string                   `yaml:"pull_policy"`
+	Build       any                      `yaml:"build"`
+	Command     []string                 `yaml:"command"`
+	Environment map[string]string        `yaml:"environment"`
+	Volumes     []composeVolume          `yaml:"volumes"`
+	Ports       []composePort            `yaml:"ports"`
+	Networks    map[string]any           `yaml:"networks"`
+	Logging     composeLogging           `yaml:"logging"`
+	Ulimits     map[string]composeUlimit `yaml:"ulimits"`
+}
+
+type composeUlimit struct {
+	Hard int `yaml:"hard"`
+	Soft int `yaml:"soft"`
 }
 
 type composeVolume struct {
@@ -179,6 +185,16 @@ func TestProductionComposeRotatesLocalLogs(t *testing.T) {
 			logging.Options["max-size"] != "10m" ||
 			logging.Options["max-file"] != "3" {
 			t.Errorf("%s logging = %#v, want json-file rotation 10m x 3", service, logging)
+		}
+	}
+}
+
+func TestProductionComposeDisablesCoreDumps(t *testing.T) {
+	config := renderCompose(t)
+	for _, service := range []string{"app", "caddy"} {
+		core, ok := config.Services[service].Ulimits["core"]
+		if !ok || core.Hard != 0 || core.Soft != 0 {
+			t.Errorf("%s core ulimit = %#v (present %v), want hard/soft zero", service, core, ok)
 		}
 	}
 }

@@ -111,6 +111,18 @@ check_contract "services.caddy.logging must rotate local JSON logs" '
 	.services.caddy.logging.options["max-size"] == "10m" and
 	.services.caddy.logging.options["max-file"] == "3"
 '
+check_contract "services.app.ulimits.core must disable core dumps" '
+	(.services.app.ulimits | has("core")) and
+	(.services.app.ulimits.core | type == "object") and
+	((.services.app.ulimits.core.hard // 0) == 0) and
+	((.services.app.ulimits.core.soft // 0) == 0)
+'
+check_contract "services.caddy.ulimits.core must disable core dumps" '
+	(.services.caddy.ulimits | has("core")) and
+	(.services.caddy.ulimits.core | type == "object") and
+	((.services.caddy.ulimits.core.hard // 0) == 0) and
+	((.services.caddy.ulimits.core.soft // 0) == 0)
+'
 
 for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_PROXY_SECRET JOBCRON_SIGNUP_ACCESS_CODE; do
 	check_contract "services.app.environment.${name}_FILE" \

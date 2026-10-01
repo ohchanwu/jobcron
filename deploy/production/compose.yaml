@@ -47,6 +47,10 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+    ulimits:
+      core:
+        hard: 0
+        soft: 0
     restart: unless-stopped
 
   caddy:
@@ -75,6 +79,10 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+    ulimits:
+      core:
+        hard: 0
+        soft: 0
     restart: unless-stopped
 
 networks:

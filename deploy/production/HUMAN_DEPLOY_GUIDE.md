@@ -113,9 +113,11 @@ For initial deployment only, select these branches in the remaining procedure:
   Check the checkout's full SHA/clean status before and after building and verify
   `"$JOBCRON_GO_BINARY" version -m "$migration_bin"`
   reports that exact `vcs.revision` and `vcs.modified=false`. Record its SHA-256
-  digest privately. Run `"$migration_bin" migrate --database-url
-  "$JOBCRON_MASTER_DATABASE_URL"` through the section-6 TLS tunnel and silent
-  password prompt, with `JOBCRON_DATABASE_PASSWORD` unset. **Do not supply**
+  digest privately. Put `JOBCRON_MASTER_DATABASE_URL` in a private temporary
+  `0600` file, then run `"$migration_bin" migrate` with
+  `JOBCRON_ENV=production` and `DATABASE_URL_FILE` through the section-6 TLS
+  tunnel and silent password prompt, with `JOBCRON_DATABASE_PASSWORD` unset.
+  Never put the production URL in argv. **Do not supply**
   `--backfill-legacy-migration-tree`, a previous-image commit, or a full-toolchain
   manifest. A legacy migration ledger or existing data contradicts this lane:
   stop rather than backfill it. Snapshotting the verified empty unused DB is
@@ -430,12 +432,19 @@ test "$previous_migration_tree" = "$reviewed_migration_tree"
 migration_dir=$(mktemp -d)
 migration_bin="$migration_dir/jobcron-user-$JOBCRON_REVIEWED_SHA"
 migration_builder="$migration_dir/build-reviewed-jobcron-user"
+database_url_file=
 cleanup_migration_binary() {
   rm -f -- "$migration_bin" "$migration_builder"
+  if [ -n "$database_url_file" ]; then
+    rm -f -- "$database_url_file"
+  fi
   rmdir "$migration_dir"
 }
 trap cleanup_migration_binary EXIT
 trap 'exit 1' HUP INT TERM
+database_url_file=$(mktemp)
+printf '%s' "$JOBCRON_MASTER_DATABASE_URL" >"$database_url_file"
+chmod 600 "$database_url_file"
 repo_root=$(run_git rev-parse --show-toplevel)
 run_git show "${JOBCRON_REVIEWED_SHA}:scripts/build-reviewed-jobcron-user.sh" >"$migration_builder"
 chmod 500 "$migration_builder"
@@ -444,8 +453,8 @@ test "$(run_git rev-parse HEAD)" = "$JOBCRON_REVIEWED_SHA"
 test -z "$(run_git status --porcelain=v1 --untracked-files=all)"
 test -z "$(run_git stash list)"
 unset JOBCRON_DATABASE_PASSWORD
-"$migration_bin" migrate \
-  --database-url "$JOBCRON_MASTER_DATABASE_URL" \
+JOBCRON_ENV=production DATABASE_URL_FILE="$database_url_file" \
+  "$migration_bin" migrate \
   --backfill-legacy-migration-tree "$previous_migration_tree"
 )
 ```

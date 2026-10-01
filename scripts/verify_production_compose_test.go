@@ -225,6 +225,7 @@ func TestProductionMigrationDocsBindReviewedSource(t *testing.T) {
 		"$JOBCRON_PREVIOUS_IMAGE_COMMIT:internal/storage/postgres_migrations",
 		"$JOBCRON_REVIEWED_SHA:internal/storage/postgres_migrations",
 		"test \"$previous_migration_tree\" = \"$reviewed_migration_tree\"",
+		"JOBCRON_ENV=production DATABASE_URL_FILE=\"$database_url_file\"",
 		"--backfill-legacy-migration-tree \"$previous_migration_tree\"",
 		"build-reviewed-jobcron-user",
 		"\"$JOBCRON_GO_TOOLCHAIN_DIGEST\"",
@@ -233,6 +234,9 @@ func TestProductionMigrationDocsBindReviewedSource(t *testing.T) {
 		if !strings.Contains(text, required) {
 			t.Errorf("production guide does not bind migration source with %q", required)
 		}
+	}
+	if strings.Contains(text, "--database-url") {
+		t.Fatal("production guide puts the privileged database URL in argv")
 	}
 }
 
@@ -421,6 +425,53 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 		},
 	}
 
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := runProductionVerifier(t, test.mutate, syntheticProductionEnvironment)
+			assertRejectedContract(t, result, test.contract)
+		})
+	}
+}
+
+func TestProductionComposeVerifierRejectsCoreDumps(t *testing.T) {
+	tests := []struct {
+		name     string
+		contract string
+		mutate   func(string) string
+	}{
+		{
+			name:     "app",
+			contract: "services.app.ulimits.core",
+			mutate: replaceOnce(
+				"        hard: 0\n        soft: 0\n    restart: unless-stopped\n\n  caddy:",
+				"        hard: 1\n        soft: 0\n    restart: unless-stopped\n\n  caddy:",
+			),
+		},
+		{
+			name:     "app missing",
+			contract: "services.app.ulimits.core",
+			mutate: replaceOnce(
+				"    ulimits:\n      core:\n        hard: 0\n        soft: 0\n    restart: unless-stopped\n\n  caddy:",
+				"    restart: unless-stopped\n\n  caddy:",
+			),
+		},
+		{
+			name:     "caddy",
+			contract: "services.caddy.ulimits.core",
+			mutate: replaceOnce(
+				"        hard: 0\n        soft: 0\n    restart: unless-stopped\n\nnetworks:",
+				"        hard: 0\n        soft: 1\n    restart: unless-stopped\n\nnetworks:",
+			),
+		},
+		{
+			name:     "caddy missing",
+			contract: "services.caddy.ulimits.core",
+			mutate: replaceOnce(
+				"    ulimits:\n      core:\n        hard: 0\n        soft: 0\n    restart: unless-stopped\n\nnetworks:",
+				"    restart: unless-stopped\n\nnetworks:",
+			),
+		},
+	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := runProductionVerifier(t, test.mutate, syntheticProductionEnvironment)
