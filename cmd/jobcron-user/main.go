@@ -134,15 +134,15 @@ func migrationDatabaseURL(raw, password string) (string, error) {
 }
 
 func runOwnerCommand(ctx context.Context, name string, args []string, env envMap, in io.Reader, out, promptOut io.Writer, reset bool) error {
+	if err := rejectProductionDatabaseArgs(env, args); err != nil {
+		return err
+	}
 	var databaseURL, email string
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&databaseURL, "database-url", "", "PostgreSQL database URL")
 	fs.StringVar(&email, "email", "", "owner email address")
 	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if err := rejectProductionDatabaseFlag(env, fs); err != nil {
 		return err
 	}
 	var err error
@@ -199,6 +199,9 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 }
 
 func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io.Writer) error {
+	if err := rejectProductionDatabaseArgs(env, args); err != nil {
+		return err
+	}
 	var databaseURL, email, confirmEmail string
 	fs := flag.NewFlagSet("delete-user", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -206,9 +209,6 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 	fs.StringVar(&email, "email", "", "user email address")
 	fs.StringVar(&confirmEmail, "confirm-email", "", "repeat the user email address")
 	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if err := rejectProductionDatabaseFlag(env, fs); err != nil {
 		return err
 	}
 	var err error
@@ -273,6 +273,21 @@ func databaseInput(env envMap, flagValue string) (string, error) {
 		return config.Secret(env, "DATABASE_URL")
 	}
 	return flagValue, nil
+}
+
+// Inspect every raw token: flag.Parse stops at positional arguments and --.
+// Match only option names, without parsing or disclosing their values.
+func rejectProductionDatabaseArgs(env envMap, args []string) error {
+	if env["JOBCRON_ENV"] != "production" {
+		return nil
+	}
+	for _, arg := range args {
+		name, _, _ := strings.Cut(arg, "=")
+		if name == "--database-url" || name == "-database-url" {
+			return errors.New("user: production requires DATABASE_URL_FILE")
+		}
+	}
+	return nil
 }
 
 func rejectProductionDatabaseFlag(env envMap, fs *flag.FlagSet) error {
