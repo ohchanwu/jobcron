@@ -67,16 +67,13 @@ type composeNetwork struct {
 func TestProductionComposeRequiresCredentialEncryptionKey(t *testing.T) {
 	cmd := composeCommand(false)
 	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("docker compose config succeeded without JOBCRON_CREDENTIAL_ENCRYPTION_KEY")
-	}
-	if !strings.Contains(string(output), credentialKeyEnvName) {
-		t.Fatalf("docker compose config failed without naming %s:\n%s", credentialKeyEnvName, output)
+	if err != nil {
+		t.Fatalf("file-based Compose must render without secret values: %v\n%s", err, output)
 	}
 
 	config := renderCompose(t)
-	if got := config.Services["app"].Environment[credentialKeyEnvName]; got != testCredentialKey {
-		t.Fatalf("%s = %q, want rendered synthetic key", credentialKeyEnvName, got)
+	if got := config.Services["app"].Environment[credentialKeyEnvName+"_FILE"]; got != "/run/jobcron/secrets/"+credentialKeyEnvName {
+		t.Fatal("missing credential file reference")
 	}
 }
 
@@ -96,29 +93,22 @@ func TestProductionComposeHasNoJobcronConfigVolumeOrMount(t *testing.T) {
 func TestProductionComposeRetainsDatabaseSessionAndCaddyState(t *testing.T) {
 	config := renderCompose(t)
 	app := config.Services["app"]
-	if got := app.Environment["DATABASE_URL"]; got != testDatabaseURL {
-		t.Fatalf("DATABASE_URL = %q, want %q", got, testDatabaseURL)
+	if app.Environment["DATABASE_URL_FILE"] != "/run/jobcron/secrets/DATABASE_URL" {
+		t.Fatal("missing database file reference")
 	}
-	if got := app.Environment["SESSION_SECRET"]; got != testSessionSecret {
-		t.Fatalf("SESSION_SECRET = %q, want %q", got, testSessionSecret)
+	if app.Environment["SESSION_SECRET_FILE"] != "/run/jobcron/secrets/SESSION_SECRET" {
+		t.Fatal("missing session file reference")
 	}
 
 	caddy := config.Services["caddy"]
-	wantVolumes := map[string]string{"/data": "caddy_data", "/config": "caddy_config"}
 	for _, volume := range caddy.Volumes {
-		if wantSource, ok := wantVolumes[volume.Target]; ok {
-			if volume.Source != wantSource {
-				t.Errorf("caddy volume target %s uses source %q, want %q", volume.Target, volume.Source, wantSource)
-			}
-			delete(wantVolumes, volume.Target)
+		if volume.Target == "/data" || volume.Target == "/config" {
+			t.Fatal("persistent Caddy state forbidden")
 		}
 	}
-	for target := range wantVolumes {
-		t.Errorf("caddy volume target %s is missing", target)
-	}
 	for _, name := range []string{"caddy_data", "caddy_config"} {
-		if _, ok := config.Volumes[name]; !ok {
-			t.Errorf("top-level volume %s is missing", name)
+		if _, ok := config.Volumes[name]; ok {
+			t.Errorf("persistent volume %s remains", name)
 		}
 	}
 }
@@ -245,8 +235,8 @@ func TestProductionComposePreservesDailyTimeAndCommand(t *testing.T) {
 
 func TestProductionComposePassesCohortRuntimeVariables(t *testing.T) {
 	app := renderCompose(t).Services["app"]
-	if got := app.Environment["JOBCRON_SIGNUP_ACCESS_CODE"]; got != testSignupAccessCode {
-		t.Fatalf("JOBCRON_SIGNUP_ACCESS_CODE = %q, want preserved synthetic code", got)
+	if app.Environment["JOBCRON_SIGNUP_ACCESS_CODE_FILE"] != "/run/jobcron/secrets/JOBCRON_SIGNUP_ACCESS_CODE" {
+		t.Fatal("missing signup file reference")
 	}
 	if got := app.Environment["JOBCRON_STAGE1_SPONSOR_USER_ID"]; got != testSponsorUserID {
 		t.Fatalf("JOBCRON_STAGE1_SPONSOR_USER_ID = %q, want %q", got, testSponsorUserID)
@@ -256,22 +246,22 @@ func TestProductionComposePassesCohortRuntimeVariables(t *testing.T) {
 func TestProductionComposeSharesRequiredProxySecret(t *testing.T) {
 	config := renderCompose(t)
 	for _, service := range []string{"app", "caddy"} {
-		if got := config.Services[service].Environment[proxySecretEnvName]; got != testProxySecret {
-			t.Fatalf("%s %s = %q, want shared synthetic secret", service, proxySecretEnvName, got)
+		if _, ok := config.Services[service].Environment[proxySecretEnvName]; ok {
+			t.Fatal("proxy value remains in metadata")
 		}
 	}
 	caddyfile, err := os.ReadFile("Caddyfile")
 	if err != nil {
 		t.Fatalf("read Caddyfile: %v", err)
 	}
-	want := "header_up X-Jobcron-Proxy {$JOBCRON_PROXY_SECRET}"
+	want := "import /run/jobcron/caddy/proxy-header"
 	if !strings.Contains(string(caddyfile), want) {
 		t.Fatalf("Caddyfile does not overwrite the trusted proxy header with %q", want)
 	}
 }
 
 func TestProductionComposeRequiresCohortRuntimeVariables(t *testing.T) {
-	for _, name := range []string{"JOBCRON_SIGNUP_ACCESS_CODE", "JOBCRON_STAGE1_SPONSOR_USER_ID"} {
+	for _, name := range []string{"JOBCRON_STAGE1_SPONSOR_USER_ID"} {
 		t.Run(name, func(t *testing.T) {
 			cmd := composeCommand(true)
 			cmd.Env = withoutEnvironment(cmd.Env, name)

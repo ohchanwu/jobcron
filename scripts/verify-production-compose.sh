@@ -8,13 +8,6 @@ fail() {
 }
 
 [ -n "${JOBCRON_IMAGE:-}" ] || fail "required variable JOBCRON_IMAGE"
-[ -n "${DATABASE_URL:-}" ] || fail "required variable DATABASE_URL"
-[ -n "${SESSION_SECRET:-}" ] || fail "required variable SESSION_SECRET"
-[ -n "${JOBCRON_CREDENTIAL_ENCRYPTION_KEY:-}" ] ||
-	fail "required variable JOBCRON_CREDENTIAL_ENCRYPTION_KEY"
-[ -n "${JOBCRON_PROXY_SECRET:-}" ] || fail "required variable JOBCRON_PROXY_SECRET"
-[ -n "${JOBCRON_SIGNUP_ACCESS_CODE:-}" ] ||
-	fail "required variable JOBCRON_SIGNUP_ACCESS_CODE"
 [ -n "${JOBCRON_STAGE1_SPONSOR_USER_ID:-}" ] ||
 	fail "required variable JOBCRON_STAGE1_SPONSOR_USER_ID"
 
@@ -73,8 +66,11 @@ check_contract() {
 
 check_contract "services.app" '.services.app | type == "object"'
 check_contract "services.caddy" '.services.caddy | type == "object"'
-check_contract "services.app.volumes must be absent" \
-	'((.services.app.volumes // []) | length) == 0'
+check_contract "services.app.volumes must be only read-only runtime secrets" '
+	.services.app.volumes as $v | ($v | length) == 1 and
+	$v[0].type == "bind" and $v[0].source == "/run/jobcron/secrets" and
+	$v[0].target == "/run/jobcron/secrets" and $v[0].read_only == true
+'
 check_contract "services.app.ports must bind only loopback 7777" '
 	(.services.app.ports // []) as $ports |
 	($ports | length) == 1 and
@@ -116,12 +112,18 @@ check_contract "services.caddy.logging must rotate local JSON logs" '
 	.services.caddy.logging.options["max-file"] == "3"
 '
 
-check_contract "services.app.environment.DATABASE_URL" \
-	'.services.app.environment.DATABASE_URL == env.DATABASE_URL'
-check_contract "services.app.environment.SESSION_SECRET" \
-	'.services.app.environment.SESSION_SECRET == env.SESSION_SECRET'
-check_contract "services.app.environment.JOBCRON_CREDENTIAL_ENCRYPTION_KEY" \
-	'.services.app.environment.JOBCRON_CREDENTIAL_ENCRYPTION_KEY == env.JOBCRON_CREDENTIAL_ENCRYPTION_KEY'
+for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_PROXY_SECRET JOBCRON_SIGNUP_ACCESS_CODE; do
+	check_contract "services.app.environment.${name}_FILE" \
+		".services.app.environment.${name}_FILE == \"/run/jobcron/secrets/$name\" and (.services.app.environment | has(\"$name\") | not)"
+done
+check_contract "services.caddy.environment.JOBCRON_PROXY_SECRET must be absent" \
+	'(.services.caddy.environment | has("JOBCRON_PROXY_SECRET") | not)'
+check_contract "services.caddy state must be volatile" '
+	.services.caddy.read_only == true and
+	(.services.caddy.tmpfs | sort) == ["/config:mode=0700", "/data:mode=0700", "/tmp:mode=0700"] and
+	all(.services.caddy.volumes[]; .type == "bind" and .read_only == true) and
+	(.services.caddy.volumes | length) == 2
+'
 check_contract "services.app.environment.JOBCRON_ENV must be production" \
 	'.services.app.environment.JOBCRON_ENV == "production"'
 check_contract "services.app.environment.JOBCRON_HOST must be 0.0.0.0" \
@@ -138,10 +140,7 @@ check_contract "services.app.environment.JOBCRON_ADMIN_TOKEN must be absent" \
 	'(.services.app.environment | has("JOBCRON_ADMIN_TOKEN")) | not'
 check_contract "services.app.environment.JOBCRON_WORKNET_KEY must be absent" \
 	'(.services.app.environment | has("JOBCRON_WORKNET_KEY")) | not'
-check_contract "services.app.environment.JOBCRON_PROXY_SECRET" \
-	'.services.app.environment.JOBCRON_PROXY_SECRET == env.JOBCRON_PROXY_SECRET'
-check_contract "services.caddy.environment.JOBCRON_PROXY_SECRET" \
-	'.services.caddy.environment.JOBCRON_PROXY_SECRET == env.JOBCRON_PROXY_SECRET'
+
 check_contract "services.caddy.environment.AWS_EC2_METADATA_DISABLED must be true" \
 	'.services.caddy.environment.AWS_EC2_METADATA_DISABLED == "true"'
 check_contract "services.app.environment.JOBCRON_SCHEDULER_ENABLED must be 1" \
@@ -151,8 +150,7 @@ check_contract "services.app.environment.JOBCRON_DAILY_SCRAPE_TIME must preserve
 	.services.app.environment.JOBCRON_DAILY_SCRAPE_TIME ==
 	(if $daily_time == "" then "05:00" else $daily_time end)
 '
-check_contract "services.app.environment.JOBCRON_SIGNUP_ACCESS_CODE" \
-	'.services.app.environment.JOBCRON_SIGNUP_ACCESS_CODE == env.JOBCRON_SIGNUP_ACCESS_CODE'
+
 check_contract "services.app.environment.JOBCRON_STAGE1_SPONSOR_USER_ID" \
 	'.services.app.environment.JOBCRON_STAGE1_SPONSOR_USER_ID == env.JOBCRON_STAGE1_SPONSOR_USER_ID'
 check_contract "services.app.command must enforce no-open host and port" '
@@ -162,6 +160,16 @@ check_contract "services.app.image must equal JOBCRON_IMAGE" \
 	'.services.app.image == env.JOBCRON_IMAGE'
 check_contract "services.app.pull_policy must be never" \
 	'.services.app.pull_policy == "never"'
+check_contract "services environment must contain only reviewed keys" '
+	(.services.app.environment | keys | sort) == ([
+		"AWS_EC2_METADATA_DISABLED", "DATABASE_URL_FILE",
+		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE", "JOBCRON_DAILY_SCRAPE_TIME",
+		"JOBCRON_ENV", "JOBCRON_HOST", "JOBCRON_NO_OPEN", "JOBCRON_PORT",
+		"JOBCRON_PROXY_SECRET_FILE", "JOBCRON_SCHEDULER_ENABLED",
+		"JOBCRON_SIGNUP_ACCESS_CODE_FILE", "JOBCRON_STAGE1_SPONSOR_USER_ID",
+		"SESSION_SECRET_FILE"] | sort) and
+	(.services.caddy.environment | keys) == ["AWS_EC2_METADATA_DISABLED"]
+'
 check_contract "services.app.image must use private GHCR sha256 digest" \
 	'(.services.app.image | type == "string") and
 	 (.services.app.image |

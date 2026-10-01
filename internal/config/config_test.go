@@ -3,6 +3,8 @@ package config_test
 import (
 	"bytes"
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,8 +14,8 @@ import (
 )
 
 func TestLoadProductionRequiresDatabaseURL(t *testing.T) {
-	env := validProductionEnv()
-	delete(env, "DATABASE_URL")
+	env := validProductionEnv(t)
+	delete(env, "DATABASE_URL_FILE")
 	_, err := config.Load(nil, env)
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
 		t.Fatalf("Load error = %v, want DATABASE_URL requirement", err)
@@ -21,8 +23,8 @@ func TestLoadProductionRequiresDatabaseURL(t *testing.T) {
 }
 
 func TestLoadProductionRequiresSessionSecret(t *testing.T) {
-	env := validProductionEnv()
-	delete(env, "SESSION_SECRET")
+	env := validProductionEnv(t)
+	delete(env, "SESSION_SECRET_FILE")
 	_, err := config.Load(nil, env)
 	if err == nil || !strings.Contains(err.Error(), "SESSION_SECRET") {
 		t.Fatalf("Load error = %v, want SESSION_SECRET requirement", err)
@@ -30,8 +32,8 @@ func TestLoadProductionRequiresSessionSecret(t *testing.T) {
 }
 
 func TestLoadProductionRequiresCredentialEncryptionKey(t *testing.T) {
-	env := validProductionEnv()
-	delete(env, "JOBCRON_CREDENTIAL_ENCRYPTION_KEY")
+	env := validProductionEnv(t)
+	delete(env, "JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE")
 
 	_, err := config.Load(nil, env)
 	if err == nil || !strings.Contains(err.Error(), "JOBCRON_CREDENTIAL_ENCRYPTION_KEY") {
@@ -40,7 +42,7 @@ func TestLoadProductionRequiresCredentialEncryptionKey(t *testing.T) {
 }
 
 func TestLoadRejectsProductionDemoFromEnvironment(t *testing.T) {
-	env := validProductionEnv()
+	env := validProductionEnv(t)
 	env["JOBCRON_DEMO"] = "1"
 
 	_, err := config.Load(nil, env)
@@ -50,7 +52,7 @@ func TestLoadRejectsProductionDemoFromEnvironment(t *testing.T) {
 }
 
 func TestLoadRejectsProductionDemoFromFlag(t *testing.T) {
-	_, err := config.Load([]string{"--demo"}, validProductionEnv())
+	_, err := config.Load([]string{"--demo"}, validProductionEnv(t))
 	if err == nil || err.Error() != "production does not support demo mode" {
 		t.Fatalf("Load error = %v, want production demo rejection", err)
 	}
@@ -77,8 +79,10 @@ func TestLoadRejectsInvalidCredentialEncryptionKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			env := validProductionEnv()
-			env["JOBCRON_CREDENTIAL_ENCRYPTION_KEY"] = tt.encoded
+			env := validProductionEnv(t)
+			if err := os.WriteFile(env["JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE"], []byte(tt.encoded), 0600); err != nil {
+				t.Fatal(err)
+			}
 			_, err := config.Load(nil, env)
 			if err == nil {
 				t.Fatal("Load succeeded, want credential encryption key error")
@@ -94,7 +98,7 @@ func TestLoadRejectsInvalidCredentialEncryptionKey(t *testing.T) {
 }
 
 func TestLoadParsesCredentialEncryptionKey(t *testing.T) {
-	env := validProductionEnv()
+	env := validProductionEnv(t)
 	want := bytes.Repeat([]byte{0x42}, credential.MasterKeyBytes)
 
 	cfg, err := config.Load(nil, env)
@@ -393,8 +397,9 @@ func TestLoadInvalidFlagPortReturnsError(t *testing.T) {
 	}
 }
 
-func validProductionEnv() map[string]string {
-	return map[string]string{
+func validProductionEnv(t *testing.T) map[string]string {
+	t.Helper()
+	env := map[string]string{
 		"JOBCRON_ENV":    "production",
 		"DATABASE_URL":   "postgres://db.example.invalid/jobs",
 		"SESSION_SECRET": strings.Repeat("s", 32),
@@ -402,4 +407,13 @@ func validProductionEnv() map[string]string {
 			bytes.Repeat([]byte{0x42}, credential.MasterKeyBytes),
 		),
 	}
+	for _, name := range []string{"DATABASE_URL", "SESSION_SECRET", "JOBCRON_CREDENTIAL_ENCRYPTION_KEY"} {
+		path := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(path, []byte(env[name]), 0600); err != nil {
+			t.Fatal(err)
+		}
+		env[name+"_FILE"] = path
+		delete(env, name)
+	}
+	return env
 }

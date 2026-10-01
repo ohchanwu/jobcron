@@ -20,18 +20,18 @@ services:
       JOBCRON_HOST: 0.0.0.0
       JOBCRON_PORT: "7777"
       JOBCRON_NO_OPEN: "1"
-      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
-      SESSION_SECRET: "${SESSION_SECRET:?set SESSION_SECRET in .env}"
-      JOBCRON_CREDENTIAL_ENCRYPTION_KEY: >-
-        ${JOBCRON_CREDENTIAL_ENCRYPTION_KEY:?set JOBCRON_CREDENTIAL_ENCRYPTION_KEY in .env}
+      DATABASE_URL_FILE: /run/jobcron/secrets/DATABASE_URL
+      SESSION_SECRET_FILE: /run/jobcron/secrets/SESSION_SECRET
+      JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE: /run/jobcron/secrets/JOBCRON_CREDENTIAL_ENCRYPTION_KEY
       JOBCRON_SCHEDULER_ENABLED: "1"
       JOBCRON_DAILY_SCRAPE_TIME: "${JOBCRON_DAILY_SCRAPE_TIME:-05:00}"
-      JOBCRON_SIGNUP_ACCESS_CODE: >-
-        ${JOBCRON_SIGNUP_ACCESS_CODE:?set JOBCRON_SIGNUP_ACCESS_CODE in .env}
+      JOBCRON_SIGNUP_ACCESS_CODE_FILE: /run/jobcron/secrets/JOBCRON_SIGNUP_ACCESS_CODE
       JOBCRON_STAGE1_SPONSOR_USER_ID: >-
         ${JOBCRON_STAGE1_SPONSOR_USER_ID:?set JOBCRON_STAGE1_SPONSOR_USER_ID in .env}
-      JOBCRON_PROXY_SECRET: "${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}"
+      JOBCRON_PROXY_SECRET_FILE: /run/jobcron/secrets/JOBCRON_PROXY_SECRET
       AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - /run/jobcron/secrets:/run/jobcron/secrets:ro
     ports:
       - target: 7777
         published: "7777"
@@ -59,13 +59,15 @@ services:
         host_ip: 0.0.0.0
         protocol: tcp
     environment:
-      JOBCRON_PROXY_SECRET: "${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}"
       AWS_EC2_METADATA_DISABLED: "true"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - /run/jobcron/caddy:/run/jobcron/caddy:ro
-      - caddy_data:/data
-      - caddy_config:/config
+    read_only: true
+    tmpfs:
+      - /data:mode=0700
+      - /config:mode=0700
+      - /tmp:mode=0700
     networks:
       - runtime
     logging:
@@ -74,10 +76,6 @@ services:
         max-size: 10m
         max-file: "3"
     restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:
 
 networks:
   runtime:

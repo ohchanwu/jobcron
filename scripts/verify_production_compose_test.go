@@ -285,11 +285,6 @@ func TestProductionComposeVerifierRejectsMutableImageReference(t *testing.T) {
 func TestProductionComposeVerifierRequiresSyntheticInputs(t *testing.T) {
 	for _, name := range []string{
 		"JOBCRON_IMAGE",
-		"DATABASE_URL",
-		"SESSION_SECRET",
-		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY",
-		"JOBCRON_PROXY_SECRET",
-		"JOBCRON_SIGNUP_ACCESS_CODE",
 		"JOBCRON_STAGE1_SPONSOR_USER_ID",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -333,8 +328,8 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 			name:     "app filesystem mount",
 			contract: "services.app.volumes",
 			mutate: replaceOnce(
-				"    expose:\n      - \"7777\"",
-				"    volumes:\n      - ./state:/root/.config/jobcron\n    expose:\n      - \"7777\"",
+				"      - /run/jobcron/secrets:/run/jobcron/secrets:ro",
+				"      - ./state:/root/.config/jobcron",
 			),
 		},
 		{
@@ -420,8 +415,8 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 			name:     "legacy app volume remains declared",
 			contract: "volumes.jobcron_config",
 			mutate: replaceOnce(
-				"volumes:\n  caddy_data:\n  caddy_config:",
-				"volumes:\n  caddy_data:\n  caddy_config:\n  jobcron_config:",
+				"networks:\n  runtime:",
+				"volumes:\n  jobcron_config:\n\nnetworks:\n  runtime:",
 			),
 		},
 	}
@@ -436,9 +431,9 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 
 func TestProductionComposeVerifierRejectsMissingAppEnvironment(t *testing.T) {
 	for _, name := range []string{
-		"DATABASE_URL",
-		"SESSION_SECRET",
-		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY",
+		"DATABASE_URL_FILE",
+		"SESSION_SECRET_FILE",
+		"JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE",
 		"JOBCRON_ENV",
 		"JOBCRON_HOST",
 		"JOBCRON_PORT",
@@ -446,7 +441,7 @@ func TestProductionComposeVerifierRejectsMissingAppEnvironment(t *testing.T) {
 		"AWS_EC2_METADATA_DISABLED",
 		"JOBCRON_SCHEDULER_ENABLED",
 		"JOBCRON_DAILY_SCRAPE_TIME",
-		"JOBCRON_SIGNUP_ACCESS_CODE",
+		"JOBCRON_SIGNUP_ACCESS_CODE_FILE",
 		"JOBCRON_STAGE1_SPONSOR_USER_ID",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -456,15 +451,15 @@ func TestProductionComposeVerifierRejectsMissingAppEnvironment(t *testing.T) {
 	}
 	t.Run("Caddy AWS_EC2_METADATA_DISABLED", func(t *testing.T) {
 		result := runProductionVerifier(t, replaceOnce(
-			"    environment:\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"\n      AWS_EC2_METADATA_DISABLED: \"true\"",
-			"    environment:\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
+			"    environment:\n      AWS_EC2_METADATA_DISABLED: \"true\"",
+			"    environment: {}",
 		), syntheticProductionEnvironment)
 		assertRejectedContract(t, result, "services.caddy.environment.AWS_EC2_METADATA_DISABLED")
 	})
 	t.Run("JOBCRON_PROXY_SECRET", func(t *testing.T) {
 		result := runProductionVerifier(t, replaceOnce(
-			"      JOBCRON_STAGE1_SPONSOR_USER_ID: >-\n        ${JOBCRON_STAGE1_SPONSOR_USER_ID:?set JOBCRON_STAGE1_SPONSOR_USER_ID in .env}\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
-			"      JOBCRON_STAGE1_SPONSOR_USER_ID: >-\n        ${JOBCRON_STAGE1_SPONSOR_USER_ID:?set JOBCRON_STAGE1_SPONSOR_USER_ID in .env}",
+			"      JOBCRON_PROXY_SECRET_FILE: /run/jobcron/secrets/JOBCRON_PROXY_SECRET\n",
+			"",
 		), syntheticProductionEnvironment)
 		assertRejectedContract(t, result, "services.app.environment.JOBCRON_PROXY_SECRET")
 	})
@@ -480,7 +475,7 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 			name:          "DATABASE_URL",
 			mismatchValue: "postgres://mismatch.invalid/jobcron",
 			mutate: replaceOnce(
-				`      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"`,
+				`      DATABASE_URL_FILE: /run/jobcron/secrets/DATABASE_URL`,
 				`      DATABASE_URL: "postgres://mismatch.invalid/jobcron"`,
 			),
 		},
@@ -488,7 +483,7 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 			name:          "SESSION_SECRET",
 			mismatchValue: "mismatched-session-value",
 			mutate: replaceOnce(
-				`      SESSION_SECRET: "${SESSION_SECRET:?set SESSION_SECRET in .env}"`,
+				`      SESSION_SECRET_FILE: /run/jobcron/secrets/SESSION_SECRET`,
 				`      SESSION_SECRET: "mismatched-session-value"`,
 			),
 		},
@@ -496,7 +491,7 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 			name:          "JOBCRON_CREDENTIAL_ENCRYPTION_KEY",
 			mismatchValue: "mismatched-credential-key",
 			mutate: replaceOnce(
-				"      JOBCRON_CREDENTIAL_ENCRYPTION_KEY: >-\n        ${JOBCRON_CREDENTIAL_ENCRYPTION_KEY:?set JOBCRON_CREDENTIAL_ENCRYPTION_KEY in .env}",
+				"      JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE: /run/jobcron/secrets/JOBCRON_CREDENTIAL_ENCRYPTION_KEY",
 				`      JOBCRON_CREDENTIAL_ENCRYPTION_KEY: "mismatched-credential-key"`,
 			),
 		},
@@ -504,7 +499,7 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 			name:          "JOBCRON_PROXY_SECRET",
 			mismatchValue: "mismatched-proxy-secret",
 			mutate: replaceOnce(
-				"      JOBCRON_STAGE1_SPONSOR_USER_ID: >-\n        ${JOBCRON_STAGE1_SPONSOR_USER_ID:?set JOBCRON_STAGE1_SPONSOR_USER_ID in .env}\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
+				"      JOBCRON_STAGE1_SPONSOR_USER_ID: >-\n        ${JOBCRON_STAGE1_SPONSOR_USER_ID:?set JOBCRON_STAGE1_SPONSOR_USER_ID in .env}\n      JOBCRON_PROXY_SECRET_FILE: /run/jobcron/secrets/JOBCRON_PROXY_SECRET",
 				"      JOBCRON_STAGE1_SPONSOR_USER_ID: >-\n        ${JOBCRON_STAGE1_SPONSOR_USER_ID:?set JOBCRON_STAGE1_SPONSOR_USER_ID in .env}\n      JOBCRON_PROXY_SECRET: \"mismatched-proxy-secret\"",
 			),
 		},
@@ -522,8 +517,8 @@ func TestProductionComposeVerifierRejectsMismatchedSensitiveEnvironment(t *testi
 	t.Run("Caddy JOBCRON_PROXY_SECRET", func(t *testing.T) {
 		mismatchValue := "mismatched-caddy-proxy-secret"
 		result := runProductionVerifier(t, replaceOnce(
-			"    environment:\n      JOBCRON_PROXY_SECRET: \"${JOBCRON_PROXY_SECRET:?set JOBCRON_PROXY_SECRET in .env}\"",
-			"    environment:\n      JOBCRON_PROXY_SECRET: \""+mismatchValue+"\"",
+			"    environment:\n      AWS_EC2_METADATA_DISABLED: \"true\"",
+			"    environment:\n      AWS_EC2_METADATA_DISABLED: \"true\"\n      JOBCRON_PROXY_SECRET: \""+mismatchValue+"\"",
 		), syntheticProductionEnvironment)
 		assertRejectedContract(t, result, "services.caddy.environment.JOBCRON_PROXY_SECRET")
 		if strings.Contains(result.output, mismatchValue) {
@@ -826,7 +821,7 @@ func removeComposeEnvironment(name string) func(string) string {
 		result := make([]string, 0, len(lines))
 		removed := false
 		for index := 0; index < len(lines); index++ {
-			if strings.HasPrefix(lines[index], "      "+name+":") {
+			if !removed && strings.HasPrefix(lines[index], "      "+name+":") {
 				removed = true
 				if strings.HasSuffix(lines[index], ">-") && index+1 < len(lines) {
 					index++

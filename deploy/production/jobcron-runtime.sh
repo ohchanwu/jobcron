@@ -22,9 +22,33 @@ owner() {
 	stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1"
 }
 
+check_runtime_custody() {
+	swap=$(swapon --noheadings --show=NAME 2>/dev/null) || fail
+	[ -z "$swap" ] || fail
+	case $run_dir in /*) ;; *) fail ;; esac
+	for directory in "$run_dir" "$run_dir/secrets" "$run_dir/caddy" "$run_dir/docker" "$run_dir/archive"; do
+		[ ! -L "$directory" ] || fail
+		if [ -e "$directory" ]; then
+			[ -d "$directory" ] || fail
+			[ "$(mode "$directory")" = 700 ] || fail
+			[ "$(owner "$directory")" = "$(id -u)" ] || fail
+			[ "$(findmnt -n -o FSTYPE --target "$directory" 2>/dev/null)" = tmpfs ] || fail
+		fi
+	done
+	parent=$(dirname "$run_dir")
+	[ "$(findmnt -n -o FSTYPE --target "$parent" 2>/dev/null)" = tmpfs ] || fail
+	if [ -d "$run_dir" ]; then
+		[ "$(findmnt -n -o FSTYPE --target "$run_dir" 2>/dev/null)" = tmpfs ] || fail
+	fi
+}
+
 remove_runtime_outputs() {
 	rm -f "$run_dir/compose.env"
-	rm -f "$run_dir/caddy/origin.crt" "$run_dir/caddy/origin.key"
+	rm -f "$run_dir/caddy/origin.crt" "$run_dir/caddy/origin.key" "$run_dir/caddy/proxy-header"
+	for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_SIGNUP_ACCESS_CODE JOBCRON_PROXY_SECRET; do
+		rm -f "$run_dir/secrets/$name"
+	done
+	rmdir "$run_dir/secrets" 2>/dev/null || true
 	rmdir "$run_dir/caddy" 2>/dev/null || true
 }
 
@@ -35,7 +59,9 @@ cleanup() {
 }
 
 prepare() {
+	check_runtime_custody
 	remove_runtime_outputs
+	[ ! -L "$secret_id_file" ] || fail
 	[ -f "$secret_id_file" ] || fail
 	[ "$(mode "$secret_id_file")" = 600 ] || fail
 	[ "$(owner "$secret_id_file")" = "$(id -u)" ] || fail
@@ -46,7 +72,7 @@ prepare() {
 	mkdir -p "$run_dir"
 	chmod 700 "$run_dir"
 	tmp_dir=$(mktemp -d "$run_dir/.prepare.XXXXXX")
-	trap 'rm -f "$tmp_dir/secret.json" "$tmp_dir/compose.env" "$tmp_dir/origin.crt" "$tmp_dir/origin.key"; rmdir "$tmp_dir" 2>/dev/null || true' EXIT HUP INT TERM
+	trap 'rm -rf -- "$tmp_dir"' EXIT HUP INT TERM
 
 	if ! aws secretsmanager get-secret-value \
 		--secret-id "$secret_id" \
@@ -73,6 +99,9 @@ prepare() {
 			((.value | contains("\n") or contains("\r")) | not)
 		)
 		and (.JOBCRON_IMAGE | test("^ghcr\\.io/[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?/jobcron@sha256:[0-9a-f]{64}$"))
+		and (.JOBCRON_STAGE1_SPONSOR_USER_ID | test("^[1-9][0-9]*$"))
+		and (.JOBCRON_PROXY_SECRET | test("^[A-Za-z0-9_-]{16,128}$"))
+		and all(.[]; (contains("\u0000") | not))
 		and (.ORIGIN_CA_CERT | startswith("-----BEGIN CERTIFICATE-----"))
 		and (.ORIGIN_CA_KEY | test("^-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----"))
 	' "$tmp_dir/secret.json" >/dev/null 2>&1; then
@@ -81,18 +110,26 @@ prepare() {
 
 	jq -r '
 		to_entries[]
-		| select(.key != "ORIGIN_CA_CERT" and .key != "ORIGIN_CA_KEY")
+		| select(.key == "JOBCRON_IMAGE" or .key == "JOBCRON_STAGE1_SPONSOR_USER_ID")
 		| "\(.key)=\(.value)"
 	' "$tmp_dir/secret.json" >"$tmp_dir/compose.env"
 	jq -r '.ORIGIN_CA_CERT' "$tmp_dir/secret.json" >"$tmp_dir/origin.crt"
 	jq -r '.ORIGIN_CA_KEY' "$tmp_dir/secret.json" >"$tmp_dir/origin.key"
 	chmod 600 "$tmp_dir/compose.env" "$tmp_dir/origin.crt" "$tmp_dir/origin.key"
+	mkdir "$tmp_dir/secrets"
+	for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_SIGNUP_ACCESS_CODE JOBCRON_PROXY_SECRET; do
+		jq -j --arg name "$name" '.[$name]' "$tmp_dir/secret.json" >"$tmp_dir/secrets/$name"
+		chmod 600 "$tmp_dir/secrets/$name"
+	done
+	jq -j '"header_up X-Jobcron-Proxy " + .JOBCRON_PROXY_SECRET + "\n"' "$tmp_dir/secret.json" >"$tmp_dir/proxy-header"
 
 	mkdir -p "$run_dir/caddy"
 	chmod 700 "$run_dir/caddy"
 	mv "$tmp_dir/compose.env" "$run_dir/compose.env"
 	mv "$tmp_dir/origin.crt" "$run_dir/caddy/origin.crt"
 	mv "$tmp_dir/origin.key" "$run_dir/caddy/origin.key"
+	mv "$tmp_dir/proxy-header" "$run_dir/caddy/proxy-header"
+	mv "$tmp_dir/secrets" "$run_dir/secrets"
 	rm -f "$tmp_dir/secret.json"
 	rmdir "$tmp_dir"
 	trap - EXIT HUP INT TERM
@@ -170,7 +207,7 @@ percent_decode() {
 archive() {
 	[ -f "$run_dir/compose.env" ] || fail
 	[ -n "${JOBCRON_RECOVERY_BUCKET:-}" ] || fail
-	database_url=$(compose_value DATABASE_URL)
+	database_url=$(cat "$run_dir/secrets/DATABASE_URL")
 	[ -n "$database_url" ] || fail
 	printf '%s\n' "$database_url" |
 		grep -Eq '^postgres://[A-Za-z_][A-Za-z0-9_]*:([A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\.rds\.amazonaws\.com:[0-9]+/[A-Za-z_][A-Za-z0-9_]*\?sslmode=require$' ||
@@ -280,11 +317,48 @@ verify_local_state() {
 	printf 'disk_free_bytes=%s\n' "$disk_free_bytes"
 }
 
+verify_secrets() {
+	check_runtime_custody
+	inspection=$(mktemp -d "$run_dir/.inspect.XXXXXX")
+	trap 'rm -rf -- "$inspection"' EXIT HUP INT TERM
+	for service in app caddy; do
+		container=$(cd "$deploy_dir" && docker compose --env-file "$run_dir/compose.env" ps -q "$service" 2>/dev/null) || fail
+		[ -n "$container" ] || fail
+		docker inspect "$container" >"$inspection/$service.json" 2>/dev/null || fail
+		jq -e 'type == "array" and length == 1 and (.[0].Config.Env | type == "array")' "$inspection/$service.json" >/dev/null 2>&1 || fail
+		for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_SIGNUP_ACCESS_CODE JOBCRON_PROXY_SECRET; do
+			file=$run_dir/secrets/$name
+			[ ! -L "$file" ] && [ -f "$file" ] && [ -s "$file" ] || fail
+			[ "$(mode "$file")" = 600 ] && [ "$(owner "$file")" = "$(id -u)" ] || fail
+			[ "$(findmnt -n -o FSTYPE --target "$file" 2>/dev/null)" = tmpfs ] || fail
+			jq -e --rawfile secret "$file" --arg name "$name" '
+				all(.. | strings; contains($secret) | not) and
+				all(.[0].Config.Env[]; startswith($name + "=") | not)
+			' "$inspection/$service.json" >/dev/null 2>&1 || fail
+			if [ "$service" = app ]; then
+				jq -e --arg name "$name" '.[0].Config.Env | map(select(. == ($name + "_FILE=/run/jobcron/secrets/" + $name))) | length == 1' "$inspection/app.json" >/dev/null 2>&1 || fail
+			fi
+		done
+	done
+	jq -e '.[0].Mounts | map(select(.Type == "bind" and .Source == "/run/jobcron/secrets" and .Destination == "/run/jobcron/secrets" and .RW == false)) | length == 1' "$inspection/app.json" >/dev/null 2>&1 || fail
+	jq -e '.[0] |
+		.HostConfig.ReadonlyRootfs == true and
+		(.HostConfig.Tmpfs | keys | sort) == ["/config", "/data", "/tmp"] and
+		all(.HostConfig.Tmpfs[]; . == "mode=0700") and
+		all(.Mounts[]; .Type != "volume" and (.Type != "bind" or .RW == false)) and
+		([.Mounts[] | select(.Type == "bind" and .Source == "/run/jobcron/caddy" and .Destination == "/run/jobcron/caddy" and .RW == false)] | length == 1)
+	' "$inspection/caddy.json" >/dev/null 2>&1 || fail
+	rm -rf -- "$inspection"
+	trap - EXIT HUP INT TERM
+	printf '%s\n' 'runtime_secret_metadata_safe=true'
+}
+
 case ${1:-} in
 prepare) prepare ;;
 pull) pull ;;
 archive) archive ;;
 cleanup) cleanup ;;
 verify-local-state) verify_local_state ;;
+verify-secrets) verify_secrets ;;
 *) fail ;;
 esac

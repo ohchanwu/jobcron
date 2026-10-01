@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/auth"
+	"github.com/ohchanwu/jobcron/internal/config"
 	"github.com/ohchanwu/jobcron/internal/storage"
 	"golang.org/x/term"
 )
@@ -43,7 +44,7 @@ func runWithPrompt(ctx context.Context, args []string, env envMap, in io.Reader,
 	case "reset-password":
 		return runOwnerCommand(ctx, args[0], args[1:], env, in, out, promptOut, true)
 	case "delete-user":
-		return runDeleteUserCommand(ctx, args[1:], out)
+		return runDeleteUserCommand(ctx, args[1:], env, out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -61,6 +62,11 @@ func runMigrateCommand(ctx context.Context, args []string, env envMap, in io.Rea
 	}
 	if fs.NArg() != 0 {
 		return errors.New("user: unexpected positional arguments")
+	}
+	var err error
+	rawDatabaseURL, err = databaseInput(env, rawDatabaseURL)
+	if err != nil {
+		return err
 	}
 	if rawDatabaseURL == "" {
 		return errors.New("user: --database-url is required")
@@ -133,6 +139,11 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	var err error
+	databaseURL, err = databaseInput(env, databaseURL)
+	if err != nil {
+		return err
+	}
 	if databaseURL == "" {
 		return errors.New("user: --database-url is required")
 	}
@@ -181,7 +192,7 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	return nil
 }
 
-func runDeleteUserCommand(ctx context.Context, args []string, out io.Writer) error {
+func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io.Writer) error {
 	var databaseURL, email, confirmEmail string
 	fs := flag.NewFlagSet("delete-user", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -189,6 +200,11 @@ func runDeleteUserCommand(ctx context.Context, args []string, out io.Writer) err
 	fs.StringVar(&email, "email", "", "user email address")
 	fs.StringVar(&confirmEmail, "confirm-email", "", "repeat the user email address")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	var err error
+	databaseURL, err = databaseInput(env, databaseURL)
+	if err != nil {
 		return err
 	}
 	if databaseURL == "" {
@@ -232,6 +248,18 @@ func runDeleteUserCommand(ctx context.Context, args []string, out io.Writer) err
 	return nil
 }
 
+func databaseInput(env envMap, flagValue string) (string, error) {
+	_, direct := env["DATABASE_URL"]
+	_, file := env["DATABASE_URL_FILE"]
+	if flagValue != "" && (direct || file) {
+		return "", errors.New("user: ambiguous database input")
+	}
+	if direct || file {
+		return config.Secret(env, "DATABASE_URL")
+	}
+	return flagValue, nil
+}
+
 func openUserStore(databaseURL string) (*storage.Store, error) {
 	st, err := storage.OpenPostgres(databaseURL)
 	if err != nil {
@@ -259,7 +287,11 @@ func openMigrationStore(ctx context.Context, databaseURL, legacyMigrationTree st
 }
 
 func commandPassword(env envMap, envName, label string, in io.Reader, out io.Writer) (string, error) {
-	if password := env[envName]; password != "" {
+	password, err := config.Secret(env, envName)
+	if err != nil {
+		return "", err
+	}
+	if password != "" {
 		return password, nil
 	}
 	if in == nil {
@@ -284,7 +316,7 @@ func commandPassword(env envMap, envName, label string, in io.Reader, out io.Wri
 	if err != nil && !errors.Is(err, io.EOF) {
 		return "", fmt.Errorf("user: read %s password: %w", strings.ToLower(label), err)
 	}
-	password := strings.TrimRight(line, "\r\n")
+	password = strings.TrimRight(line, "\r\n")
 	if password == "" {
 		return "", fmt.Errorf("user: %s password is required", strings.ToLower(label))
 	}

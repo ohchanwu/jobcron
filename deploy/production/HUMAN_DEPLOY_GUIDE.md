@@ -555,6 +555,48 @@ Compose in that order. Confirm:
 Run `/opt/jobcron/jobcron-runtime.sh verify-local-state` and record only its
 value-blind booleans and counts.
 
+The file-secret remediation requires a **new exact release image**. The previous
+environment-consuming image cannot run this Compose contract. Before any later
+publication approval, freeze the clean independently reviewed commit and bind
+the app binary, `jobcron-user` binary, Compose, Caddyfile and runtime helper to
+that revision. Publication inputs are the full `release_sha` to
+`.github/workflows/publish-production-image.yml` and target `linux/arm64`.
+After separately authorized publication, evidence must bind that SHA, successful
+full CI, private registry visibility, immutable manifest digest and platform;
+never substitute the old image or a mutable tag. Local build/test evidence alone
+is not publication, hosted CI, deployment readiness or approval to start.
+
+Use the file contract in [README.md](README.md#runtime-contract). Do not export
+runtime secret values, source an env file containing them, or run `docker exec
+env`, `docker inspect`, `docker compose config`, or `caddy adapt` into shared
+output with real inputs. The host retrieval helper creates each app secret as
+`/run/jobcron/secrets/NAME` and the restricted Caddy `proxy-header` import under
+`/run/jobcron/caddy`; `compose.env` carries only non-secret selectors. All runtime
+directories must be root-owned `0700` on tmpfs, files root-owned `0600`, swap
+disabled and core dumps disabled. Caddy has no persistent `/data` or `/config`;
+its read-only root plus tmpfs mounts and `persist_config off` prevent autosave
+from persisting the expanded header. Do not enable debug or config logging.
+
+After authorized private startup, run
+`/opt/jobcron/jobcron-runtime.sh verify-secrets`. It reads actual container
+metadata only into owner-only tmpfs, checks file custody, required `_FILE`
+references, absence of runtime secret bytes anywhere in inspected metadata,
+read-only secret binds, and volatile Caddy state, removes inspection files, and
+emits only `runtime_secret_metadata_safe=true`. Separately bind the installed
+Caddyfile/helper/Compose bytes to the reviewed release and run the rendered
+Compose verifier with non-secret selectors. Inspect certificate/key file custody
+value-blindly too. A missing or failed predicate is NO-GO; do not print the raw
+daemon response to diagnose it. No production check is considered executed by
+the local synthetic tests.
+
+For operator commands, supply `DATABASE_URL_FILE` rather than a credential URL
+argument. Migration still requires a password-free loopback TLS URL, plus a
+silent password prompt or `JOBCRON_DATABASE_PASSWORD_FILE`. Owner creation and
+password reset use `JOBCRON_OWNER_PASSWORD_FILE` / `JOBCRON_USER_PASSWORD_FILE`
+or silent prompts. Never combine value/env/flag inputs with file inputs. Stage
+secret material only in the approved owner-only volatile custody area, remove it
+after the operation, and retain the lower-privilege role and migration gates.
+
 ## 10. Complete private verification
 
 Forward trusted-Mac ports through Session Manager to host ports `7777` and
@@ -574,6 +616,14 @@ replacement host. Confirm the memory-backed runtime directory was cleared,
 systemd recreated complete files with modes `0700` and `0600`, no secret or TLS
 key persisted elsewhere, and the already-present approved digest starts without
 another registry token.
+
+Repeat `verify-secrets` after both an authorized container recreation and the
+reboot, as well as private user-path acceptance. Confirm systemd fetched fresh
+files before starting the one app/scheduler and that Caddy imported the recreated
+snippet without persistent autosave. If tmpfs, disabled swap or retrieval cannot
+be proved, leave the runtime stopped; never recover by copying credentials into
+Compose environment values. This verification and reboot remain separately
+authorized production actions, not part of local remediation.
 
 Any incomplete secret, wrong mode, failed pull, unhealthy container, or failed
 user-path check is a stop condition. Unexpected external reachability or

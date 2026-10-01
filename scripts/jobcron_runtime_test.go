@@ -47,6 +47,17 @@ func TestJobcronRuntimePrepareFailsClosed(t *testing.T) {
 			if strings.HasPrefix(key, "ORIGIN_CA_") {
 				continue
 			}
+			if key != "JOBCRON_IMAGE" && key != "JOBCRON_STAGE1_SPONSOR_USER_ID" {
+				if strings.Contains(composeEnv, value) {
+					t.Errorf("compose.env contains %s", key)
+				}
+				path := filepath.Join(fixture.runDir, "secrets", key)
+				if readFile(t, path) != value {
+					t.Errorf("secret file mismatch: %s", key)
+				}
+				assertMode(t, path, 0600)
+				continue
+			}
 			if !strings.Contains(composeEnv, key+"="+value) {
 				t.Errorf("compose.env missing %s", key)
 			}
@@ -131,7 +142,10 @@ func installGNUStatCollision(t *testing.T, binDir string) {
 	t.Helper()
 	writeExecutable(t, filepath.Join(binDir, "stat"), `#!/bin/sh
 if [ "$1" = -f ]; then printf '%s\n' gnu-filesystem-output; exit 0; fi
-if [ "$1" = -c ] && [ "$2" = %a ]; then printf '%s\n' 600; exit 0; fi
+if [ "$1" = -c ] && [ "$2" = %a ]; then
+  if [ -d "$3" ]; then printf '%s\n' 700; else printf '%s\n' 600; fi
+  exit 0
+fi
 if [ "$1" = -c ] && [ "$2" = %u ]; then id -u; exit 0; fi
 exit 1
 `)
@@ -662,6 +676,8 @@ func (f runtimeFixture) run(t *testing.T, secret string, args ...string) command
 
 func installRuntimeFakes(t *testing.T, f runtimeFixture) {
 	t.Helper()
+	writeExecutable(t, filepath.Join(f.binDir, "findmnt"), "#!/bin/sh\nprintf tmpfs\n")
+	writeExecutable(t, filepath.Join(f.binDir, "swapon"), "#!/bin/sh\nexit 0\n")
 	realJQ, err := exec.LookPath("jq")
 	if err != nil {
 		t.Fatal("jq is required for runtime helper tests")

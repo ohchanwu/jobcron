@@ -44,6 +44,21 @@ type Config struct {
 // Load parses jobcron configuration. Existing CLI flags override matching
 // environment defaults.
 func Load(args []string, env map[string]string) (Config, error) {
+	// Resolve into a private copy; never export file contents into the environment.
+	resolved := make(map[string]string, len(env))
+	var secretErr error
+	for name, value := range env {
+		resolved[name] = value
+	}
+	for _, name := range []string{"DATABASE_URL", "SESSION_SECRET", "JOBCRON_CREDENTIAL_ENCRYPTION_KEY", "JOBCRON_SIGNUP_ACCESS_CODE", "JOBCRON_PROXY_SECRET", "JOBCRON_ADMIN_TOKEN", "JOBCRON_WORKNET_KEY"} {
+		value, err := Secret(env, name)
+		if err != nil {
+			secretErr = err
+			break
+		}
+		resolved[name] = value
+	}
+	env = resolved
 	encodedCredentialEncryptionKey := envValue(env, "JOBCRON_CREDENTIAL_ENCRYPTION_KEY")
 	cfg := Config{
 		Production:       envValue(env, "JOBCRON_ENV") == "production",
@@ -75,6 +90,17 @@ func Load(args []string, env map[string]string) (Config, error) {
 	}
 	if cfg.ShowHelp || cfg.ShowVersion {
 		return cfg, nil
+	}
+	if secretErr != nil {
+		return Config{}, secretErr
+	}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "worknet-api-key" && cfg.Production {
+			secretErr = fmt.Errorf("production requires JOBCRON_WORKNET_KEY_FILE, not --worknet-api-key")
+		}
+	})
+	if secretErr != nil {
+		return Config{}, secretErr
 	}
 	if cfg.Production && cfg.Demo {
 		return Config{}, fmt.Errorf("production does not support demo mode")
