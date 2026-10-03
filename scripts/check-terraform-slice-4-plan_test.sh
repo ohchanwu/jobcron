@@ -348,9 +348,9 @@ jq -n '{
 
 cat >"$fixture_root/replacement-user-data" <<'EOF'
 #!/bin/bash
-/opt/jobcron/compose.yaml 28470a096ae9430633174abf7b631c0b41540dfed9003a07a91280a8c703d5a8
-/opt/jobcron/Caddyfile 3b52c1f296b4fa709ae4ce50aced61f23a4d1d00ff7939d5f6b0f8a193c863f6
-/opt/jobcron/jobcron-runtime.sh 854a72aadb5dfa5717956131cb6db37430a7fba49beafac92010db977cbbe91f
+/opt/jobcron/compose.yaml 905cfbc80845e4e09edd05099b80ae00d0e6e7910f9295a716a5642cce0cee48
+/opt/jobcron/Caddyfile 9d040c186245ed16791f3c5b909c6384447d080d6fc87ba8926e96197608d56c
+/opt/jobcron/jobcron-runtime.sh 2dcdeef787e6286a72c7e5cb430baa06440b1992972b2ec40e1510c7504abdd2
 /etc/systemd/system/jobcron.service f450f85dd50c75250b0c5ae4c40cbcc61da8453356b3b89cec8abe9c647e10dd
 /etc/systemd/system/jobcron-recovery.service f1ead8f00c5cdf8dab3b1dd2564b3e20956fa38f388fe82016098383ea3e361c
 /etc/systemd/system/jobcron-recovery.timer 4b9831517333fcb689dd40e7db55faf1773495bc85f54612e0ab8db6e75a834c
@@ -1793,6 +1793,40 @@ for user_data_filter in \
   replacement_plan_mutation 'provider-v6-user-data' "$user_data_mutation"
   combined_recovery_plan_mutation 'provider-v6-user-data' "$user_data_mutation"
   initial_mutation 0 'provider-v6-user-data' "$user_data_mutation"
+done
+
+# Matching plan/render bytes cannot legitimize a stale deployment asset digest.
+for asset in compose.yaml Caddyfile jobcron-runtime.sh; do
+  awk -v target="/opt/jobcron/$asset" '
+    $1 == target {
+      $2 = "0000000000000000000000000000000000000000000000000000000000000000"
+      count++
+    }
+    { print }
+    END { if (count != 1) exit 1 }
+  ' "$fixture_root/replacement-user-data" >"$fixture_root/user-data-stale-asset"
+  for asset_mode in replacement combined-recovery initial-deployment; do
+    asset_plan="$fixture_root/plan-replacement-valid.json"
+    asset_checkpoint="$fixture_root/current-checkpoint-replacement-valid.json"
+    if [[ "$asset_mode" == combined-recovery ]]; then
+      asset_plan="$fixture_root/plan-combined-recovery-valid.json"
+      asset_checkpoint="$fixture_root/current-checkpoint-combined-valid.json"
+    elif [[ "$asset_mode" == initial-deployment ]]; then
+      asset_plan="$fixture_root/plan-initial-valid.json"
+      asset_checkpoint="$fixture_root/current-checkpoint-initial-valid.json"
+    fi
+    jq --rawfile payload "$fixture_root/user-data-stale-asset" \
+      '(.resource_changes[] | select(.address == "aws_instance.replacement_host") |
+        .change.after.user_data) = $payload' \
+      "$asset_plan" >"$fixture_root/plan-stale-asset.json"
+    asset_args=("$fixture_root/plan-stale-asset.json" "$fixture_root/cost-valid.json"
+      "$asset_checkpoint" "$fixture_root/user-data-stale-asset" "$reviewed_sha")
+    if [[ "$asset_mode" != replacement ]]; then
+      asset_args+=("$asset_mode")
+    fi
+    expect_recovery_invocation_rejected \
+      "$asset_mode matching stale $asset digest" "${asset_args[@]}"
+  done
 done
 
 # A matching render cannot legitimize a recognizable secret in initial mode.
