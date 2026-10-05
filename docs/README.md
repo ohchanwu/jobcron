@@ -35,7 +35,12 @@ Use this index instead of recursively loading the entire documentation tree.
   reports. Load only the active files listed here and the concise decision
   records needed for the current task.
 
+- [Emergency overnight alpha deployment — owner-approved 2026-10-05][emergency-overnight-deployment]
+  controls this launch's autonomous sequencing; exact operations still require
+  independent review and fresh per-operation envelopes.
 - [Human-assisted alpha deployment][human-assisted-alpha-deployment]
+  remains the technical safety reference; its attended sequencing is superseded
+  for this launch by the approved emergency scope above.
 
 ## Recently Archived
 
@@ -139,6 +144,8 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 [local-only-submit-formula]: learnings/260719-local-only-polecat-submit-formula.md
 [human-assisted-alpha-deployment]:
   specs/260923-human-assisted-alpha-deployment.md
+[emergency-overnight-deployment]:
+  specs/261005-emergency-overnight-deployment.md
 [gemini-byok-spec-archive]:
   archive/2026-09-25-gemini-byok-onboarding/260924-gemini-byok-onboarding.md
 [gemini-byok-plan-archive]:
