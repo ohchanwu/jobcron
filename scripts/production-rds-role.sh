@@ -109,13 +109,45 @@ if ! PGPASSWORD=$master_password psql "$verified_master_url" -X -q -v ON_ERROR_S
 BEGIN;
 SET LOCAL search_path = pg_catalog, public;
 DO \$jobcron\$
+DECLARE
+	app_oid OID;
 BEGIN
-	IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$app_user') THEN
+	SELECT oid INTO app_oid FROM pg_roles WHERE rolname = '$app_user';
+	IF app_oid IS NULL THEN
 		CREATE ROLE $app_user LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+	ELSE
+		-- Reject existing authority before password/settings/grant mutations.
+		-- RDS administrators cannot ALTER superuser-only attributes, even to
+		-- restate their already-disabled values on an ordinary role.
+		IF EXISTS (
+			SELECT 1 FROM pg_roles WHERE oid = app_oid
+			  AND (NOT rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls)
+		) THEN
+			RAISE EXCEPTION 'application role attributes are not restrictive';
+		END IF;
+		IF EXISTS (
+			SELECT 1 FROM pg_auth_members membership
+			WHERE membership.member = app_oid OR membership.roleid = app_oid
+		) THEN
+			RAISE EXCEPTION 'application role has role membership';
+		END IF;
+		IF EXISTS (
+			SELECT 1 FROM pg_database
+			WHERE datname = current_database() AND datdba = app_oid
+		) OR EXISTS (
+			SELECT 1 FROM pg_namespace
+			WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND nspowner = app_oid
+		) OR EXISTS (
+			SELECT 1 FROM pg_class relation
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname NOT LIKE 'pg_%' AND namespace.nspname <> 'information_schema' AND relation.relowner = app_oid
+		) THEN
+			RAISE EXCEPTION 'application role owns production database objects';
+		END IF;
 	END IF;
 END
 \$jobcron\$;
-ALTER ROLE $app_user LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '$escaped_application_password';
+ALTER ROLE $app_user LOGIN PASSWORD '$escaped_application_password';
 ALTER ROLE $app_user RESET ALL;
 ALTER ROLE $app_user IN DATABASE $database RESET ALL;
 ALTER ROLE $app_user SET search_path = pg_catalog, public;

@@ -22,7 +22,10 @@ func TestProductionPasswordCommandsPreserveSequentialStdin(t *testing.T) {
 	if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
 		t.Fatal(err)
 	}
-	env := envMap{"JOBCRON_ENV": "production", "DATABASE_URL_FILE": path}
+	env := envMap{
+		"JOBCRON_ENV": "production", "DATABASE_URL_FILE": path,
+		"JOBCRON_OWNER_EMAIL_FILE": ownerEmailFile(t, "owner@example.com", 0600),
+	}
 	for _, command := range []string{"create-owner", "reset-password"} {
 		for _, source := range []string{"reader", "already-buffered", "prefilled-pipe"} {
 			t.Run(command+"/"+source, func(t *testing.T) {
@@ -50,7 +53,11 @@ func TestProductionPasswordCommandsPreserveSequentialStdin(t *testing.T) {
 					in = reader
 				}
 				var out, prompts bytes.Buffer
-				err := runWithPrompt(context.Background(), []string{command, "--email", "owner@example.com"}, env, in, &out, &prompts)
+				args := []string{command}
+				if command == "reset-password" {
+					args = append(args, "--email", "owner@example.com")
+				}
+				err := runWithPrompt(context.Background(), args, env, in, &out, &prompts)
 				if err == nil || err.Error() != "user: verified operator connection forbids ambient PG settings" {
 					t.Fatalf("sequential stdin did not reach the pre-dial guard: %v", err)
 				}
@@ -72,6 +79,7 @@ func TestProductionVerifiedCommandsRedactConnectionFailure(t *testing.T) {
 	dir := t.TempDir()
 	inputs := map[string]string{
 		"DATABASE_URL":              raw,
+		"JOBCRON_OWNER_EMAIL":       "private-owner@example.com",
 		"JOBCRON_DATABASE_PASSWORD": "private-database-password",
 		"JOBCRON_OWNER_PASSWORD":    "private-owner-password",
 		"JOBCRON_USER_PASSWORD":     "private-user-password",
@@ -86,7 +94,7 @@ func TestProductionVerifiedCommandsRedactConnectionFailure(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"migrate"},
-		{"create-owner", "--email", "owner@example.com"},
+		{"create-owner"},
 		{"reset-password", "--email", "owner@example.com"},
 		{"delete-user", "--email", "owner@example.com", "--confirm-email", "owner@example.com"},
 	} {

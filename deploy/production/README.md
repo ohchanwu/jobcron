@@ -91,6 +91,29 @@ silent prompt, and owner/reset passwords retain their own inputs. Unset ambient
 loopback `sslmode=require` migration remains non-production-only and is not
 certificate/hostname verification. Do not put production URLs in argv.
 
+Production `create-owner` also requires `JOBCRON_OWNER_EMAIL_FILE`, using the
+same owner-only file custody above. Leave `JOBCRON_OWNER_EMAIL` unset and omit
+`--email`; literal/file or flag/file combinations (including empty inputs) are
+rejected. Email normalization and validation are unchanged. Non-production
+retains `--email` and permits the single literal environment input. For example,
+after the controller privately stages the approved files, invoke the exact
+reviewed native operator:
+
+```sh
+JOBCRON_ENV=production \
+DATABASE_URL_FILE=/private/operator/database-url \
+JOBCRON_OWNER_EMAIL_FILE=/private/operator/owner-email \
+JOBCRON_OWNER_PASSWORD_FILE=/private/operator/owner-password \
+JOBCRON_DATABASE_PASSWORD_FILE=/private/operator/database-password \
+/private/operator/jobcron-user create-owner
+```
+
+The production receipt is `owner_user_ready=true user_id=<numeric ID>`, never
+the email. Passwords may instead use the existing silent prompts (owner first,
+database second); do not put values in argv or logs. Production owner-creation
+database errors are sanitized; reconcile actual owner state before any retry,
+especially after an uncertain commit. Reset/delete command contracts are unchanged.
+
 ## Verified RDS TLS and controller command brief
 
 This is a local compatibility contract, not authorization or deployment PASS.
@@ -116,6 +139,15 @@ The controller retains all exact-operation, recovery and cutover gates.
   with real host, loopback `hostaddr`, tunnel port and that CA. Passwords remain
   two stdin lines, never argv. The runtime URL it writes uses the real private
   endpoint and exactly `sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem`.
+  Before altering an existing role, the guarded transaction rejects unsafe
+  attributes, either direction of role membership, or production-object
+  ownership. It does not silently remove authority. A safe existing role needs
+  only native `ALTER ROLE ... LOGIN PASSWORD`, settings and restricted grants,
+  not superuser-only `NOSUPERUSER`/`NOREPLICATION`/`NOBYPASSRLS` alteration.
+  New-role creation retains the explicit least-privilege attributes. All final
+  safety/effective-privilege checks remain mandatory. If the selected RDS admin
+  cannot perform these ordinary operations, stop at that capability boundary;
+  there is no elevated-role, IAM or runtime-admin fallback.
 - Runtime: preserve the exact nine existing JSON keys and existing secrets/key;
   bind the accepted image and actual owner ID privately. `prepare` rejects
   downgraded/wrong-CA URLs, copies the approved public CA into root-owned tmpfs

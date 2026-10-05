@@ -516,9 +516,13 @@ Enter the master and application passwords only through the helper's silent
 stdin prompts. It grants connect, schema usage, application-table DML, sequence
 usage, and read-only access to `schema_migrations`; the runtime role cannot
 forge the migration ledger or create a database, superuser, extension, or
-replication role. Existing elevated role attributes are removed, while any role
-membership or ownership of the production database, public schema, or public
-relations makes the transaction fail closed. Direct and public ledger writes
+replication role. Existing elevated role attributes, either direction of role
+membership, or production-object ownership make the guarded transaction fail
+closed before any role mutation. Safe existing roles use native password/LOGIN
+alteration without restating superuser-only attributes; new roles retain explicit
+least-privilege creation. No admin-privilege expansion or fallback is permitted
+if the selected RDS administrator lacks ordinary role/grant authority.
+Direct and public ledger writes
 are revoked, and effective `SELECT`/`INSERT`/`UPDATE`/`DELETE` privileges are
 checked before readiness. Verify the catalog grants without printing names or
 passwords. The helper stores the lower-privilege hostname/CA-verified

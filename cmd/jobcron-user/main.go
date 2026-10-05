@@ -150,13 +150,24 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if err := rejectProductionDatabaseArgs(env, args); err != nil {
 		return err
 	}
+	if !reset {
+		if err := rejectOwnerEmailArgs(env, args); err != nil {
+			return err
+		}
+	}
 	var databaseURL, email string
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&databaseURL, "database-url", "", "PostgreSQL database URL")
 	fs.StringVar(&email, "email", "", "owner email address")
 	if err := fs.Parse(args); err != nil {
+		if !reset {
+			return errors.New("user: invalid create-owner arguments")
+		}
 		return err
+	}
+	if !reset && fs.NArg() != 0 {
+		return errors.New("user: unexpected positional arguments")
 	}
 	var err error
 	databaseURL, err = databaseInput(env, databaseURL)
@@ -165,6 +176,18 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	}
 	if databaseURL == "" {
 		return errors.New("user: --database-url is required")
+	}
+	if !reset {
+		provided := false
+		fs.Visit(func(current *flag.Flag) {
+			if current.Name == "email" {
+				provided = true
+			}
+		})
+		email, err = ownerEmailInput(env, email, provided)
+		if err != nil {
+			return err
+		}
 	}
 	if email == "" {
 		return errors.New("user: --email is required")
@@ -214,14 +237,25 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 		user, err = st.CreateOwnerUser(ctx, email, passwordHash)
 	}
 	if err != nil {
+		if !reset && env["JOBCRON_ENV"] == "production" {
+			return errors.New("user: create owner failed")
+		}
 		return err
 	}
 	if reset {
 		fmt.Fprintf(out, "reset password for %s (user ID %d)\n", user.Email, user.ID)
 	} else {
-		fmt.Fprintf(out, "created owner user %s (user ID %d)\n", user.Email, user.ID)
+		writeOwnerCreated(out, user, env["JOBCRON_ENV"] == "production")
 	}
 	return nil
+}
+
+func writeOwnerCreated(out io.Writer, user storage.User, production bool) {
+	if production {
+		fmt.Fprintf(out, "owner_user_ready=true user_id=%d\n", user.ID)
+	} else {
+		fmt.Fprintf(out, "created owner user %s (user ID %d)\n", user.Email, user.ID)
+	}
 }
 
 func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io.Writer) error {
@@ -285,6 +319,40 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 		return errors.New("user: user no longer exists")
 	}
 	fmt.Fprintf(out, "deleted user %s (user ID %d)\n", user.Email, user.ID)
+	return nil
+}
+
+func ownerEmailInput(env envMap, flagValue string, provided bool) (string, error) {
+	_, direct := env["JOBCRON_OWNER_EMAIL"]
+	_, file := env["JOBCRON_OWNER_EMAIL_FILE"]
+	if env["JOBCRON_ENV"] == "production" && (provided || direct || !file) {
+		return "", errors.New("user: production requires JOBCRON_OWNER_EMAIL_FILE")
+	}
+	if provided && (direct || file) {
+		return "", errors.New("user: ambiguous owner email input")
+	}
+	if direct || file {
+		return config.Secret(env, "JOBCRON_OWNER_EMAIL")
+	}
+	return flagValue, nil
+}
+
+// Check raw option names, including after -- or positional arguments, without
+// disclosing values. Explicit empty and duplicate flags are still inputs.
+func rejectOwnerEmailArgs(env envMap, args []string) error {
+	count := 0
+	for _, arg := range args {
+		name, _, _ := strings.Cut(arg, "=")
+		if name == "--email" || name == "-email" {
+			if env["JOBCRON_ENV"] == "production" {
+				return errors.New("user: production requires JOBCRON_OWNER_EMAIL_FILE")
+			}
+			count++
+		}
+	}
+	if count > 1 {
+		return errors.New("user: ambiguous owner email input")
+	}
 	return nil
 }
 

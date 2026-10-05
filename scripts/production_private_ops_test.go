@@ -57,9 +57,9 @@ func TestProductionPrivateOpsRDSUsesOneLeastPrivilegeTransaction(t *testing.T) {
 	for _, want := range []string{
 		"BEGIN;",
 		"SET LOCAL search_path = pg_catalog, public;",
-		"IF NOT EXISTS",
+		"IF app_oid IS NULL THEN",
 		"CREATE ROLE jobcron_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;",
-		"ALTER ROLE jobcron_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '" + applicationPassword + "';",
+		"ALTER ROLE jobcron_app LOGIN PASSWORD '" + applicationPassword + "';",
 		"ALTER ROLE jobcron_app RESET ALL;",
 		"pg_auth_members",
 		"datdba = app_oid",
@@ -117,9 +117,67 @@ func TestProductionPrivateOpsRDSUsesOneLeastPrivilegeTransaction(t *testing.T) {
 		t.Fatalf("RDS helper rerun failed: %v\n%s", result.err, result.output)
 	}
 	secondSQL := readFile(t, fixture.sqlLog)
-	if !strings.Contains(secondSQL, "IF NOT EXISTS") ||
-		!strings.Contains(secondSQL, "ALTER ROLE jobcron_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+secondPassword+"';") {
+	if !strings.Contains(secondSQL, "IF app_oid IS NULL THEN") ||
+		!strings.Contains(secondSQL, "ALTER ROLE jobcron_app LOGIN PASSWORD '"+secondPassword+"';") {
 		t.Fatalf("rerun was not idempotent password rotation:\n%s", secondSQL)
+	}
+}
+
+// Source-derived SQL checks, not a PostgreSQL executor: live catalog validation
+// remains a controller gate. The fixture captures the exact native input.
+func TestProductionPrivateOpsRDSGuardsExistingRoleBeforeMutation(t *testing.T) {
+	fixture := newPrivateOpsFixture(t)
+	result := fixture.run(t, rdsRoleHelper, "master-password\napplication-password\n")
+	if result.err != nil {
+		t.Fatalf("capture SQL: %v", result.err)
+	}
+	sql := readFile(t, fixture.sqlLog)
+	create := strings.Index(sql, "CREATE ROLE jobcron_app")
+	alter := strings.Index(sql, "ALTER ROLE jobcron_app")
+	guardEnd := strings.Index(sql, "END\n$jobcron$;")
+	if create < 0 || alter <= guardEnd || guardEnd <= create {
+		t.Fatal("role creation/alteration escaped the guarded transaction")
+	}
+	guard := sql[:guardEnd]
+	for _, want := range []string{
+		"SELECT oid INTO app_oid FROM pg_roles WHERE rolname = 'jobcron_app'",
+		"IF app_oid IS NULL THEN", "ELSE",
+		"NOT rolcanlogin", "rolsuper", "rolcreatedb", "rolcreaterole", "rolinherit", "rolreplication", "rolbypassrls",
+		"AND (NOT rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls)",
+		"membership.member = app_oid OR membership.roleid = app_oid",
+		"datdba = app_oid", "nspowner = app_oid", "relation.relowner = app_oid",
+		"RAISE EXCEPTION 'application role attributes are not restrictive'",
+		"RAISE EXCEPTION 'application role has role membership'",
+		"RAISE EXCEPTION 'application role owns production database objects'",
+	} {
+		if !strings.Contains(guard, want) {
+			t.Errorf("pre-write role guard missing %q", want)
+		}
+	}
+	for _, statement := range strings.Split(sql, "\n") {
+		if strings.HasPrefix(statement, "ALTER ROLE jobcron_app") &&
+			strings.Contains(statement, "NOSUPERUSER") {
+			t.Fatal("existing safe role still requires superuser-only attribute alteration")
+		}
+	}
+	if strings.Count(sql, "BEGIN;") != 1 || strings.Count(sql, "COMMIT;") != 1 {
+		t.Fatal("role operation is not one transaction")
+	}
+}
+
+func TestProductionPrivateOpsRDSFailedGuardPreservesReadiness(t *testing.T) {
+	fixture := newPrivateOpsFixture(t)
+	before := readFile(t, fixture.runtimeSecret)
+	fixture.env = append(fixture.env, "FAKE_PSQL_EXIT=1")
+	result := fixture.run(t, rdsRoleHelper, "master-password\napplication-password\n")
+	if result.err == nil || result.output != "production RDS role operation failed\n" {
+		t.Fatal("failed native transaction did not fail closed")
+	}
+	if readFile(t, fixture.runtimeSecret) != before {
+		t.Fatal("failed native transaction replaced runtime input")
+	}
+	if _, err := os.Stat(fixture.roleEnv); !os.IsNotExist(err) {
+		t.Fatal("failed native transaction wrote readiness")
 	}
 }
 
