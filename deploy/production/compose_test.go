@@ -52,6 +52,9 @@ type composeVolume struct {
 	Source   string `yaml:"source"`
 	Target   string `yaml:"target"`
 	ReadOnly bool   `yaml:"read_only"`
+	Bind     struct {
+		CreateHostPath bool `yaml:"create_host_path"`
+	} `yaml:"bind"`
 }
 
 type composePort struct {

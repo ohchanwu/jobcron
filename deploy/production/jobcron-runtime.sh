@@ -22,6 +22,15 @@ owner() {
 	stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1"
 }
 
+validate_database_url() {
+	printf '%s\n' "$1" |
+		grep -Eq '^postgres://[A-Za-z_][A-Za-z0-9_]*:([A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\.rds\.amazonaws\.com:[0-9]+/[A-Za-z_][A-Za-z0-9_]*\?sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca\.pem$' || fail
+	endpoint=${1#*@}
+	endpoint=${endpoint%%/*}
+	port=${endpoint##*:}
+	[ "$port" -ge 1 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null || fail
+}
+
 check_runtime_custody() {
 	swap=$(swapon --noheadings --show=NAME 2>/dev/null) || fail
 	[ -z "$swap" ] || fail
@@ -44,6 +53,7 @@ check_runtime_custody() {
 
 remove_runtime_outputs() {
 	rm -f "$run_dir/compose.env"
+	rm -f "$run_dir/rds-ca.pem"
 	rm -f "$run_dir/caddy/origin.crt" "$run_dir/caddy/origin.key" "$run_dir/caddy/proxy-header"
 	for name in DATABASE_URL SESSION_SECRET JOBCRON_CREDENTIAL_ENCRYPTION_KEY JOBCRON_SIGNUP_ACCESS_CODE JOBCRON_PROXY_SECRET; do
 		rm -f "$run_dir/secrets/$name"
@@ -61,6 +71,14 @@ cleanup() {
 prepare() {
 	check_runtime_custody
 	remove_runtime_outputs
+	[ ! -e "$run_dir/secrets" ] || fail
+	if [ "$etc_dir" = /etc/jobcron ]; then [ "$(id -u)" = 0 ] || fail; fi
+	[ ! -L "$etc_dir" ] && [ -d "$etc_dir" ] || fail
+	[ "$(mode "$etc_dir")" = 700 ] && [ "$(owner "$etc_dir")" = "$(id -u)" ] || fail
+	ca_file=$etc_dir/rds-ca.pem
+	[ ! -L "$ca_file" ] && [ -f "$ca_file" ] && [ -s "$ca_file" ] || fail
+	[ "$(mode "$ca_file")" = 600 ] && [ "$(owner "$ca_file")" = "$(id -u)" ] || fail
+	openssl x509 -in "$ca_file" -noout >/dev/null 2>&1 || fail
 	[ ! -L "$secret_id_file" ] || fail
 	[ -f "$secret_id_file" ] || fail
 	[ "$(mode "$secret_id_file")" = 600 ] || fail
@@ -73,6 +91,8 @@ prepare() {
 	chmod 700 "$run_dir"
 	tmp_dir=$(mktemp -d "$run_dir/.prepare.XXXXXX")
 	trap 'rm -rf -- "$tmp_dir"' EXIT HUP INT TERM
+	cp "$ca_file" "$tmp_dir/rds-ca.pem"
+	chmod 600 "$tmp_dir/rds-ca.pem"
 
 	if ! aws secretsmanager get-secret-value \
 		--secret-id "$secret_id" \
@@ -107,6 +127,9 @@ prepare() {
 	' "$tmp_dir/secret.json" >/dev/null 2>&1; then
 		fail
 	fi
+	database_url=$(jq -j '.DATABASE_URL' "$tmp_dir/secret.json")
+	validate_database_url "$database_url"
+	unset database_url
 
 	jq -r '
 		to_entries[]
@@ -129,6 +152,7 @@ prepare() {
 	mv "$tmp_dir/origin.crt" "$run_dir/caddy/origin.crt"
 	mv "$tmp_dir/origin.key" "$run_dir/caddy/origin.key"
 	mv "$tmp_dir/proxy-header" "$run_dir/caddy/proxy-header"
+	mv "$tmp_dir/rds-ca.pem" "$run_dir/rds-ca.pem"
 	mv "$tmp_dir/secrets" "$run_dir/secrets"
 	rm -f "$tmp_dir/secret.json"
 	rmdir "$tmp_dir"
@@ -205,13 +229,25 @@ percent_decode() {
 }
 
 archive() {
+	check_runtime_custody
+	if env | grep -q '^PG'; then fail; fi
 	[ -f "$run_dir/compose.env" ] || fail
 	[ -n "${JOBCRON_RECOVERY_BUCKET:-}" ] || fail
 	database_url=$(cat "$run_dir/secrets/DATABASE_URL")
 	[ -n "$database_url" ] || fail
-	printf '%s\n' "$database_url" |
-		grep -Eq '^postgres://[A-Za-z_][A-Za-z0-9_]*:([A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\.rds\.amazonaws\.com:[0-9]+/[A-Za-z_][A-Za-z0-9_]*\?sslmode=require$' ||
-		fail
+	validate_database_url "$database_url"
+	ca_file=$run_dir/rds-ca.pem
+	[ ! -L "$ca_file" ] && [ -f "$ca_file" ] && [ -s "$ca_file" ] || fail
+	[ "$(mode "$ca_file")" = 600 ] && [ "$(owner "$ca_file")" = "$(id -u)" ] || fail
+	[ "$(findmnt -n -o FSTYPE --target "$ca_file" 2>/dev/null)" = tmpfs ] || fail
+	openssl x509 -in "$ca_file" -noout >/dev/null 2>&1 || fail
+	# Single explicit installed executable, never a shell command or download.
+	pg_dump_command=${JOBCRON_PG_DUMP:-pg_dump}
+	case $pg_dump_command in
+	pg_dump) ;;
+	/*/pg_dump) [ -f "$pg_dump_command" ] && [ -x "$pg_dump_command" ] || fail ;;
+	*) fail ;;
+	esac
 	authority=${database_url#postgres://}
 	userinfo=${authority%%@*}
 	connection=${authority#*@}
@@ -238,7 +274,7 @@ archive() {
 	trap 'cleanup_archive_raw' EXIT HUP INT TERM
 
 	# libpq expands a URI only when it is the dbname argument; keep its password off argv.
-	PGPASSWORD=$database_password pg_dump --dbname="$password_free_url" -Fc \
+	PGPASSWORD=$database_password "$pg_dump_command" --dbname="$password_free_url" -Fc \
 		-f "$archive_dir/database.dump" >/dev/null 2>&1 || fail
 	unset database_password encoded_password
 	(cd "$deploy_dir" && docker compose --env-file "$run_dir/compose.env" logs --no-color app >"$jobcron_raw") || fail
@@ -360,6 +396,7 @@ verify_secrets() {
 		done
 	done
 	jq -e '.[0].Mounts | map(select(.Type == "bind" and .Source == "/run/jobcron/secrets" and .Destination == "/run/jobcron/secrets" and .RW == false)) | length == 1' "$inspection/app.json" >/dev/null 2>&1 || fail
+	jq -e '.[0].Mounts | map(select(.Type == "bind" and .Source == "/run/jobcron/rds-ca.pem" and .Destination == "/run/jobcron/rds-ca.pem" and .RW == false)) | length == 1' "$inspection/app.json" >/dev/null 2>&1 || fail
 	jq -e '.[0] |
 		.HostConfig.ReadonlyRootfs == true and
 		(.HostConfig.Tmpfs | keys | sort) == ["/config", "/data", "/tmp"] and

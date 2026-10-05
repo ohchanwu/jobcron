@@ -66,10 +66,11 @@ check_contract() {
 
 check_contract "services.app" '.services.app | type == "object"'
 check_contract "services.caddy" '.services.caddy | type == "object"'
-check_contract "services.app.volumes must be only read-only runtime secrets" '
-	.services.app.volumes as $v | ($v | length) == 1 and
-	$v[0].type == "bind" and $v[0].source == "/run/jobcron/secrets" and
-	$v[0].target == "/run/jobcron/secrets" and $v[0].read_only == true
+check_contract "services.app.volumes must be only read-only runtime secrets and RDS CA" '
+	.services.app.volumes as $v | ($v | length) == 2 and
+	all($v[]; .type == "bind" and .read_only == true and .source == .target) and
+	([$v[].source] | sort) == ["/run/jobcron/rds-ca.pem", "/run/jobcron/secrets"] and
+	all($v[] | select(.source == "/run/jobcron/rds-ca.pem"); .bind.create_host_path == false)
 '
 check_contract "services.app.ports must bind only loopback 7777" '
 	(.services.app.ports // []) as $ports |

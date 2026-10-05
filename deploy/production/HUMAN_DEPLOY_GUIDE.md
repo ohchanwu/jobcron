@@ -480,9 +480,15 @@ requires that audited tree object to equal its pinned migration tree. Without
 the argument, a legacy ledger fails closed; a tree, filename, or digest mismatch
 always fails closed.
 
-The URL must contain the master username but no password, use exactly the
-`127.0.0.1` Session Manager tunnel, and set only `sslmode=require`.
-`verify-full` cannot verify the RDS certificate against a loopback hostname.
+The URL must contain the master username but no password and the real RDS
+hostname with the explicit local tunnel port. Set exactly `sslmode=verify-full`,
+`hostaddr=127.0.0.1` and `sslrootcert=<absolute approved public RDS CA file>`
+(URI-encode the CA path). The operator-only pgx configuration pins the TCP dial
+to that loopback port while retaining RDS TLS ServerName/RootCAs; the localhost
+name is not used for certificate verification. Unset ambient `PG*` settings.
+The CA and its directories must have trusted custody. Production rejects
+`require`/`verify-ca` and missing/invalid trust anchors. See the
+[controller command brief](README.md#verified-rds-tls-and-controller-command-brief).
 For this production run, leave `JOBCRON_DATABASE_PASSWORD` unset and enter the
 AWS-managed master password only through the silent stdin prompt. The command's
 environment source exists for controlled automation and tests, not this manual
@@ -495,7 +501,12 @@ lock.
 
 Set the helper's private inputs to the localhost-only master URL, private RDS
 endpoint, application role name, owner-only `database-role.env`, and
-owner-only `runtime-secret.json`. Then run:
+owner-only `runtime-secret.json`. Also set `JOBCRON_RDS_CA_FILE` to the approved
+owner-only absolute public CA file. This helper's legacy localhost URL supplies
+coordinates only (`sslmode=require` or `verify-full`); unlike the Go operator
+URI above, it does not carry the real hostname. The helper constructs the
+effective native libpq connection using the selected private RDS hostname,
+loopback hostaddr, tunnel port and `verify-full` with the approved CA. Then run:
 
 ```sh
 scripts/production-rds-role.sh
@@ -510,7 +521,8 @@ membership or ownership of the production database, public schema, or public
 relations makes the transaction fail closed. Direct and public ledger writes
 are revoked, and effective `SELECT`/`INSERT`/`UPDATE`/`DELETE` privileges are
 checked before readiness. Verify the catalog grants without printing names or
-passwords. The helper stores the lower-privilege TLS `DATABASE_URL` only in the
+passwords. The helper stores the lower-privilege hostname/CA-verified
+`DATABASE_URL` (`sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem`) only in the
 private runtime JSON and emits only `database_role_ready=true`. Run this helper
 after every operator migration so newly created tables and sequences receive
 the runtime grants and ledger writes are revoked again.
@@ -599,8 +611,9 @@ daemon response to diagnose it. No production check is considered executed by
 the local synthetic tests.
 
 For operator commands, supply `DATABASE_URL_FILE` rather than a credential URL
-argument. Migration still requires a password-free loopback TLS URL, plus a
-silent password prompt or `JOBCRON_DATABASE_PASSWORD_FILE`. Owner creation and
+argument. All production operator commands require the password-free real RDS
+hostname/loopback-hostaddr verified URI above and a silent database password
+prompt or `JOBCRON_DATABASE_PASSWORD_FILE`. Owner creation and
 password reset use `JOBCRON_OWNER_PASSWORD_FILE` / `JOBCRON_USER_PASSWORD_FILE`
 or silent prompts. Never combine value/env/flag inputs with file inputs. Stage
 secret material only in the approved owner-only volatile custody area, remove it
@@ -648,7 +661,15 @@ deployment uses the dump/checksum/disposable-restore minimum above instead.
 Run `jobcron-recovery.service` once and enable its timer only after that run
 succeeds. The service uploads a custom-format database dump, sanitized Jobcron
 and Caddy logs, and one SHA-256 recovery manifest for each artifact.
-It accepts only the generated TLS RDS URL, passes a password-free URL as
+Before that run, bind the existing approved non-secret recovery bucket in a
+root-owned systemd drop-in (`JOBCRON_RECOVERY_BUCKET`); no new secret/IAM grant.
+Select an already installed compatible native client using `JOBCRON_PG_DUMP`
+only when PATH's client is incompatible. PostgreSQL 15 cannot dump RDS 18.
+The initial/emergency minimum may use the controller's native PostgreSQL 18
+off-host dump/restore instead of host installation; keep the host timer disabled
+until its real archive gate passes. See the controller brief for the explicit
+path and binding contracts; client-version/dump/restore PASS is a live result.
+It accepts only the generated hostname/CA-verified RDS URL, passes a password-free URL as
 `pg_dump`'s database argument, and supplies the decoded password only through
 the child environment. Confirm the process arguments and sanitized evidence do
 not contain either the encoded or decoded database password.

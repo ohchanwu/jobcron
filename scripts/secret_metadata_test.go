@@ -16,6 +16,7 @@ func TestRuntimeSecretVerifierFailsClosed(t *testing.T) {
 	metadata := `[{"Config":{"Env":["DATABASE_URL_FILE=/run/jobcron/secrets/DATABASE_URL","SESSION_SECRET_FILE=/run/jobcron/secrets/SESSION_SECRET","JOBCRON_CREDENTIAL_ENCRYPTION_KEY_FILE=/run/jobcron/secrets/JOBCRON_CREDENTIAL_ENCRYPTION_KEY","JOBCRON_SIGNUP_ACCESS_CODE_FILE=/run/jobcron/secrets/JOBCRON_SIGNUP_ACCESS_CODE","JOBCRON_PROXY_SECRET_FILE=/run/jobcron/secrets/JOBCRON_PROXY_SECRET"]},"HostConfig":{"Ulimits":[{"Name":"core","Hard":0,"Soft":0}]},"Mounts":[{"Type":"bind","Source":"/run/jobcron/secrets","Destination":"/run/jobcron/secrets","RW":false}]}]`
 	caddy := `[{"Config":{"Env":["AWS_EC2_METADATA_DISABLED=true"]},"HostConfig":{"ReadonlyRootfs":true,"Tmpfs":{"/config":"mode=0700","/data":"mode=0700","/tmp":"mode=0700"},"Ulimits":[{"Name":"core","Hard":0,"Soft":0}]},"Mounts":[{"Type":"bind","Source":"/run/jobcron/caddy","Destination":"/run/jobcron/caddy","RW":false}]}]`
 	appPath := filepath.Join(f.root, "app.json")
+	metadata = strings.Replace(metadata, `"Mounts":[`, `"Mounts":[{"Type":"bind","Source":"/run/jobcron/rds-ca.pem","Destination":"/run/jobcron/rds-ca.pem","RW":false},`, 1)
 	caddyPath := filepath.Join(f.root, "caddy.json")
 	writeFile(t, appPath, metadata, 0600)
 	writeFile(t, caddyPath, caddy, 0600)
@@ -38,6 +39,8 @@ esac
 		strings.Replace(metadata, "DATABASE_URL_FILE=", "DATABASE_URL=", 1),
 		strings.Replace(metadata, `"Config":{`, `"leak":"`+runtimeSecretFields["SESSION_SECRET"]+`","Config":{`, 1),
 		strings.Replace(metadata, `"Ulimits":[{"Name":"core","Hard":0,"Soft":0}]`, `"Ulimits":[]`, 1),
+		strings.Replace(metadata, `"Source":"/run/jobcron/rds-ca.pem"`, `"Source":"/unapproved/ca.pem"`, 1),
+		strings.Replace(metadata, `"RW":false`, `"RW":true`, 1),
 	} {
 		writeFile(t, appPath, bad, 0600)
 		r := f.run(t, validRuntimeSecret(), "verify-secrets")

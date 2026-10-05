@@ -22,7 +22,7 @@ func TestProductionPrivateOpsRDSRejectsNonLocalOrWeakTLS(t *testing.T) {
 	for _, databaseURL := range []string{
 		"postgres://master@db.example.invalid:5432/jobcron?sslmode=require",
 		"postgres://master@127.0.0.1:15432/jobcron?sslmode=disable",
-		"postgres://master@127.0.0.1:15432/jobcron?sslmode=verify-full",
+		"postgres://master@127.0.0.1:0/jobcron?sslmode=verify-full",
 		"postgres://master@localhost:15432/jobcron?sslmode=require",
 	} {
 		t.Run(databaseURL, func(t *testing.T) {
@@ -104,10 +104,10 @@ func TestProductionPrivateOpsRDSUsesOneLeastPrivilegeTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := runtime["DATABASE_URL"]; !strings.Contains(got, "jobcron_app:application-password-secret@jobcron.abc123.ap-northeast-2.rds.amazonaws.com:5432/jobcron") ||
-		!strings.Contains(got, "sslmode=require") || strings.Contains(got, "127.0.0.1") {
+		!strings.Contains(got, "sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem") || strings.Contains(got, "127.0.0.1") {
 		t.Fatalf("private runtime DATABASE_URL not updated: %q", got)
 	}
-	if !strings.Contains(commandLog, "psql postgres://master@127.0.0.1:15432/jobcron?sslmode=require") {
+	if !strings.Contains(commandLog, "psql postgres://master@jobcron.abc123.ap-northeast-2.rds.amazonaws.com:15432/jobcron?sslmode=verify-full&hostaddr=127.0.0.1&sslrootcert=") {
 		t.Fatalf("master operation did not use localhost-only tunnel:\n%s", commandLog)
 	}
 
@@ -297,6 +297,12 @@ func newPrivateOpsFixture(t *testing.T) privateOpsFixture {
 		}
 	}
 	writeFile(t, fixture.runtimeSecret, `{"SESSION_SECRET":"synthetic-existing"}`+"\n", 0o600)
+	caPath := filepath.Join(root, "rds-ca.pem")
+	writeFile(t, caPath, publicTestCA(t), 0600)
+	caPath, err := filepath.EvalSymlinks(caPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	realSHA, err := exec.LookPath("sha256sum")
 	if err != nil {
 		t.Fatal("sha256sum is required for private operations tests")
@@ -330,6 +336,7 @@ exit 1
 		"PRIVATE_OPS_COMMAND_LOG="+fixture.commandLog,
 		"PRIVATE_OPS_SQL_LOG="+fixture.sqlLog,
 		"JOBCRON_MASTER_DATABASE_URL=postgres://master@127.0.0.1:15432/jobcron?sslmode=require",
+		"JOBCRON_RDS_CA_FILE="+caPath,
 		"JOBCRON_PRIVATE_DATABASE_ENDPOINT=jobcron.abc123.ap-northeast-2.rds.amazonaws.com:5432",
 		"JOBCRON_APP_DATABASE_USER=jobcron_app",
 		"JOBCRON_DATABASE_ROLE_ENV="+fixture.roleEnv,
