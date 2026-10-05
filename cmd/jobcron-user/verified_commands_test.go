@@ -3,13 +3,68 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestProductionPasswordCommandsPreserveSequentialStdin(t *testing.T) {
+	const input = "synthetic-owner-password\r\nsynthetic-database-password"
+	// Stop before CA access or dial, but only after both passwords were read.
+	t.Setenv("PGHOST", "unapproved.invalid")
+	path := filepath.Join(t.TempDir(), "database-url")
+	raw := "postgres://master@" + testRDSHost + ":15432/jobcron?sslmode=verify-full&hostaddr=127.0.0.1&sslrootcert=/unused/rds-ca.pem"
+	if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	env := envMap{"JOBCRON_ENV": "production", "DATABASE_URL_FILE": path}
+	for _, command := range []string{"create-owner", "reset-password"} {
+		for _, source := range []string{"reader", "already-buffered", "prefilled-pipe"} {
+			t.Run(command+"/"+source, func(t *testing.T) {
+				var in io.Reader = strings.NewReader(input)
+				switch source {
+				case "already-buffered":
+					buffered := bufio.NewReader(in)
+					if _, err := buffered.Peek(len(input)); err != nil {
+						t.Fatal(err)
+					}
+					in = buffered
+				case "prefilled-pipe":
+					reader, writer, err := os.Pipe()
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { reader.Close() })
+					t.Cleanup(func() { writer.Close() })
+					if _, err := io.WriteString(writer, input); err != nil {
+						t.Fatal(err)
+					}
+					if err := writer.Close(); err != nil {
+						t.Fatal(err)
+					}
+					in = reader
+				}
+				var out, prompts bytes.Buffer
+				err := runWithPrompt(context.Background(), []string{command, "--email", "owner@example.com"}, env, in, &out, &prompts)
+				if err == nil || err.Error() != "user: verified operator connection forbids ambient PG settings" {
+					t.Fatalf("sequential stdin did not reach the pre-dial guard: %v", err)
+				}
+				label := "Owner"
+				if command == "reset-password" {
+					label = "User"
+				}
+				if out.Len() != 0 || prompts.String() != label+" password: Database password: " {
+					t.Fatal("unexpected output or password disclosure")
+				}
+			})
+		}
+	}
+}
 
 func TestProductionVerifiedCommandsRedactConnectionFailure(t *testing.T) {
 	ca, _ := tunnelCertificate(t, testRDSHost)

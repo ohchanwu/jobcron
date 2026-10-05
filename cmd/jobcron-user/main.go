@@ -177,6 +177,14 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if reset {
 		passwordEnv, passwordLabel = "JOBCRON_USER_PASSWORD", "User"
 	}
+	if in == nil {
+		in = os.Stdin
+	}
+	// Share nonterminal read-ahead across the user and database prompts.
+	// Keep terminal files unwrapped so ReadPassword still disables echo.
+	if file, ok := in.(*os.File); !ok || !term.IsTerminal(int(file.Fd())) {
+		in = bufio.NewReader(in)
+	}
 	password, err := commandPassword(env, passwordEnv, passwordLabel, in, promptOut)
 	if err != nil {
 		return err
