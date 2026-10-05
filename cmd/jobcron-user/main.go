@@ -51,6 +51,9 @@ func runWithPrompt(ctx context.Context, args []string, env envMap, in io.Reader,
 }
 
 func runMigrateCommand(ctx context.Context, args []string, env envMap, in io.Reader, out, promptOut io.Writer) error {
+	if err := rejectProductionDatabaseArgs(env, args); err != nil {
+		return err
+	}
 	var rawDatabaseURL string
 	var legacyMigrationTree string
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
@@ -82,6 +85,11 @@ func runMigrateCommand(ctx context.Context, args []string, env envMap, in io.Rea
 	if err != nil {
 		return err
 	}
+	databaseURL, release, err := registerTunnelDatabase(databaseURL, env["JOBCRON_ENV"] == "production")
+	if err != nil {
+		return err
+	}
+	defer release()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	st, err := openMigrationStore(ctx, databaseURL, legacyMigrationTree)
@@ -109,21 +117,26 @@ func migrationDatabaseURL(raw, password string) (string, error) {
 	if _, present := parsed.User.Password(); present {
 		return "", errors.New("user: migration database URL must not contain a password")
 	}
-	if parsed.Hostname() != "127.0.0.1" {
+	query, err := url.ParseQuery(parsed.RawQuery)
+	verified := err == nil && query.Get("sslmode") == "verify-full"
+	if parsed.Hostname() != "127.0.0.1" && !verified {
 		return "", errors.New("user: migration database URL must use 127.0.0.1")
 	}
-	if parsed.Port() == "" {
+	if !validTunnelPort(parsed.Port()) {
 		return "", errors.New("user: migration database URL requires a tunnel port")
 	}
 	database := strings.TrimPrefix(parsed.Path, "/")
 	if database == "" || strings.Contains(database, "/") {
 		return "", errors.New("user: migration database URL requires one database name")
 	}
-	query, err := url.ParseQuery(parsed.RawQuery)
-	if err != nil || len(query) != 1 || len(query["sslmode"]) != 1 {
+	if err != nil || len(query["sslmode"]) != 1 {
 		return "", errors.New("user: migration database URL requires only one sslmode")
 	}
-	if query.Get("sslmode") != "require" {
+	if verified {
+		if err := validateVerifiedTunnel(parsed, query); err != nil {
+			return "", err
+		}
+	} else if len(query) != 1 || query.Get("sslmode") != "require" {
 		return "", errors.New("user: migration database URL requires TLS")
 	}
 	if password == "" {
@@ -175,6 +188,11 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if err != nil {
 		return err
 	}
+	databaseURL, release, err := operatorDatabase(env, databaseURL, in, promptOut)
+	if err != nil {
+		return err
+	}
+	defer release()
 	st, err := openUserStore(databaseURL)
 	if err != nil {
 		return err
@@ -234,6 +252,11 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 		return errors.New("user: email confirmation does not match")
 	}
 
+	databaseURL, release, err := operatorDatabase(env, databaseURL, nil, io.Discard)
+	if err != nil {
+		return err
+	}
+	defer release()
 	st, err := openUserStore(databaseURL)
 	if err != nil {
 		return err

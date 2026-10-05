@@ -14,7 +14,7 @@ const systemdDir = "../deploy/production/systemd"
 
 var runtimeSecretFields = map[string]string{
 	"JOBCRON_IMAGE":                     "ghcr.io/example/jobcron@sha256:" + strings.Repeat("a", 64),
-	"DATABASE_URL":                      "postgres://app:db%3Asecret%40value@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require",
+	"DATABASE_URL":                      "postgres://app:db%3Asecret%40value@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem",
 	"SESSION_SECRET":                    "session-secret-at-least-32-bytes",
 	"JOBCRON_CREDENTIAL_ENCRYPTION_KEY": "credential-key-secret",
 	"JOBCRON_SIGNUP_ACCESS_CODE":        "signup-code-secret",
@@ -334,7 +334,7 @@ func TestJobcronRuntimeArchiveIsWriteOnlyAndSanitized(t *testing.T) {
 	}
 	assertNoRuntimeSecret(t, result.output)
 	log := readFile(t, fixture.logPath)
-	const safeDumpURL = "postgres://app@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require"
+	const safeDumpURL = "postgres://app@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem"
 	if !strings.Contains(log, "pg_dump --dbname="+safeDumpURL+" -Fc") {
 		t.Fatalf("pg_dump did not receive the password-free connection URL:\n%s", log)
 	}
@@ -410,7 +410,7 @@ func TestJobcronRuntimeArchivePreservesEncodedNewlinesInPassword(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newRuntimeFixture(t)
 			fixture.env = append(fixture.env, "FAKE_EXPECTED_DATABASE_PASSWORD="+test.decoded)
-			databaseURL := "postgres://app:" + test.encoded + "@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require"
+			databaseURL := "postgres://app:" + test.encoded + "@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem"
 			secret := replaceRuntimeSecret(t, "DATABASE_URL", databaseURL)
 			if result := fixture.run(t, secret, "prepare"); result.err != nil {
 				t.Fatalf("prepare: %v\n%s", result.err, result.output)
@@ -433,12 +433,18 @@ func TestJobcronRuntimeArchiveRejectsUnsafeDatabaseURLBeforeDump(t *testing.T) {
 		"postgres://app:bad%ZZ@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=require",
 		"postgres://app:secret@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=disable",
 		"postgres://app:secret@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=verify-full",
+		"postgres://app:secret@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=verify-ca&sslrootcert=/run/jobcron/rds-ca.pem",
+		"postgres://app:secret@synthetic.cluster-abc.ap-northeast-2.rds.amazonaws.com:5432/jobcron?sslmode=verify-full&sslrootcert=/other/ca.pem",
 	} {
 		fixture := newRuntimeFixture(t)
 		secret := replaceRuntimeSecret(t, "DATABASE_URL", databaseURL)
-		if result := fixture.run(t, secret, "prepare"); result.err != nil {
+		if result := fixture.run(t, secret, "prepare"); result.err == nil {
+			t.Fatal("prepare accepted unsafe database URL")
+		}
+		if result := fixture.run(t, validRuntimeSecret(), "prepare"); result.err != nil {
 			t.Fatalf("prepare: %v\n%s", result.err, result.output)
 		}
+		writeFile(t, filepath.Join(fixture.runDir, "secrets", "DATABASE_URL"), databaseURL, 0600)
 		result := fixture.run(t, secret, "archive")
 		if result.err == nil {
 			t.Fatalf("archive accepted unsafe database URL")
@@ -648,6 +654,7 @@ func newRuntimeFixture(t *testing.T) runtimeFixture {
 		}
 	}
 	writeFile(t, filepath.Join(fixture.etcDir, "runtime-secret-id"), "synthetic-id\n", 0o600)
+	writeFile(t, filepath.Join(fixture.etcDir, "rds-ca.pem"), publicTestCA(t), 0o600)
 	writeFile(t, filepath.Join(fixture.deployDir, "compose.yaml"), "logging:\n  driver: json-file\n  options:\n    max-size: 10m\n    max-file: 3\n", 0o600)
 	installRuntimeFakes(t, fixture)
 	fixture.env = append(os.Environ(),

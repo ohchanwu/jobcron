@@ -77,11 +77,75 @@ custody guarantees cannot be established. Errors never include paths or values.
 
 `jobcron-user` accepts `DATABASE_URL_FILE` for all database commands and
 `JOBCRON_DATABASE_PASSWORD_FILE`, `JOBCRON_OWNER_PASSWORD_FILE`, and
-`JOBCRON_USER_PASSWORD_FILE` for their respective password prompts. The migration
-URL must still be password-free, localhost-only and TLS-required; its password
-comes from the separate file or silent prompt. Existing direct inputs remain for
-controlled non-production tooling, not the production operator procedure.
-Do not supply credential-bearing URLs in command arguments.
+`JOBCRON_USER_PASSWORD_FILE` for their respective password prompts. Production
+operator URLs are password-free: use the real RDS hostname, the explicit local
+SSM tunnel port, and exactly `sslmode=verify-full`, `hostaddr=127.0.0.1` and
+`sslrootcert=<absolute approved CA file>`. The CA and its directories must be
+owned by root/the operator, non-symlink and not writable by other users (a
+root-owned sticky temporary ancestor is allowed). The existing pgx stdlib
+registration retains RDS `ServerName`/RootCAs but permits only the exact
+loopback TCP dial; no remote DNS, alternate dial or plaintext fallback.
+All production operator subcommands use a separate database password file or
+silent prompt, and owner/reset passwords retain their own inputs. Unset ambient
+`PG*` settings. Errors never disclose the URL, CA path or password. Legacy
+loopback `sslmode=require` migration remains non-production-only and is not
+certificate/hostname verification. Do not put production URLs in argv.
+
+## Verified RDS TLS and controller command brief
+
+This is a local compatibility contract, not authorization or deployment PASS.
+The controller retains all exact-operation, recovery and cutover gates.
+
+- Certificate: independently approve the official regional RDS CA bundle and
+  its digest. Stage public PEM bytes as root-owned `/etc/jobcron/rds-ca.pem`
+  (`0600`, directory `0700`, no symlinks). Existing native `openssl` must be
+  available for PEM validation. This public trust anchor is not a new secret,
+  runtime JSON key, credential rotation or IAM permission.
+- Tunnel/operator: the native SSM TCP session must forward only the selected
+  RDS endpoint to an explicitly allocated `127.0.0.1` port. Put the password-free
+  real-host/loopback-hostaddr URI above in an owner-only file; invoke the locally
+  built exact reviewed `jobcron-user` binary with production `_FILE` inputs.
+  Keep this operator SHA/binary digest distinct from the accepted app release.
+  Verify certificate and hostname failures stop the operation; reconcile and
+  terminate the exact native session handle afterwards.
+- Role helper: `JOBCRON_MASTER_DATABASE_URL` retains the existing password-free
+  loopback coordinate syntax (`sslmode=require` or `verify-full`); it is never
+  used as the effective connection. Set `JOBCRON_RDS_CA_FILE` to the approved
+  owner-only absolute CA file and `JOBCRON_PRIVATE_DATABASE_ENDPOINT` to the
+  selected real RDS host/port. The helper constructs a `verify-full` libpq URI
+  with real host, loopback `hostaddr`, tunnel port and that CA. Passwords remain
+  two stdin lines, never argv. The runtime URL it writes uses the real private
+  endpoint and exactly `sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem`.
+- Runtime: preserve the exact nine existing JSON keys and existing secrets/key;
+  bind the accepted image and actual owner ID privately. `prepare` rejects
+  downgraded/wrong-CA URLs, copies the approved public CA into root-owned tmpfs
+  `/run/jobcron/rds-ca.pem`, and Compose binds that file read-only at the same
+  path with `create_host_path: false`. Cleanup removes only the runtime copy.
+  Reprepare must not nest a secrets directory or destroy unexpected evidence.
+- Backup: prefer the controller's already available native PostgreSQL 18 client
+  over installing host tools for the initial off-host dump/checksum/isolated
+  restore. Use libpq's real host plus loopback `hostaddr` and the approved CA
+  with `verify-full`, password-free `--dbname` and private child password input.
+  Actual client compatibility, encrypted off-host retention, separate encryption
+  key backup and disposable restore/schema-count comparison remain live gates.
+  Host `archive` preserves the verified URI and keeps its password off argv;
+  `JOBCRON_PG_DUMP` may select one already installed absolute executable path
+  ending in `/pg_dump` (no command string), otherwise PATH's `pg_dump` is used.
+  It does not install tools or assert a client-version PASS.
+- Recovery timer: before enabling, the controller must bind the existing
+  non-secret bucket with a root-owned systemd drop-in for
+  `jobcron-recovery.service`: `Environment=JOBCRON_RECOVERY_BUCKET=<existing
+  approved bucket>`, and, only if needed, `Environment=JOBCRON_PG_DUMP=<installed
+  compatible absolute path>`. Do not put secrets in this drop-in or add IAM.
+  Reload/read back the binding and require a successful real archive before
+  enabling the timer. A host pg_dump 15 against RDS 18 cannot satisfy that gate;
+  leave the timer disabled until compatible, even if the controller backup PASSes.
+
+The published application image is unchanged: no `cmd/jobcron`, application
+packages, Go modules, migrations or production Dockerfile behavior changed.
+Its existing pgx runtime already accepts `verify-full`/`sslrootcert`; only the
+external trust file/mount was missing. Reuse the accepted immutable arm64 image
+and its existing CI/provenance evidence, not a new operational-only publication.
 
 ## Files
 

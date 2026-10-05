@@ -16,15 +16,43 @@ private_endpoint=${JOBCRON_PRIVATE_DATABASE_ENDPOINT:-}
 app_user=${JOBCRON_APP_DATABASE_USER:-}
 role_env=${JOBCRON_DATABASE_ROLE_ENV:-}
 runtime_secret=${JOBCRON_RUNTIME_SECRET_JSON:-}
+ca_file=${JOBCRON_RDS_CA_FILE:-}
+
+# No inherited libpq connection or TLS selectors. Passwords are scoped below.
+if env | grep -q '^PG'; then fail; fi
 
 printf '%s\n' "$master_url" |
-	grep -Eq '^postgres://[A-Za-z_][A-Za-z0-9_]*@127\.0\.0\.1:[0-9]+/[A-Za-z_][A-Za-z0-9_]*\?sslmode=require$' ||
+	grep -Eq '^postgres://[A-Za-z_][A-Za-z0-9_]*@127\.0\.0\.1:[0-9]+/[A-Za-z_][A-Za-z0-9_]*\?sslmode=(require|verify-full)$' ||
 	fail
 printf '%s\n' "$private_endpoint" |
 	grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\.rds\.amazonaws\.com:[0-9]+$' ||
 	fail
 private_port=${private_endpoint##*:}
 [ "$private_port" -ge 1 ] 2>/dev/null && [ "$private_port" -le 65535 ] 2>/dev/null || fail
+master_endpoint=${master_url#*@}
+master_endpoint=${master_endpoint%%/*}
+tunnel_port=${master_endpoint##*:}
+[ "$tunnel_port" -ge 1 ] 2>/dev/null && [ "$tunnel_port" -le 65535 ] 2>/dev/null || fail
+# This legacy URL supplies coordinates only; the effective libpq connection
+# always verifies the real RDS hostname against the explicitly approved CA.
+case $ca_file in /*) ;; *) fail ;; esac
+[ ! -L "$ca_file" ] && [ -s "$ca_file" ] && [ -f "$ca_file" ] || fail
+[ "$(mode "$ca_file")" = 600 ] || fail
+ca_owner=$(stat -c '%u' "$ca_file" 2>/dev/null || stat -f '%u' "$ca_file")
+[ "$ca_owner" = "$(id -u)" ] || [ "$ca_owner" = 0 ] || fail
+ca_parent=$(dirname "$ca_file")
+while :; do
+	[ ! -L "$ca_parent" ] && [ -d "$ca_parent" ] || fail
+	parent_mode=$(mode "$ca_parent")
+	parent_owner=$(stat -c '%u' "$ca_parent" 2>/dev/null || stat -f '%u' "$ca_parent")
+	[ "$parent_owner" = "$(id -u)" ] || [ "$parent_owner" = 0 ] || fail
+	if [ "$((0$parent_mode & 022))" != 0 ]; then
+		[ "$parent_owner" = 0 ] && [ "$((0$parent_mode & 01000))" != 0 ] || fail
+	fi
+	[ "$ca_parent" != / ] || break
+	ca_parent=$(dirname "$ca_parent")
+done
+openssl x509 -in "$ca_file" -noout >/dev/null 2>&1 || fail
 printf '%s\n' "$app_user" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$' || fail
 master_user=${master_url#postgres://}
 master_user=${master_user%%@*}
@@ -52,7 +80,10 @@ fi
 
 database_url=${master_url%%\?*}
 database=${database_url##*/}
-tls_query=${master_url#*\?}
+encoded_ca=$(printf '%s' "$ca_file" | jq -sRr @uri)
+private_host=${private_endpoint%:*}
+verified_master_url="postgres://$master_user@$private_host:$tunnel_port/$database?sslmode=verify-full&hostaddr=127.0.0.1&sslrootcert=$encoded_ca"
+tls_query='sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem'
 escaped_application_password=$(printf '%s' "$application_password" | sed "s/'/''/g")
 encoded_application_password=$(printf '%s' "$application_password" | jq -sRr @uri)
 application_url="postgres://$app_user:$encoded_application_password@$private_endpoint/$database?$tls_query"
@@ -73,7 +104,7 @@ fi
 printf '%s\n' "DATABASE_ROLE_READY=true" >"$role_tmp"
 chmod 600 "$runtime_tmp" "$role_tmp"
 
-if ! PGPASSWORD=$master_password psql "$master_url" -X -q -v ON_ERROR_STOP=1 \
+if ! PGPASSWORD=$master_password psql "$verified_master_url" -X -q -v ON_ERROR_STOP=1 \
 	>/dev/null 2>&1 <<SQL
 BEGIN;
 SET LOCAL search_path = pg_catalog, public;
