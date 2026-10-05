@@ -393,16 +393,16 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 			name:     "app omits outbound network",
 			contract: "networks",
 			mutate: replaceOnce(
-				"    networks:\n      - runtime\n      - outbound",
-				"    networks:\n      - runtime",
+				"    expose:\n      - \"7777\"\n    networks:\n      - runtime\n      - outbound",
+				"    expose:\n      - \"7777\"\n    networks:\n      - runtime",
 			),
 		},
 		{
-			name:     "Caddy joins outbound network",
+			name:     "Caddy internal-only network loses published HTTPS",
 			contract: "networks",
 			mutate: replaceOnce(
-				"    networks:\n      - runtime\n    logging:",
-				"    networks:\n      - runtime\n      - outbound\n    logging:",
+				"      - /tmp:mode=0700\n    networks:\n      - runtime\n      - outbound\n",
+				"      - /tmp:mode=0700\n    networks:\n      - runtime\n",
 			),
 		},
 		{

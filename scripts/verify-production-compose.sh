@@ -88,12 +88,12 @@ check_contract "services.caddy.ports must publish only host TCP 443" '
 	$ports[0].target == 443 and
 	$ports[0].protocol == "tcp"
 '
-check_contract "networks must isolate proxy traffic while preserving app egress" '
+check_contract "networks must retain internal runtime and outbound bridge for app egress and published HTTPS" '
 	.networks.runtime.internal == true and
 	.networks.outbound.driver == "bridge" and
 	((.networks.outbound.internal // false) == false) and
 	((.services.app.networks | keys | sort) == ["outbound", "runtime"]) and
-	((.services.caddy.networks | keys) == ["runtime"])
+	((.services.caddy.networks | keys | sort) == ["outbound", "runtime"])
 '
 check_contract "services.caddy.volumes must mount transient Origin CA read-only" '
 	[.services.caddy.volumes[] |

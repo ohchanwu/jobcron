@@ -166,12 +166,14 @@ func TestProductionComposeUsesSplitRuntimeAndOutboundNetworks(t *testing.T) {
 	if !ok || outboundNetwork.Internal || outboundNetwork.Driver != "bridge" {
 		t.Fatalf("outbound network = %#v (present %v), want non-internal bridge", outboundNetwork, ok)
 	}
-	if got := config.Services["app"].Networks; len(got) != 2 ||
-		got["runtime"] != nil || got["outbound"] != nil {
-		t.Errorf("app networks = %#v, want exactly runtime and outbound", got)
-	}
-	if got := config.Services["caddy"].Networks; len(got) != 1 || got["runtime"] != nil {
-		t.Errorf("caddy networks = %#v, want only runtime", got)
+	// An internal-only bridge cannot provide Caddy's published HTTPS port.
+	for _, service := range []string{"app", "caddy"} {
+		got := config.Services[service].Networks
+		_, runtimeOK := got["runtime"]
+		_, outboundOK := got["outbound"]
+		if len(got) != 2 || !runtimeOK || !outboundOK {
+			t.Errorf("%s networks = %#v, want exactly runtime and outbound", service, got)
+		}
 	}
 	for _, service := range []string{"app", "caddy"} {
 		if got := config.Services[service].Environment["AWS_EC2_METADATA_DISABLED"]; got != "true" {
