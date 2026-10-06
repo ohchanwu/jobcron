@@ -56,6 +56,12 @@ func (s *Store) upsertAIScore(
 		return fmt.Errorf("storage: begin upsert ai score: %w", err)
 	}
 	defer tx.Rollback()
+	if s.dialect == DialectPostgres {
+		// The matching failure write takes this same lock before cache admission.
+		if _, err := tx.ExecContext(ctx, s.query(`SELECT id FROM postings WHERE id=? FOR UPDATE`), postingID); err != nil {
+			return fmt.Errorf("storage: lock AI score posting: %w", err)
+		}
+	}
 	upsertSQL := `
 INSERT INTO ai_scores
     (posting_id, ai_input_hash, ai_version, items_json, net_delta, computed_at)

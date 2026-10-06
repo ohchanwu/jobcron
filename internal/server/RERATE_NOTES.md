@@ -67,7 +67,11 @@ failed (`analyzed == 0`), the SSE terminal is a calm, classified `failed` event 
 "선택한 모델이 이 제공자와 맞지 않아요" (the mismatched-model trap a provider switch
 leaves behind), a 429 to a usage-cap line — instead of a hollow `done` with `0/M`.
 A *partial* failure still reloads (the rows that succeeded render) but emits a
-status note first. The cache behavior above is unchanged: a failed row writes no
+status note first and retains the same classified cause in the terminal and
+recovered message. Missing successes alone do not establish a cap/budget skip:
+called failures and rejected proposals were processed. Actual uncalled cap/budget
+skips, rejected evidence and contextual warnings can coexist and are reported
+independently. The cache behavior above is unchanged: a failed row writes no
 `ai_scores` row and is retried on the next press.
 
 ## Counts and progress
@@ -100,6 +104,17 @@ match against) or switch models. A repeat press recovers rejected, failed or
 never-run listings, not genuine empty or rated successes. Rendering and startup
 never call the provider; upgrading the contract can cause bounded fresh cache
 misses and spend on the next existing authorized analysis trigger, not at startup.
+
+Ordinary cross-model pruning retains current-model rows and one prior-model score.
+After A → B → C, A's older score may therefore be gone on a return to A. Its old
+successful outcome is not an independent cache hit or a current completed card:
+successful provenance is readable only while its exact score row still exists.
+A definite admitted rejection/failure can replace that orphan provenance, while
+an actual successful score (including a legacy row without outcome detail) remains
+protected. PostgreSQL score/failure transactions serialize on the posting before
+cache admission; user/goal/model keys still decide which result is protected.
+This also handles pruning performed through the compatible recovery binary,
+without deleting old outcomes or changing the existing stale-score retention.
 
 ## Token-accounting footnote
 

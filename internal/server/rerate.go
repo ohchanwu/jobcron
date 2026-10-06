@@ -364,6 +364,8 @@ type rerateSummary struct {
 	Rejected                int
 	Visible                 int
 	ProviderCalls           int
+	ScoreFailureMessage     string
+	ScoreLimitBlocked       bool
 	ContextPendingBefore    int
 	ContextPendingAfter     int
 	ContextAttemptedChecks  int
@@ -492,14 +494,23 @@ func rerateDoneMessage(summary rerateSummary) (message string) {
 			message = fmt.Sprintf("처리 %d/%d · 분석 완료 %d/%d · 추가 반영 없음 %d · 근거 미확인 %d. %s",
 				summary.Processed, summary.Visible, summary.Analyzed, summary.Visible, summary.NoSignal, summary.Rejected, message)
 		}
+		// These independent causes can coexist with each other and context
+		// warnings. Keep them in the terminal/recovery message, not just a status
+		// immediately replaced by the final rescore or navigation.
+		if summary.Rejected > 0 {
+			message += " 근거를 확인하지 못한 공고에는 새 AI 조정을 반영하지 않았어요. 다음에 직접 다시 평가하면 예산 안에서 재시도할 수 있어요."
+		}
+		if summary.ScoreFailureMessage != "" {
+			message += " " + summary.ScoreFailureMessage
+		}
+		if summary.ScoreLimitBlocked {
+			message += " 호출 수나 토큰 예산 한도로 일부는 남겨뒀어요. 더 보려면 다시 눌러주세요."
+		}
 	}()
 	if summary.ContextPendingBefore == 0 && (summary.Processed > 0 || summary.NoSignal > 0 || summary.Rejected > 0) {
 		message := fmt.Sprintf("처리 %d/%d · 분석 완료 %d/%d · 추가 반영 없음 %d · 근거 미확인 %d", summary.Processed, summary.Visible, summary.Analyzed, summary.Visible, summary.NoSignal, summary.Rejected)
-		if summary.Rejected > 0 {
-			return message + ". 근거를 확인하지 못한 공고에는 새 AI 조정을 반영하지 않았어요. 다음에 직접 다시 평가하면 예산 안에서 재시도할 수 있어요."
-		}
 		if summary.Analyzed < summary.Visible {
-			return message + ". 호출 수나 토큰 예산 한도로 일부는 남겨뒀어요. 더 보려면 다시 눌러주세요."
+			return message + "."
 		}
 		if summary.ProviderCalls == 0 {
 			return message + ". 이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요."
@@ -536,7 +547,7 @@ func rerateDoneMessage(summary rerateSummary) (message string) {
 		return fmt.Sprintf("공고 %d개를 모두 AI로 분석했어요.", summary.Visible)
 	default:
 		return fmt.Sprintf(
-			"공고 %d/%d개를 AI로 분석했어요 — 토큰을 아끼려고 한 번에 일정 개수만 분석해요. 더 보려면 다시 눌러주세요.",
+			"공고 %d/%d개를 AI로 분석했어요. 일부 공고는 분석을 완료하지 못했어요. 더 보려면 다시 눌러주세요.",
 			summary.Analyzed, summary.Visible)
 	}
 }
@@ -645,6 +656,10 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	var stage2Calls int
 	summary.Analyzed, stage2Calls, summary.Processed, provErr = s.rateStage2(ctx, postings, prof, userID, runtime, budget, calls, emit, true)
 	summary.ProviderCalls += stage2Calls
+	// For an admitted manual pass every unique row is either cached, called,
+	// or skipped by the shared cap/budget. Rejections and provider failures are
+	// processed calls, not limit skips. Storage errors below abort the done path.
+	summary.ScoreLimitBlocked = summary.Processed < summary.Visible
 	outcomes, outcomeErr := s.store.AIScoreOutcomesByPostingID(ctx, userID, profile.AIInputHash(prof), runtime.ScoreVersion)
 	if outcomeErr != nil {
 		return summary, outcomeErr
@@ -669,7 +684,8 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	if provErr != nil && summary.Analyzed > 0 {
 		// Partial: some rows rated, some hit a provider error. Note it before the
 		// done path reloads (the rows that succeeded still render their chips).
-		emit("status", providerFailureMessage(provErr))
+		summary.ScoreFailureMessage = providerFailureMessage(provErr)
+		emit("status", summary.ScoreFailureMessage)
 	}
 	emit("status", "점수를 다시 매기는 중...")
 	if _, err := s.scoreAll(ctx, userID, runtime); err != nil {
