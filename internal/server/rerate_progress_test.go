@@ -320,12 +320,18 @@ func TestRunReratePhaseProgressCountsHonestRows(t *testing.T) {
 	// Stage-1B: first two rows resolve, third FAILS against the provider,
 	// fourth is skipped by the per-call cap. Stage-2: first row fails, the
 	// rest rate fine — a partial provider failure must not corrupt counts.
+	// The synthetic call indices are mutex-guarded: rateStage2 runs rows
+	// through a concurrent worker pool, and an unsynchronized read/increment
+	// here is a -race failure in the TEST (review run104 finding 3).
+	var mu sync.Mutex
 	var contextCalls, scoreCalls int
 	provider := &ai.StubProvider{
 		NameVal: "stub",
 		ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
+			mu.Lock()
 			n := contextCalls
 			contextCalls++
+			mu.Unlock()
 			if n == 2 {
 				return nil, ai.Usage{}, errors.New("synthetic provider failure")
 			}
@@ -336,8 +342,10 @@ func TestRunReratePhaseProgressCountsHonestRows(t *testing.T) {
 			}}, ai.Usage{InputTokens: 2}, nil
 		},
 		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
+			mu.Lock()
 			n := scoreCalls
 			scoreCalls++
+			mu.Unlock()
 			if n == 0 {
 				return nil, ai.Usage{}, errors.New("synthetic stage-2 failure")
 			}

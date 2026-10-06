@@ -9,7 +9,6 @@
   var entryStateKey = 'jobcronRerateEntry';
   var eventSource = null;
   var pollTimer = null;
-  var statusController = null;
   var lifecycleGeneration = 0;
   var activeRunToken = '';
   // Stream-silence watchdog + bounded recovery-retry state.
@@ -31,6 +30,18 @@
   var statusRetryMs = 3000;
   var maxStatusRetries = 20;
   var unresolvedCopy = '진행 상태를 확인하지 못했어요. 잠시 후 페이지를 새로고침해 주세요.';
+  // Every status request (poll or probe) carries a deadline covering BOTH the
+  // fetch and the body read: a hung response is a transport fault like any
+  // other, so its expiry must flow into the same bounded retry/exhaustion
+  // path as a rejection — never an open-ended hang with the page disabled.
+  var statusDeadlineMs = 10000;
+  // Observation fence: bumped by every newer observation (stream event,
+  // adopted status response, lifecycle cancellation). A status response whose
+  // request epoch no longer matches is STALE — a newer SSE/status observation
+  // already spoke — and is dropped instead of overwriting it. This also
+  // serializes concurrent probes: only the first response to arrive may adopt.
+  var statusEpoch = 0;
+  var statusInflight = [];
 
   function newEntryToken() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -132,6 +143,24 @@
     return generation === lifecycleGeneration;
   }
 
+  // cancelPendingStatus invalidates every outstanding status request at once:
+  // it bumps the observation fence (late responses become stale and are
+  // dropped) and aborts the underlying fetches with their deadline timers. A
+  // terminal adoption, exhaustion, or lifecycle stop can never be resurrected
+  // or clobbered by a response that was already on the wire.
+  function cancelPendingStatus() {
+    statusEpoch++;
+    for (var i = 0; i < statusInflight.length; i++) {
+      var record = statusInflight[i];
+      if (record.deadline) {
+        clearTimeout(record.deadline);
+        record.deadline = null;
+      }
+      record.controller.abort();
+    }
+    statusInflight = [];
+  }
+
   function stopTransport() {
     lifecycleGeneration++;
     if (eventSource) {
@@ -146,10 +175,7 @@
       clearTimeout(silenceTimer);
       silenceTimer = null;
     }
-    if (statusController) {
-      statusController.abort();
-      statusController = null;
-    }
+    cancelPendingStatus();
     return lifecycleGeneration;
   }
 
@@ -165,6 +191,7 @@
       clearTimeout(silenceTimer);
       silenceTimer = null;
     }
+    cancelPendingStatus();
     return lifecycleGeneration;
   }
 
@@ -226,21 +253,38 @@
   // pollStatus reads the existing status endpoint. In probe mode (silent
   // stream check) it never touches the running UI beyond adopting the owned
   // run's latest copy, and never cancels the still-open stream; in full mode
-  // it owns the recovery loop. Failed fetches retry up to maxStatusRetries
-  // (transient network loss), then stop with an explicit unresolved state —
-  // never an infinite loop, never a dead page.
+  // it owns the recovery loop. Both the fetch and the body read carry a
+  // deadline; expiry (a hung response) enters the SAME bounded retry path as
+  // a rejection, and repeated failure stops at maxStatusRetries with an
+  // explicit unresolved state — never an infinite loop, never a dead page.
+  // Every response is fenced: it is adopted only when no newer stream/status
+  // observation happened while it was in flight (request epoch match).
   function pollStatus(generation, probe) {
     if (!isCurrent(generation)) return;
-    if (pollTimer && !probe) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
+    if (!probe) {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      cancelPendingStatus();
     }
-    if (statusController && !probe) {
-      statusController.abort();
-      statusController = null;
-    }
+    var requestEpoch = statusEpoch;
     var controller = new AbortController();
-    if (!probe) statusController = controller;
+    var record = { controller: controller, deadline: null, timedOut: false };
+    statusInflight.push(record);
+    record.deadline = setTimeout(function () {
+      record.timedOut = true;
+      record.deadline = null;
+      controller.abort();
+    }, statusDeadlineMs);
+    function settleCleanup() {
+      if (record.deadline) {
+        clearTimeout(record.deadline);
+        record.deadline = null;
+      }
+      var index = statusInflight.indexOf(record);
+      if (index !== -1) statusInflight.splice(index, 1);
+    }
     fetch('/api/rerate/status?surface=' + encodeURIComponent(surface), {
       headers: { 'Accept': 'application/json' },
       cache: 'no-store',
@@ -250,10 +294,14 @@
       if (!response.ok) throw new Error('status ' + response.status);
       return response.json();
     }).then(function (status) {
+      settleCleanup();
       if (!isCurrent(generation)) return;
-      if (!probe && statusController === controller) statusController = null;
       if (!status) return;
       statusFailures = 0;
+      // Stale response: a newer observation (stream event or another
+      // adoption) already spoke while this one was in flight — drop it so a
+      // late snapshot can never regress newer progress.
+      if (statusEpoch !== requestEpoch) return;
       if (probe && eventSource) {
         // Silent-stream probe outcome: adopt the owned run's live copy. The
         // watchdog re-arms ONLY for an owned active run — a foreign or
@@ -262,8 +310,8 @@
         if (adoptStatus(status, generation)) noteStreamEvent();
         return;
       }
-      adoptStatus(status, generation);
-      if (status.state === 'running' && ownsStatus(status)) {
+      var adopted = adoptStatus(status, generation);
+      if (adopted && status.state === 'running') {
         pollTimer = setTimeout(function () {
           if (!isCurrent(generation)) return;
           pollTimer = null;
@@ -271,15 +319,19 @@
         }, 750);
       }
     }).catch(function (error) {
+      settleCleanup();
       if (!isCurrent(generation)) return;
-      if (!probe && statusController === controller) statusController = null;
-      if (error && error.name === 'AbortError') return;
+      // A deliberate lifecycle cancellation is silent; a deadline expiry
+      // (record.timedOut) is a transport fault and must retry like any other.
+      if (error && error.name === 'AbortError' && !record.timedOut) return;
       statusFailures++;
       if (statusFailures >= maxStatusRetries) {
-        // Bounded exhaustion: stop retrying, state the unresolved outcome,
-        // and hand control back to the user — never claim completion.
+        // Bounded exhaustion: stop retrying, invalidate outstanding probes,
+        // state the unresolved outcome, and hand control back to the user —
+        // never claim completion.
         if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+        cancelPendingStatus();
         setRunning(false);
         clearProgress();
         showStatus(unresolvedCopy);
@@ -301,7 +353,11 @@
 
   // adoptStatus applies one status snapshot to the page under the existing
   // ownership/handled rules — shared by the recovery poll and the probe. It
-  // returns true only when it adopted an OWNED, still-running run.
+  // returns true only when it adopted an OWNED, still-running run (terminal
+  // states return true after ending the loop). Adopting makes this response
+  // the newest observation; a terminal adoption also closes the still-open
+  // stream and cancels every outstanding probe, so nothing later can revive
+  // the ended run or clear its notice.
   function adoptStatus(status, generation) {
     var handled = isHandled(status.run_token);
     if (status.state === 'running') {
@@ -311,6 +367,24 @@
         clearProgress();
         return false;
       }
+      // Identity fence: this entry may own a NEWER run than the one this page
+      // pressed (another tab pressed again). A running snapshot for a
+      // different run_token never overwrites the known active run's state and
+      // never polls it. When the known stream is still live that is enough;
+      // when recovery owns the loop (stream dead) the known run is gone
+      // server-side, so the loop ends terminally-safe: loading stops, the
+      // still-honest progress stays on screen, and a hint tells the user the
+      // run moved. An unknown activeRunToken (fresh page adopting after
+      // reload) still adopts freely.
+      if (activeRunToken && status.run_token && status.run_token !== activeRunToken) {
+        if (eventSource) return false;
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+        cancelPendingStatus();
+        setRunning(false);
+        showStatus('이전 요청이 종료됐어요. 최근 상태는 새로고침하면 확인할 수 있어요.');
+        return false;
+      }
+      statusEpoch++;
       setRunning(true);
       showStatus(status.status || estimateCopy);
       showProgress(status.progress || '공고 분석을 준비하는 중...');
@@ -321,34 +395,38 @@
     clearProgress();
     if (status.state === 'idle') {
       clearStatus();
-      return;
+      return true;
     }
     if (!ownsStatus(status)) {
       clearStatus();
-      return;
+      return true;
     }
     if (status.state === 'done') {
       if (!handled) {
+        stopTransport();
         var message = status.outcome === 'changed' ? completedAwayCopy : status.message;
         rememberAndReload(message || completedAwayCopy, status.run_token, status.owner_entry);
-        return;
+        return true;
       }
       // done+handled after the completion reload: keep the fresh notice this
       // page just displayed (done+handled must not clobber it); otherwise the
       // run is old news on an unrelated page — clear it.
+      stopTransport();
       if (!freshNotice) clearStatus();
-      return;
+      return true;
     }
     if (status.state === 'failed') {
+      stopTransport();
       if (handled) {
         clearStatus();
-        return;
+        return true;
       }
       markHandled(status.run_token);
       showStatus(status.message || 'AI 평가에 실패했어요.');
-      return;
+      return true;
     }
     clearStatus();
+    return true;
   }
 
   btn.addEventListener('click', function () {
@@ -364,16 +442,19 @@
     noteStreamEvent();
     source.addEventListener('run-token', function (event) {
       if (!isCurrent(generation)) return;
+      statusEpoch++;
       noteStreamEvent();
       activeRunToken = event.data || '';
     });
     source.addEventListener('status', function (event) {
       if (!isCurrent(generation)) return;
+      statusEpoch++;
       noteStreamEvent();
       showStatus(event.data);
     });
     source.addEventListener('progress', function (event) {
       if (!isCurrent(generation)) return;
+      statusEpoch++;
       noteStreamEvent();
       showProgress(event.data);
     });

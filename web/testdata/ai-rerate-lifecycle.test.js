@@ -15,6 +15,7 @@ const completedCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 
 const silenceWatchMs = 15000;
 const retryDelayMs = 3000;
 const maxStatusRetries = 20;
+const statusDeadlineMs = 10000;
 
 // estimateRetained reports whether the estimate copy is what the page is
 // showing right now (the visible status carries the 5–10분/coffee copy).
@@ -145,6 +146,26 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     if (!queued) return Promise.reject(new Error('no queued fetch response'));
     if (queued.kind === 'immediate') return Promise.resolve(response(queued.status));
     if (queued.kind === 'failure') return Promise.reject(new Error('network down'));
+    if (queued.kind === 'deferred-body') {
+      // Headers arrive, the body never does until released. The abort path
+      // must reject the BODY promise too, or a deadline can only fire the
+      // outer fetch promise.
+      const bodyPromise = new Promise((resolveBody, rejectBody) => {
+        queued.resolveBody = resolveBody;
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => {
+            const error = new Error('aborted');
+            error.name = 'AbortError';
+            rejectBody(error);
+          }, { once: true });
+        }
+      });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => bodyPromise
+      });
+    }
     return new Promise((resolve, reject) => {
       queued.resolve = (status) => resolve(response(status));
       if (options.signal) {
@@ -238,6 +259,14 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     queueFailure() { fetchQueue.push({ kind: 'failure' }); },
     deferStatus() {
       const deferred = { kind: 'deferred', resolve: null };
+      fetchQueue.push(deferred);
+      return deferred;
+    },
+    // deferBodyStatus resolves the fetch HEADERS immediately but never the
+    // body read (response.json) until released — a hung body is a distinct
+    // transport fault from a hung fetch and both need a deadline.
+    deferBodyStatus() {
+      const deferred = { kind: 'deferred-body', resolveBody: null };
       fetchQueue.push(deferred);
       return deferred;
     },
@@ -687,6 +716,130 @@ async function main() {
   await flush();
   assert.equal(noticePage.text('rerate-status'), completedCopy, 'fresh completion notice must survive the done+handled poll');
   assert.equal(noticePage.has('rerate-progress'), false);
+
+  // --- Review round 2 (run104): deadlined, ordered, identity-fenced recovery ---
+
+  // F1a: an unresolved status FETCH after stream loss must not strand the
+  // page forever — the fetch gets a deadline; expiry enters the SAME bounded
+  // retry/exhaustion path as a rejection (never an infinite hang).
+  const hungStorage = new Storage();
+  const hung = makePage({ storage: hungStorage });
+  hung.click();
+  hung.sources[0].emit('run-token', 'process-hung-run-1');
+  hung.sources[0].emit('status', estimateCopy);
+  hung.deferStatus(); // stream errors → recovery fetch that never resolves
+  hung.sources[0].emit('error', {});
+  await flush();
+  // One full silence window + deadline + retry delay: the deadlined fetch
+  // must have expired and been replaced by a fresh attempt.
+  await hung.run(silenceWatchMs + statusDeadlineMs + retryDelayMs);
+  assert.ok(hung.fetchCalls.length >= 2, `a deadlined fetch must retry, not hang (fetches=${hung.fetchCalls.length})`);
+  assert.ok(hung.timerCount() >= 1, 'deadline expiry must schedule the next bounded retry');
+  assert.equal(hung.button.disabled, true, 'the owned run keeps the button disabled through retries');
+
+  // F1b: a resolved fetch whose BODY never arrives is the same fault — the
+  // deadline must cover the body read, not only the fetch.
+  const hungBodyStorage = new Storage();
+  const hungBody = makePage({ storage: hungBodyStorage });
+  hungBody.click();
+  hungBody.sources[0].emit('run-token', 'process-hungbody-run-1');
+  hungBody.sources[0].emit('status', estimateCopy);
+  hungBody.deferBodyStatus();
+  hungBody.sources[0].emit('error', {});
+  await flush();
+  await hungBody.run(silenceWatchMs + statusDeadlineMs + retryDelayMs);
+  assert.ok(hungBody.fetchCalls.length >= 2, `a deadlined body read must retry, not hang (fetches=${hungBody.fetchCalls.length})`);
+  assert.ok(hungBody.timerCount() >= 1, 'body-deadline expiry must schedule the next bounded retry');
+
+  // F1c: repeated deadlined reads end in the SAME explicit unresolved state
+  // as rejections — never an unbounded fetch loop.
+  const deadDeadlineStorage = new Storage();
+  const deadDeadline = makePage({ storage: deadDeadlineStorage });
+  deadDeadline.click();
+  deadDeadline.sources[0].emit('run-token', 'process-deadline-run-1');
+  deadDeadline.sources[0].emit('status', estimateCopy);
+  for (let i = 0; i < maxStatusRetries + 2; i++) deadDeadline.deferStatus();
+  deadDeadline.sources[0].emit('error', {});
+  await flush();
+  for (let i = 0; i < maxStatusRetries; i++) await deadDeadline.run(statusDeadlineMs + retryDelayMs);
+  assert.equal(deadDeadline.timerCount(), 0, 'deadlined retries must exhaust within the bounded budget');
+  assert.equal(deadDeadline.button.disabled, false, 'exhausted deadlined recovery must re-enable the button');
+  assert.match(deadDeadline.text('rerate-status'), /확인하지 못했어요/, 'deadlined exhaustion must leave the explicit unresolved message');
+
+  // F2a: a LATE status response must not overwrite newer stream progress.
+  // The stream is live at 3/4 when an older 0/4 snapshot finally resolves —
+  // the stale adoption is dropped (fenced by observation order).
+  const staleStorage = new Storage();
+  const stale = makePage({ storage: staleStorage });
+  stale.click();
+  stale.sources[0].emit('run-token', 'process-stale-run-1');
+  stale.sources[0].emit('status', estimateCopy);
+  const staleDeferred = stale.deferStatus();
+  await stale.run(silenceWatchMs); // watchdog probe fires, stays pending
+  stale.sources[0].emit('progress', '공고 3/4 분석 중...'); // stream moves on
+  staleDeferred.resolve({ state: 'running', run_token: 'process-stale-run-1', owner_entry: stale.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 0/4 분석 중...' });
+  await flush();
+  assert.equal(stale.text('rerate-progress'), '공고 3/4 분석 중...', 'a late status response must not regress newer stream progress');
+  assert.equal(stale.sources[0].closed, false, 'the live stream stays open');
+
+  // F2b: terminal adoption must invalidate outstanding probes and the still
+  // open stream — a late RUNNING response after a terminal outcome can never
+  // resurrect loading state or re-arm timers.
+  const terminalStorage = new Storage();
+  const terminal = makePage({ storage: terminalStorage });
+  terminal.click();
+  terminal.sources[0].emit('run-token', 'process-terminal-run-1');
+  terminal.sources[0].emit('status', estimateCopy);
+  const terminalDeferred = terminal.deferStatus();
+  await terminal.run(silenceWatchMs); // watchdog probe pending
+  terminal.queueStatus({ state: 'failed', run_token: 'process-terminal-run-1', owner_entry: terminal.history.state.jobcronRerateEntry, message: 'synthetic terminal failure' });
+  terminal.becomeVisible(); // visibility probe adopts the terminal state
+  await flush();
+  assert.equal(terminal.button.disabled, false, 'terminal adoption must end loading');
+  assert.equal(terminal.text('rerate-status'), 'synthetic terminal failure');
+  assert.equal(terminal.timerCount(), 0, 'terminal adoption must clear every recovery timer');
+  assert.equal(terminal.sources[0].closed, true, 'terminal adoption must close the still-open stream');
+  terminalDeferred.resolve({ state: 'running', run_token: 'process-terminal-run-1', owner_entry: terminal.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 1/4 분석 중...' });
+  await flush();
+  assert.equal(terminal.button.disabled, false, 'a late running response must not resurrect loading');
+  assert.equal(terminal.timerCount(), 0, 'a late running response must not re-arm timers');
+  assert.equal(terminal.text('rerate-status'), 'synthetic terminal failure', 'a late running response must not clear the terminal notice');
+
+  // F2c: identity fence — the client knows the run_token of the run it
+  // started; a status response for a DIFFERENT run (same owner entry, e.g.
+  // another tab of the same entry after a reload started a newer run) must
+  // never overwrite the known active run's progress. Only a terminal state of
+  // a foreign run may stop the local loop (the known run is gone server-side).
+  const mismatchStorage = new Storage();
+  const mismatch = makePage({ storage: mismatchStorage });
+  mismatch.click();
+  mismatch.sources[0].emit('run-token', 'process-known-run-1');
+  mismatch.sources[0].emit('status', estimateCopy);
+  mismatch.sources[0].emit('progress', '공고 2/5 분석 중...');
+  mismatch.queueStatus({ state: 'running', run_token: 'process-other-run-9', owner_entry: mismatch.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 9/9 분석 중...' });
+  await mismatch.run(silenceWatchMs); // watchdog probe returns the foreign run
+  assert.equal(mismatch.text('rerate-progress'), '공고 2/5 분석 중...', 'a foreign running run must not overwrite the known active run progress');
+  assert.equal(mismatch.button.disabled, true, 'the known owned run keeps the button disabled');
+  assert.equal(mismatch.timerCount(), 0, 'a foreign running run must not start a poll loop while the known stream is live');
+
+  // F2c-2: same identity fence with the stream DEAD (recovery poll owns the
+  // loop): the known run is gone server-side — the loop must end terminally
+  // safe (no strand, no foreign-run polling), with an explicit hint.
+  const goneStorage = new Storage();
+  const gone = makePage({ storage: goneStorage });
+  gone.click();
+  gone.sources[0].emit('run-token', 'process-gone-run-1');
+  gone.sources[0].emit('status', estimateCopy);
+  gone.sources[0].emit('progress', '공고 2/5 분석 중...');
+  gone.queueStatus({ state: 'running', run_token: 'process-newer-run-2', owner_entry: gone.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 1/2 분석 중...' });
+  gone.sources[0].emit('error', {}); // stream dies → full poll adopts the foreign run
+  await flush();
+  await gone.run(retryDelayMs); // let one scheduled poll cycle observe cleanup
+  assert.equal(gone.button.disabled, false, 'a foreign running run during dead-stream recovery must end loading');
+  assert.equal(gone.timerCount(), 0, 'the dead-stream recovery loop must stop on a foreign run');
+  assert.equal(gone.text('rerate-progress'), '공고 2/5 분석 중...', 'the known run progress stays honest on screen');
+  assert.match(gone.text('rerate-status'), /종료됐어요/, 'the user is told the known run ended and how to see the newest state');
+
 }
 
 main().catch((error) => {
