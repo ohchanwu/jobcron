@@ -7,14 +7,7 @@
   var surface = btn.dataset.surface;
   if (!surface) return;
   var entryStateKey = 'jobcronRerateEntry';
-  var eventSource = null;
-  var pollTimer = null;
-  var lifecycleGeneration = 0;
-  var activeRunToken = '';
-  // Stream-silence watchdog + bounded recovery-retry state.
-  var silenceTimer = null;
-  var lastStreamEventAt = 0;
-  var statusFailures = 0;
+  var owner = null;
   var noticeKey = 'jobcron:rerate-notice:' + surface;
   var handledKey = 'jobcron:rerate-handled:' + surface;
   var freshNotice = false;
@@ -35,13 +28,7 @@
   // other, so its expiry must flow into the same bounded retry/exhaustion
   // path as a rejection — never an open-ended hang with the page disabled.
   var statusDeadlineMs = 10000;
-  // Observation fence: bumped by every newer observation (stream event,
-  // adopted status response, lifecycle cancellation). A status response whose
-  // request epoch no longer matches is STALE — a newer SSE/status observation
-  // already spoke — and is dropped instead of overwriting it. This also
-  // serializes concurrent probes: only the first response to arrive may adopt.
-  var statusEpoch = 0;
-  var statusInflight = [];
+
 
   function newEntryToken() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -139,80 +126,72 @@
     activity.hidden = !running;
   }
 
-  function isCurrent(generation) {
-    return generation === lifecycleGeneration;
-  }
-
-  // cancelPendingStatus invalidates every outstanding status request at once:
-  // it bumps the observation fence (late responses become stale and are
-  // dropped) and aborts the underlying fetches with their deadline timers. A
-  // terminal adoption, exhaustion, or lifecycle stop can never be resurrected
-  // or clobbered by a response that was already on the wire.
-  function cancelPendingStatus() {
-    statusEpoch++;
-    for (var i = 0; i < statusInflight.length; i++) {
-      var record = statusInflight[i];
-      if (record.deadline) {
-        clearTimeout(record.deadline);
-        record.deadline = null;
+  // One owner holds the identity and every asynchronous producer for a run.
+  // Every callback enters through admit; settlement invalidates them together.
+  function admit(run, record, identity, source) {
+    if (owner !== run || run.settled || (record && run.request !== record) ||
+        (source && run.source !== source)) return false;
+    if (identity) {
+      if (!ownsStatus(identity) || (run.token && run.token !== identity.run_token)) {
+        var mismatch = ownsStatus(identity) && Boolean(run.token);
+        settle(run);
+        if (mismatch) {
+          showStatus('이전 요청이 종료됐어요. 최근 상태는 새로고침하면 확인할 수 있어요.');
+        } else {
+          clearProgress();
+          if (!freshNotice) clearStatus();
+        }
+        return false;
       }
-      record.controller.abort();
+      if (!run.token) run.token = identity.run_token;
     }
-    statusInflight = [];
+    return true;
   }
 
-  function stopTransport() {
-    lifecycleGeneration++;
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-    if (pollTimer) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
-    }
-    if (silenceTimer) {
-      clearTimeout(silenceTimer);
-      silenceTimer = null;
-    }
-    cancelPendingStatus();
-    return lifecycleGeneration;
+  function clearTimer(run) {
+    if (run.timer !== null) clearTimeout(run.timer);
+    run.timer = null;
   }
 
-  // stopStream closes only the SSE stream, keeping any status polling alive —
-  // used when the stream errors while the detached run may still be active.
-  function stopStream() {
-    lifecycleGeneration++;
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-    if (silenceTimer) {
-      clearTimeout(silenceTimer);
-      silenceTimer = null;
-    }
-    cancelPendingStatus();
-    return lifecycleGeneration;
+  function cancelRead(run) {
+    var record = run.request;
+    run.request = null; // invalidate BEFORE abort's promise callbacks
+    if (!record) return;
+    clearTimeout(record.deadline);
+    record.controller.abort();
   }
 
-  // noteStreamEvent records stream liveness and re-arms the silence watchdog:
-  // while the OWNED stream keeps delivering, no status probe is spent.
-  function noteStreamEvent() {
-    lastStreamEventAt = Date.now();
-    if (silenceTimer) clearTimeout(silenceTimer);
-    if (!eventSource) return;
-    silenceTimer = setTimeout(checkSilentStream, streamSilenceMs);
+  function settle(run) {
+    run.settled = true;
+    clearTimer(run);
+    cancelRead(run);
+    if (run.source) run.source.close();
+    run.source = null;
+    setRunning(false);
   }
 
-  // checkSilentStream is the bounded status-only recovery for a stream that
-  // stays OPEN but silent (proxy stall, dropped middle): one probe of the
-  // existing status endpoint — never a new EventSource, so a recovering
-  // client can never start a second provider run. The healthy stream is left
-  // open; the watchdog re-arms after the probe completes.
-  function checkSilentStream() {
-    silenceTimer = null;
-    if (!eventSource) return;
-    pollStatus(lifecycleGeneration, true);
+  function beginOwner() {
+    if (owner) settle(owner);
+    owner = { settled: false, token: '', source: null, request: null, timer: null, failures: 0 };
+    return owner;
+  }
+
+  function schedule(run, delay) {
+    if (!admit(run) || run.request) return;
+    clearTimer(run);
+    run.timer = setTimeout(function () {
+      run.timer = null;
+      observe(run);
+    }, delay);
+  }
+
+  function sourceObservation(run, source) {
+    if (!admit(run, null, null, source)) return false;
+    // New SSE makes both late successes AND errors of the old read obsolete.
+    cancelRead(run);
+    run.failures = 0;
+    schedule(run, streamSilenceMs);
+    return true;
   }
 
   function rememberAndReload(message, runToken, ownerEntry) {
@@ -250,265 +229,129 @@
     showStatus(notice.message);
   }
 
-  // pollStatus reads the existing status endpoint. In probe mode (silent
-  // stream check) it never touches the running UI beyond adopting the owned
-  // run's latest copy, and never cancels the still-open stream; in full mode
-  // it owns the recovery loop. Both the fetch and the body read carry a
-  // deadline; expiry (a hung response) enters the SAME bounded retry path as
-  // a rejection, and repeated failure stops at maxStatusRetries with an
-  // explicit unresolved state — never an infinite loop, never a dead page.
-  // Every response is fenced: it is adopted only when no newer stream/status
-  // observation happened while it was in flight (request epoch match).
-  function pollStatus(generation, probe) {
-    if (!isCurrent(generation)) return;
-    if (!probe) {
-      if (pollTimer) {
-        clearTimeout(pollTimer);
-        pollTimer = null;
+  // Watchdog, visibility and poll triggers coalesce onto this single read.
+  // The deadline owns failure accounting even if abort cannot end a body read.
+  function observe(run) {
+    if (!admit(run) || run.request) return;
+    clearTimer(run);
+    var record = { controller: new AbortController(), deadline: null };
+    run.request = record;
+    function failure() {
+      if (!admit(run, record)) return;
+      cancelRead(run);
+      run.failures++;
+      if (run.failures >= maxStatusRetries) {
+        settle(run);
+        clearProgress();
+        showStatus(unresolvedCopy);
+      } else {
+        // Preserve meaningful budget/provider status while retrying.
+        schedule(run, statusRetryMs);
       }
-      cancelPendingStatus();
     }
-    var requestEpoch = statusEpoch;
-    var controller = new AbortController();
-    var record = { controller: controller, deadline: null, timedOut: false };
-    statusInflight.push(record);
-    record.deadline = setTimeout(function () {
-      record.timedOut = true;
-      record.deadline = null;
-      controller.abort();
-    }, statusDeadlineMs);
-    function settleCleanup() {
-      if (record.deadline) {
-        clearTimeout(record.deadline);
-        record.deadline = null;
-      }
-      var index = statusInflight.indexOf(record);
-      if (index !== -1) statusInflight.splice(index, 1);
-    }
+    record.deadline = setTimeout(failure, statusDeadlineMs);
     fetch('/api/rerate/status?surface=' + encodeURIComponent(surface), {
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store',
-      signal: controller.signal
+      headers: { 'Accept': 'application/json' }, cache: 'no-store', signal: record.controller.signal
     }).then(function (response) {
-      if (!isCurrent(generation)) return null;
+      if (!admit(run, record)) return null;
       if (!response.ok) throw new Error('status ' + response.status);
       return response.json();
     }).then(function (status) {
-      settleCleanup();
-      if (!isCurrent(generation)) return;
-      if (!status) return;
-      statusFailures = 0;
-      // Stale response: a newer observation (stream event or another
-      // adoption) already spoke while this one was in flight — drop it so a
-      // late snapshot can never regress newer progress.
-      if (statusEpoch !== requestEpoch) return;
-      if (probe && eventSource) {
-        // Silent-stream probe outcome: adopt the owned run's live copy. The
-        // watchdog re-arms ONLY for an owned active run — a foreign or
-        // terminal state terminates the silence timer (no polling another
-        // entry's run; a later live stream event re-arms on its own).
-        if (adoptStatus(status, generation)) noteStreamEvent();
+      if (!admit(run, record)) return;
+      if (!status || ['idle', 'running', 'done', 'failed'].indexOf(status.state) === -1) {
+        failure();
         return;
       }
-      var adopted = adoptStatus(status, generation);
-      if (adopted && status.state === 'running') {
-        pollTimer = setTimeout(function () {
-          if (!isCurrent(generation)) return;
-          pollTimer = null;
-          pollStatus(generation, false);
-        }, 750);
-      }
-    }).catch(function (error) {
-      settleCleanup();
-      if (!isCurrent(generation)) return;
-      // A deliberate lifecycle cancellation is silent; a deadline expiry
-      // (record.timedOut) is a transport fault and must retry like any other.
-      if (error && error.name === 'AbortError' && !record.timedOut) return;
-      statusFailures++;
-      if (statusFailures >= maxStatusRetries) {
-        // Bounded exhaustion: stop retrying, invalidate outstanding probes,
-        // state the unresolved outcome, and hand control back to the user —
-        // never claim completion.
-        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-        cancelPendingStatus();
-        setRunning(false);
-        clearProgress();
-        showStatus(unresolvedCopy);
+      // Idle normally has no identity. If it does, it must pass the SAME
+      // identity gate as every running/terminal observation before effects.
+      if ((status.state !== 'idle' || status.run_token) && !admit(run, record, status)) return;
+      cancelRead(run);
+      run.failures = 0;
+      if (status.state === 'running') {
+        setRunning(true);
+        showStatus(status.status || estimateCopy);
+        showProgress(status.progress || '공고 분석을 준비하는 중...');
+        schedule(run, run.source ? streamSilenceMs : 750);
         return;
       }
-      if (probe && eventSource) {
-        noteStreamEvent(); // stream still open: re-arm the watchdog
-        return;
-      }
-      setRunning(true);
-      showStatus(estimateCopy);
-      pollTimer = setTimeout(function () {
-        if (!isCurrent(generation)) return;
-        pollTimer = null;
-        pollStatus(generation, false);
-      }, statusRetryMs);
-    });
-  }
-
-  // adoptStatus applies one status snapshot to the page under the existing
-  // ownership/handled rules — shared by the recovery poll and the probe. It
-  // returns true only when it adopted an OWNED, still-running run (terminal
-  // states return true after ending the loop). Adopting makes this response
-  // the newest observation; a terminal adoption also closes the still-open
-  // stream and cancels every outstanding probe, so nothing later can revive
-  // the ended run or clear its notice.
-  function adoptStatus(status, generation) {
-    var handled = isHandled(status.run_token);
-    if (status.state === 'running') {
-      if (!ownsStatus(status)) {
-        setRunning(false);
-        clearStatus();
-        clearProgress();
-        return false;
-      }
-      // Identity fence: this entry may own a NEWER run than the one this page
-      // pressed (another tab pressed again). A running snapshot for a
-      // different run_token never overwrites the known active run's state and
-      // never polls it. When the known stream is still live that is enough;
-      // when recovery owns the loop (stream dead) the known run is gone
-      // server-side, so the loop ends terminally-safe: loading stops, the
-      // still-honest progress stays on screen, and a hint tells the user the
-      // run moved. An unknown activeRunToken (fresh page adopting after
-      // reload) still adopts freely.
-      if (activeRunToken && status.run_token && status.run_token !== activeRunToken) {
-        if (eventSource) return false;
-        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-        cancelPendingStatus();
-        setRunning(false);
-        showStatus('이전 요청이 종료됐어요. 최근 상태는 새로고침하면 확인할 수 있어요.');
-        return false;
-      }
-      statusEpoch++;
-      setRunning(true);
-      showStatus(status.status || estimateCopy);
-      showProgress(status.progress || '공고 분석을 준비하는 중...');
-      return true;
-    }
-
-    setRunning(false);
-    clearProgress();
-    if (status.state === 'idle') {
-      clearStatus();
-      return true;
-    }
-    if (!ownsStatus(status)) {
-      clearStatus();
-      return true;
-    }
-    if (status.state === 'done') {
-      if (!handled) {
-        stopTransport();
+      settle(run);
+      clearProgress();
+      if (status.state === 'done' && !isHandled(run.token)) {
         var message = status.outcome === 'changed' ? completedAwayCopy : status.message;
-        rememberAndReload(message || completedAwayCopy, status.run_token, status.owner_entry);
-        return true;
-      }
-      // done+handled after the completion reload: keep the fresh notice this
-      // page just displayed (done+handled must not clobber it); otherwise the
-      // run is old news on an unrelated page — clear it.
-      stopTransport();
-      if (!freshNotice) clearStatus();
-      return true;
-    }
-    if (status.state === 'failed') {
-      stopTransport();
-      if (handled) {
+        rememberAndReload(message || completedAwayCopy, run.token, entryToken);
+      } else if (status.state === 'failed' && !isHandled(run.token)) {
+        markHandled(run.token);
+        showStatus(status.message || 'AI 평가에 실패했어요.');
+      } else if (!freshNotice) {
         clearStatus();
-        return true;
       }
-      markHandled(status.run_token);
-      showStatus(status.message || 'AI 평가에 실패했어요.');
-      return true;
-    }
-    clearStatus();
-    return true;
+    }).catch(failure);
   }
 
   btn.addEventListener('click', function () {
-    var generation = stopTransport();
-    activeRunToken = '';
-    statusFailures = 0;
+    var run = beginOwner();
+    freshNotice = false;
     log.textContent = '';
     setRunning(true);
     showStatus(estimateCopy);
     var source = new EventSource('/api/rerate?surface=' + encodeURIComponent(surface) +
       '&entry=' + encodeURIComponent(entryToken));
-    eventSource = source;
-    noteStreamEvent();
+    run.source = source;
+    schedule(run, streamSilenceMs);
     source.addEventListener('run-token', function (event) {
-      if (!isCurrent(generation)) return;
-      statusEpoch++;
-      noteStreamEvent();
-      activeRunToken = event.data || '';
+      if (!admit(run, null, { run_token: event.data, owner_entry: entryToken }, source)) return;
+      sourceObservation(run, source);
     });
     source.addEventListener('status', function (event) {
-      if (!isCurrent(generation)) return;
-      statusEpoch++;
-      noteStreamEvent();
+      if (!sourceObservation(run, source)) return;
       showStatus(event.data);
     });
     source.addEventListener('progress', function (event) {
-      if (!isCurrent(generation)) return;
-      statusEpoch++;
-      noteStreamEvent();
+      if (!sourceObservation(run, source)) return;
       showProgress(event.data);
     });
     source.addEventListener('done', function (event) {
-      if (!isCurrent(generation)) return;
-      var runToken = activeRunToken;
-      stopTransport();
-      setRunning(false);
+      if (!admit(run, null, null, source)) return;
+      settle(run);
       clearProgress();
-      rememberAndReload(event.data, runToken, entryToken);
+      rememberAndReload(event.data, run.token, entryToken);
     });
     source.addEventListener('failed', function (event) {
-      if (!isCurrent(generation)) return;
-      var runToken = activeRunToken;
-      stopTransport();
-      setRunning(false);
+      if (!admit(run, null, null, source)) return;
+      settle(run);
       clearProgress();
-      markHandled(runToken);
+      markHandled(run.token);
       showStatus(event.data || 'AI 평가에 실패했어요.');
     });
     source.addEventListener('error', function () {
-      if (!isCurrent(generation)) return;
+      if (!admit(run, null, null, source)) return;
       // Hidden tab: EventSource errors fire spuriously while backgrounded.
       // The stream is closed (no auto-reconnect → no second run); recovery
       // resumes via visibilitychange when the user returns.
-      if (document.visibilityState === 'hidden') {
-        stopStream();
-        return;
-      }
+      source.close();
+      run.source = null;
+      clearTimer(run);
+      cancelRead(run);
+      if (document.visibilityState === 'hidden') return;
       // The run may still be active server-side (detached, S8). Close the
       // stream — closing prevents the browser's automatic EventSource
       // reconnect from ever issuing a SECOND run — and adopt the active run
       // through the status endpoint instead.
-      var pollGeneration = stopStream();
-      pollStatus(pollGeneration, false);
+      observe(run);
     });
   });
 
-  window.addEventListener('pagehide', stopTransport);
+  window.addEventListener('pagehide', function () {
+    if (owner) settle(owner);
+    owner = null;
+  });
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') return;
-    // Returning to a visible tab: probe once whether the owned run advanced
-    // while hidden — the stream may be dead-but-non-null (silently dropped),
-    // so recovery must not depend on eventSource being null.
-    if (eventSource) {
-      if (silenceTimer) clearTimeout(silenceTimer);
-      pollStatus(lifecycleGeneration, true);
-      return;
-    }
-    pollStatus(stopTransport());
+    if (owner) observe(owner);
   });
   window.addEventListener('pageshow', function (event) {
     showStoredNotice();
-    pollStatus(stopTransport());
+    observe(owner || beginOwner());
   });
   showStoredNotice();
 })();

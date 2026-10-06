@@ -152,7 +152,7 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
       // outer fetch promise.
       const bodyPromise = new Promise((resolveBody, rejectBody) => {
         queued.resolveBody = resolveBody;
-        if (options.signal) {
+        if (options.signal && !queued.ignoreAbort) {
           options.signal.addEventListener('abort', () => {
             const error = new Error('aborted');
             error.name = 'AbortError';
@@ -168,7 +168,8 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     }
     return new Promise((resolve, reject) => {
       queued.resolve = (status) => resolve(response(status));
-      if (options.signal) {
+      queued.reject = reject;
+      if (options.signal && !queued.ignoreAbort) {
         options.signal.addEventListener('abort', () => {
           const error = new Error('aborted');
           error.name = 'AbortError';
@@ -257,16 +258,16 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     fetchCalls,
     queueStatus(status) { fetchQueue.push({ kind: 'immediate', status }); },
     queueFailure() { fetchQueue.push({ kind: 'failure' }); },
-    deferStatus() {
-      const deferred = { kind: 'deferred', resolve: null };
+    deferStatus(ignoreAbort = false) {
+      const deferred = { kind: 'deferred', resolve: null, ignoreAbort };
       fetchQueue.push(deferred);
       return deferred;
     },
     // deferBodyStatus resolves the fetch HEADERS immediately but never the
     // body read (response.json) until released — a hung body is a distinct
     // transport fault from a hung fetch and both need a deadline.
-    deferBodyStatus() {
-      const deferred = { kind: 'deferred-body', resolveBody: null };
+    deferBodyStatus(ignoreAbort = false) {
+      const deferred = { kind: 'deferred-body', resolveBody: null, ignoreAbort };
       fetchQueue.push(deferred);
       return deferred;
     },
@@ -792,8 +793,9 @@ async function main() {
   terminal.sources[0].emit('status', estimateCopy);
   const terminalDeferred = terminal.deferStatus();
   await terminal.run(silenceWatchMs); // watchdog probe pending
-  terminal.queueStatus({ state: 'failed', run_token: 'process-terminal-run-1', owner_entry: terminal.history.state.jobcronRerateEntry, message: 'synthetic terminal failure' });
-  terminal.becomeVisible(); // visibility probe adopts the terminal state
+  terminal.becomeVisible(); // coalesced; cannot start a second competing read
+  assert.equal(terminal.fetchCalls.length, 1);
+  terminal.sources[0].emit('failed', 'synthetic terminal failure');
   await flush();
   assert.equal(terminal.button.disabled, false, 'terminal adoption must end loading');
   assert.equal(terminal.text('rerate-status'), 'synthetic terminal failure');
@@ -819,8 +821,9 @@ async function main() {
   mismatch.queueStatus({ state: 'running', run_token: 'process-other-run-9', owner_entry: mismatch.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 9/9 분석 중...' });
   await mismatch.run(silenceWatchMs); // watchdog probe returns the foreign run
   assert.equal(mismatch.text('rerate-progress'), '공고 2/5 분석 중...', 'a foreign running run must not overwrite the known active run progress');
-  assert.equal(mismatch.button.disabled, true, 'the known owned run keeps the button disabled');
-  assert.equal(mismatch.timerCount(), 0, 'a foreign running run must not start a poll loop while the known stream is live');
+  assert.equal(mismatch.button.disabled, false, 'known-token mismatch must boundedly end loading');
+  assert.equal(mismatch.sources[0].closed, true, 'mismatch must settle the source too');
+  assert.equal(mismatch.timerCount(), 0, 'a foreign running run must not start a poll loop');
 
   // F2c-2: same identity fence with the stream DEAD (recovery poll owns the
   // loop): the known run is gone server-side — the loop must end terminally
@@ -842,7 +845,10 @@ async function main() {
 
 }
 
-main().catch((error) => {
-  console.error(error.stack || error);
-  process.exitCode = 1;
-});
+module.exports = { makePage, Storage, flush, estimateCopy };
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.stack || error);
+    process.exitCode = 1;
+  });
+}
