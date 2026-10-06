@@ -35,6 +35,9 @@ Use this index instead of recursively loading the entire documentation tree.
   reports. Load only the active files listed here and the concise decision
   records needed for the current task.
 
+- [AI rating outcomes and stronger weighting — draft specification](specs/261006-ai-rating-outcomes-and-weight.md)
+  and [implementation / combined-release plan](plans/261006-ai-rating-outcomes-and-weight-plan.md)
+  await independent readiness review; application implementation and live release are not completed.
 - [Emergency overnight alpha deployment — owner-approved 2026-10-05][emergency-overnight-deployment]
   controls this launch's autonomous sequencing; exact operations still require
   independent review and fresh per-operation envelopes.
