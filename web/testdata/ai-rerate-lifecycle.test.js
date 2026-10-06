@@ -9,6 +9,19 @@ const script = fs.readFileSync(path.join(__dirname, '..', 'ai-rerate.js'), 'utf8
 const activeCopy = 'AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕';
 const estimateCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
 const completedCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 반영했습니다.';
+// Virtual-time constants mirroring the client's delay knobs: silenceWatchMs
+// is how long an OPEN stream may stay silent before a status probe, and
+// retryDelayMs / maxStatusRetries bound recovery fetches.
+const silenceWatchMs = 15000;
+const retryDelayMs = 3000;
+const maxStatusRetries = 20;
+
+// estimateRetained reports whether the estimate copy is what the page is
+// showing right now (the visible status carries the 5–10분/coffee copy).
+function estimateRetained(page) {
+  const text = page.text('rerate-status') || '';
+  return text.indexOf('5–10분') !== -1 && text.indexOf('커피') !== -1;
+}
 
 class Storage {
   constructor() { this.values = new Map(); }
@@ -97,6 +110,14 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
   };
   const timers = new Map();
   let nextTimer = 1;
+  // Virtual clock: the client reads Date.now() only to measure stream
+  // silence, so tests can advance time deterministically. setTimeout records
+  // each timer's due time so run(ms) can fire them in scheduled order.
+  let clock = 0;
+  const dueAt = new Map();
+  const DateShim = class extends Date {
+    static now() { return clock; }
+  };
   const sources = [];
   const fetchQueue = [];
   const fetchCalls = [];
@@ -123,6 +144,7 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     const queued = fetchQueue.shift();
     if (!queued) return Promise.reject(new Error('no queued fetch response'));
     if (queued.kind === 'immediate') return Promise.resolve(response(queued.status));
+    if (queued.kind === 'failure') return Promise.reject(new Error('network down'));
     return new Promise((resolve, reject) => {
       queued.resolve = (status) => resolve(response(status));
       if (options.signal) {
@@ -147,6 +169,9 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     }
   };
   const documentListeners = new Map();
+  function dispatchDocument(name) {
+    for (const listener of documentListeners.get(name) || []) listener();
+  }
   const window = {
     crypto: { randomUUID: () => `entry-token-${String(++tokenCounter).padStart(8, '0')}` },
     addEventListener(name, listener) {
@@ -166,19 +191,42 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     fetch,
     encodeURIComponent,
     JSON,
-    Date,
+    Date: DateShim,
     Math,
     Object,
     String,
     Boolean,
-    setTimeout(listener) {
+    setTimeout(listener, delay = 0) {
       const id = nextTimer++;
       timers.set(id, listener);
+      dueAt.set(id, clock + delay);
       return id;
     },
-    clearTimeout(id) { timers.delete(id); }
+    clearTimeout(id) { timers.delete(id); dueAt.delete(id); }
   };
   vm.runInNewContext(script, context, { filename: 'ai-rerate.js' });
+
+  // run(ms) advances the virtual clock by ms, firing every timer that came
+  // due in that window (in due order), letting each callback schedule the
+  // next — the closest deterministic analogue of real elapsed time.
+  async function run(ms) {
+    const deadline = clock + ms;
+    while (true) {
+      let fireId = null;
+      let fireAt = Infinity;
+      for (const [id, at] of dueAt.entries()) {
+        if (at <= deadline && at < fireAt) { fireAt = at; fireId = id; }
+      }
+      if (fireId === null) break;
+      clock = Math.max(clock, fireAt);
+      const listener = timers.get(fireId);
+      timers.delete(fireId);
+      dueAt.delete(fireId);
+      if (listener) listener();
+      await flush();
+    }
+    clock = deadline;
+  }
 
   return {
     button,
@@ -187,10 +235,17 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     sources,
     fetchCalls,
     queueStatus(status) { fetchQueue.push({ kind: 'immediate', status }); },
+    queueFailure() { fetchQueue.push({ kind: 'failure' }); },
     deferStatus() {
       const deferred = { kind: 'deferred', resolve: null };
       fetchQueue.push(deferred);
       return deferred;
+    },
+    run,
+    setHidden() { document.visibilityState = 'hidden'; },
+    becomeVisible() {
+      document.visibilityState = 'visible';
+      dispatchDocument('visibilitychange');
     },
     dispatchWindow(name, event = {}) {
       for (const listener of windowListeners.get(name) || []) listener(event);
@@ -451,6 +506,148 @@ async function main() {
   assert.equal(drop.text('rerate-progress'), '공고 2/4 분석 중...', 'owned run progress must resume via status polling');
   assert.equal(drop.button.disabled, true, 'the run is still active — button stays disabled');
   assert.equal(drop.timerCount(), 1, 'polling must be scheduled');
+
+  // --- Review round 1: estimate survives the REAL server status sequence ---
+  // The server's mid-run statuses now re-anchor the same approximate wait, so
+  // a real press must show the estimate from click through the Stage-2 status,
+  // never reverting to a generic "analyzing" line. This replays the exact
+  // sequence the fixed server emits (opening estimate → prep progress →
+  // Stage-2 estimate status → stage-2 progress) and asserts the visible copy
+  // still carries the estimate after every step.
+  const liveStorage = new Storage();
+  const live = makePage({ storage: liveStorage });
+  live.click();
+  live.sources[0].emit('run-token', 'process-live-run-1');
+  live.sources[0].emit('status', estimateCopy);
+  live.sources[0].emit('progress', '공고 정보 확인 0/8...');
+  for (let i = 1; i <= 8; i++) {
+    live.sources[0].emit('progress', `공고 정보 확인 ${i}/8...`);
+  }
+  live.sources[0].emit('progress', '공고 문맥 확인 0/8...');
+  live.sources[0].emit('progress', '공고 문맥 확인 8/8...');
+  live.sources[0].emit('status', estimateCopy); // Stage-2 status re-anchors the estimate
+  live.sources[0].emit('progress', '공고 0/8 분석 중...');
+  live.sources[0].emit('progress', '공고 8/8 분석 중...');
+  live.sources[0].emit('done', '공고 8개를 모두 AI로 분석했어요.');
+  assert.ok(estimateRetained(live), 'estimate must remain visible through the full real status sequence');
+  assert.equal(live.location.reloads, 1);
+
+  // Estimate retention through error → poll recovery with the REAL server
+  // running status (the tracker now holds the estimate, not the old copy).
+  const recoverStorage = new Storage();
+  const recover = makePage({ storage: recoverStorage });
+  recover.click();
+  recover.sources[0].emit('run-token', 'process-recover-run-1');
+  recover.sources[0].emit('status', estimateCopy);
+  recover.queueStatus({ state: 'running', run_token: 'process-recover-run-1', owner_entry: recover.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 3/6 분석 중...' });
+  recover.sources[0].emit('error', {});
+  await flush();
+  assert.equal(recover.text('rerate-status'), estimateCopy, 'estimate must survive stream error + owned-run poll recovery');
+
+  // --- Review round 1: bounded status-only recovery for a silent open stream ---
+  // While the stream stays OPEN but stops delivering events (proxy stall,
+  // dropped middle), the client must check the status endpoint after a
+  // bounded silence window — without closing the healthy stream — and adopt
+  // the owned run's progress. Ownership/generation guards unchanged.
+  const silentStorage = new Storage();
+  const silent = makePage({ storage: silentStorage });
+  silent.click();
+  silent.sources[0].emit('run-token', 'process-silent-run-1');
+  silent.sources[0].emit('status', estimateCopy);
+  silent.queueStatus({ state: 'running', run_token: 'process-silent-run-1', owner_entry: silent.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 5/9 분석 중...' });
+  await silent.run(silenceWatchMs); // advance past the silence window with no events
+  assert.equal(silent.timerCount() >= 1, true, 'a recovery probe must be scheduled while the stream is silent');
+  const silentFetched = silent.fetchCalls.some((call) => call.url.indexOf('/api/rerate/status') !== -1);
+  assert.equal(silentFetched, true, 'a silent open stream must trigger a status check, not just wait');
+  assert.equal(silent.text('rerate-progress'), '공고 5/9 분석 중...', 'silent-stream recovery must adopt the owned run progress');
+  assert.equal(silent.button.disabled, true, 'the owned run keeps the button disabled during silent-stream recovery');
+  assert.equal(silent.sources[0].closed, false, 'the still-open stream must not be closed by the silence check');
+  // Terminal cleanup: done fires on the stream → transport stops, no timers.
+  silent.sources[0].emit('done', '공고 9개를 모두 AI로 분석했어요.');
+  assert.equal(silent.timerCount(), 0, 'terminal done must clear every recovery timer');
+  assert.equal(silent.location.reloads, 1);
+
+  // A hidden tab whose stream died silently: on return, the client re-adopts
+  // the owned run via one status probe (the stream may be dead but non-null).
+  const awayStorage = new Storage();
+  const away = makePage({ storage: awayStorage });
+  away.click();
+  away.sources[0].emit('run-token', 'process-away-run-1');
+  away.sources[0].emit('status', estimateCopy);
+  away.setHidden(); // tab hidden while the stream silently stalls
+  away.queueStatus({ state: 'running', run_token: 'process-away-run-1', owner_entry: away.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 2/5 분석 중...' });
+  away.becomeVisible();
+  await flush();
+  assert.equal(away.text('rerate-progress'), '공고 2/5 분석 중...', 'returning to a silently-stalled tab must re-adopt the owned run');
+  assert.equal(away.button.disabled, true);
+
+  // A transiently failing status fetch during recovery must keep retrying
+  // (bounded), not strand the page: connectivity returns → the poll resumes
+  // and the run completes without any user action.
+  const flakyStorage = new Storage();
+  const flaky = makePage({ storage: flakyStorage });
+  flaky.click();
+  flaky.sources[0].emit('run-token', 'process-flaky-run-1');
+  flaky.sources[0].emit('status', estimateCopy);
+  flaky.sources[0].emit('progress', '공고 1/3 분석 중...');
+  flaky.queueFailure(); // first recovery fetch fails (network down)
+  flaky.sources[0].emit('error', {});
+  await flush();
+  assert.equal(flaky.text('rerate-status'), estimateCopy, 'a failed recovery fetch must not strand dead copy');
+  assert.equal(flaky.button.disabled, true, 'a transient fetch failure must not re-enable the button (run still active server-side)');
+  assert.equal(flaky.timerCount(), 1, 'a retry must be scheduled after a failed status fetch');
+  flaky.queueStatus({ state: 'done', run_token: 'process-flaky-run-1', owner_entry: flaky.history.state.jobcronRerateEntry, outcome: 'changed', message: '공고 3개를 모두 AI로 분석했어요.' });
+  await flaky.run(retryDelayMs);
+  assert.equal(flaky.location.reloads, 1, 'connectivity return must complete the run end-to-end with no user action');
+
+  // Bounded exhaustion: repeated failed status reads end in an explicit
+  // unresolved state (page still owned, button re-enabled, honest copy),
+  // never a silent infinite retry loop.
+  const deadStorage = new Storage();
+  const dead = makePage({ storage: deadStorage });
+  dead.click();
+  dead.sources[0].emit('run-token', 'process-dead-run-1');
+  dead.sources[0].emit('status', estimateCopy);
+  for (let i = 0; i < maxStatusRetries + 2; i++) dead.queueFailure();
+  dead.sources[0].emit('error', {});
+  await flush();
+  for (let i = 0; i < maxStatusRetries; i++) await dead.run(retryDelayMs);
+  assert.equal(dead.timerCount(), 0, 'bounded retry must terminate, not loop forever');
+  assert.equal(dead.button.disabled, false, 'exhausted recovery must re-enable the button');
+  assert.match(dead.text('rerate-status'), /확인하지 못했어요/, 'exhausted recovery must leave an explicit unresolved message');
+
+  // A foreign running run discovered through silent-stream recovery is NOT
+  // adopted: no progress render, no poll loop, button stays usable.
+  const foreignSilentStorage = new Storage();
+  const foreignSilent = makePage({ storage: foreignSilentStorage });
+  foreignSilent.click();
+  foreignSilent.sources[0].emit('run-token', 'process-fsilent-run-1');
+  foreignSilent.sources[0].emit('status', estimateCopy);
+  foreignSilent.queueStatus({ state: 'running', run_token: 'process-fsilent-run-1', owner_entry: 'someone-else', status: estimateCopy, progress: '공고 1/9 분석 중...' });
+  await foreignSilent.run(silenceWatchMs);
+  assert.equal(foreignSilent.button.disabled, false, 'a foreign run must never disable this page');
+  assert.equal(foreignSilent.timerCount(), 0, 'a foreign run must not start a poll loop');
+
+  // --- Review round 1: Stage-2 initial numeric before first result ---
+  // The click placeholder must be numeric immediately: the client renders the
+  // server's honest 0/M the moment it arrives — before any provider call
+  // completes — so the counter never sits empty between click and first row.
+  const numericStorage = new Storage();
+  const numeric = makePage({ storage: numericStorage });
+  numeric.click();
+  numeric.sources[0].emit('run-token', 'process-numeric-run-1');
+  numeric.sources[0].emit('status', estimateCopy);
+  numeric.sources[0].emit('progress', '공고 정보 확인 0/6...');
+  for (let i = 1; i <= 6; i++) {
+    numeric.sources[0].emit('progress', `공고 정보 확인 ${i}/6...`);
+  }
+  numeric.sources[0].emit('status', estimateCopy);
+  numeric.sources[0].emit('progress', '공고 0/6 분석 중...');
+  assert.equal(numeric.text('rerate-progress'), '공고 0/6 분석 중...', 'the honest 0/M must render before any row completes');
+  assert.equal(numeric.button.disabled, true);
+  numeric.sources[0].emit('done', '공고 6개를 모두 AI로 분석했어요.');
+  assert.equal(numeric.location.reloads, 1);
+
 
   // A page shown WITHOUT a history return (e.g. reload while the owned run is
   // still active on the detached server side) must adopt the owned run.

@@ -12,12 +12,25 @@
   var statusController = null;
   var lifecycleGeneration = 0;
   var activeRunToken = '';
+  // Stream-silence watchdog + bounded recovery-retry state.
+  var silenceTimer = null;
+  var lastStreamEventAt = 0;
+  var statusFailures = 0;
   var noticeKey = 'jobcron:rerate-notice:' + surface;
   var handledKey = 'jobcron:rerate-handled:' + surface;
   var freshNotice = false;
-  var activeCopy = 'AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕';
-  var estimateCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
+  var activeCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
+  var estimateCopy = activeCopy;
   var completedAwayCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 반영했습니다.';
+  // Bounded status-only recovery knobs: while an OWNED stream stays open but
+  // silent longer than streamSilenceMs, one status probe checks whether the
+  // detached run advanced; failed recovery fetches retry up to
+  // maxStatusRetries times every statusRetryMs, then stop with an explicit
+  // unresolved message. Never a second EventSource (no second provider run).
+  var streamSilenceMs = 15000;
+  var statusRetryMs = 3000;
+  var maxStatusRetries = 20;
+  var unresolvedCopy = '진행 상태를 확인하지 못했어요. 잠시 후 페이지를 새로고침해 주세요.';
 
   function newEntryToken() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -129,6 +142,10 @@
       clearTimeout(pollTimer);
       pollTimer = null;
     }
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+      silenceTimer = null;
+    }
     if (statusController) {
       statusController.abort();
       statusController = null;
@@ -144,7 +161,31 @@
       eventSource.close();
       eventSource = null;
     }
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+      silenceTimer = null;
+    }
     return lifecycleGeneration;
+  }
+
+  // noteStreamEvent records stream liveness and re-arms the silence watchdog:
+  // while the OWNED stream keeps delivering, no status probe is spent.
+  function noteStreamEvent() {
+    lastStreamEventAt = Date.now();
+    if (silenceTimer) clearTimeout(silenceTimer);
+    if (!eventSource) return;
+    silenceTimer = setTimeout(checkSilentStream, streamSilenceMs);
+  }
+
+  // checkSilentStream is the bounded status-only recovery for a stream that
+  // stays OPEN but silent (proxy stall, dropped middle): one probe of the
+  // existing status endpoint — never a new EventSource, so a recovering
+  // client can never start a second provider run. The healthy stream is left
+  // open; the watchdog re-arms after the probe completes.
+  function checkSilentStream() {
+    silenceTimer = null;
+    if (!eventSource) return;
+    pollStatus(lifecycleGeneration, true);
   }
 
   function rememberAndReload(message, runToken, ownerEntry) {
@@ -182,18 +223,24 @@
     showStatus(notice.message);
   }
 
-  function pollStatus(generation) {
+  // pollStatus reads the existing status endpoint. In probe mode (silent
+  // stream check) it never touches the running UI beyond adopting the owned
+  // run's latest copy, and never cancels the still-open stream; in full mode
+  // it owns the recovery loop. Failed fetches retry up to maxStatusRetries
+  // (transient network loss), then stop with an explicit unresolved state —
+  // never an infinite loop, never a dead page.
+  function pollStatus(generation, probe) {
     if (!isCurrent(generation)) return;
-    if (pollTimer) {
+    if (pollTimer && !probe) {
       clearTimeout(pollTimer);
       pollTimer = null;
     }
-    if (statusController) {
+    if (statusController && !probe) {
       statusController.abort();
       statusController = null;
     }
     var controller = new AbortController();
-    statusController = controller;
+    if (!probe) statusController = controller;
     fetch('/api/rerate/status?surface=' + encodeURIComponent(surface), {
       headers: { 'Accept': 'application/json' },
       cache: 'no-store',
@@ -204,89 +251,130 @@
       return response.json();
     }).then(function (status) {
       if (!isCurrent(generation)) return;
-      if (statusController === controller) statusController = null;
+      if (!probe && statusController === controller) statusController = null;
       if (!status) return;
-
-      var handled = isHandled(status.run_token);
-      if (status.state === 'running') {
-        if (!ownsStatus(status)) {
-          setRunning(false);
-          clearStatus();
-          clearProgress();
-          return;
-        }
-        setRunning(true);
-        showStatus(status.status || activeCopy);
-        showProgress(status.progress || '공고 분석을 준비하는 중...');
+      statusFailures = 0;
+      if (probe && eventSource) {
+        // Silent-stream probe outcome: adopt the owned run's live copy. The
+        // watchdog re-arms ONLY for an owned active run — a foreign or
+        // terminal state terminates the silence timer (no polling another
+        // entry's run; a later live stream event re-arms on its own).
+        if (adoptStatus(status, generation)) noteStreamEvent();
+        return;
+      }
+      adoptStatus(status, generation);
+      if (status.state === 'running' && ownsStatus(status)) {
         pollTimer = setTimeout(function () {
           if (!isCurrent(generation)) return;
           pollTimer = null;
-          pollStatus(generation);
+          pollStatus(generation, false);
         }, 750);
-        return;
       }
-
-      setRunning(false);
-      clearProgress();
-      if (status.state === 'idle') {
-        clearStatus();
-        return;
-      }
-      if (!ownsStatus(status)) {
-        clearStatus();
-        return;
-      }
-      if (status.state === 'done') {
-        if (!handled) {
-          var message = status.outcome === 'changed' ? completedAwayCopy : status.message;
-          rememberAndReload(message || completedAwayCopy, status.run_token, status.owner_entry);
-          return;
-        }
-        // done+handled after the completion reload: keep the fresh notice this
-        // page just displayed (done+handled must not clobber it); otherwise the
-        // run is old news on an unrelated page — clear it.
-        if (!freshNotice) clearStatus();
-        return;
-      }
-      if (status.state === 'failed') {
-        if (handled) {
-          clearStatus();
-          return;
-        }
-        markHandled(status.run_token);
-        showStatus(status.message || 'AI 평가에 실패했어요.');
-        return;
-      }
-      clearStatus();
     }).catch(function (error) {
       if (!isCurrent(generation)) return;
-      if (statusController === controller) statusController = null;
+      if (!probe && statusController === controller) statusController = null;
       if (error && error.name === 'AbortError') return;
-      setRunning(false);
-      clearProgress();
-      showStatus('진행 상태를 다시 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
+      statusFailures++;
+      if (statusFailures >= maxStatusRetries) {
+        // Bounded exhaustion: stop retrying, state the unresolved outcome,
+        // and hand control back to the user — never claim completion.
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+        setRunning(false);
+        clearProgress();
+        showStatus(unresolvedCopy);
+        return;
+      }
+      if (probe && eventSource) {
+        noteStreamEvent(); // stream still open: re-arm the watchdog
+        return;
+      }
+      setRunning(true);
+      showStatus(estimateCopy);
+      pollTimer = setTimeout(function () {
+        if (!isCurrent(generation)) return;
+        pollTimer = null;
+        pollStatus(generation, false);
+      }, statusRetryMs);
     });
+  }
+
+  // adoptStatus applies one status snapshot to the page under the existing
+  // ownership/handled rules — shared by the recovery poll and the probe. It
+  // returns true only when it adopted an OWNED, still-running run.
+  function adoptStatus(status, generation) {
+    var handled = isHandled(status.run_token);
+    if (status.state === 'running') {
+      if (!ownsStatus(status)) {
+        setRunning(false);
+        clearStatus();
+        clearProgress();
+        return false;
+      }
+      setRunning(true);
+      showStatus(status.status || estimateCopy);
+      showProgress(status.progress || '공고 분석을 준비하는 중...');
+      return true;
+    }
+
+    setRunning(false);
+    clearProgress();
+    if (status.state === 'idle') {
+      clearStatus();
+      return;
+    }
+    if (!ownsStatus(status)) {
+      clearStatus();
+      return;
+    }
+    if (status.state === 'done') {
+      if (!handled) {
+        var message = status.outcome === 'changed' ? completedAwayCopy : status.message;
+        rememberAndReload(message || completedAwayCopy, status.run_token, status.owner_entry);
+        return;
+      }
+      // done+handled after the completion reload: keep the fresh notice this
+      // page just displayed (done+handled must not clobber it); otherwise the
+      // run is old news on an unrelated page — clear it.
+      if (!freshNotice) clearStatus();
+      return;
+    }
+    if (status.state === 'failed') {
+      if (handled) {
+        clearStatus();
+        return;
+      }
+      markHandled(status.run_token);
+      showStatus(status.message || 'AI 평가에 실패했어요.');
+      return;
+    }
+    clearStatus();
   }
 
   btn.addEventListener('click', function () {
     var generation = stopTransport();
     activeRunToken = '';
+    statusFailures = 0;
     log.textContent = '';
     setRunning(true);
     showStatus(estimateCopy);
     var source = new EventSource('/api/rerate?surface=' + encodeURIComponent(surface) +
       '&entry=' + encodeURIComponent(entryToken));
     eventSource = source;
+    noteStreamEvent();
     source.addEventListener('run-token', function (event) {
       if (!isCurrent(generation)) return;
+      noteStreamEvent();
       activeRunToken = event.data || '';
     });
     source.addEventListener('status', function (event) {
       if (!isCurrent(generation)) return;
+      noteStreamEvent();
       showStatus(event.data);
     });
     source.addEventListener('progress', function (event) {
       if (!isCurrent(generation)) return;
+      noteStreamEvent();
       showProgress(event.data);
     });
     source.addEventListener('done', function (event) {
@@ -320,19 +408,22 @@
       // reconnect from ever issuing a SECOND run — and adopt the active run
       // through the status endpoint instead.
       var pollGeneration = stopStream();
-      pollStatus(pollGeneration);
+      pollStatus(pollGeneration, false);
     });
   });
 
   window.addEventListener('pagehide', stopTransport);
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') return;
-    // Returning to a tab whose stream was closed while hidden: re-adopt the
-    // active owned run (if any) through the status endpoint. A single probe
-    // also covers the page-reload-mid-run case on pageshow.
-    if (!eventSource) {
-      pollStatus(stopTransport());
+    // Returning to a visible tab: probe once whether the owned run advanced
+    // while hidden — the stream may be dead-but-non-null (silently dropped),
+    // so recovery must not depend on eventSource being null.
+    if (eventSource) {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      pollStatus(lifecycleGeneration, true);
+      return;
     }
+    pollStatus(stopTransport());
   });
   window.addEventListener('pageshow', function (event) {
     showStoredNotice();
