@@ -7,6 +7,7 @@ const vm = require('node:vm');
 
 const script = fs.readFileSync(path.join(__dirname, '..', 'ai-rerate.js'), 'utf8');
 const activeCopy = 'AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕';
+const estimateCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
 const completedCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 반영했습니다.';
 
 class Storage {
@@ -139,8 +140,13 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     visibilityState: 'visible',
     getElementById(id) { return registry.get(id) || null; },
     createElement(tagName) { return new Element(tagName, registry); },
-    createTextNode(text) { return { textContent: String(text), parentNode: null }; }
+    createTextNode(text) { return { textContent: String(text), parentNode: null }; },
+    addEventListener(name, listener) {
+      if (!documentListeners.has(name)) documentListeners.set(name, []);
+      documentListeners.get(name).push(listener);
+    }
   };
+  const documentListeners = new Map();
   const window = {
     crypto: { randomUUID: () => `entry-token-${String(++tokenCounter).padStart(8, '0')}` },
     addEventListener(name, listener) {
@@ -417,6 +423,73 @@ async function main() {
   visible.sources[0].emit('done', '공고 2개를 모두 AI로 분석했어요.');
   assert.equal(visible.location.reloads, 1);
   assert.equal(visibleStorage.getItem('jobcron:rerate-handled:archive'), 'process-visible-run-1');
+
+  // --- Progress copy + transport recovery (t_942f06ba) ---
+
+  // The click-time copy must carry the calm 5–10 minute estimate so the wait
+  // is explained the moment the button is pressed.
+  const estimateStorage = new Storage();
+  const estimate = makePage({ storage: estimateStorage });
+  assert.match(estimate.button.textContent || 'AI 평가', /^AI 평가/); // element sanity
+  estimate.click();
+  assert.equal(estimate.text('rerate-status'), estimateCopy);
+
+  // A stream error on a visible tab must not strand the page on dead copy:
+  // the client closes the stream (no EventSource auto-reconnect → no second
+  // provider run) and recovers through the status endpoint instead.
+  const dropStorage = new Storage();
+  const drop = makePage({ storage: dropStorage });
+  drop.click();
+  drop.sources[0].emit('run-token', 'process-drop-run-1');
+  drop.sources[0].emit('status', estimateCopy);
+  drop.sources[0].emit('progress', '공고 1/4 분석 중...');
+  drop.queueStatus({ state: 'running', run_token: 'process-drop-run-1', owner_entry: drop.history.state.jobcronRerateEntry, status: estimateCopy, progress: '공고 2/4 분석 중...' });
+  drop.sources[0].emit('error', {});
+  assert.equal(drop.sources[0].closed, true, 'stream must close on error (no auto-reconnect into a second run)');
+  await flush();
+  assert.equal(drop.text('rerate-status'), estimateCopy);
+  assert.equal(drop.text('rerate-progress'), '공고 2/4 분석 중...', 'owned run progress must resume via status polling');
+  assert.equal(drop.button.disabled, true, 'the run is still active — button stays disabled');
+  assert.equal(drop.timerCount(), 1, 'polling must be scheduled');
+
+  // A page shown WITHOUT a history return (e.g. reload while the owned run is
+  // still active on the detached server side) must adopt the owned run.
+  const reloadStorage = new Storage();
+  const reloadPage = makePage({ storage: reloadStorage });
+  const reloadEntry = reloadPage.history.state.jobcronRerateEntry;
+  reloadPage.queueStatus({ state: 'running', run_token: 'process-reload-run-1', owner_entry: reloadEntry, status: estimateCopy, progress: '공고 3/9 분석 중...' });
+  reloadPage.dispatchWindow('pageshow', { persisted: false });
+  await flush();
+  assert.equal(reloadPage.button.disabled, true);
+  assert.equal(reloadPage.text('rerate-progress'), '공고 3/9 분석 중...');
+
+  // A non-owner running run on a fresh page must not be adopted.
+  const foreignStorage = new Storage();
+  const foreign = makePage({ storage: foreignStorage, navigationType: 'reload' });
+  foreign.queueStatus({ state: 'running', run_token: 'process-foreign-run-1', owner_entry: 'someone-else-entry', status: estimateCopy, progress: '공고 1/9 분석 중...' });
+  foreign.dispatchWindow('pageshow', { persisted: false });
+  await flush();
+  assert.equal(foreign.button.disabled, false);
+  assert.equal(foreign.has('rerate-progress'), false);
+
+  // The completion notice shown right after the completion reload must SURVIVE
+  // the pageshow status poll: done+handled must not clobber the fresh notice.
+  const noticeStorage = new Storage();
+  const noticeEntry = 'entry-token-notice001';
+  noticeStorage.setItem('jobcron:rerate-notice:archive', JSON.stringify({
+    entry_token: noticeEntry,
+    run_token: 'process-notice-run-1',
+    message: completedCopy
+  }));
+  noticeStorage.setItem('jobcron:rerate-handled:archive', 'process-notice-run-1');
+  const noticeState = {};
+  noticeState.jobcronRerateEntry = noticeEntry;
+  const noticePage = makePage({ storage: noticeStorage, state: noticeState, navigationType: 'reload' });
+  noticePage.queueStatus({ state: 'done', run_token: 'process-notice-run-1', owner_entry: noticeEntry, outcome: 'changed', message: completedCopy });
+  noticePage.dispatchWindow('pageshow', { persisted: false });
+  await flush();
+  assert.equal(noticePage.text('rerate-status'), completedCopy, 'fresh completion notice must survive the done+handled poll');
+  assert.equal(noticePage.has('rerate-progress'), false);
 }
 
 main().catch((error) => {

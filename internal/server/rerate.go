@@ -518,6 +518,13 @@ func rerateDoneMessage(summary rerateSummary) string {
 // cap, so a later press resumes on the still-uncached rows. It returns the
 // cumulative analyzed count (N — visible rows now cached against the current
 // goal) and the total visible rows (M) for the progress copy.
+//
+// rerateActiveStatus is the opening, phase-neutral status of a 재평가 press.
+// The wait is dominated by paced provider calls (1 req/s starts), so a surface
+// of tens of listings takes minutes — the user is told that up front, as a
+// rough UX estimate ("약", "정도", "수 있어요") and never a promised ETA.
+const rerateActiveStatus = "AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요."
+
 func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userID int64, runtime *AIRuntime) (summary rerateSummary, err error) {
 	if runtime == nil || runtime.UserID != userID {
 		return summary, fmt.Errorf("server: rerate requires matching AI runtime")
@@ -537,13 +544,17 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	if err != nil {
 		return summary, err
 	}
+	// The wait is minutes long and provider-paced; state that up front so the
+	// user knows roughly what they signed up for the moment the press starts.
+	emit("status", rerateActiveStatus)
 	// Stage 1A must run before contextual validation and the first score merge:
 	// an extraction can correct a conservative career/education exclusion and
 	// return the posting to the visible set selected for Stage 2. Eligibility
 	// and Stage 2 have independent cache identities, so only extractStage1's own
 	// exact eligibility/content cache check can make this call free.
-	for _, p := range candidates {
+	for i, p := range candidates {
 		s.extractStage1(ctx, p.ID, p, now, func() *stage1Funding { return stage1 })
+		emit("progress", fmt.Sprintf("공고 정보 확인 %d/%d...", i+1, len(candidates)))
 	}
 	stage1B, err := s.stage1BPostings(ctx, candidates)
 	if err != nil {

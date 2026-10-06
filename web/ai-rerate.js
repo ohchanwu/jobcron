@@ -14,7 +14,9 @@
   var activeRunToken = '';
   var noticeKey = 'jobcron:rerate-notice:' + surface;
   var handledKey = 'jobcron:rerate-handled:' + surface;
+  var freshNotice = false;
   var activeCopy = 'AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕';
+  var estimateCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
   var completedAwayCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 반영했습니다.';
 
   function newEntryToken() {
@@ -134,6 +136,17 @@
     return lifecycleGeneration;
   }
 
+  // stopStream closes only the SSE stream, keeping any status polling alive —
+  // used when the stream errors while the detached run may still be active.
+  function stopStream() {
+    lifecycleGeneration++;
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    return lifecycleGeneration;
+  }
+
   function rememberAndReload(message, runToken, ownerEntry) {
     if (!runToken || ownerEntry !== entryToken) return;
     markHandled(runToken);
@@ -165,11 +178,20 @@
       return;
     }
     sessionStorage.removeItem(noticeKey);
+    freshNotice = true;
     showStatus(notice.message);
   }
 
   function pollStatus(generation) {
     if (!isCurrent(generation)) return;
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    if (statusController) {
+      statusController.abort();
+      statusController = null;
+    }
     var controller = new AbortController();
     statusController = controller;
     fetch('/api/rerate/status?surface=' + encodeURIComponent(surface), {
@@ -220,7 +242,10 @@
           rememberAndReload(message || completedAwayCopy, status.run_token, status.owner_entry);
           return;
         }
-        if (handled) clearStatus();
+        // done+handled after the completion reload: keep the fresh notice this
+        // page just displayed (done+handled must not clobber it); otherwise the
+        // run is old news on an unrelated page — clear it.
+        if (!freshNotice) clearStatus();
         return;
       }
       if (status.state === 'failed') {
@@ -243,18 +268,12 @@
     });
   }
 
-  function isHistoryReturn(event) {
-    if (event && event.persisted) return true;
-    var entries = performance.getEntriesByType ? performance.getEntriesByType('navigation') : [];
-    return entries.length > 0 && entries[0].type === 'back_forward';
-  }
-
   btn.addEventListener('click', function () {
     var generation = stopTransport();
     activeRunToken = '';
     log.textContent = '';
     setRunning(true);
-    showStatus(activeCopy);
+    showStatus(estimateCopy);
     var source = new EventSource('/api/rerate?surface=' + encodeURIComponent(surface) +
       '&entry=' + encodeURIComponent(entryToken));
     eventSource = source;
@@ -289,18 +308,35 @@
     });
     source.addEventListener('error', function () {
       if (!isCurrent(generation)) return;
-      if (document.visibilityState === 'hidden') return;
-      stopTransport();
-      setRunning(false);
-      clearProgress();
-      showStatus('연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
+      // Hidden tab: EventSource errors fire spuriously while backgrounded.
+      // The stream is closed (no auto-reconnect → no second run); recovery
+      // resumes via visibilitychange when the user returns.
+      if (document.visibilityState === 'hidden') {
+        stopStream();
+        return;
+      }
+      // The run may still be active server-side (detached, S8). Close the
+      // stream — closing prevents the browser's automatic EventSource
+      // reconnect from ever issuing a SECOND run — and adopt the active run
+      // through the status endpoint instead.
+      var pollGeneration = stopStream();
+      pollStatus(pollGeneration);
     });
   });
 
   window.addEventListener('pagehide', stopTransport);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    // Returning to a tab whose stream was closed while hidden: re-adopt the
+    // active owned run (if any) through the status endpoint. A single probe
+    // also covers the page-reload-mid-run case on pageshow.
+    if (!eventSource) {
+      pollStatus(stopTransport());
+    }
+  });
   window.addEventListener('pageshow', function (event) {
     showStoredNotice();
-    if (isHistoryReturn(event)) pollStatus(stopTransport());
+    pollStatus(stopTransport());
   });
   showStoredNotice();
 })();
