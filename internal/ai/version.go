@@ -9,7 +9,7 @@ import (
 const (
 	extractionContractRevision = "1"
 	DealbreakerPromptVersion   = "2"
-	ScorePromptVersion         = "1"
+	ScorePromptVersion         = "2"
 )
 
 func taskVersion(parts ...string) string {
@@ -25,7 +25,7 @@ func DealbreakerVersion(provider, model string) string {
 	return taskVersion(provider, model, "dealbreaker", DealbreakerPromptVersion)
 }
 
-// ScoreVersion preserves the original Stage-2 cache identity.
+// ScoreVersion keys the Stage-2 contract independently of extraction/dealbreakers.
 func ScoreVersion(provider, model string) string {
 	return taskVersion(provider, model, ScorePromptVersion)
 }

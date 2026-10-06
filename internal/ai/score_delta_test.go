@@ -29,8 +29,8 @@ func TestParseScoreDeltaValid(t *testing.T) {
 	}
 }
 
-func TestParseScoreDeltaDropsBadItems(t *testing.T) {
-	t.Run("unknown kind dropped, rest kept", func(t *testing.T) {
+func TestParseScoreDeltaKeepsProposalCount(t *testing.T) {
+	t.Run("unknown kind retained for gate rejection", func(t *testing.T) {
 		raw := `{"items":[
 			{"signal":"x","kind":"sideeffect","delta":99,"quote":"무시"},
 			{"signal":"y","kind":"presence","delta":5,"quote":"좋은 회사 문화"}
@@ -39,15 +39,15 @@ func TestParseScoreDeltaDropsBadItems(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		if len(items) != 1 || items[0].Kind != KindPresence {
-			t.Fatalf("expected only the presence item, got %+v", items)
+		if len(items) != 2 || items[1].Kind != KindPresence {
+			t.Fatalf("expected both proposals before gating, got %+v", items)
 		}
 	})
 
-	t.Run("zero delta dropped", func(t *testing.T) {
+	t.Run("zero delta retained for gate rejection", func(t *testing.T) {
 		items, _ := parseScoreDelta([]byte(`{"items":[{"signal":"x","kind":"presence","delta":0,"quote":"아무거나"}]}`))
-		if len(items) != 0 {
-			t.Fatalf("a zero-delta item must be dropped, got %+v", items)
+		if len(items) != 1 || items[0].Delta != 0 {
+			t.Fatalf("a zero-delta proposal must retain provenance, got %+v", items)
 		}
 	})
 
@@ -143,7 +143,7 @@ func TestGateDeltaPresence(t *testing.T) {
 	sent := "제목: 신입 백엔드\n회사: 가나다\n\n서버 개발자를 찾습니다. 재택근무 가능하고 좋은 회사 문화를 갖췄습니다."
 
 	t.Run("real quote survives", func(t *testing.T) {
-		raw := []RawDeltaItem{{Signal: "백엔드", Kind: KindPresence, Delta: 6, Quote: "서버 개발자를 찾습니다"}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "백엔드", Kind: KindPresence, Delta: 6, Quote: "서버 개발자를 찾습니다"}}
 		d := GateDelta(raw, sent, sent)
 		if len(d.Items) != 1 || d.NetDelta != 6 {
 			t.Fatalf("expected one survivor netting 6, got %+v", d)
@@ -154,7 +154,7 @@ func TestGateDeltaPresence(t *testing.T) {
 	})
 
 	t.Run("absent quote dropped", func(t *testing.T) {
-		raw := []RawDeltaItem{{Signal: "x", Kind: KindPresence, Delta: 6, Quote: "주 4일 근무 보장"}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "x", Kind: KindPresence, Delta: 6, Quote: "주 4일 근무 보장"}}
 		d := GateDelta(raw, sent, sent)
 		if len(d.Items) != 0 || d.NetDelta != 0 {
 			t.Fatalf("a quote not in the text must be dropped, got %+v", d)
@@ -163,7 +163,7 @@ func TestGateDeltaPresence(t *testing.T) {
 
 	t.Run("below char floor dropped", func(t *testing.T) {
 		// "재택" is in the text but only 2 chars — below the 6-rune floor.
-		raw := []RawDeltaItem{{Signal: "x", Kind: KindPresence, Delta: 6, Quote: "재택"}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "x", Kind: KindPresence, Delta: 6, Quote: "재택"}}
 		if d := GateDelta(raw, sent, sent); len(d.Items) != 0 {
 			t.Fatalf("quote below char floor must be dropped, got %+v", d)
 		}
@@ -172,7 +172,7 @@ func TestGateDeltaPresence(t *testing.T) {
 	t.Run("below token floor dropped", func(t *testing.T) {
 		// A single long token clears the char floor but not the ≥2-token floor.
 		s := "백엔드개발자포지션입니다"
-		raw := []RawDeltaItem{{Signal: "x", Kind: KindPresence, Delta: 6, Quote: "백엔드개발자포지션입니다"}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "x", Kind: KindPresence, Delta: 6, Quote: "백엔드개발자포지션입니다"}}
 		if d := GateDelta(raw, s, s); len(d.Items) != 0 {
 			t.Fatalf("single-token quote must be dropped, got %+v", d)
 		}
@@ -180,7 +180,7 @@ func TestGateDeltaPresence(t *testing.T) {
 
 	t.Run("injected common word dropped", func(t *testing.T) {
 		// The classic injection foothold: a filler word that's trivially present.
-		raw := []RawDeltaItem{{Signal: "x", Kind: KindPresence, Delta: 50, Quote: "및"}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "x", Kind: KindPresence, Delta: 50, Quote: "및"}}
 		if d := GateDelta(raw, sent, sent); len(d.Items) != 0 {
 			t.Fatalf("a filler word must not satisfy the gate, got %+v", d)
 		}
@@ -191,7 +191,7 @@ func TestGateDeltaPresence(t *testing.T) {
 		// lives only past the truncation point must not be honored.
 		truncated := "제목: 신입 백엔드\n회사: 가나다"
 		full := truncated + "\n\n주 4일 근무를 보장합니다"
-		raw := []RawDeltaItem{{Signal: "x", Kind: KindPresence, Delta: 8, Quote: "주 4일 근무를 보장합니다"}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "x", Kind: KindPresence, Delta: 8, Quote: "주 4일 근무를 보장합니다"}}
 		if d := GateDelta(raw, truncated, full); len(d.Items) != 0 {
 			t.Fatalf("a quote only in the untruncated tail must be dropped, got %+v", d)
 		}
@@ -202,19 +202,19 @@ func TestGateDeltaAbsence(t *testing.T) {
 	full := "제목: 백엔드 개발자\n\n온사이트 근무입니다. 주말 근무는 없습니다."
 
 	t.Run("all forms absent → penalty survives with code-verified evidence", func(t *testing.T) {
-		raw := []RawDeltaItem{{Signal: "재택 불가", Kind: KindAbsence, Delta: -5, Forms: []string{"재택", "원격", "remote"}}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "재택 불가", Kind: KindAbsence, Delta: -5, Forms: []string{"재택", "원격", "remote"}}}
 		d := GateDelta(raw, full, full)
 		if len(d.Items) != 1 || d.NetDelta != -5 {
 			t.Fatalf("expected one absence penalty netting -5, got %+v", d)
 		}
-		want := "'재택/원격/remote' 등 관련 언급 없음 (코드 확인)"
+		want := "'remote/원격/재택' 등 관련 언급 없음 (코드 확인)"
 		if d.Items[0].Evidence != want {
 			t.Fatalf("evidence = %q, want %q", d.Items[0].Evidence, want)
 		}
 	})
 
 	t.Run("one present form drops the whole penalty (fail-safe)", func(t *testing.T) {
-		raw := []RawDeltaItem{{Signal: "근무 형태", Kind: KindAbsence, Delta: -5, Forms: []string{"재택", "온사이트"}}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "근무 형태", Kind: KindAbsence, Delta: -5, Forms: []string{"재택", "온사이트"}}}
 		if d := GateDelta(raw, full, full); len(d.Items) != 0 {
 			t.Fatalf("a present surface form must drop the penalty, got %+v", d)
 		}
@@ -228,7 +228,7 @@ func TestGateDeltaAbsence(t *testing.T) {
 		// match the compound "재택근무", the documented 개발/개발자 tradeoff.)
 		sentTrunc := "제목: 백엔드 개발자"
 		full := sentTrunc + "\n\n재택 근무 가능합니다"
-		raw := []RawDeltaItem{{Signal: "재택 불가", Kind: KindAbsence, Delta: -6, Forms: []string{"재택"}}}
+		raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "재택 불가", Kind: KindAbsence, Delta: -6, Forms: []string{"재택"}}}
 		if d := GateDelta(raw, sentTrunc, full); len(d.Items) != 0 {
 			t.Fatalf("a form present past truncation must not read as absent, got %+v", d)
 		}
@@ -236,7 +236,7 @@ func TestGateDeltaAbsence(t *testing.T) {
 
 	t.Run("empty / blank forms dropped", func(t *testing.T) {
 		for _, forms := range [][]string{nil, {}, {"  "}, {"!!!"}} {
-			raw := []RawDeltaItem{{Signal: "x", Kind: KindAbsence, Delta: -5, Forms: forms}}
+			raw := []RawDeltaItem{{MatchedGoal: "업무", Signal: "x", Kind: KindAbsence, Delta: -5, Forms: forms}}
 			if d := GateDelta(raw, full, full); len(d.Items) != 0 {
 				t.Fatalf("unconfirmable forms %v must drop the penalty, got %+v", forms, d)
 			}
@@ -247,9 +247,9 @@ func TestGateDeltaAbsence(t *testing.T) {
 func TestGateDeltaNetsPositivesAndNegatives(t *testing.T) {
 	full := "제목: 백엔드\n\n서버 개발자를 찾습니다. 온사이트 근무."
 	raw := []RawDeltaItem{
-		{Signal: "백엔드", Kind: KindPresence, Delta: 6, Quote: "서버 개발자를 찾습니다"},
-		{Signal: "재택 불가", Kind: KindAbsence, Delta: -4, Forms: []string{"재택", "원격"}},
-		{Signal: "헛소리", Kind: KindPresence, Delta: 9, Quote: "있지도 않은 문구"}, // dropped: not in text
+		{MatchedGoal: "업무", Signal: "백엔드", Kind: KindPresence, Delta: 6, Quote: "서버 개발자를 찾습니다"},
+		{MatchedGoal: "업무", Signal: "재택 불가", Kind: KindAbsence, Delta: -4, Forms: []string{"재택", "원격"}},
+		{MatchedGoal: "업무", Signal: "헛소리", Kind: KindPresence, Delta: 9, Quote: "있지도 않은 문구"}, // dropped: not in text
 	}
 	d := GateDelta(raw, full, full)
 	if len(d.Items) != 2 {

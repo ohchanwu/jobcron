@@ -434,7 +434,7 @@ func TestAccountDeleteWaitsForRerateUsageDebit(t *testing.T) {
 		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
 			close(providerStarted)
 			<-releaseProvider
-			return []ai.RawDeltaItem{{Signal: "백엔드", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발"}},
+			return []ai.RawDeltaItem{{Signal: "백엔드", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발자를 찾습니다", MatchedGoal: "백엔드 서버 개발"}},
 				ai.Usage{InputTokens: 5, OutputTokens: 1}, nil
 		},
 	}

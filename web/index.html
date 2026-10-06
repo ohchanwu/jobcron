@@ -95,6 +95,7 @@
               {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
             </div>
             {{template "scoreChips" .Breakdown}}
+            {{template "aiOutcome" .AIOutcome}}
           </div>
           <div class="posting-actions">
             <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"
@@ -138,6 +139,7 @@
                 {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
               </div>
               {{template "exclusion-reasons" .ExclusionReasons}}
+              {{if ge .Total 0}}{{template "scoreChips" .Breakdown}}{{template "aiOutcome" .AIOutcome}}{{end}}
             </div>
             <div class="posting-actions">
               <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"

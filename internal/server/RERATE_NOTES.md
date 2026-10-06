@@ -1,42 +1,44 @@
 # Re-rate (재평가) cache semantics
 
-Why a listing can be *analyzed* yet show no `AI 분석` card, and what a repeat
-재평가 press does — and does not — re-spend on. This trips people up because two
-opposite states look identical on the page.
+Stage-2 outcomes now preserve the difference between a genuine empty response,
+unverified proposals, and a failed call. This document describes the locally
+implemented contract; candidate review and any production rollout are separate.
 
-## The two reasons a listing shows no AI 분석 card
+## Rated and genuine no-signal results are cached successes
 
-A visible, non-dealbroken row carries no `AI 분석` chip in one of two states. They
-render identically but behave oppositely on a repeat press.
+At least one accepted item is **rated**, including partial acceptance and a
+nonempty result whose positive/negative items net to zero. It retains evidence
+and a signed AI chip. A structurally valid explicit empty `items` array (or the
+supported bare empty array) is **no signal**. It renders the grey
+`AI 분석 완료 · 추가로 반영할 내용 없음` card, not a fabricated scored LineItem.
 
-### A. Analyzed, but empty — cached, never re-analyzed (under the same goal)
+`UpsertAIResult` commits the successful `ai_scores` row and its provenance in
+`ai_score_outcomes` atomically. Only committed success contributes to fresh N.
+Both successes are cache hits on the next press and spend no tokens under the
+same identity. A fresh genuine empty result takes precedence over old scored
+evidence. Neither card expresses a negative judgment of the applicant.
 
-The Stage-2 `ScoreDelta` provider call **succeeded**, but the citation gate
-(`ai.GateDelta`) stripped every signal — either the model returned no signals, or
-none of its quotes survived presence/absence verification. `GateDelta` returns a
-real, *empty* `Delta` (`Items: []`, `NetDelta: 0`), not an error.
+## Rejected proposals are not an empty success
 
-`rerateOne` (`rerate.go`) stores this **unconditionally** — there is no "skip if
-empty" guard. `UpsertAIScore` (`internal/storage/ai_scores.go`) writes a row with
-`items_json = "[]"`, `net_delta = 0`.
+Nonempty responses whose proposals all fail item validation, citation checks,
+or canonical evidence grouping are **rejected**, not genuine no signal.
+The parser preserves proposed-item provenance instead of turning invalid arrays
+into a valid empty response. Malformed JSON and missing/wrong-type `items` are
+parse failures. Partial acceptance still succeeds.
 
-Consequences:
+Rejected work writes one bounded user/posting/goal/ScoreVersion status containing
+only state, proposed/accepted counts and time. It writes no successful score row
+and adds nothing to fresh N. The amber `AI 분석 · 근거를 확인하지 못했어요` card
+explains that no NEW adjustment was applied. A prior supported score may remain
+faded as `이전 설정 기준`, alongside the current rejection; it does not count as fresh.
+Legacy empty rows remain unknown and are never backfilled with guessed provenance.
 
-- **No card.** `scoring.Score` appends the `AI 분석` line only when
-  `len(delta.Items) > 0` — the §c "no empty chips" rule (`internal/scoring/engine.go`).
-  An empty delta renders nothing.
-- **Counted as analyzed.** `buildRerateInfo` computes the `AI 분석 N/M` indicator's
-  N from `AIScoresByPostingID`, keyed on **row presence, not chip presence**. An
-  empty-items row is present, so it is inside N.
-- **Never re-analyzed on a repeat press.** `rerateOne` checks the Stage-2 cache
-  *first*; `AIScore` returns `ok=true` for the empty row (it reports a miss only on
-  `sql.ErrNoRows`), so `rerateOne` returns `(cached: true, called: false)` and
-  never calls the provider again.
+A later deliberate manual rerate may retry a rejected row once per run, within
+the existing shared cap, pacing and token budgets. Automatic scrape/scheduled
+Stage-2 callers skip known same-identity rejections. Reload, polling and reconnect
+never initiate a paid retry. A budget skip retains the earlier explanation.
 
-An empty result is therefore **permanent under the same configuration** — the
-system considers it done and has nothing more to say.
-
-### B. Failed or never reached — no row, retried next press
+## Failed or never reached — no successful cache row
 
 The analysis did **not** complete: a provider error (timeout, 5xx, 429/529
 overload, malformed JSON that fails parsing), a failed cache write, OR the listing
@@ -44,19 +46,21 @@ was never reached this press because the user's per-call cap
 (`AIRuntime.PerCallCap`) or the
 token budget halted first.
 
-None of these write an `ai_scores` row (`rerateOne` returns before the upsert).
+None writes a successful `ai_scores` row. A definite provider/parse failure may
+persist a bounded failed status; never-attempted/budget-skipped work does not
+manufacture an outcome. A failed outcome write is not counted as analysis.
 Consequences:
 
 - **Not counted in N** (no row).
 - **Retried on the next press** — the cache check misses, so control falls through
   to the spend path, subject to that press's own cap/budget.
 
-This is what makes a second 재평가 press *advance* the counter: it picks up exactly
-the Case-B rows. Intermittent `ScoreDelta` failures (seen live against real
-providers) land here and recover on a later press.
+This is what makes a second 재평가 press *advance* the counter: it picks up missing
+successes, including known rejections eligible for a deliberate retry. Intermittent
+`ScoreDelta` failures can recover on a later press.
 
-**Provider errors are no longer silent.** A `ScoreDelta` error now propagates out
-of `rerateOne` (it returns `(false, err)`, not a swallowed `false`). `rateStage2`
+**Provider errors are not silent.** A `ScoreDelta` error propagates out
+of `rerateOne`. `rateStage2`
 keeps the first such error and `runRerate` surfaces it: if **every** attempted row
 failed (`analyzed == 0`), the SSE terminal is a calm, classified `failed` event —
 `providerFailureMessage` maps a 401/403 to "AI 키를 확인해주세요", a 400/404 to
@@ -66,17 +70,20 @@ A *partial* failure still reloads (the rows that succeeded render) but emits a
 status note first. The cache behavior above is unchanged: a failed row writes no
 `ai_scores` row and is retried on the next press.
 
-## The N/M indicator is the signal that separates them
+## Counts and progress
 
-On the page, Case A and Case B both show no card. The `AI 분석 N/M` indicator is
-the only thing that tells them apart: Case A is **inside** N, Case B is not. When
-N reaches M, every visible listing has been successfully analyzed (some just had
-nothing to say) and further presses re-spend nothing. This is the whole reason the
-indicator counts the cache instead of the chips.
+Fresh N counts current-version rated and genuine no-signal successes, not chips,
+calls, old-version rows, rejections or failures. M is the same eligible selected
+surface throughout the run. Processing progress can advance on failure/rejection;
+terminal copy separately reports processed, successfully analyzed, no-signal and
+rejected counts, including when contextual-validation warnings also need display.
+The inherited numeric progress, coffee-break copy, single observation owner and
+interruption recovery remain in place. Hard exclusions never acquire a new AI card.
 
 ## When IS a cached-empty listing re-analyzed?
 
-The Stage-2 cache key is `(posting_id, ai_input_hash, ai_version)`. An
+The PostgreSQL Stage-2 cache/outcome key is `(user_id, posting_id, ai_input_hash, ScoreVersion)`.
+Legacy SQLite's successful-score cache is sole-user; new outcomes enforce user 1. An
 empty-cached listing becomes a fresh miss — and is re-analyzed — only when one
 of these rotates:
 
@@ -84,21 +91,22 @@ of these rotates:
   `long_term_goals`). `profile.AIInputHash` hashes only the goal text
   (NFC-normalized), so a goal edit rotates `ai_input_hash`. Weight / MinScore
   tweaks do **not** (by design — they must not churn the AI cache).
-- **You switch provider or model.** `ai_version = ai.AIVersion(provider, model)`
-  rotates.
+- **You switch provider/model or the Stage-2 contract changes.** `ScoreVersion`
+  rotates. Stage-2 prompt version 2 does not rotate extraction/dealbreaker identities.
 
 Practical upshot: if the AI is *wrongly* finding nothing on a batch of listings,
 re-pressing won't help — reword your goals (give the model different things to
-match against) or switch models. A repeat press only recovers failed / never-run
-listings.
+match against) or switch models. A repeat press recovers rejected, failed or
+never-run listings, not genuine empty or rated successes. Rendering and startup
+never call the provider; upgrading the contract can cause bounded fresh cache
+misses and spend on the next existing authorized analysis trigger, not at startup.
 
 ## Token-accounting footnote
 
-`budget.debit` (the per-run + daily `ai_usage` ledger) runs **only on the success
-path**, after `ScoreDelta` returns a nil error. A failed call never debits the
-local ledger — though the provider may still bill for input tokens on a
-200-with-bad-JSON. So the `ai_usage` ledger can slightly under-count true provider
-spend during a flaky window.
+`budget.debit` charges reported usage even when item/citation verification rejects
+all proposals or parsing fails after a billable response. Failed calls with no
+reported usage cannot be locally accounted for; the provider may still bill them.
+Retries do not reset the daily/run ledger or get a free-call exemption.
 
 ## Design rationale
 
@@ -106,12 +114,26 @@ This is the token-saving contract: analyze each listing **once** per
 `(goal, model)`, cache the result — even an empty one — and let repeat presses
 drain a long surface a cap-sized chunk at a time without ever re-spending on a
 success. A dropped or failed run resumes from cache with no double-spend (the
-per-row commit lands before the next provider call — S8). Caching empty results
-as "analyzed-but-silent" is what the honest N/M indicator exists to disambiguate.
+per-row commit lands before success is reported — S8). Explicit provenance keeps
+neutral success distinct from unverified proposals without retaining raw model output.
 
 ---
 
-*Verified against the code 2026-06-03 (three independent traces + three
-adversarial reviewers, unanimous). Locked by `TestRerateInfoCountsCacheNotChips`
-and `TestRerateProgressesAcrossPressesUnderBudget` in
-`internal/server/ai_rerate_test.go`.*
+## Evidence and magnitude
+
+The prompt requires contiguous posting-only presence quotes with at least six
+Unicode characters AND two existing-tokenizer tokens plus an explicit matched
+goal. Presence verifies against sent text; absence checks the full description.
+Per-item deltas clamp to +/-30 and net to +/-40. Evidence disclosures explain
+net clipping; total scores remain 0..100 and hard exclusions short-circuit first.
+Token-canonical identical evidence is grouped conservatively: minimum same-sign
+magnitude, opposite-sign suppression, deterministic representative/order. This
+is not a semantic paraphrase detector and does not guarantee higher chip yield.
+
+The additive outcome migrations are SQLite 0013 and PostgreSQL 0020. A distinct
+baseline-behavior compatibility recovery build must carry those exact files and
+the matching complete pinned manifest; the untouched prior binary is not the
+post-upgrade recovery artifact. Preserve the authoritative ledger and user writes.
+See the reviewed [specification](../../docs/specs/261006-ai-rating-outcomes-and-weight.md)
+and [plan](../../docs/plans/261006-ai-rating-outcomes-and-weight-plan.md). Preparation
+and local rehearsal do not authorize publication, production migration or deployment.

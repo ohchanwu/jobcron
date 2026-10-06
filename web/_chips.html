@@ -14,6 +14,12 @@
   .v.neg with the real U+2212 minus (−N). Terracotta is reserved for deadlines,
   so a demerit never shouts louder than a closing date.
 */}}
+{{define "aiOutcome"}}
+{{if eq . "no_signal"}}<div class="ai-outcome ai-outcome-neutral"><p>✓ AI 분석 완료 · 추가로 반영할 내용 없음</p><p>분석을 완료했지만 목표에 따라 추가로 반영할 근거가 없었어요. 지원자에 대한 부정적인 판단은 아니에요.</p></div>
+{{else if eq . "rejected"}}<div class="ai-outcome ai-outcome-rejected"><p>! AI 분석 · 근거를 확인하지 못했어요</p><p>새 AI 점수 조정은 반영하지 않았어요. 다음에 직접 다시 평가하면 호출 수와 토큰 예산 안에서 재시도할 수 있어요.</p></div>
+{{else if eq . "failed"}}<p class="ai-outcome ai-outcome-neutral">AI 분석을 완료하지 못했어요. 새 AI 조정은 반영하지 않았어요.</p>{{end}}
+{{end}}
+
 {{define "deltaValue"}}{{if gt . 0}}<span class="v">+{{.}}</span>{{else if lt . 0}}<span class="v neg">−{{absInt .}}</span>{{end}}{{end}}
 
 {{define "scoreChips"}}{{if .}}<div class="chips">
@@ -21,9 +27,10 @@
 {{- if .Evidence}}
   <span class="chip-ai-wrap">
     <button type="button" class="chip chip-ai{{if .Stale}} is-stale{{end}}" aria-expanded="false" aria-label="AI 분석 근거 보기">
-      <span class="chip-label">AI 분석</span>{{template "deltaValue" .Delta}}{{if .Stale}}<span class="chip-stale-note">(이전 설정 기준)</span>{{end}}<span class="chip-caret" aria-hidden="true">▸</span>
+      <span class="chip-label">AI 분석</span>{{if eq .Delta 0}}<span class="v">0</span>{{else}}{{template "deltaValue" .Delta}}{{end}}{{if .Stale}}<span class="chip-stale-note">(이전 설정 기준)</span>{{end}}<span class="chip-caret" aria-hidden="true">▸</span>
     </button>
     <div class="ai-evidence" hidden>
+      {{if ne .Reason "AI 분석"}}<p class="ai-evidence-item">{{.Reason}}</p>{{end}}
       {{- range .Evidence}}
       <p class="ai-evidence-item">{{template "deltaValue" .Delta}}<span class="ai-evidence-text">{{if .Quote}}{{.Quote}}{{else}}관련 언급 없음 (코드 확인){{end}}</span>{{if .MatchedGoal}}<span class="ai-evidence-goal">{{.MatchedGoal}}</span>{{end}}</p>
       {{- end}}

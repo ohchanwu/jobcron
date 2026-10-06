@@ -221,7 +221,9 @@ func careerExclusionReason(p scraper.Posting, prof profile.Profile, ext *ai.Extr
 // stale flag passed through.
 func aiLineItem(d ai.Delta) LineItem {
 	evidence := make([]EvidenceItem, 0, len(d.Items))
+	var itemSum int64
 	for _, it := range d.Items {
+		itemSum += int64(it.Delta)
 		evidence = append(evidence, EvidenceItem{
 			Kind:        it.Kind,
 			Delta:       it.Delta,
@@ -230,6 +232,9 @@ func aiLineItem(d ai.Delta) LineItem {
 		})
 	}
 	li := LineItem{Label: aiLineLabel, Delta: d.NetDelta, Reason: aiLineLabel, Stale: d.Stale}
+	if itemSum != int64(d.NetDelta) {
+		li.Reason = fmt.Sprintf("항목 합계 %+d점에서 AI 반영 한도 ±%d점에 맞춰 %+d점을 반영했어요.", itemSum, ai.MaxNetDelta, d.NetDelta)
+	}
 	if len(evidence) > 0 {
 		li.Evidence = evidence
 	}

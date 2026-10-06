@@ -310,6 +310,23 @@ The second AI layer compares posting text with the user's free-text goals and di
 citation gate rejects unsupported adjustments. Accepted deltas, usage, and cache entries are
 scoped by `user_id`, posting input, profile input, and AI version.
 
+Stage-2 prompt version 2 preserves explicit empty-response provenance separately from rejected
+proposals. `ai_score_outcomes` stores one bounded state/count/time row per user/posting/goal hash/
+ScoreVersion; a successful score and its rated/no-signal outcome commit atomically. Rejected and
+failed outcomes are not successful cache rows. Only current rated/genuine-empty success counts
+in N; legacy empty rows remain unknown. Shared cards distinguish neutral success, unsupported
+evidence and failure without inventing scored line items. A later manual rerate can retry a
+rejection within existing budgets, whereas automatic scrape/scheduled Stage 2 skips same-identity
+rejections. Page load, polling and reconnect never initiate analysis. Stage-1 identities remain
+unchanged; the next authorized Stage-2 run may have fresh version misses and spend, not startup.
+
+Presence quotes retain the six-Unicode-character/two-token contiguous sent-text gate, and absence
+uses the complete description. Surviving items clamp to +/-30 and net to +/-40; the evidence view
+explains net clipping. Canonical identical evidence is conservatively grouped (same-sign minimum,
+opposite-sign suppression), without claiming semantic paraphrase detection. Hard exclusions and
+total-score bounds remain unchanged. See [the re-rate contract](../internal/server/RERATE_NOTES.md)
+for cache admission, counts, retry and reported-usage accounting.
+
 A rerate resolves one user's runtime and operates only on that user's visible rows. The scrape
 pipeline may also run Stage 2 automatically for new postings. Per-call, per-run, daily, and monthly
 limits bound paid usage; the usage ledger persists across restarts.
@@ -392,6 +409,11 @@ same exact-user boundaries for password changes and deletion.
 
 Legacy SQLite is not an ordinary writable runtime. The tracked read-only demo may open an uploaded
 snapshot through `--demo --db`; all other application startup paths use PostgreSQL.
+The new outcome tables are additive (SQLite 0013 / PostgreSQL 0020). Post-upgrade recovery requires
+a separate baseline-behavior compatibility build with byte-identical new migration files and
+the matching complete pinned digest/tree declarations. The untouched prior artifact cannot reopen
+the new ledger. Recovery must preserve forward-written state and the authoritative ledger;
+building and rehearsing the two artifacts locally is not production deployment authority.
 `cmd/jobcron-import` creates a verified snapshot, checks counts and collisions, and imports
 preserved local data into an existing PostgreSQL owner. It inserts all postings before restoring
 their self-referencing canonical-duplicate links, so a link may safely point to a posting with a

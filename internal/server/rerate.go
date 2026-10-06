@@ -29,6 +29,9 @@ type providerCallError struct{ err error }
 func (e *providerCallError) Error() string { return e.err.Error() }
 func (e *providerCallError) Unwrap() error { return e.err }
 
+// Persistence failures must not masquerade as paid-provider failures.
+type rerateStorageError struct{ error }
+
 // providerFailureMessage maps an AI provider failure to a calm Korean message.
 // It uses provider-neutral HTTP status plus structured status/reason/detail
 // signals when present. Provider bodies are classification input only and are
@@ -296,8 +299,13 @@ func (s *Server) buildRerateInfo(ctx context.Context, userID int64, runtime *AIR
 		}
 	}
 	info := &rerateInfo{Surface: surface}
+	outcomes, _ := s.store.AIScoreOutcomesByPostingID(ctx, userID, profile.AIInputHash(prof), runtime.ScoreVersion)
 	for _, list := range lists {
-		for _, dp := range list {
+		for i := range list {
+			dp := &list[i]
+			if dp.Total >= 0 {
+				dp.AIOutcome = outcomes[dp.Posting.ID].State
+			}
 			_, contentHash, _ := ai.ModelInput(dp.Posting)
 			pendingValidation := false
 			if s.store.Dialect() == storage.DialectPostgres {
@@ -351,6 +359,9 @@ func validRerateSurface(surface string) bool {
 
 type rerateSummary struct {
 	Analyzed                int
+	Processed               int
+	NoSignal                int
+	Rejected                int
 	Visible                 int
 	ProviderCalls           int
 	ContextPendingBefore    int
@@ -474,7 +485,27 @@ func rerateDoneOutcome(summary rerateSummary) rerateOutcome {
 // honest N/M progress and, when the press did not finish the list (the per-call
 // cap or token budget stopped it), why and what to do — so a counter that did
 // not reach M reads as "intentional, press again," not "broken."
-func rerateDoneMessage(summary rerateSummary) string {
+func rerateDoneMessage(summary rerateSummary) (message string) {
+	// Context warnings must not hide the independently completed Stage-2 work.
+	defer func() {
+		if summary.ContextPendingBefore > 0 && summary.Processed > 0 {
+			message = fmt.Sprintf("처리 %d/%d · 분석 완료 %d/%d · 추가 반영 없음 %d · 근거 미확인 %d. %s",
+				summary.Processed, summary.Visible, summary.Analyzed, summary.Visible, summary.NoSignal, summary.Rejected, message)
+		}
+	}()
+	if summary.ContextPendingBefore == 0 && (summary.Processed > 0 || summary.NoSignal > 0 || summary.Rejected > 0) {
+		message := fmt.Sprintf("처리 %d/%d · 분석 완료 %d/%d · 추가 반영 없음 %d · 근거 미확인 %d", summary.Processed, summary.Visible, summary.Analyzed, summary.Visible, summary.NoSignal, summary.Rejected)
+		if summary.Rejected > 0 {
+			return message + ". 근거를 확인하지 못한 공고에는 새 AI 조정을 반영하지 않았어요. 다음에 직접 다시 평가하면 예산 안에서 재시도할 수 있어요."
+		}
+		if summary.Analyzed < summary.Visible {
+			return message + ". 호출 수나 토큰 예산 한도로 일부는 남겨뒀어요. 더 보려면 다시 눌러주세요."
+		}
+		if summary.ProviderCalls == 0 {
+			return message + ". 이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요."
+		}
+		return message + ". 같은 결과는 추가 토큰 없이 다시 사용할 수 있어요."
+	}
 	switch {
 	case summary.ContextPendingBefore > 0 && summary.ContextFailureMessage != "":
 		return fmt.Sprintf("%s AI 문맥 확인 %d개가 남았어요.", summary.ContextFailureMessage, summary.ContextPendingAfter)
@@ -612,12 +643,28 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 
 	var provErr error
 	var stage2Calls int
-	summary.Analyzed, stage2Calls, provErr = s.rateStage2(ctx, postings, prof, userID, runtime, budget, calls, emit)
+	summary.Analyzed, stage2Calls, summary.Processed, provErr = s.rateStage2(ctx, postings, prof, userID, runtime, budget, calls, emit, true)
 	summary.ProviderCalls += stage2Calls
+	outcomes, outcomeErr := s.store.AIScoreOutcomesByPostingID(ctx, userID, profile.AIInputHash(prof), runtime.ScoreVersion)
+	if outcomeErr != nil {
+		return summary, outcomeErr
+	}
+	for _, p := range postings {
+		switch outcomes[p.ID].State {
+		case storage.AIScoreNoSignal:
+			summary.NoSignal++
+		case storage.AIScoreRejected:
+			summary.Rejected++
+		}
+	}
 	if budget != nil && budget.isDegraded() {
 		emit("status", "오늘 AI 예산을 다 써서 일부는 다시 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
 	} else if stage1 != nil && stage1.budget.isDegraded() {
 		emit("status", "일부 공고는 AI 분석 없이 일반 점수로 다시 분석했어요.")
+	}
+	var storageErr *rerateStorageError
+	if errors.As(provErr, &storageErr) {
+		return summary, storageErr.error
 	}
 	if provErr != nil && summary.Analyzed > 0 {
 		// Partial: some rows rated, some hit a provider error. Note it before the
@@ -650,14 +697,29 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 // limiter still spaces request starts. SSE progress writes stay on this
 // goroutine (a ResponseWriter is not safe for concurrent writes); workers send
 // results to a fully-buffered channel that a closer goroutine ends.
-func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, userID int64, runtime *AIRuntime, budget *aiBudget, calls *callCap, emit func(event, data string)) (analyzed int, providerCalls int, provErr error) {
+func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, userID int64, runtime *AIRuntime, budget *aiBudget, calls *callCap, emit func(event, data string), retryRejected bool) (analyzed int, providerCalls int, processed int, provErr error) {
 	if runtime == nil || runtime.UserID != userID || budget == nil || calls == nil || len(postings) == 0 {
-		return 0, 0, nil
+		return 0, 0, 0, nil
 	}
 	aiInputHash := profile.AIInputHash(prof)
 	profileText := profile.BuildStage2ProfileText(prof)
 	now := time.Now().UTC()
+	// Surface selection is normally unique, but admission owns the invariant:
+	// no duplicate input can create an in-run repair call or inflate the denominator.
+	unique := make([]scraper.Posting, 0, len(postings))
+	seen := make(map[int64]bool, len(postings))
+	for _, p := range postings {
+		if !seen[p.ID] {
+			unique = append(unique, p)
+			seen[p.ID] = true
+		}
+	}
+	postings = unique
 	total := len(postings)
+	outcomes, err := s.store.AIScoreOutcomesByPostingID(ctx, userID, aiInputHash, runtime.ScoreVersion)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 
 	type rerateResult struct {
 		cached         bool
@@ -668,6 +730,10 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 	sem := make(chan struct{}, rerateWorkers)
 	var wg sync.WaitGroup
 	for _, p := range postings {
+		if !retryRejected && outcomes[p.ID].State == storage.AIScoreRejected {
+			results <- rerateResult{}
+			continue
+		}
 		wg.Add(1)
 		go func(p scraper.Posting) {
 			defer wg.Done()
@@ -682,20 +748,24 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 	completed := 0
 	for r := range results {
 		completed++
+		if r.cached || r.providerCalled {
+			processed++
+		}
 		if r.cached {
 			analyzed++
 		}
 		if r.providerCalled {
 			providerCalls++
 		}
-		// Keep the FIRST provider error as representative — a bad key or mismatched
-		// model fails every row identically, so one classified message is enough.
-		if r.err != nil && provErr == nil {
+		// Keep the first provider error, but never hide a persistence error behind
+		// another row's provider failure or partial successful work.
+		var storageErr *rerateStorageError
+		if r.err != nil && (provErr == nil || errors.As(r.err, &storageErr)) {
 			provErr = r.err
 		}
 		emit("progress", fmt.Sprintf("공고 %d/%d 분석 중...", completed, total))
 	}
-	return analyzed, providerCalls, provErr
+	return analyzed, providerCalls, processed, provErr
 }
 
 // rerateOne re-rates a single posting and reports whether it now has a delta
@@ -716,7 +786,11 @@ func (s *Server) rerateOne(
 ) (cached bool, providerCalled bool, err error) {
 	// Already rated against the current goal text → reuse (reconnect-safe, no
 	// re-spend, free). An empty cached delta still counts as analyzed.
-	if _, ok, e := s.store.AIScore(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion); e == nil && ok {
+	_, ok, cacheErr := s.store.AIScore(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion)
+	if cacheErr != nil {
+		return false, false, &rerateStorageError{cacheErr}
+	}
+	if ok {
 		return true, false, nil
 	}
 	// Uncached: spend only if the token budget has headroom AND the per-call cap
@@ -731,18 +805,34 @@ func (s *Server) rerateOne(
 	}
 	sent, _, _ := ai.ModelInput(p)
 	raw, usage, err := runtime.Provider.ScoreDelta(ctx, sent, profileText)
+	// Even a malformed reply can follow a billed successful HTTP call.
+	// Usage is provider-reported accounting, independent of usable evidence.
+	budget.debit(ctx, usage)
 	if err != nil {
 		// Provider error (bad key, mismatched model, transport) → no delta. Return
 		// it so rateStage2 can surface a calm, specific message instead of letting
 		// the failure read as a silent "not analyzed." The reserved slot is spent.
+		outcome := storage.AIScoreOutcome{State: storage.AIScoreFailed, ComputedAt: now}
+		if writeErr := s.store.UpsertAIScoreFailure(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, outcome); writeErr != nil {
+			return false, true, &rerateStorageError{writeErr}
+		}
 		return false, true, err
 	}
-	budget.debit(ctx, usage)
 	// Gate: presence against the SENT (truncated) text, absence against the FULL
 	// Description (S5). Survivors net into the stored delta.
 	delta := ai.GateDelta(raw, sent, p.Description)
-	if err := s.store.UpsertAIScore(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, delta, now); err != nil {
-		return false, true, err
+	outcome := storage.AIScoreOutcome{State: storage.AIScoreRated, Proposed: len(raw), Accepted: len(delta.Items), ComputedAt: now}
+	if len(raw) == 0 {
+		outcome.State = storage.AIScoreNoSignal
+	} else if len(delta.Items) == 0 {
+		outcome.State = storage.AIScoreRejected
+		if err := s.store.UpsertAIScoreFailure(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, outcome); err != nil {
+			return false, true, &rerateStorageError{err}
+		}
+		return false, true, nil
+	}
+	if err := s.store.UpsertAIResult(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, delta, outcome); err != nil {
+		return false, true, &rerateStorageError{err}
 	}
 	return true, true, nil
 }

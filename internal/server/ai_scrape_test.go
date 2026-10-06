@@ -139,7 +139,7 @@ func TestRunScrapeOrdersDealbreakerValidationBeforeStage2(t *testing.T) {
 				return nil, ai.Usage{}, errors.New("contextual score not merged before Stage 2")
 			}
 			order = append(order, "stage2")
-			return []ai.RawDeltaItem{{Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발"}}, ai.Usage{InputTokens: 3}, nil
+			return []ai.RawDeltaItem{{Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발자를 찾습니다", MatchedGoal: "서버 개발"}}, ai.Usage{InputTokens: 3}, nil
 		},
 	}
 	cipher := newAIRuntimeTestCipher(t, 0x59)

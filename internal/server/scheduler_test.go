@@ -504,7 +504,7 @@ func TestRunScheduledScrapeFundsStage1OnceAndFiltersPaidWork(t *testing.T) {
 			},
 			ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
 				return []ai.RawDeltaItem{{
-					Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발",
+					Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "리서치 서버 개발", MatchedGoal: "서버 개발",
 				}}, ai.Usage{InputTokens: 3}, nil
 			},
 		}

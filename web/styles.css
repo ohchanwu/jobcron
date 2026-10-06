@@ -56,6 +56,12 @@ html[data-theme="dark"]  { color-scheme: dark; }
   --ai-border:   light-dark(#c9bdfa, #5b4d8d);
   --ai-text:     light-dark(#3f307c, #ede8ff);
   --ai-accent:   light-dark(#6748c7, #b7a7ff);
+  /* Empty completion is grey; unverified evidence is amber, never a score. */
+  --ai-neutral-bg:    light-dark(#f0efec, #24231f);
+  --ai-neutral-text:  light-dark(#605d58, #c2beb7);
+  --ai-rejected-bg:   light-dark(#fcf1d4, #332b17);
+  --ai-rejected-text: light-dark(#735309, #edc56b);
+  --ai-rejected-rule: light-dark(#dbbd75, #776039);
 
   --sans: "Pretendard Variable", Pretendard, -apple-system,
           BlinkMacSystemFont, "Apple SD Gothic Neo",
@@ -655,6 +661,20 @@ nav.primary a.active {
    (it's in the Total), with a quiet "(이전 프로필 기준)" note. */
 .chip-ai.is-stale { opacity: 0.6; }
 .chip-stale-note { color: var(--ink-soft); margin-left: 0.3rem; font-size: 0.9em; }
+
+.ai-outcome {
+  padding: .75rem 1rem;
+  margin-block: .6rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-size: .84rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.ai-outcome p { margin: 0; }
+.ai-outcome p + p { margin-top: .3rem; }
+.ai-outcome-neutral { background: var(--ai-neutral-bg); color: var(--ai-neutral-text); }
+.ai-outcome-rejected { background: var(--ai-rejected-bg); color: var(--ai-rejected-text); border-color: var(--ai-rejected-rule); }
 
 /* Indigo evidence panel — an inline disclosure, never a floating tooltip (a
    tooltip can't clip inside a 375px card). flex-basis:100% drops it onto its

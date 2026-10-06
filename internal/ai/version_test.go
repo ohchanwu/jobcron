@@ -12,8 +12,8 @@ func TestTaskVersionsAreStableAndPartitioned(t *testing.T) {
 	if !hex12.MatchString(score) {
 		t.Fatalf("ScoreVersion = %q, want 12 lowercase hex chars", score)
 	}
-	if score != "925859b252bb" {
-		t.Fatalf("ScoreVersion = %q, want the pre-split Stage 2 identity", score)
+	if score != taskVersion("anthropic", "claude-x", "2") || score == "925859b252bb" {
+		t.Fatalf("ScoreVersion = %q, want the new Stage-2-only contract identity", score)
 	}
 	if score != AIVersion("anthropic", "claude-x") {
 		t.Fatal("Stage 2 cache identity changed")

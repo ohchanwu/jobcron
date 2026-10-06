@@ -33,6 +33,13 @@ func (s *Store) UpsertAIScore(
 	ctx context.Context, userID, postingID int64, aiInputHash, aiVersion string,
 	d ai.Delta, computedAt time.Time,
 ) error {
+	return s.upsertAIScore(ctx, userID, postingID, aiInputHash, aiVersion, d, computedAt, nil)
+}
+
+func (s *Store) upsertAIScore(
+	ctx context.Context, userID, postingID int64, aiInputHash, aiVersion string,
+	d ai.Delta, computedAt time.Time, outcome *AIScoreOutcome,
+) error {
 	if err := validateAIUserID(userID); err != nil {
 		return err
 	}
@@ -105,6 +112,11 @@ WHERE user_id = ?
 	}
 	if _, err = tx.ExecContext(ctx, s.query(pruneSQL), pruneArgs...); err != nil {
 		return fmt.Errorf("storage: prune ai scores: %w", err)
+	}
+	if outcome != nil {
+		if err := upsertAIScoreOutcome(ctx, tx, s, userID, postingID, aiInputHash, aiVersion, *outcome); err != nil {
+			return fmt.Errorf("storage: upsert AI outcome: %w", err)
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("storage: commit upsert ai score: %w", err)

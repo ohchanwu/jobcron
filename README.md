@@ -102,6 +102,27 @@ no quote, no adjustment. A per-page **AI 평가** button re-rates the postings y
 looking at (for example after you change your goals, or to analyze more than one
 scrape covered), and a daily token budget (which you set) keeps spend bounded.
 
+The updated Stage-2 contract distinguishes completed analysis with no supported
+additional adjustment (a grey card) from proposals whose evidence could not be
+verified (an amber card). The `AI 분석 N/M` counter counts only current successful
+results, including genuine empty and valid zero-net results. Successful repeats
+spend nothing; a later manual press can retry an unverified result within the same
+budgets. A missing card or neutral result is not a judgment of the applicant.
+
+Supported items can adjust by up to ±30 points, with the net AI contribution
+bounded to ±40. Evidence disclosures explain clipping. This can reorder postings
+or move them across your minimum score, but never overrides a hard exclusion or
+guarantees more AI cards. Identical token-canonical evidence is grouped conservatively,
+not treated as a general semantic duplicate detector. The default per-press cap
+remains 200; explicitly saved 100/200 values are preserved.
+
+On upgrade, only the Stage-2 contract version changes. Old results and usage
+ledgers stay intact; the next bounded analysis may have fresh cache misses and
+spend, but opening a page or restarting never starts paid analysis. Compatible
+recovery requires a separately prepared baseline-behavior build with the new
+migration manifest, not the untouched prior binary. These are source changes and
+local preparation, not evidence of a production rollout.
+
 This is the **v2.0** line and ships as a `-alpha` prerelease while the live AI
 path gets more real-world mileage. Everything else in the app works identically
 whether or not AI is configured.

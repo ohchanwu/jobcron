@@ -669,7 +669,7 @@ func (s *Server) analyzeUserCollection(
 		vis = filterPostingsBySource(vis, prof.SourceEnabled)
 		if verr == nil && len(vis) > 0 {
 			emit("status", "새 공고를 AI로 분석하는 중...")
-			rated, _, provErr := s.rateStage2(ctx, vis, prof, userID, runtime, budget, calls, emit)
+			rated, _, _, provErr := s.rateStage2(ctx, vis, prof, userID, runtime, budget, calls, emit, false)
 			if rated > 0 {
 				// Merge the fresh Stage-2 deltas into the rendered scores.
 				if rescored, rerr := s.scoreAll(ctx, userID, runtime); rerr == nil {

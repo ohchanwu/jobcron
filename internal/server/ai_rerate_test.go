@@ -106,7 +106,7 @@ func TestRunRerateValidatesExcludedPostingBeforeStage2(t *testing.T) {
 			return []ai.DealbreakerValidation{{CandidateID: candidates[0].ID, Verdict: ai.DealbreakerNotApplicable, ReasonCode: ai.DealbreakerReasonExplicitlyNegated}}, ai.Usage{InputTokens: 2}, nil
 		},
 		ScoreDeltaFn: func(context.Context, string, string) ([]ai.RawDeltaItem, ai.Usage, error) {
-			return []ai.RawDeltaItem{{Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발"}}, ai.Usage{InputTokens: 3}, nil
+			return []ai.RawDeltaItem{{Signal: "서버", Kind: ai.KindPresence, Delta: 1, Quote: "서버 개발자를 찾습니다", MatchedGoal: "서버 개발"}}, ai.Usage{InputTokens: 3}, nil
 		},
 	}
 	runtime := testAIRuntime(userID, provider, "shared-model")
@@ -266,10 +266,11 @@ func TestRunRerateSponsorExhaustionPreservesUserFundedStages(t *testing.T) {
 		error,
 	) {
 		return []ai.RawDeltaItem{{
-			Signal: "서버",
-			Kind:   ai.KindPresence,
-			Delta:  1,
-			Quote:  "서버 개발",
+			Signal:      "서버",
+			Kind:        ai.KindPresence,
+			Delta:       1,
+			Quote:       "서버 개발자를 찾습니다",
+			MatchedGoal: "서버 개발",
 		}}, ai.Usage{InputTokens: 3}, nil
 	}
 	p := listingPosting("sponsor-exhausted", "신입 리서치 개발자")
@@ -338,7 +339,7 @@ func TestRunRerateReconnectReusesCache(t *testing.T) {
 	if stub.ScoreDeltaCalls != callsAfterFirst {
 		t.Fatalf("provider calls changed %d -> %d", callsAfterFirst, stub.ScoreDeltaCalls)
 	}
-	if got := rerateDoneMessage(second); got != "이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요." {
+	if got := rerateDoneMessage(second); !strings.Contains(got, "이미 모든 공고가 AI로 평가됐습니다. 추가 토큰은 사용하지 않았어요.") || !strings.Contains(got, "분석 완료 2/2") {
 		t.Fatalf("no-op copy = %q", got)
 	}
 }
