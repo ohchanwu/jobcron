@@ -606,10 +606,10 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 	if dailyCap == profile.DefaultDailyTokenCap {
 		dailyCap = 0
 	}
-	// Same convention for the per-call cap: storing the default as 0 keeps an
-	// unchanged default absent from the canonical JSON (omitempty).
+	// Keep an implicit default absent from canonical JSON (omitempty), but
+	// preserve a saved positive choice even when it now equals the default.
 	perCallCap := atoi(r.FormValue("ai_per_call_cap"))
-	if perCallCap == profile.DefaultAIPerCallCap {
+	if perCallCap == profile.DefaultAIPerCallCap && previousProfile.AIPerCallCap <= 0 {
 		perCallCap = 0
 	}
 	monthlyUSDCap := atoi(r.FormValue("ai_monthly_usd_cap_cents"))

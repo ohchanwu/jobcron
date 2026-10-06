@@ -36,11 +36,12 @@ func TestAIPerCallCapProfileFlow(t *testing.T) {
 		wantCap   int
 	}{
 		{name: "absent", wantCap: 200},
+		{name: "implicit submitted default", formValue: "200", wantCap: 200},
 		{name: "zero", jsonField: `,"ai_per_call_cap":0`, formValue: "0", wantCap: 200},
 		{name: "negative retains fallback", jsonField: `,"ai_per_call_cap":-1`, formValue: "-1", wantRaw: -1, wantCap: 200},
 		{name: "explicit old default", jsonField: `,"ai_per_call_cap":50`, formValue: "50", wantRaw: 50, wantCap: 50},
 		{name: "explicit 100", jsonField: `,"ai_per_call_cap":100`, formValue: "100", wantRaw: 100, wantCap: 100},
-		{name: "explicit 200", jsonField: `,"ai_per_call_cap":200`, formValue: "200", wantCap: 200},
+		{name: "explicit 200", jsonField: `,"ai_per_call_cap":200`, formValue: "200", wantRaw: 200, wantCap: 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, st := newPostgresTestServer(t, &fakeScraper{})
@@ -92,7 +93,7 @@ func TestAIPerCallCapProfileFlow(t *testing.T) {
 				}
 			}
 			initialValue := tc.formValue
-			if initialValue == "0" {
+			if initialValue == "0" || tc.jsonField == "" {
 				initialValue = ""
 			}
 			assertForm(initialValue)
