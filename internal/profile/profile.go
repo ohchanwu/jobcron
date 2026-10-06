@@ -37,7 +37,7 @@ const (
 	// ceilings. A press analyzes up to this many fresh rows, then stops so the
 	// spend per click is predictable; pressing again continues where it left off.
 	// Cached rows are free and never count against it.
-	DefaultAIPerCallCap = 50
+	DefaultAIPerCallCap = 200
 
 	// Default AI cost caps are user-facing USD estimates, stored as cents to
 	// avoid float rounding. Token caps remain the internal enforcement layer for
