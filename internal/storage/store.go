@@ -25,7 +25,7 @@ var postgresMigrationsFS embed.FS
 
 const (
 	postgresMigrationAdvisoryLock int64 = 0x4a4f4243524f4e
-	pinnedPostgresMigrationTree         = "4650d3f225f26eb33cb67e02290606983c40c241"
+	pinnedPostgresMigrationTree         = "39abc634023719ef482239e288c3eed2aa5bf42f"
 )
 
 // PostgresMigrationError identifies the embedded migration and phase that
@@ -68,6 +68,7 @@ var pinnedPostgresMigrationDigests = map[string]string{
 	"0017_contextual_dealbreakers.sql":      "18a7eba2022a232471e48441e8f08cd9e51dbb415524a50d1ddde91e5e81a40f",
 	"0018_multi_user_accounts.sql":          "1fa379ef0b47da66fa2929a256a9b7621167970332beb17fe655040a10d18328",
 	"0019_dealbreaker_match_provenance.sql": "014d8266b6dee0fa40b4f331fbbe3edc2362ee05c82dce8f2596c001751c4b72",
+	"0020_ai_score_outcomes.sql":            "61095f766c97b85b8bb97c8f357ebb4955d72df767452b6fc4f831a217e87a3b",
 }
 
 func postgresMigrationManifest(source fs.FS) ([]postgresMigration, error) {

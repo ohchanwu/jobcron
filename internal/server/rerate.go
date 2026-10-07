@@ -176,8 +176,15 @@ func (s *Server) validateDealbreakers(
 	if err != nil {
 		return summary, err
 	}
+	// An honest phase-labeled 0/N before the first blocking call of this
+	// phase, then a sequential count of every posting the phase EXAMINED —
+	// cached rows, cap/budget skips, and provider failures all advance the
+	// counter (they are processed rows), but nothing here is ever labeled
+	// 분석 (analyzed): that word is reserved for Stage-2 rows the gate kept.
+	emit("progress", fmt.Sprintf("공고 문맥 확인 0/%d...", len(postings)))
 	now := time.Now().UTC()
-	for _, p := range postings {
+	for i, p := range postings {
+		counted := i + 1
 		// Stage 1B alone sends the FULL normalized posting: a dealbreaker can sit
 		// past rune 12,000, and judging an occurrence the model never saw is worse
 		// than not judging it. The content hash is still the full-text hash, so
@@ -203,11 +210,13 @@ func (s *Server) validateDealbreakers(
 		if !budget.canSpend() {
 			summary.PendingAfter++
 			summary.BudgetBlocked = true
+			emit("progress", fmt.Sprintf("공고 문맥 확인 %d/%d...", counted, len(postings)))
 			continue
 		}
 		if !calls.tryReserve() {
 			summary.PendingAfter++
 			summary.CallCapBlocked = true
+			emit("progress", fmt.Sprintf("공고 문맥 확인 %d/%d...", counted, len(postings)))
 			continue
 		}
 		validations, usage, err := runtime.Provider.ValidateDealbreakers(ctx, modelText, unresolved)
@@ -221,6 +230,7 @@ func (s *Server) validateDealbreakers(
 			if providerErr == nil {
 				providerErr = err
 			}
+			emit("progress", fmt.Sprintf("공고 문맥 확인 %d/%d...", counted, len(postings)))
 			continue
 		}
 		accepted := 0
@@ -242,7 +252,7 @@ func (s *Server) validateDealbreakers(
 		if accepted < len(unresolved) {
 			summary.PendingAfter++
 		}
-		emit("progress", fmt.Sprintf("공고 #%d (%s) 문맥 확인 중...", p.ID, p.Company))
+		emit("progress", fmt.Sprintf("공고 문맥 확인 %d/%d...", counted, len(postings)))
 	}
 	return summary, providerErr
 }
@@ -518,6 +528,16 @@ func rerateDoneMessage(summary rerateSummary) string {
 // cap, so a later press resumes on the still-uncached rows. It returns the
 // cumulative analyzed count (N — visible rows now cached against the current
 // goal) and the total visible rows (M) for the progress copy.
+//
+// rerateActiveStatus is the status of a 재평가 press through every active
+// phase. The wait is dominated by paced provider calls (1 req/s starts), so a
+// surface of tens of listings takes minutes — the user is told that up front
+// AND re-anchored when the longest phase (Stage 2) begins, as a rough UX
+// estimate ("약", "정도", "수 있어요") and never a promised ETA. Every status
+// during the active phases carries this copy; only deliberate failure/budget
+// notices or the final seconds-long rescore line may replace it.
+const rerateActiveStatus = "AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요."
+
 func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userID int64, runtime *AIRuntime) (summary rerateSummary, err error) {
 	if runtime == nil || runtime.UserID != userID {
 		return summary, fmt.Errorf("server: rerate requires matching AI runtime")
@@ -537,13 +557,22 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	if err != nil {
 		return summary, err
 	}
+	// The wait is minutes long and provider-paced; state that up front so the
+	// user knows roughly what they signed up for the moment the press starts.
+	emit("status", rerateActiveStatus)
+	// An honest phase-labeled 0/N BEFORE the first blocking preparation call:
+	// the counter must be numeric from the start, never a text-only
+	// placeholder while the first paced provider call runs. 0/0 is honest
+	// when the surface has no candidates — the phase ran with nothing to do.
+	emit("progress", fmt.Sprintf("공고 정보 확인 0/%d...", len(candidates)))
 	// Stage 1A must run before contextual validation and the first score merge:
 	// an extraction can correct a conservative career/education exclusion and
 	// return the posting to the visible set selected for Stage 2. Eligibility
 	// and Stage 2 have independent cache identities, so only extractStage1's own
 	// exact eligibility/content cache check can make this call free.
-	for _, p := range candidates {
+	for i, p := range candidates {
 		s.extractStage1(ctx, p.ID, p, now, func() *stage1Funding { return stage1 })
+		emit("progress", fmt.Sprintf("공고 정보 확인 %d/%d...", i+1, len(candidates)))
 	}
 	stage1B, err := s.stage1BPostings(ctx, candidates)
 	if err != nil {
@@ -573,7 +602,13 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	if summary.Visible == 0 {
 		return summary, nil
 	}
-	emit("status", "AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕")
+	// Stage 2 is the longest phase (a provider call per uncached visible row,
+	// paced by the 1-req/s limiter): re-anchor the approximate wait so the
+	// estimate is still on screen for the bulk of it, and open the phase with
+	// an honest 0/M BEFORE any worker result — the counter is numeric from
+	// the first moment of the phase, not only after the first completion.
+	emit("status", rerateActiveStatus)
+	emit("progress", fmt.Sprintf("공고 0/%d 분석 중...", summary.Visible))
 
 	var provErr error
 	var stage2Calls int

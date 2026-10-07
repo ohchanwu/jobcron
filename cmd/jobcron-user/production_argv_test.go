@@ -94,7 +94,14 @@ func TestProductionUserCommandsPreserveFileOnlyInput(t *testing.T) {
 				err := run(context.Background(), args, envMap{
 					"JOBCRON_ENV": "production", "DATABASE_URL_FILE": path,
 				}, nil, &out)
-				if err == nil || err.Error() != "user: --email is required" || out.Len() != 0 {
+				want := "user: --email is required"
+				if command == "create-owner" {
+					want = "user: production requires JOBCRON_OWNER_EMAIL_FILE"
+					if len(suffix) > 0 {
+						want = "user: unexpected positional arguments"
+					}
+				}
+				if err == nil || err.Error() != want || out.Len() != 0 {
 					t.Fatalf("file-only database input changed: %v", err)
 				}
 			})

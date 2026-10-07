@@ -22,7 +22,7 @@ func TestProductionPrivateOpsRDSRejectsNonLocalOrWeakTLS(t *testing.T) {
 	for _, databaseURL := range []string{
 		"postgres://master@db.example.invalid:5432/jobcron?sslmode=require",
 		"postgres://master@127.0.0.1:15432/jobcron?sslmode=disable",
-		"postgres://master@127.0.0.1:15432/jobcron?sslmode=verify-full",
+		"postgres://master@127.0.0.1:0/jobcron?sslmode=verify-full",
 		"postgres://master@localhost:15432/jobcron?sslmode=require",
 	} {
 		t.Run(databaseURL, func(t *testing.T) {
@@ -57,9 +57,9 @@ func TestProductionPrivateOpsRDSUsesOneLeastPrivilegeTransaction(t *testing.T) {
 	for _, want := range []string{
 		"BEGIN;",
 		"SET LOCAL search_path = pg_catalog, public;",
-		"IF NOT EXISTS",
+		"IF app_oid IS NULL THEN",
 		"CREATE ROLE jobcron_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;",
-		"ALTER ROLE jobcron_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '" + applicationPassword + "';",
+		"ALTER ROLE jobcron_app LOGIN PASSWORD '" + applicationPassword + "';",
 		"ALTER ROLE jobcron_app RESET ALL;",
 		"pg_auth_members",
 		"datdba = app_oid",
@@ -104,10 +104,10 @@ func TestProductionPrivateOpsRDSUsesOneLeastPrivilegeTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := runtime["DATABASE_URL"]; !strings.Contains(got, "jobcron_app:application-password-secret@jobcron.abc123.ap-northeast-2.rds.amazonaws.com:5432/jobcron") ||
-		!strings.Contains(got, "sslmode=require") || strings.Contains(got, "127.0.0.1") {
+		!strings.Contains(got, "sslmode=verify-full&sslrootcert=/run/jobcron/rds-ca.pem") || strings.Contains(got, "127.0.0.1") {
 		t.Fatalf("private runtime DATABASE_URL not updated: %q", got)
 	}
-	if !strings.Contains(commandLog, "psql postgres://master@127.0.0.1:15432/jobcron?sslmode=require") {
+	if !strings.Contains(commandLog, "psql postgres://master@jobcron.abc123.ap-northeast-2.rds.amazonaws.com:15432/jobcron?sslmode=verify-full&hostaddr=127.0.0.1&sslrootcert=") {
 		t.Fatalf("master operation did not use localhost-only tunnel:\n%s", commandLog)
 	}
 
@@ -117,9 +117,67 @@ func TestProductionPrivateOpsRDSUsesOneLeastPrivilegeTransaction(t *testing.T) {
 		t.Fatalf("RDS helper rerun failed: %v\n%s", result.err, result.output)
 	}
 	secondSQL := readFile(t, fixture.sqlLog)
-	if !strings.Contains(secondSQL, "IF NOT EXISTS") ||
-		!strings.Contains(secondSQL, "ALTER ROLE jobcron_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+secondPassword+"';") {
+	if !strings.Contains(secondSQL, "IF app_oid IS NULL THEN") ||
+		!strings.Contains(secondSQL, "ALTER ROLE jobcron_app LOGIN PASSWORD '"+secondPassword+"';") {
 		t.Fatalf("rerun was not idempotent password rotation:\n%s", secondSQL)
+	}
+}
+
+// Source-derived SQL checks, not a PostgreSQL executor: live catalog validation
+// remains a controller gate. The fixture captures the exact native input.
+func TestProductionPrivateOpsRDSGuardsExistingRoleBeforeMutation(t *testing.T) {
+	fixture := newPrivateOpsFixture(t)
+	result := fixture.run(t, rdsRoleHelper, "master-password\napplication-password\n")
+	if result.err != nil {
+		t.Fatalf("capture SQL: %v", result.err)
+	}
+	sql := readFile(t, fixture.sqlLog)
+	create := strings.Index(sql, "CREATE ROLE jobcron_app")
+	alter := strings.Index(sql, "ALTER ROLE jobcron_app")
+	guardEnd := strings.Index(sql, "END\n$jobcron$;")
+	if create < 0 || alter <= guardEnd || guardEnd <= create {
+		t.Fatal("role creation/alteration escaped the guarded transaction")
+	}
+	guard := sql[:guardEnd]
+	for _, want := range []string{
+		"SELECT oid INTO app_oid FROM pg_roles WHERE rolname = 'jobcron_app'",
+		"IF app_oid IS NULL THEN", "ELSE",
+		"NOT rolcanlogin", "rolsuper", "rolcreatedb", "rolcreaterole", "rolinherit", "rolreplication", "rolbypassrls",
+		"AND (NOT rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls)",
+		"membership.member = app_oid OR membership.roleid = app_oid",
+		"datdba = app_oid", "nspowner = app_oid", "relation.relowner = app_oid",
+		"RAISE EXCEPTION 'application role attributes are not restrictive'",
+		"RAISE EXCEPTION 'application role has role membership'",
+		"RAISE EXCEPTION 'application role owns production database objects'",
+	} {
+		if !strings.Contains(guard, want) {
+			t.Errorf("pre-write role guard missing %q", want)
+		}
+	}
+	for _, statement := range strings.Split(sql, "\n") {
+		if strings.HasPrefix(statement, "ALTER ROLE jobcron_app") &&
+			strings.Contains(statement, "NOSUPERUSER") {
+			t.Fatal("existing safe role still requires superuser-only attribute alteration")
+		}
+	}
+	if strings.Count(sql, "BEGIN;") != 1 || strings.Count(sql, "COMMIT;") != 1 {
+		t.Fatal("role operation is not one transaction")
+	}
+}
+
+func TestProductionPrivateOpsRDSFailedGuardPreservesReadiness(t *testing.T) {
+	fixture := newPrivateOpsFixture(t)
+	before := readFile(t, fixture.runtimeSecret)
+	fixture.env = append(fixture.env, "FAKE_PSQL_EXIT=1")
+	result := fixture.run(t, rdsRoleHelper, "master-password\napplication-password\n")
+	if result.err == nil || result.output != "production RDS role operation failed\n" {
+		t.Fatal("failed native transaction did not fail closed")
+	}
+	if readFile(t, fixture.runtimeSecret) != before {
+		t.Fatal("failed native transaction replaced runtime input")
+	}
+	if _, err := os.Stat(fixture.roleEnv); !os.IsNotExist(err) {
+		t.Fatal("failed native transaction wrote readiness")
 	}
 }
 
@@ -297,6 +355,12 @@ func newPrivateOpsFixture(t *testing.T) privateOpsFixture {
 		}
 	}
 	writeFile(t, fixture.runtimeSecret, `{"SESSION_SECRET":"synthetic-existing"}`+"\n", 0o600)
+	caPath := filepath.Join(root, "rds-ca.pem")
+	writeFile(t, caPath, publicTestCA(t), 0600)
+	caPath, err := filepath.EvalSymlinks(caPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	realSHA, err := exec.LookPath("sha256sum")
 	if err != nil {
 		t.Fatal("sha256sum is required for private operations tests")
@@ -330,6 +394,7 @@ exit 1
 		"PRIVATE_OPS_COMMAND_LOG="+fixture.commandLog,
 		"PRIVATE_OPS_SQL_LOG="+fixture.sqlLog,
 		"JOBCRON_MASTER_DATABASE_URL=postgres://master@127.0.0.1:15432/jobcron?sslmode=require",
+		"JOBCRON_RDS_CA_FILE="+caPath,
 		"JOBCRON_PRIVATE_DATABASE_ENDPOINT=jobcron.abc123.ap-northeast-2.rds.amazonaws.com:5432",
 		"JOBCRON_APP_DATABASE_USER=jobcron_app",
 		"JOBCRON_DATABASE_ROLE_ENV="+fixture.roleEnv,

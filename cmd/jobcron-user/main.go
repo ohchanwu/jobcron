@@ -51,6 +51,9 @@ func runWithPrompt(ctx context.Context, args []string, env envMap, in io.Reader,
 }
 
 func runMigrateCommand(ctx context.Context, args []string, env envMap, in io.Reader, out, promptOut io.Writer) error {
+	if err := rejectProductionDatabaseArgs(env, args); err != nil {
+		return err
+	}
 	var rawDatabaseURL string
 	var legacyMigrationTree string
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
@@ -82,6 +85,11 @@ func runMigrateCommand(ctx context.Context, args []string, env envMap, in io.Rea
 	if err != nil {
 		return err
 	}
+	databaseURL, release, err := registerTunnelDatabase(databaseURL, env["JOBCRON_ENV"] == "production")
+	if err != nil {
+		return err
+	}
+	defer release()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	st, err := openMigrationStore(ctx, databaseURL, legacyMigrationTree)
@@ -109,21 +117,26 @@ func migrationDatabaseURL(raw, password string) (string, error) {
 	if _, present := parsed.User.Password(); present {
 		return "", errors.New("user: migration database URL must not contain a password")
 	}
-	if parsed.Hostname() != "127.0.0.1" {
+	query, err := url.ParseQuery(parsed.RawQuery)
+	verified := err == nil && query.Get("sslmode") == "verify-full"
+	if parsed.Hostname() != "127.0.0.1" && !verified {
 		return "", errors.New("user: migration database URL must use 127.0.0.1")
 	}
-	if parsed.Port() == "" {
+	if !validTunnelPort(parsed.Port()) {
 		return "", errors.New("user: migration database URL requires a tunnel port")
 	}
 	database := strings.TrimPrefix(parsed.Path, "/")
 	if database == "" || strings.Contains(database, "/") {
 		return "", errors.New("user: migration database URL requires one database name")
 	}
-	query, err := url.ParseQuery(parsed.RawQuery)
-	if err != nil || len(query) != 1 || len(query["sslmode"]) != 1 {
+	if err != nil || len(query["sslmode"]) != 1 {
 		return "", errors.New("user: migration database URL requires only one sslmode")
 	}
-	if query.Get("sslmode") != "require" {
+	if verified {
+		if err := validateVerifiedTunnel(parsed, query); err != nil {
+			return "", err
+		}
+	} else if len(query) != 1 || query.Get("sslmode") != "require" {
 		return "", errors.New("user: migration database URL requires TLS")
 	}
 	if password == "" {
@@ -137,13 +150,24 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if err := rejectProductionDatabaseArgs(env, args); err != nil {
 		return err
 	}
+	if !reset {
+		if err := rejectOwnerEmailArgs(env, args); err != nil {
+			return err
+		}
+	}
 	var databaseURL, email string
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&databaseURL, "database-url", "", "PostgreSQL database URL")
 	fs.StringVar(&email, "email", "", "owner email address")
 	if err := fs.Parse(args); err != nil {
+		if !reset {
+			return errors.New("user: invalid create-owner arguments")
+		}
 		return err
+	}
+	if !reset && fs.NArg() != 0 {
+		return errors.New("user: unexpected positional arguments")
 	}
 	var err error
 	databaseURL, err = databaseInput(env, databaseURL)
@@ -152,6 +176,18 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	}
 	if databaseURL == "" {
 		return errors.New("user: --database-url is required")
+	}
+	if !reset {
+		provided := false
+		fs.Visit(func(current *flag.Flag) {
+			if current.Name == "email" {
+				provided = true
+			}
+		})
+		email, err = ownerEmailInput(env, email, provided)
+		if err != nil {
+			return err
+		}
 	}
 	if email == "" {
 		return errors.New("user: --email is required")
@@ -164,6 +200,14 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if reset {
 		passwordEnv, passwordLabel = "JOBCRON_USER_PASSWORD", "User"
 	}
+	if in == nil {
+		in = os.Stdin
+	}
+	// Share nonterminal read-ahead across the user and database prompts.
+	// Keep terminal files unwrapped so ReadPassword still disables echo.
+	if file, ok := in.(*os.File); !ok || !term.IsTerminal(int(file.Fd())) {
+		in = bufio.NewReader(in)
+	}
 	password, err := commandPassword(env, passwordEnv, passwordLabel, in, promptOut)
 	if err != nil {
 		return err
@@ -175,6 +219,11 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 	if err != nil {
 		return err
 	}
+	databaseURL, release, err := operatorDatabase(env, databaseURL, in, promptOut)
+	if err != nil {
+		return err
+	}
+	defer release()
 	st, err := openUserStore(databaseURL)
 	if err != nil {
 		return err
@@ -188,14 +237,25 @@ func runOwnerCommand(ctx context.Context, name string, args []string, env envMap
 		user, err = st.CreateOwnerUser(ctx, email, passwordHash)
 	}
 	if err != nil {
+		if !reset && env["JOBCRON_ENV"] == "production" {
+			return errors.New("user: create owner failed")
+		}
 		return err
 	}
 	if reset {
 		fmt.Fprintf(out, "reset password for %s (user ID %d)\n", user.Email, user.ID)
 	} else {
-		fmt.Fprintf(out, "created owner user %s (user ID %d)\n", user.Email, user.ID)
+		writeOwnerCreated(out, user, env["JOBCRON_ENV"] == "production")
 	}
 	return nil
+}
+
+func writeOwnerCreated(out io.Writer, user storage.User, production bool) {
+	if production {
+		fmt.Fprintf(out, "owner_user_ready=true user_id=%d\n", user.ID)
+	} else {
+		fmt.Fprintf(out, "created owner user %s (user ID %d)\n", user.Email, user.ID)
+	}
 }
 
 func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io.Writer) error {
@@ -234,6 +294,11 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 		return errors.New("user: email confirmation does not match")
 	}
 
+	databaseURL, release, err := operatorDatabase(env, databaseURL, nil, io.Discard)
+	if err != nil {
+		return err
+	}
+	defer release()
 	st, err := openUserStore(databaseURL)
 	if err != nil {
 		return err
@@ -254,6 +319,40 @@ func runDeleteUserCommand(ctx context.Context, args []string, env envMap, out io
 		return errors.New("user: user no longer exists")
 	}
 	fmt.Fprintf(out, "deleted user %s (user ID %d)\n", user.Email, user.ID)
+	return nil
+}
+
+func ownerEmailInput(env envMap, flagValue string, provided bool) (string, error) {
+	_, direct := env["JOBCRON_OWNER_EMAIL"]
+	_, file := env["JOBCRON_OWNER_EMAIL_FILE"]
+	if env["JOBCRON_ENV"] == "production" && (provided || direct || !file) {
+		return "", errors.New("user: production requires JOBCRON_OWNER_EMAIL_FILE")
+	}
+	if provided && (direct || file) {
+		return "", errors.New("user: ambiguous owner email input")
+	}
+	if direct || file {
+		return config.Secret(env, "JOBCRON_OWNER_EMAIL")
+	}
+	return flagValue, nil
+}
+
+// Check raw option names, including after -- or positional arguments, without
+// disclosing values. Explicit empty and duplicate flags are still inputs.
+func rejectOwnerEmailArgs(env envMap, args []string) error {
+	count := 0
+	for _, arg := range args {
+		name, _, _ := strings.Cut(arg, "=")
+		if name == "--email" || name == "-email" {
+			if env["JOBCRON_ENV"] == "production" {
+				return errors.New("user: production requires JOBCRON_OWNER_EMAIL_FILE")
+			}
+			count++
+		}
+	}
+	if count > 1 {
+		return errors.New("user: ambiguous owner email input")
+	}
 	return nil
 }
 
