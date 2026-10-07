@@ -345,6 +345,39 @@ func TestProductionComposeVerifierRejectsUnsafeTopology(t *testing.T) {
 			),
 		},
 		{
+			name:     "runtime secrets writable",
+			contract: "services.app.volumes",
+			mutate:   replaceOnce("/run/jobcron/secrets:/run/jobcron/secrets:ro", "/run/jobcron/secrets:/run/jobcron/secrets:rw"),
+		},
+		{
+			name:     "RDS CA writable",
+			contract: "services.app.volumes",
+			mutate:   replaceOnce("        read_only: true", "        read_only: false"),
+		},
+		{
+			name:     "RDS CA auto creates host path",
+			contract: "services.app.volumes",
+			mutate:   replaceOnce("          create_host_path: false", "          create_host_path: true"),
+		},
+		{
+			name:     "RDS CA short syntax auto creates host path",
+			contract: "services.app.volumes",
+			mutate: replaceOnce(
+				"      - type: bind\n        source: /run/jobcron/rds-ca.pem\n        target: /run/jobcron/rds-ca.pem\n        read_only: true\n        bind:\n          create_host_path: false",
+				"      - /run/jobcron/rds-ca.pem:/run/jobcron/rds-ca.pem:ro",
+			),
+		},
+		{
+			name:     "RDS CA wrong target",
+			contract: "services.app.volumes",
+			mutate:   replaceOnce("        target: /run/jobcron/rds-ca.pem", "        target: /run/jobcron/other-ca.pem"),
+		},
+		{
+			name:     "extra read-only app mount",
+			contract: "services.app.volumes",
+			mutate:   replaceOnce("      - /run/jobcron/secrets:/run/jobcron/secrets:ro", "      - /run/jobcron/secrets:/run/jobcron/secrets:ro\n      - /run/jobcron/extra:/run/jobcron/extra:ro"),
+		},
+		{
 			name:     "app publishes on all interfaces",
 			contract: "services.app.ports",
 			mutate: replaceOnce(

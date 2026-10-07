@@ -90,6 +90,12 @@ func newTestServer(t *testing.T, f *fakeScraper) (*Server, *storage.Store) {
 	if err != nil {
 		t.Fatalf("OpenAt: %v", err)
 	}
+	// SQLite is only a legacy compatibility fixture here. Its deferred
+	// read-to-write transactions cannot upgrade a stale WAL snapshot, even
+	// with busy_timeout. Queue fixture DB operations on one connection; the
+	// provider worker pool remains concurrent and PostgreSQL fixtures retain
+	// their separate, unrestricted connection setup.
+	st.SQLDB().SetMaxOpenConns(1)
 	t.Cleanup(func() { st.Close() })
 	return New(st, f), st
 }

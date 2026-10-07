@@ -56,10 +56,46 @@ if docker compose -f "$compose_file" -f "$legacy_volume_probe" config --quiet \
 	fail "volumes.jobcron_config must be absent"
 fi
 
+# Compose v2 omits false create_host_path; v5 omits true instead. Determine
+# which representation this renderer uses without running or mounting anything.
+# Reuse the private probe file; no application environment is rendered here.
+cat >"$legacy_volume_probe" <<'EOF'
+services:
+  production_contract_probe:
+    image: scratch
+    volumes:
+      - type: bind
+        source: /contract-false
+        target: /contract-false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /contract-true
+        target: /contract-true
+        bind:
+          create_host_path: true
+EOF
+if ! omitted_host_path_is_false=$(docker compose -f "$legacy_volume_probe" config --format json 2>/dev/null |
+	jq -r '
+		.services.production_contract_probe.volumes as $v |
+		($v[] | select(.target == "/contract-false").bind) as $f |
+		($v[] | select(.target == "/contract-true").bind) as $t |
+		if ($f | type) != "object" or ($t | type) != "object" then error("bind options")
+		elif ($f | has("create_host_path") | not) and $t.create_host_path == true then true
+		elif $f.create_host_path == false and
+			(($t | has("create_host_path") | not) or $t.create_host_path == true) then false
+		else error("bind options") end
+	' 2>/dev/null); then
+	fail "Compose bind create_host_path representation"
+fi
+[ "$omitted_host_path_is_false" = true ] || [ "$omitted_host_path_is_false" = false ] ||
+	fail "Compose bind create_host_path representation"
+
 check_contract() {
 	contract=$1
 	filter=$2
-	if ! jq -e "$filter" "$rendered_compose" >/dev/null 2>&1; then
+	if ! jq --argjson omitted_host_path_is_false "$omitted_host_path_is_false" \
+		-e "$filter" "$rendered_compose" >/dev/null 2>&1; then
 		fail "$contract"
 	fi
 }
@@ -70,7 +106,10 @@ check_contract "services.app.volumes must be only read-only runtime secrets and 
 	.services.app.volumes as $v | ($v | length) == 2 and
 	all($v[]; .type == "bind" and .read_only == true and .source == .target) and
 	([$v[].source] | sort) == ["/run/jobcron/rds-ca.pem", "/run/jobcron/secrets"] and
-	all($v[] | select(.source == "/run/jobcron/rds-ca.pem"); .bind.create_host_path == false)
+	all($v[] | select(.source == "/run/jobcron/rds-ca.pem");
+		(.bind | type == "object") and
+		(.bind.create_host_path == false or
+			($omitted_host_path_is_false and (.bind | has("create_host_path") | not))))
 '
 check_contract "services.app.ports must bind only loopback 7777" '
 	(.services.app.ports // []) as $ports |
