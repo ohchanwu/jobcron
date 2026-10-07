@@ -348,9 +348,9 @@ jq -n '{
 
 cat >"$fixture_root/replacement-user-data" <<'EOF'
 #!/bin/bash
-/opt/jobcron/compose.yaml 905cfbc80845e4e09edd05099b80ae00d0e6e7910f9295a716a5642cce0cee48
+/opt/jobcron/compose.yaml b6bee7a42b61eb2bbd78d61674235fa246a34f02aace8e26e99c1d9267f6dd93
 /opt/jobcron/Caddyfile 9d040c186245ed16791f3c5b909c6384447d080d6fc87ba8926e96197608d56c
-/opt/jobcron/jobcron-runtime.sh 2dcdeef787e6286a72c7e5cb430baa06440b1992972b2ec40e1510c7504abdd2
+/opt/jobcron/jobcron-runtime.sh b8acc836b7ea1258331fa5375945619c00acf509d3be8d9690fda0cd28f2c602
 /etc/systemd/system/jobcron.service f450f85dd50c75250b0c5ae4c40cbcc61da8453356b3b89cec8abe9c647e10dd
 /etc/systemd/system/jobcron-recovery.service f1ead8f00c5cdf8dab3b1dd2564b3e20956fa38f388fe82016098383ea3e361c
 /etc/systemd/system/jobcron-recovery.timer 4b9831517333fcb689dd40e7db55faf1773495bc85f54612e0ab8db6e75a834c
