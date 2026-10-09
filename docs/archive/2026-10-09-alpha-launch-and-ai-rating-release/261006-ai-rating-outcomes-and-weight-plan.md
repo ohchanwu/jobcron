@@ -1,8 +1,8 @@
 # AI rating outcomes and weighting — implementation and combined-release plan
 
-Status: revised draft R2 addressing review120's remaining manifest-metadata correction; awaiting independent re-review, not an execution envelope.
+Status: archived 2026-10-09. Implementation and release accepted at `4701eba23989b2dc4eac93ea12f1896ea16b6066`. The original future-tense steps below preserve historical scope; they are not pending tasks or authority to repeat operations. See [the maintained contract](../../decisions/261009-ai-rating-and-release-contract.md).
 Created: 2026-10-06. Author: jobcron-orchestrator.
-Governing [specification](../specs/261006-ai-rating-outcomes-and-weight.md).
+Historical governing [specification](261006-ai-rating-outcomes-and-weight.md).
 Protected baseline: `b7ce9d585f3cdadf3eb12bff9c8b8e690f9a1964` on local main.
 
 ## Authority and execution tuple

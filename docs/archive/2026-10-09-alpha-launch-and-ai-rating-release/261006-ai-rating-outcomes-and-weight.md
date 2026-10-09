@@ -1,9 +1,9 @@
 # AI rating outcomes, evidence-aligned prompting, and stronger deltas
 
-Status: revised draft R2 addressing review120's remaining manifest-metadata correction; awaiting independent re-review, not implemented or deployed.
+Status: archived 2026-10-09. Implemented and release accepted at `4701eba23989b2dc4eac93ea12f1896ea16b6066`; original scope/rationale below are historical, not another work queue or live grant. See [the maintained contract](../../decisions/261009-ai-rating-and-release-contract.md).
 Created: 2026-10-06. Author: jobcron-orchestrator.
 Source baseline: `b7ce9d585f3cdadf3eb12bff9c8b8e690f9a1964`.
-Companion: [implementation and combined-release plan](../plans/261006-ai-rating-outcomes-and-weight-plan.md).
+Companion: [completed implementation and combined-release plan](261006-ai-rating-outcomes-and-weight-plan.md).
 
 ## Objective and authority
 

@@ -1,10 +1,11 @@
 # Human deploy guide for jobcron.app production
 
-> **Alpha launch:** Use the
-> [human-assisted alpha deployment specification](../../docs/specs/260923-human-assisted-alpha-deployment.md)
-> as the controlling runbook. This document preserves detailed private-runtime
-> procedures that may be selected during that attended run; it is not a mandate
-> to execute the superseded multi-slice launch end to end.
+> **Lifecycle:** The [initial alpha launch specification](../../docs/archive/2026-10-09-alpha-launch-and-ai-rating-release/260923-human-assisted-alpha-deployment.md)
+> is historical. This guide retains detailed native/runtime procedures, not a
+> mandate or authority to rerun the launch. For an existing working service,
+> use the [maintained safety contract](../../docs/decisions/261009-ai-rating-and-release-contract.md).
+> The [app-only runner proposal](../../docs/specs/261009-app-only-release-runner.md)
+> is draft documentation only; no new runner command is implemented by this update.
 
 This guide supports an explicit lean initial deployment and the historical
 private Slice 4 replacement-host sequence. Neither authorizes a

@@ -35,15 +35,19 @@ Use this index instead of recursively loading the entire documentation tree.
   reports. Load only the active files listed here and the concise decision
   records needed for the current task.
 
-- [AI rating outcomes and stronger weighting — draft specification](specs/261006-ai-rating-outcomes-and-weight.md)
-  and [implementation / combined-release plan](plans/261006-ai-rating-outcomes-and-weight-plan.md)
-  await independent readiness review; application implementation and live release are not completed.
-- [Emergency overnight alpha deployment — owner-approved 2026-10-05][emergency-overnight-deployment]
-  controls this launch's autonomous sequencing; exact operations still require
-  independent review and fresh per-operation envelopes.
-- [Human-assisted alpha deployment][human-assisted-alpha-deployment]
-  remains the technical safety reference; its attended sequencing is superseded
-  for this launch by the approved emergency scope above.
+- [App-only release runner — draft specification](specs/261009-app-only-release-runner.md)
+  and [phased plan](plans/261009-app-only-release-runner-plan.md).
+- [Gemini pacing and quota classification — narrow draft specification](specs/261009-gemini-pacing-and-quota-classification.md)
+  and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
+  The runner is proposed first, the Gemini payload second. Both pairs await review
+  and owner approval; **documentation only, no implementation or live authority**.
+- [Maintained AI-rating and existing-service release contract](decisions/261009-ai-rating-and-release-contract.md)
+  records accepted behavior and reusable safety requirements. The prior AI-rating
+  upgrade is complete at commit `4701eba23989b2dc4eac93ea12f1896ea16b6066`;
+  its execution plan is no longer active work.
+- Historical compatibility pointers remain at the old human-assisted and emergency
+  spec paths because tests/owner instructions consume them. Full completed designs
+  are archived; these pointers are not pending work or operational authority.
 
 ## Recently Archived
 
@@ -52,6 +56,10 @@ only when the active task or a human explicitly names it. See
 [archive guidance](archive/AGENTS.md).
 
 - [Completed PostgreSQL convergence specification][postgresql-convergence-spec-archive]
+- [Completed alpha launch and AI-rating upgrade](archive/2026-10-09-alpha-launch-and-ai-rating-release/README.md)
+  includes the [human-assisted initial design][human-assisted-alpha-deployment],
+  [closed emergency scope][emergency-overnight-deployment], and completed AI-rating
+  spec/plan. Initial-launch assumptions and old approvals do not govern new upgrades.
 - [Completed Hermes orchestration transition adapter][hermes-orchestration-transition]
 - [Superseded first-production deployment records][simplified-alpha-deployment-archive]
 - [Terraform Slice 3 implementation archive][terraform-slice-3-plan]
@@ -106,11 +114,15 @@ only when the active task or a human explicitly names it. See
 - [RDS production settings](decisions/260710-rds-production-settings.md)
 - [Jobcron production and rename decisions](decisions/260711-jobcron-production.md)
 - [Hosted-first product and local database convergence](decisions/260714-hosted-first-local-database-convergence.md)
+- [AI-rating outcomes and existing-service release safety](decisions/261009-ai-rating-and-release-contract.md)
 
 ## Context Policy
 
 - `plans/` contains only work that is not implemented yet.
 - `specs/` contains only designs that are still active or awaiting approval.
+  Tiny historical-path pointers may remain where existing tests or owner
+  instructions require them; they carry no active requirements or authority.
+  Draft companion plans are explicitly marked not approved for execution.
 - `decisions/` contains short durable facts needed by future work.
 - `archive/` contains completed evidence. Do not scan or load it unless an
   active plan or a human explicitly names a specific archived file.
@@ -146,9 +158,9 @@ Compose, Caddy, CI, and EC2 commands consume those paths directly.
 [caller-managed-convoy-closeout]: learnings/260718-caller-managed-convoy-closeout.md
 [local-only-submit-formula]: learnings/260719-local-only-polecat-submit-formula.md
 [human-assisted-alpha-deployment]:
-  specs/260923-human-assisted-alpha-deployment.md
+  archive/2026-10-09-alpha-launch-and-ai-rating-release/260923-human-assisted-alpha-deployment.md
 [emergency-overnight-deployment]:
-  specs/261005-emergency-overnight-deployment.md
+  archive/2026-10-09-alpha-launch-and-ai-rating-release/261005-emergency-overnight-deployment.md
 [gemini-byok-spec-archive]:
   archive/2026-09-25-gemini-byok-onboarding/260924-gemini-byok-onboarding.md
 [gemini-byok-plan-archive]:

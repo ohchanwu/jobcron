@@ -1,8 +1,9 @@
 # Re-rate (재평가) cache semantics
 
-Stage-2 outcomes now preserve the difference between a genuine empty response,
-unverified proposals, and a failed call. This document describes the locally
-implemented contract; candidate review and any production rollout are separate.
+Stage-2 outcomes preserve the difference between a genuine empty response,
+unverified proposals, and a failed call. This contract was implemented and its
+release accepted at `4701eba23989b2dc4eac93ea12f1896ea16b6066`. That historical
+acceptance is not fresh production evidence or authority for another operation.
 
 ## Rated and genuine no-signal results are cached successes
 
@@ -149,6 +150,8 @@ The additive outcome migrations are SQLite 0013 and PostgreSQL 0020. A distinct
 baseline-behavior compatibility recovery build must carry those exact files and
 the matching complete pinned manifest; the untouched prior binary is not the
 post-upgrade recovery artifact. Preserve the authoritative ledger and user writes.
-See the reviewed [specification](../../docs/specs/261006-ai-rating-outcomes-and-weight.md)
-and [plan](../../docs/plans/261006-ai-rating-outcomes-and-weight-plan.md). Preparation
-and local rehearsal do not authorize publication, production migration or deployment.
+See the [maintained outcome/release contract](../../docs/decisions/261009-ai-rating-and-release-contract.md)
+and [completed historical specification/plan](../../docs/archive/2026-10-09-alpha-launch-and-ai-rating-release/README.md).
+The [Gemini follow-up](../../docs/specs/261009-gemini-pacing-and-quota-classification.md)
+is draft work, not implemented behavior. Preparation and local rehearsal do not
+authorize publication, production migration, deployment or live inference.

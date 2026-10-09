@@ -32,6 +32,12 @@ Open an archived file only when the active task or the human explicitly names
 that file. `.superpowers/sdd/` is ephemeral and should contain only the current
 execution's ignored artifacts.
 
+Current documentation-only proposals are
+`docs/specs/261009-app-only-release-runner.md` and
+`docs/specs/261009-gemini-pacing-and-quota-classification.md`, with companion
+plans indexed in `docs/README.md`. They await review and owner approval; do not
+start implementation or live operations from these drafts.
+
 For the private production-plan structural inventory, read
 `docs/operations/260926-private-plan-shape.md` before using the
 `scripts/private_plan_shape*.py` tools.

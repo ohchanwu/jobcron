@@ -1,9 +1,11 @@
 # AWS production deploy: jobcron.app
 
-> **Alpha launch:** The active end-to-end runbook is the concise
-> [human-assisted alpha deployment specification](../../docs/specs/260923-human-assisted-alpha-deployment.md).
-> This directory remains the technical runtime reference; its earlier Slice 4
-> sequencing is not independent authorization to execute every step.
+> **Existing-service releases:** This directory is a technical runtime reference,
+> not fresh operational authority. The [initial alpha launch design](../../docs/archive/2026-10-09-alpha-launch-and-ai-rating-release/260923-human-assisted-alpha-deployment.md)
+> is historical; its empty-bootstrap lane is not a routine-upgrade shortcut.
+> Read the [maintained release contract](../../docs/decisions/261009-ai-rating-and-release-contract.md).
+> The [app-only runner specification](../../docs/specs/261009-app-only-release-runner.md)
+> is a draft, not an available command or implementation approval.
 
 ## Deployment modes
 
