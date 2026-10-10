@@ -1,9 +1,20 @@
 # App-Only Release Runner — Phased Plan
 
-Created: 2026-10-09. Status: draft companion plan, **not approved for execution**.
+Created: 2026-10-09. Updated: 2026-10-10. Status: Phase 0 accepted; owner-authorized
+local Phase 1/2 implementation/rehearsal on `t_6e112520`, independent acceptance
+pending. Phase 3 onward remains conditional and separately gated.
 Governing [specification](../specs/261009-app-only-release-runner.md).
 Baseline: `4701eba23989b2dc4eac93ea12f1896ea16b6066`; bind the subsequently reviewed
 and integrated docs baseline before any implementation dispatch.
+
+The pinned implementation baseline is
+`37b589bc671fe33e9928c492a1a5d29170a29484`. The native Python CLI and owned
+fixture are documented in [actual invocation/custody](../../scripts/app_release_fixture/README.md).
+Real local current -> candidate -> compatible recovery -> candidate checks,
+authenticated HTTPS/logout, seeded post-change data retention and lost-reply
+readback ran; exact local candidate review remains required. Historical crash and
+fixture correction evidence is retained, not reset. No hosted publication,
+provider/IAM read, production deployment or Gemini experiment was performed.
 
 ## Phase 0 — documentation and readiness
 

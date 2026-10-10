@@ -1,11 +1,23 @@
 # App-Only Release Runner v1
 
-Created: 2026-10-09. Status: draft, awaiting design/readiness review and owner
-approval. **Documentation only; implementation is not authorized.**
+Created: 2026-10-09. Updated: 2026-10-10. Status: local implementation/rehearsal,
+independent exact-candidate acceptance pending. Readiness review approved the
+integrated documentation baseline `37b589bc671fe33e9928c492a1a5d29170a29484`;
+the owner separately authorized local Phase 1/2 on card `t_6e112520`.
+This is NOT production, publication, credential or provider authority.
 Companion: [phased plan](../plans/261009-app-only-release-runner-plan.md).
 Source baseline: `4701eba23989b2dc4eac93ea12f1896ea16b6066`.
 
 ## Purpose and lifecycle
+
+The runnable target-host entry point is `scripts/app_release.py`. See
+[invocation, schema, custody and limitations](../../scripts/app_release_fixture/README.md).
+It implements default input-only prepare, authorized preflight, release,
+resume/reconcile and separately approved compatible recovery using fixed native
+operations. The owned local rehearsal executed real app/DB/proxy replacement,
+authenticated HTTPS journeys, retained new writes and lost-reply reconciliation.
+Local gate records/short observation do not prove hosted CI, IAM/provider
+permissions, public production routing or the 30-minute production gate.
 
 Make ordinary upgrades of the existing working service easier and faster without
 weakening recovery, custody, review or external-write gates. This is a small
@@ -15,8 +27,8 @@ this design does not promise zero downtime.
 
 Implement and independently accept the runner on disposable local infrastructure
 first. The [Gemini pacing/classification change](261009-gemini-pacing-and-quota-classification.md)
-is the proposed first payload afterward. No implementation, live investigation,
-provider call, publication or deployment follows merely from approving these docs.
+is the proposed first payload afterward. No live investigation, provider call,
+publication or deployment follows from this local implementation or these docs.
 
 Reuse the [maintained release safety contract](../decisions/261009-ai-rating-and-release-contract.md),
 [production runtime reference](../../deploy/production/README.md), supported

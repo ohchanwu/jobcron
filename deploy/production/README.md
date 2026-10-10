@@ -5,7 +5,29 @@
 > is historical; its empty-bootstrap lane is not a routine-upgrade shortcut.
 > Read the [maintained release contract](../../docs/decisions/261009-ai-rating-and-release-contract.md).
 > The [app-only runner specification](../../docs/specs/261009-app-only-release-runner.md)
-> is a draft, not an available command or implementation approval.
+> now has a runnable target-host CLI, with local acceptance review pending.
+> See [real invocation and custody](../../scripts/app_release_fixture/README.md).
+> Local rehearsal is not production, provider, publication or credential authority.
+
+## Existing-service app-only releases
+
+Use `python3 scripts/app_release.py` from a reviewed checkout for default input-only
+prepare; explicit `preflight`, `release`, `resume` and `recover` stages use private
+descriptor/evidence/approval/target inputs. The
+[operator reference](../../scripts/app_release_fixture/README.md) lists their exact
+schemas, native prerequisites, approval scopes and interruption/recovery behavior.
+Execute production adapters only on the exact selected host through the existing
+attended SSM route with separate approvals. They were not exercised against AWS.
+
+This lane preserves complete migration manifests and the exact ledger, all
+non-image values, proxy/mount/database identities and one scheduler. It does not
+call runtime `prepare`/`cleanup`, Compose down or whole-stack systemd restart.
+Images must be preavailable at immutable digest/platform before interruption;
+registry acquisition stays separately attended. A lost response preserves unknown
+intent; resume reads actual state and does not replay a committed replacement.
+Compatible recovery requires named approval and keeps the authoritative database
+and post-change writes. The required production observation is at least 30 minutes;
+the shorter synthetic fixture interval never satisfies it.
 
 ## Deployment modes
 

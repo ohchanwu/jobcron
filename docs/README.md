@@ -35,12 +35,16 @@ Use this index instead of recursively loading the entire documentation tree.
   reports. Load only the active files listed here and the concise decision
   records needed for the current task.
 
-- [App-only release runner — draft specification](specs/261009-app-only-release-runner.md)
+- [App-only release runner — local implementation, acceptance pending](specs/261009-app-only-release-runner.md)
   and [phased plan](plans/261009-app-only-release-runner-plan.md).
+  Owner-authorized local implementation/rehearsal is on card `t_6e112520`;
+  [real invocation and input custody](../scripts/app_release_fixture/README.md)
+  cover the native CLI. Independent exact-candidate review remains required;
+  no production/publication/provider authority follows from local checks.
 - [Gemini pacing and quota classification — narrow draft specification](specs/261009-gemini-pacing-and-quota-classification.md)
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
-  The runner is proposed first, the Gemini payload second. Both pairs await review
-  and owner approval; **documentation only, no implementation or live authority**.
+  The Gemini payload remains a separate documentation-only proposal awaiting
+  review and owner approval; no Gemini implementation or live authority.
 - [Maintained AI-rating and existing-service release contract](decisions/261009-ai-rating-and-release-contract.md)
   records accepted behavior and reusable safety requirements. The prior AI-rating
   upgrade is complete at commit `4701eba23989b2dc4eac93ea12f1896ea16b6066`;

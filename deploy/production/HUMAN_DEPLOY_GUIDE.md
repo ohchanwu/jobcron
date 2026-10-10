@@ -4,8 +4,11 @@
 > is historical. This guide retains detailed native/runtime procedures, not a
 > mandate or authority to rerun the launch. For an existing working service,
 > use the [maintained safety contract](../../docs/decisions/261009-ai-rating-and-release-contract.md).
-> The [app-only runner proposal](../../docs/specs/261009-app-only-release-runner.md)
-> is draft documentation only; no new runner command is implemented by this update.
+> The [app-only runner](../../docs/specs/261009-app-only-release-runner.md) is now
+> implemented for local acceptance, with independent review pending. Its
+> [actual invocation/custody reference](../../scripts/app_release_fixture/README.md)
+> controls that unchanged-schema image-only lane, not the initial-launch sequence
+> below. Local checks grant no production/provider/publication authority.
 
 This guide supports an explicit lean initial deployment and the historical
 private Slice 4 replacement-host sequence. Neither authorizes a
