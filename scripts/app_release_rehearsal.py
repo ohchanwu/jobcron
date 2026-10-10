@@ -292,10 +292,12 @@ class Fixture:
     def make_target(self):
         target = {"target": PROJECT, "project": PROJECT, "docker_host": self.docker_host,
                   "daemon_id": r.read_json(self.owner_path)["daemon_id"], "compose_file": str(self.root / "compose.json"),
-                  "compose_executable": "/usr/local/bin/docker-compose",
+                  "compose_executable": "/usr/local/bin/docker-compose", "compose_version": self.compose("version").decode().strip(),
                   "compose_sha256": r.file_digest(self.root / "compose.json"), "compose_env": str(self.root / "compose.env"),
                   "selector_file": str(self.root / "compose.env"), "lock_dir": str(self.directory("target-lock")),
                   "config_sha256": "", "protected_sha256": "", "protected_paths": [str(self.root / n) for n in ("secrets", "tls", "Caddyfile", "proxy-header")],
+                  "protected_public_paths": [str(self.root / "Caddyfile")],
+                  "protected_metadata_file": str(self.root / "initial-protected.json"),
                   "journey_url": "https://127.0.0.1:17780", "journey_ca_file": str(self.root / "tls/origin.crt"),
                   "journey_account_file": str(self.root / "input/account.json"), "proxy_secret_file": str(self.root / "secrets/JOBCRON_PROXY_SECRET")}
         d = {"mode": "local", "operation_timeout": 120, "manifests": self.manifests()}
@@ -345,6 +347,36 @@ class Fixture:
                 r.atomic(path, value)
         return root, d, evidence, approval, target
 
+    def attended_inputs(self, root, d, e, t, action="accept-effective-state"):
+        # LOCAL fixture operator simulation only. The fault runs AFTER a real,
+        # awaited Compose success. No production approval generator.
+        r.require(d["mode"] == "local" and t["project"] == PROJECT, "local attended inputs only")
+        cp = r.read_json(root / "checkpoint.json")
+        process = cp["pending"]["native_process"]
+        r.require(process["terminal"] is True and process.get("exit_code") == 0, "fixture native effect not settled")
+        try:
+            os.kill(process["pid"], 0)
+        except ProcessLookupError:
+            pass
+        else:
+            raise r.Refuse("fixture native client still alive")
+        host = r.Host(d, t, self.directory("attended-read"))
+        observed = host.snapshot(allow_stopped=True, allow_absent=True)
+        time.sleep(0.2)
+        r.require(host.snapshot(allow_stopped=True, allow_absent=True) == observed, "unstable attended fixture state")
+        binding = {"target": d["target"], "descriptor_sha256": r.digest(d), "evidence_sha256": r.digest(e),
+                   "target_sha256": r.digest(t), "checkpoint_sha256": r.file_digest(root / "checkpoint.json"),
+                   "sequence": cp["sequence"], "operation_id": cp["pending"]["operation_id"], "artifact": cp["wanted"],
+                   "observed": observed, "selector": host.selector()}
+        evidence = dict(binding, schema=1, native_invocation_terminated=True, native_effects_settled=True, exclusive_operator=True,
+                        record="LOCAL synthetic attended inspection: awaited owned native command exit0 before fault injection; terminated PID; stable exclusive owned readback; not production authority")
+        path = root / "attended-evidence.json"
+        r.atomic(path, evidence)
+        approval = dict(binding, schema=1, disposition=action, authority=action, approval_id=CARD + "-local-attended-disposition",
+                        evidence_file=str(path), evidence_sha256_file=r.file_digest(path))
+        r.atomic(root / "attended-disposition.json", approval)
+        return approval
+
     def sequence(self):
         receipts = []
         stages = (
@@ -374,26 +406,65 @@ class Fixture:
                     def replace(self):
                         super().replace()
                         raise r.Unknown("injected locally lost native Compose reply")
+                class CrashBackup(r.Runner):
+                    def commit_effect(self, pending):
+                        if pending["kind"] == "recovery-point":
+                            raise r.Unknown("local crash after durable backup outcome/readback")
+                        super().commit_effect(pending)
                 try:
-                    r.Runner(d, e, a, t, root, host_class=LostReply).start()
+                    CrashBackup(d, e, a, t, root).start()
+                    raise AssertionError("backup pair crash not injected")
+                except r.Unknown:
+                    backup_op = r.read_json(root / "checkpoint.json")["pending"]["operation_id"]
+                try:
+                    r.Runner(d, e, a, t, root, host_class=LostReply).start(resume=True)
                     raise AssertionError("lost reply injection did not stop")
                 except r.Unknown:
                     checkpoint = r.read_json(root / "checkpoint.json")
                     r.require(checkpoint["pending"]["kind"] == "replace", "lost native reply not retained")
+                    r.require(checkpoint["backup"]["operation_id"] == backup_op and
+                              len(list(root.glob("*.dump"))) == 1, "durable backup replayed")
+                    r.atomic(root / "backup-pair-readback.json", {"durable_pair_reconciled": True, "backup_not_replayed": True})
                 self.wait_http()
                 before_resume = r.Host(d, t, self.directory("resume-read")).snapshot()
-                receipt = r.Runner(d, e, a, t, root).start(resume=True)
+                original = r.file_digest(root / "checkpoint.json")
+                try:
+                    r.Runner(d, e, a, t, root).start(resume=True)
+                    raise AssertionError("unbound lost replacement adopted automatically")
+                except r.Refuse:
+                    r.require(r.file_digest(root / "checkpoint.json") == original, "refusal rewrote unknown checkpoint")
+                approval = self.attended_inputs(root, d, e, t)
+                receipt = r.Runner(d, e, a, t, root).start(resume=True, disposition=approval)
                 after_resume = r.Host(d, t, self.directory("resume-read")).snapshot()
                 r.require(before_resume == after_resume, "resume duplicated committed replacement")
                 r.atomic(root / "lost-reply-readback.json", {"same_container_before_after_resume": True, "container": after_resume["container"],
-                         "native_effect": "Compose up --no-deps app actually committed", "transport_fault": "local reply discarded", "provider_permissions_proven": False})
+                         "native_effect": "Compose up --no-deps app actually committed", "transport_fault": "local reply discarded", "provider_permissions_proven": False,
+                         "automatic_adoption_refused": True, "explicit_local_attended_resolution": True, "causal_container_provenance_claimed": False})
                 # A post-change valuable write, not restored from an old dump.
                 self.sql("INSERT INTO profiles(user_id,profile_json,profile_hash,updated_at) VALUES(1,'{\"min_score\":17}', 'fixture-post-change', now());")
             else:
-                receipt = r.Runner(d, e, a, t, root).start(recovery=is_recovery)
+                if name == "forward-2":
+                    class CrashCommit(r.Runner):
+                        def commit_effect(self, pending):
+                            if pending["kind"] == "replace":
+                                raise r.Unknown("local crash AFTER durable native success/postimage pair")
+                            super().commit_effect(pending)
+                    try:
+                        CrashCommit(d, e, a, t, root).start()
+                        raise AssertionError("durable-pair crash did not occur")
+                    except r.Unknown:
+                        pass
+                    before = r.Host(d, t, self.directory("durable-read")).snapshot()
+                    receipt = r.Runner(d, e, a, t, root).start(resume=True)
+                    r.require(r.Host(d, t, self.directory("durable-read")).snapshot() == before, "durable-pair resume replayed replacement")
+                    r.atomic(root / "delivered-pair-readback.json", {"native_success_postimage_pair": True, "same_container_after_resume": True})
+                else:
+                    receipt = r.Runner(d, e, a, t, root).start(recovery=is_recovery)
                 r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":17}', "post-change write lost across recovery")
             receipts.append(receipt)
         failure_receipt = self.failed_recovery()
+        intermediate_receipt = self.intermediate_recovery()
+        old_stopped_receipt = self.old_stopped_recovery()
         self.unknown_refusal()
         # Full receipts deliberately contain no private selector paths/config/
         # secret digests or credential/cookie values. Inputs remain owner-only.
@@ -401,6 +472,8 @@ class Fixture:
                  "sequence": "current -> candidate -> compatible recovery -> candidate", "post_change_write_preserved": True,
                  "lost_reply_reconciled_without_replay": True, "unknown_state_refused": True,
                  "failed_stopped_candidate_approved_recovery": failure_receipt,
+                 "absent_intermediate_attended_recovery": intermediate_receipt,
+                 "old_app_stopped_before_completion_recovery": old_stopped_receipt,
                  "same_application_source_baseline": BASELINE, "independent_binary_build_parameters": True,
                  "production_stability_or_IAM_proven": False, "resources": "retained for review; exact owned cleanup only"})
 
@@ -439,6 +512,12 @@ class Fixture:
         before_resume = host.snapshot()
         try:
             runner.start(resume=True)
+            raise AssertionError("late helper automatically adopted unknown replacement")
+        except r.Refuse:
+            r.require(host.snapshot() == before_resume, "unknown refusal replayed replacement")
+        approval = self.attended_inputs(root, d, e, t)
+        try:
+            runner.start(resume=True, disposition=approval)
             raise AssertionError("injected failed journey accepted")
         except r.Refuse:
             cp = r.read_json(root / "checkpoint.json")
@@ -459,6 +538,8 @@ class Fixture:
         r.require(not stopped["running"] and stopped["container"] == committed["container"], "failed app stop unproven")
         r.atomic(root / "failure-readback.json", {"committed": committed, "stopped": stopped, "fault": "locally injected acceptance failure", "owned_native_stop": True})
         recovery_root, rd, re, ra, rt = self.inputs("failed-compatible-recovery", "current", "candidate", "candidate")
+        ra["recovery_preimage"] = stopped
+        r.atomic(recovery_root / "approvals.json", ra)
         # Real CLI invocation of the new approved handoff, not a command emitter.
         args = ["/usr/bin/python3", str(REPO / "scripts/app_release.py"), "recover", "--failed-state-dir", str(root),
                 "--state-dir", str(recovery_root)]
@@ -478,6 +559,74 @@ class Fixture:
                  "completed_resume_same_container": before["container"], "historical_observation_not_current_stability": True})
         return result
 
+    def intermediate_recovery(self):
+        root, d, e, a, t = self.inputs("absent-intermediate", "candidate", "current", "recovery")
+        class LostReply(r.Host):
+            def replace(self):
+                super().replace()
+                raise r.Unknown("locally lost reply before first postidentity")
+        try:
+            r.Runner(d, e, a, t, root, host_class=LostReply).start()
+            raise AssertionError("intermediate injection did not stop")
+        except r.Unknown:
+            pass
+        host = r.Host(d, t, self.directory("intermediate-read"))
+        committed = host.snapshot()
+        app = host.inspect(committed["container"])
+        r.require(app["Config"]["Labels"].get("jobcron.card") == CARD, "intermediate app not owned")
+        self.docker("stop", "--time", "10", committed["container"])
+        self.docker("rm", committed["container"])
+        absent = host.snapshot(allow_stopped=True, allow_absent=True)
+        r.require(absent["container"] is None, "owned absence unproven")
+        try:
+            r.Runner(d, e, a, t, root).start(resume=True)
+            raise AssertionError("absent unbound runtime automatically recovered")
+        except r.Refuse:
+            pass
+        approval = self.attended_inputs(root, d, e, t, action="recover-effective-state")
+        result = r.Runner(d, e, a, t, root).start(resume=True, disposition=approval)
+        r.require(result["status"] == "attended-recovery-ready" and not (root / "receipt.json").exists(), "unknown original falsely accepted")
+        old_hash = r.file_digest(root / "checkpoint.json")
+        rr, rd, re, ra, rt = self.inputs("intermediate-compatible-recovery", "current", "candidate", "candidate")
+        ra["recovery_preimage"] = absent
+        r.atomic(rr / "approvals.json", ra)
+        receipt = r.Runner(rd, re, ra, rt, rr).start(recovery=True, failed_state=root)
+        r.require(r.file_digest(root / "checkpoint.json") == old_hash, "unknown intermediate checkpoint rewritten")
+        r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":19}', "intermediate recovery lost new write")
+        r.atomic(rr / "intermediate-preservation.json", {"verified_absence": True, "trusted_local_attended_resolution": True,
+                 "unknown_original_not_accepted": True, "new_writes_and_proxy_db_mounts_ledger_preserved": True})
+        return receipt
+
+    def old_stopped_recovery(self):
+        root, d, e, a, t = self.inputs("old-app-stopped", "candidate", "current", "recovery")
+        class StopOldFault(r.Host):
+            def replace(self):
+                old = self.service("app")
+                self.mutate(lambda: self.docker("stop", "--time", "10", old["Id"]))
+                raise r.Unknown("LOCAL fault: original app stopped before Compose completion; result not bound")
+        try:
+            r.Runner(d, e, a, t, root, host_class=StopOldFault).start()
+            raise AssertionError("old-app fault did not stop")
+        except r.Unknown:
+            pass
+        host = r.Host(d, t, self.directory("old-stopped-read"))
+        stopped = host.snapshot(allow_stopped=True)
+        r.require(stopped["image"] == d["current"]["image_id"] and not stopped["running"], "old stopped runtime unproven")
+        approval = self.attended_inputs(root, d, e, t, action="recover-effective-state")
+        result = r.Runner(d, e, a, t, root).start(resume=True, disposition=approval)
+        r.require(result["status"] == "attended-recovery-ready" and not (root / "receipt.json").exists(), "old-app original falsely accepted")
+        old_hash = r.file_digest(root / "checkpoint.json")
+        rr, rd, re, ra, rt = self.inputs("old-stopped-compatible-recovery", "candidate", "current", "candidate")
+        ra["recovery_preimage"] = stopped
+        r.atomic(rr / "approvals.json", ra)
+        receipt = r.Runner(rd, re, ra, rt, rr).start(recovery=True, failed_state=root)
+        r.require(r.file_digest(root / "checkpoint.json") == old_hash, "old-app unknown history changed")
+        r.require(host.snapshot()["image"] == stopped["image"] and host.snapshot()["container"] != stopped["container"], "approved inactive same-image recovery not delivered")
+        r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":19}', "old-app recovery lost new write")
+        r.atomic(rr / "old-stopped-preservation.json", {"local_stop_before_completion_fault": True, "same_image_inactive_recovery_separately_approved": True,
+                 "unknown_original_not_accepted": True, "new_writes_and_proxy_db_mounts_ledger_preserved": True})
+        return receipt
+
     def unknown_refusal(self):
         root, d, e, a, t = self.inputs("unknown-refusal", "candidate", "current", "recovery")
         # Create submitted intent against an unchanged real app. Its readback is
@@ -485,7 +634,9 @@ class Fixture:
         host = r.Host(d, t, self.directory("unknown-read"))
         before = host.snapshot()
         selector = host.selector()
-        checkpoint = {"schema": 1, "target": PROJECT, "descriptor_sha256": r.digest(d), "evidence_sha256": r.digest(e),
+        checkpoint = {"schema": 1, "contract": "attended-v2", "sequence": 1, "approvals_sha256": r.digest(a),
+                      "wanted": d["candidate"], "selector_after": selector,
+                      "target": PROJECT, "descriptor_sha256": r.digest(d), "evidence_sha256": r.digest(e),
                       "target_sha256": r.digest(t), "recovery": False, "stage": "replace", "effects": [],
                       "initial": before, "selector_before": selector,
                       "pending": {"kind": "replace", "operation_id": "locally-ambiguous-not-noop", "status": "submitted-unknown",

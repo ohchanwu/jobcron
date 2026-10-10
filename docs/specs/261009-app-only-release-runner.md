@@ -131,6 +131,23 @@ unprovable state stops for reconciliation. Retry at most once only after proven
 pre-provider/no-submission failure. Do not infer that a local timeout prevented
 remote completion. Global owner stop halts the whole campaign; no scoped stop.
 
+The eligible local approach keeps native singleton Compose replacement. Before
+every write (including committed-backup/selector crash windows), require the
+recorded complete stage-preimage. Automatic replacement continuation needs a
+durable successful-command/exact-postimage pair and unchanged CID/image/start/
+restart/selector-version/protected state; Compose has no create-ID return channel.
+A missing native result OR first durable postidentity remains unknown, never
+same-image adoption or automatic replay. A separate trusted attended disposition
+must bind the original checkpoint digest/sequence, operation/target/artifact and
+independent settled-exclusive effective-state evidence plus named scope. Append
+that disposition and preserve unknown history; do not invent native causal proof.
+Still-in-flight or transient observations cannot authorize racing recovery.
+Changed host/DB/schema/protected/routing state remains outside this app-only lane.
+Actual [input and resume commands](../../scripts/app_release_fixture/README.md)
+define the runnable custody boundary, including explicit partial/absent recovery.
+Public disk Caddyfile stays immutable and need not be tmpfs; known secret routes,
+payloads and tool scratch remain owner-only tmpfs/no-swap in production.
+
 Recovery requires explicit named authority and a proven compatible image. It
 changes only the selector/app while retaining the authoritative database and new
 writes. Never delete ledger entries, weaken validation or restore an older

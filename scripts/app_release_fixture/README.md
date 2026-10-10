@@ -26,7 +26,7 @@ the supported runtime pull procedure ONLY under separate publication/credential
 and registry-read authority, before interrupting the app.
 
 Host root, daemon, installed tools, approved Compose contract and attended
-operator custody are trusted. Every input is an absolute owner-owned `0600`
+operator custody are trusted. Every private input is an absolute owner-owned `0600`
 single-link regular non-symlink file; state/lock directories are `0700`. Ancestors
 must not be symlinks or writable by other users. Do not use a shared `/tmp`.
 Do not modify the live Compose topology to get a pass. Its approved file must
@@ -42,7 +42,10 @@ chaining, `credential_process`, endpoint overrides, SSO and hidden config routes
 are refused. Native stdout is captured in bounded, non-disk pipes (8 MiB maximum),
 not a temporary file in the durable checkpoint directory. Production credential
 files, journey account, database URL, protected secret paths and native temporary
-workspace must be on verified owner-only tmpfs; payload/password temporaries are removed on
+workspace must be on verified owner-only tmpfs with swap disabled. The existing
+disk-backed public Caddyfile may be `0600` or `0644`; it remains owner-owned,
+single-link, non-symlink and immutable by inode/content/mount identity. It is not
+relocated onto tmpfs. Payload/password temporaries are removed on
 ordinary exits. Credentials never appear in argv, stdout, receipts or raw errors.
 An OS kill can leave private tmpfs files; inspect and clean only owned remnants.
 
@@ -98,7 +101,8 @@ core journey. Publication and credential acquisition stay separately attended.
 The owner-only target observation contains:
 
 - `target`, `project`, exact local `docker_host` Unix socket, observed `daemon_id`,
-  `compose_executable`, `compose_file`, `compose_sha256`, `compose_env`,
+  `compose_executable`, exact independently observed `compose_version`,
+  `compose_file`, `compose_sha256`, `compose_env`,
   `selector_file`, stable per-target `lock_dir`, `config_sha256`.
 - `protected_sha256`: hash of complete protected actual runtime metadata (proxy
   ID/image/config/host config/mounts; app host config/mounts, non-image env and
@@ -108,7 +112,17 @@ The owner-only target observation contains:
   and app env by unique name, since Docker's array ordering is unspecified;
   no fields/values are dropped or rewritten. All other differences fail closed.
 - `protected_paths`: secret directories, CA/Caddy configuration and other
-  protected mount inputs; include every relevant non-image runtime input.
+  protected mount inputs; include every relevant non-image runtime input and all
+  app/Caddy bind sources. `protected_public_paths` explicitly classifies only the
+  existing Compose-relative `Caddyfile` as public. Secret-file classification,
+  public directories, inline proxy secrets/private keys, missing bind-input
+  coverage and public config mounted as a secret refuse. Actual secret mounts and
+  scratch still require private tmpfs/no-swap in production. Both classes retain
+  owner/mode/inode/content checks.
+- `protected_metadata_file`: original owner-only `Host.snapshot` protected
+  metadata, whose digest must equal `protected_sha256`. Required for an explicitly
+  identified absent-app recovery; current proxy/DB/files/ledger are independently
+  reread and must still match it. It never authorizes changed protected values.
 - `journey_url` (exact HTTPS origin), `journey_ca_file`,
   `journey_account_file: {email,password}`, `proxy_secret_file`. Supply an approved
   journey account in private custody, never in shell arguments or shared output.
@@ -164,8 +178,16 @@ crashed read-only marker can be reobserved by the same packet/state's `preflight
 that route cannot clear mutation intent or another state's marker. History records
 retain every transferred marker and completed/failed-before-effects disposition.
 A submitted operation with a lost reply is unknown even if the process failed.
-Use the same unchanged packet/state with `resume`; authoritative committed
-selector versions/container identities are reconciled without resubmission.
+Use the same unchanged packet/state with `resume`. Before EVERY write, including
+backup/selector committed-before-stage-advance windows, the entire recorded app
+CID/image/start/restarts/running preimage, selector/version, protected state and
+ledger must match. Runtime state is never refreshed from a convenient observation.
+Every durable native success/exact-readback pair is saved before clearing intent;
+automatic replacement resume requires that complete pair AND unchanged exact
+identity. Compose returns a completed command, NOT an Engine create-ID receipt.
+Matching image/name, a local operation UUID or zero restarts never prove a lost
+command created that container. A crash between native success and durable first
+postidentity remains unknown, even if the app currently looks healthy.
 Conflicting/preimage/unprovable observations stop. Submission is accounted at the
 actual mutating boundary, not around an entire multi-command callback: a missing
 late readback helper leaves earlier submission unknown. Only proven no-submission
@@ -173,6 +195,48 @@ permits one deliberate resume retry, never an ambiguous native effect. Backup
 artifact creation is itself a mutation; a later missing dump/upload helper cannot
 make that partial artifact unsubmitted. Ambiguous recovery-point creation needs attended archive
 reconciliation and is deliberately not automatically replayed.
+
+### Explicit attended replacement disposition
+
+For unbound replacement intent only, a trusted operator may supply a separate
+owner-only input through the existing attended custody channel:
+
+```sh
+python3 scripts/app_release.py resume "$@" \
+  --disposition-file "$PACKET/attended-disposition.json"
+```
+
+The ORIGINAL packet/state/target lock remains selected by `$@`. This is not a
+permission to replay the ambiguous command or automatically recover. The runner
+never generates production dispositions. The operator must independently prove
+the client invocation terminated, all native/daemon effects settled, and exclusive
+effective-host state before supplying any disposition. A possibly in-flight
+mutation or transient snapshot is insufficient; if settlement is unprovable, stop.
+The runner also refuses a recorded still-existing native PID, then rechecks state
+under the same lock. Operator/installed-tool custody is trusted, not a new
+signature, daemon transaction or hostile-administrator defense.
+
+Disposition schema 1 binds `target`, `descriptor_sha256`, `evidence_sha256`,
+`target_sha256`, ORIGINAL `checkpoint_sha256` and `sequence`, pending
+`operation_id`, complete intended `artifact`, independently observed complete
+`observed` runtime tuple (or verified absence), and exact `selector`/native version.
+It names `approval_id`, `disposition` and matching `authority`, plus independent
+owner-only `evidence_file` and its `evidence_sha256_file`. That evidence repeats all
+bindings, schema 1, a nonempty `record` reference and explicit true
+`native_invocation_terminated`, `native_effects_settled`, `exclusive_operator`.
+Missing/stale/conflicting bindings refuse. Artifact/manifests and protected-state
+readback keep host/DB/target/schema/routing drift outside this lane, regardless of
+a runtime-identity disposition.
+
+`accept-effective-state` proceeds to ordinary journey/stability verification; it
+does NOT claim causal provenance or waive acceptance. `recover-effective-state`
+records the exact failed/stopped/created-unstarted/absent state and returns
+`attended-recovery-ready`, without a release receipt or success. The unknown
+checkpoint is retained byte-for-byte as `unknown-checkpoint-<digest>.json` and a
+separate `disposition-<digest>.json` appends named evidence with
+`original_native_result: unknown` and `causal_container_provenance_claimed: false`.
+The active checkpoint uses the same truthful `attended-effective-state` label.
+No prior history or unknown marker is manually cleared.
 
 SIGINT/SIGTERM writes the stable target-lock `STOP` marker. An owner-written marker
 there stops every release-state directory for that target; do not remove it just
@@ -199,17 +263,32 @@ ledger, then transfers ownership with a separate `handoff.json`. The failed
 checkpoint and receipt remain unchanged; `superseded.json` makes their resume
 historical-only. A stopped/crashed but uniquely identifiable candidate is allowed
 only for recovery/reconciliation, never successful acceptance. Pending replacement
-can first be reconciled via the ORIGINAL `resume`, even if stopped; verification
-still refuses, after which approved handoff is possible. Unresolved backup or
+without a durable native-result/postimage pair must first use the ORIGINAL
+`resume --disposition-file` and an independently settled-effective-state decision.
+An explicit `recover-effective-state` disposition can identify an absent/partial
+app without accepting the original release. The NEW recovery approval additionally
+binds `recovery_preimage` to that exact current effective state, including CID,
+image/start/restarts/running (or absence) and protected digest. Recovery rechecks
+that tuple immediately before its writes and retains authoritative DB/new writes.
+Changed target/DB/schema/protected configuration cannot be approved here.
+Unresolved backup or
 selector intent, foreign/unidentifiable containers, concurrent owners and global
 STOP remain fail-closed. Do not manually clear a mutation marker.
-No-op image releases are refused before effects. A completed resume rechecks
+No-op image releases are refused before effects. The only exception is NEW
+separately approved same-lock recovery of an explicitly recorded inactive
+intermediate app; it may recreate the already compatible image after the old app
+stopped before replacement completion. Both actual image and persisted selector
+are independently bound, even when that interrupted intermediate differs from
+the intended selector. Ordinary running-image no-ops still refuse.
+A completed resume rechecks
 exact accepted container/start/restart/protected identity and native selector
 version, repeats the authenticated journey and records a fresh `resume_readback`.
 It does not recreate the app or relabel the historical stability interval as a
 new production observation. Interrupted committed-stage advancement applies the
 same selector operation/version and protected-value checks as pending intent.
-Older checkpoints without these result/expected/wanted bindings refuse; preserve
+Checkpoints bind unchanged descriptor/evidence/target AND approvals, monotonic
+local sequence and `contract: attended-v2`. Older checkpoints without these
+result/expected/wanted/contract bindings refuse; preserve
 them for attended reconciliation rather than editing their history to pass.
 
 ## Explicit owned local harness
@@ -235,11 +314,18 @@ with `python3 scripts/app_release_rehearsal.py`. Missing cached images/toolchain
 are a capability refusal, never implicit pulls or login. Preserve failed
 bootstrap inputs; `bootstrap` is only an explicit empty-DB continuation and
 refuses previously submitted bootstrap/account/migration work. The sequence
-includes a locally discarded reply from a REAL Compose replacement and an
-injected unknown intent that must refuse without effects. It also injects a
+includes durable-backup/result and durable-replacement/result crashes with no
+replay, plus a locally discarded reply from a REAL Compose replacement. The
+unbound reply first refuses automatic adoption without altering the checkpoint,
+then uses explicit synthetic LOCAL attended settlement/authority and still runs
+the real journey/stability checks. An injected unknown intent refuses without
+effects. It also injects a
 read-only prerequisite/acceptance failure, stops only the exact owned candidate,
 then invokes real CLI approved compatible recovery with new-write/proxy/DB/mount/
-ledger preservation and unchanged completed-resume controls. Transport/acceptance fault
+ledger preservation and unchanged completed-resume controls. An owned absent-app
+fault exercises explicit local intermediate disposition followed by separately
+approved compatible recovery; the unknown original is never relabeled accepted.
+Transport/acceptance fault
 injection is local, not a provider permission test. Cleanup checks the exact
 owned daemon/card/resource labels, removes only owned container/volume/network
 resources, and retains images, checkpoints and sanitized evidence for review.

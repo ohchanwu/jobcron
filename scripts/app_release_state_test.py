@@ -35,7 +35,7 @@ class SimulatedHost:
         self.d = d
     def prereqs(self):
         r.require(not self.state.get("missing"), "missing native prerequisites")
-    def snapshot(self, allow_stopped=False):
+    def snapshot(self, allow_stopped=False, allow_absent=False):
         r.require(not self.state.get("protected_drift"), "protected mutation")
         r.require(allow_stopped or not self.state.get("stopped"), "stopped app")
         return {"image": self.state["image"], "container": self.state["container"], "restarts": self.state.get("restarts", 0),
@@ -45,6 +45,8 @@ class SimulatedHost:
     def backup(self, op):
         self.submission(lambda: self.state.update(backups=self.state["backups"] + 1))
         return {"operation_id": op, "off_host_verified": False, "dump_sha256": "1" * 64}
+    def backup_readback(self, op, record):
+        r.require(record['operation_id'] == op and self.state['backups'] == 1, 'simulated archive drift')
     def expected_selector(self, image, op):
         return {"selector": image, "version": op}
     def persist(self, image, before, op):
@@ -111,7 +113,7 @@ class StateTests(unittest.TestCase):
         self.runner().start(resume=True)
         self.assertEqual([SimulatedHost.state[k] for k in ("backups", "persists", "replacements")], [1, 1, 1])
     def test_lost_reply_each_effect_reconciles_without_replay(self):
-        for flag in ("lost_persist", "lost_replace"):
+        for flag in ("lost_persist",):
             with self.subTest(flag=flag):
                 with tempfile.TemporaryDirectory(dir=self.root) as directory:
                     state = Path(directory)

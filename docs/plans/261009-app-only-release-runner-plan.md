@@ -21,6 +21,19 @@ and real failed/stopped-candidate recovery, with exact resume identities,
 mutation-boundary submission accounting and bounded non-disk output custody.
 Independent exact-candidate re-review is still pending.
 
+Review155 rejected inferred-poststate continuation and public/secret custody
+layout. That approach and both candidates remain historical. Independent
+prospective review161 found the supported Compose plus explicit attended
+reconciliation alternative eligible; controller activation allows local run163,
+not code approval. Replacement now records delivered-outcome/postimage pairs,
+checks complete preimages on every transition, refuses unbound lost replies and
+uses separate settled-exclusive operation-scoped attended dispositions when
+needed. Same-lock failed/stopped/identified partial recovery preserves unknown
+history and post-change writes. Public disk configuration and actual secret tmpfs
+custody are distinct. Complete regressions and new owned native rehearsal are
+required for the NEW unique candidate; no prospective review resets the budget or
+authorizes production effects. Same-card exact-candidate acceptance is pending.
+
 ## Phase 0 — documentation and readiness
 
 - Reconcile completed launch/release status from accepted evidence; archive old

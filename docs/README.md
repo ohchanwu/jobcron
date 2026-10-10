@@ -41,6 +41,9 @@ Use this index instead of recursively loading the entire documentation tree.
   [real invocation and input custody](../scripts/app_release_fixture/README.md)
   cover the native CLI. Independent exact-candidate review remains required;
   no production/publication/provider authority follows from local checks.
+  Eligible approach2 uses durable native-success/exact-postimage resume or a
+  separate settled-exclusive attended disposition; unbound lost replies stay
+  unknown/no-replay. Public disk Caddyfile and tmpfs secret custody remain distinct.
   Reviewer-directed local corrections cover failed/stopped-app approved lock
   handoff, mutation-boundary ambiguity, exact resume identity and non-disk secret
   output; independent re-review still governs acceptance.

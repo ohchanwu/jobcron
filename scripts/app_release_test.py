@@ -93,7 +93,11 @@ class Contracts(unittest.TestCase):
 
     def test_ambiguity_refuses_preimage_and_conflict(self):
         pending = {"kind": "replace", "before": {"container": "old"}, "after": "sha256:" + "a" * 64}
-        self.assertEqual(r.reconcile_effect(pending, {"container": "new", "image": pending["after"]}), "committed")
+        state = {"container": "new", "image": pending["after"]}
+        with self.assertRaises(r.Refuse):
+            r.reconcile_effect(pending, state)
+        pending.update(native_outcome="delivered-success", result=state)
+        self.assertEqual(r.reconcile_effect(pending, state), "committed")
         for observed in ({"container": "old", "image": "sha256:" + "b" * 64}, {},
                          {"container": "other", "image": "sha256:" + "c" * 64}):
             with self.assertRaises(r.Refuse):

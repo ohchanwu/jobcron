@@ -33,7 +33,7 @@ class RecoveryTests(unittest.TestCase):
         d, e = copy.deepcopy(self.d), copy.deepcopy(self.e)
         d.update(release_id='approved-recovery', current=d['candidate'])
         e['current'] = e['candidate']
-        a = dict(self.a, descriptor_sha256=r.digest(d))
+        a = dict(self.a, descriptor_sha256=r.digest(d), recovery_preimage=SimulatedHost(d, self.t, root).snapshot(allow_stopped=True))
         return r.Runner(d, e, a, self.t, root, host_class=SimulatedHost)
 
     def test_readonly_failure_releases_lock_preserving_audit(self):
@@ -53,7 +53,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(SimulatedHost.state['backups'], 0)
         self.assertTrue(list(self.lock.glob('history-*.json')))
 
-    def test_lost_replace_then_stopped_reconciles_for_approved_recovery(self):
+    def test_lost_replace_then_stopped_requires_attended_recovery(self):
         SimulatedHost.state['lost_replace'] = True
         with self.assertRaises(r.Unknown):
             self.runner().start()
@@ -61,10 +61,10 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises(r.Refuse):
             self.runner().start(resume=True)
         cp = r.read_json(self.root / 'checkpoint.json')
-        self.assertIsNone(cp['pending'])
-        self.assertEqual(cp['stage'], 'verify')
-        self.recovery().start(recovery=True, failed_state=self.root)
-        self.assertEqual(SimulatedHost.state['replacements'], 2)
+        self.assertEqual(cp['pending']['status'], 'submitted-unknown')
+        with self.assertRaises(r.Refuse):
+            self.recovery().start(recovery=True, failed_state=self.root)
+        self.assertEqual(SimulatedHost.state['replacements'], 1)
 
     def test_failed_journey_stopped_candidate_explicit_recovery(self):
         class FailedJourney(SimulatedHost):
@@ -133,9 +133,12 @@ class RecoveryTests(unittest.TestCase):
                 if kind == 'backup':
                     with self.assertRaises(r.Refuse):
                         runner.start(resume=True)
-                else:
+                elif kind == 'persist':
                     runner.host_class = SimulatedHost
                     runner.start(resume=True)
+                else:
+                    with self.assertRaises(r.Refuse):
+                        runner.start(resume=True)
                 self.assertEqual(SimulatedHost.state[{'persist': 'persists', 'replace': 'replacements', 'backup': 'backups'}[kind]], 1)
                 # A backup ambiguity leaves a durable target marker; preserve it,
                 # then use another independently owned lock for the next subcase.

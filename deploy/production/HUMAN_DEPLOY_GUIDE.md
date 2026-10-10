@@ -18,6 +18,15 @@ delete a stale mutation marker, overwrite the failed checkpoint, restore a stale
 writable DB, or bypass global STOP. Resume rechecks exact native version and
 accepted runtime identity; historical receipts do not approve drifted state.
 
+Unbound lost native replies remain unknown/no-replay. The invocation guide defines
+`resume --disposition-file` for separate trusted attended settled-exclusive
+effective-state disposition, not invented causal provenance. It preserves unknown
+history, does not waive journey/stability, and leaves host/DB/schema/protected drift
+outside the app-only lane. Public disk Caddyfile stays immutable; actual secrets
+and tool scratch still require owner-only tmpfs/no-swap. A partial/absent state must
+first be explicitly identified for recovery, then covered by a NEW exact-state
+compatible-recovery approval under the same target lock.
+
 This guide supports an explicit lean initial deployment and the historical
 private Slice 4 replacement-host sequence. Neither authorizes a
 public cutover. Use only the approved commit, private controller artifacts, and

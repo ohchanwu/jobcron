@@ -29,6 +29,14 @@ Compatible recovery requires named approval and keeps the authoritative database
 and post-change writes. The required production observation is at least 30 minutes;
 the shorter synthetic fixture interval never satisfies it.
 
+Automatic replacement resume needs the durable native-success/exact-postimage
+pair, not image equality. Unbound replies remain unknown; only a separate trusted
+attended settled-exclusive disposition can admit the effective identity without
+inventing causal provenance. It does not waive journey/stability or grant recovery.
+The supported disk Caddyfile stays immutable and may be public; actual secret
+routes/output/scratch retain owner-only tmpfs/no-swap. See the invocation guide for
+`resume --disposition-file` and separately approved partial/absent recovery.
+
 Failed acceptance can transfer the same target lock to a NEW separately approved
 compatible recovery using `recover --failed-state-dir "$FAILED_STATE"` and the
 new packet/state. This reobserves the exact failed (possibly stopped) container,

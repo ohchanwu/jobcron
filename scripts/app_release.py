@@ -56,8 +56,8 @@ def digest(value):
     return hashlib.sha256(encoded(value)).hexdigest()
 
 
-def file_digest(path):
-    p = custody(path)
+def file_digest(path, public=False):
+    p = custody(path, public=public)
     result = hashlib.sha256()
     with p.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -65,7 +65,7 @@ def file_digest(path):
     return result.hexdigest()
 
 
-def custody(path, directory=False):
+def custody(path, directory=False, public=False):
     p = Path(path)
     require(p.is_absolute(), "input paths must be absolute")
     # Check every component before following it; reject symlinks and writable
@@ -76,7 +76,8 @@ def custody(path, directory=False):
         require(not s.st_mode & 0o022, "writable input ancestry")
     s = p.lstat()
     require(s.st_uid == os.getuid(), "foreign input owner")
-    require(stat.S_IMODE(s.st_mode) == (0o700 if directory else 0o600), "unsafe input mode")
+    modes = (0o600, 0o644) if public and not directory else (0o700 if directory else 0o600,)
+    require(stat.S_IMODE(s.st_mode) in modes, "unsafe input mode")
     require(stat.S_ISDIR(s.st_mode) if directory else stat.S_ISREG(s.st_mode), "unsafe input kind")
     require(directory or s.st_nlink == 1, "hardlinked input")
     return p
@@ -192,7 +193,7 @@ class TargetLock:
         atomic(self.root / "lock.json", {"pid": os.getpid(), "pending": True, "owner": self.owner, "read_only": False})
 
 
-def native(args, timeout, env=None, data=None, output=None):
+def native(args, timeout, env=None, data=None, output=None, on_process=None):
     """No shell, inherited credentials, stdin/config discovery or raw diagnostics.
 
     Only an exec-before-submission failure is eligible for one explicit retry.
@@ -218,6 +219,8 @@ def native(args, timeout, env=None, data=None, output=None):
     offset = 0
     with selectors.DefaultSelector() as pipes:
         try:
+            if on_process:
+                on_process({"pid": process.pid, "terminal": False})
             if process.stdout is not None:
                 os.set_blocking(process.stdout.fileno(), False)
                 pipes.register(process.stdout, selectors.EVENT_READ)
@@ -248,12 +251,16 @@ def native(args, timeout, env=None, data=None, output=None):
                             pipes.unregister(key.fileobj)
                             key.fileobj.close()
             process.wait(timeout=max(0.01, deadline - time.monotonic()))
+            if on_process:
+                on_process({"pid": process.pid, "terminal": True, "exit_code": process.returncode})
         except BaseException:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
             process.wait()
+            if on_process:
+                on_process({"pid": process.pid, "terminal": True, "interrupted": True})
             raise Unknown("native operation interrupted/timed out; reconcile before any retry") from None
         finally:
             for stream in (process.stdin, process.stdout):
@@ -313,8 +320,8 @@ def reconcile_effect(pending, state):
         require(state.get("selector") == pending["after"] and state.get("version") and
                 state["version"] != pending["before"]["version"], "selector submission unprovable/conflicting; stop")
     elif pending["kind"] == "replace":
-        require(state.get("image") == pending["after"] and state.get("container") and
-                state["container"] != pending["before"]["container"], "app submission unprovable/conflicting; stop")
+        require(pending.get("native_outcome") == "delivered-success" and pending.get("result") == state,
+                "missing durable native success/postimage pair; attended reconciliation required")
     else:
         raise Refuse("submitted recovery-point operation requires attended reconciliation")
     return "committed"
@@ -387,6 +394,20 @@ class Host:
         custody(p, directory=True)
         require(not any(p.iterdir()), "Docker config must be empty; no credentials/keychain helpers")
         require(target["docker_host"].startswith("unix:///"), "local Unix Docker required")
+        self.public_paths = set(target.get("protected_public_paths", []))
+        # Public classification is a closed supported route, not a caller's way
+        # to downgrade credentials, secret mounts or tool scratch. Caddy's public
+        # config stays at its existing disk-backed Compose-relative path.
+        public_config = str(Path(target["compose_file"]).parent / "Caddyfile")
+        require(self.public_paths <= {public_config} and self.public_paths <= set(target["protected_paths"]),
+                "unsupported public input classification")
+        known_secret = {target[k] for k in ("aws_credentials", "database_url_file", "journey_account_file", "proxy_secret_file", "secret_work_dir") if k in target}
+        require(not self.public_paths & known_secret, "known secret cannot be public")
+        for path in self.public_paths:
+            p = custody(path, public=True)
+            content = p.read_bytes()
+            require(b"PRIVATE KEY-----" not in content and
+                    not re.search(rb"header_up\s+X-Jobcron-Proxy\s+", content, re.I), "secret-bearing public Caddyfile")
         custody(target["compose_env"])
         custody(target["selector_file"])
         # Compose is executable configuration; trusted operator pins its bytes.
@@ -394,7 +415,7 @@ class Host:
         if not self.local:
             aws_inputs(target)
             self.secret_work = custody(target["secret_work_dir"], directory=True)
-            for path in [self.secret_work, *map(Path, target["protected_paths"]),
+            for path in [self.secret_work, *map(Path, set(target["protected_paths"]) - self.public_paths),
                          *[Path(target[k]) for k in ("aws_credentials", "database_url_file", "journey_account_file", "proxy_secret_file")]]:
                 custody(path, directory=path.is_dir())
                 require(self.run(["findmnt", "-n", "-o", "FSTYPE", "--target", str(path)]).strip() == b"tmpfs", "production secret inputs require tmpfs")
@@ -414,7 +435,8 @@ class Host:
                                "--file", target["compose_file"], "--env-file", target["compose_env"]]
 
     def run(self, args, data=None, output=None):
-        return native(args, self.timeout, env=self.env, data=data, output=output)
+        return native(args, self.timeout, env=self.env, data=data, output=output,
+                      on_process=getattr(self, "invocation_event", None) if getattr(self, "mutating", False) else None)
 
     def docker(self, *args, data=None):
         return self.run(["docker", *args], data=data)
@@ -426,12 +448,17 @@ class Host:
         require(not self.local, "provider operation disabled in local mode")
         require(self.secret_output_verified and self.env["TMPDIR"] == str(self.secret_work), "unverified secret output route")
         return native(["aws", "--no-cli-pager", "--region", self.t["region"], *args], self.timeout,
-                      env={**self.env, **self.aws_env})
+                      env={**self.env, **self.aws_env},
+                      on_process=getattr(self, "invocation_event", None) if getattr(self, "mutating", False) else None)
 
     def mutate(self, operation):
         # Precisely the mutating operation, not surrounding preflight/readback.
         boundary = getattr(self, "submission", None)
-        return boundary(operation) if boundary else operation()
+        self.mutating = True
+        try:
+            return boundary(operation) if boundary else operation()
+        finally:
+            self.mutating = False
 
     def expected_selector(self, image, operation_id):
         if not self.local:
@@ -444,7 +471,8 @@ class Host:
     def prereqs(self):
         info = json.loads(self.docker("info", "--format", "{{json .}}"))
         require(info["ID"] == self.t["daemon_id"], "wrong Docker daemon/target")
-        self.compose("version")
+        version = self.compose("version").decode().strip()
+        require(version == self.t["compose_version"], "native Compose version drift")
         for role in ("current", "candidate", "recovery"):
             artifact = self.d[role]
             # Preavailability only: never pull/login implicitly. Operator may
@@ -550,8 +578,25 @@ class Host:
         require(allow_stopped or container["State"]["Running"], "running service required")
         return container
 
-    def snapshot(self, allow_stopped=False):
+    def snapshot(self, allow_stopped=False, allow_absent=False):
         require(self.render() == self.t["config_sha256"], "non-image Compose drift")
+        if allow_absent:
+            ids = self.docker("ps", "-a", "--filter", "label=com.docker.compose.project=" + self.t["project"],
+                              "--filter", "label=com.docker.compose.service=app", "--format", "{{.ID}}").decode().split()
+            require(len(ids) <= 1, "competing app instances")
+            if not ids:
+                # Independent original metadata is required to preserve the
+                # complete protected contract when no app can be inspected.
+                protected = read_json(self.t["protected_metadata_file"])
+                require(digest(protected) == self.t["protected_sha256"], "absent-app original protected evidence mismatch")
+                protected["proxy"] = metadata(self.service("caddy"), ("Id", "Image", "Mounts", "Config", "HostConfig"))
+                protected["secrets"] = self.mount_files()
+                if self.local:
+                    protected["database"] = metadata(self.service("db"), ("Id", "Image", "Mounts", "Config", "HostConfig"))
+                require(digest(protected) == self.t["protected_sha256"], "absent-app protected drift")
+                validate_ledger(self.d["manifests"], self.ledger())
+                return {"container": None, "image": None, "restarts": None, "started_at": None,
+                        "running": False, "protected_sha256": digest(protected)}
         app, proxy = self.service("app", allow_stopped=allow_stopped), self.service("caddy")
         require(app["Config"]["Env"].count("JOBCRON_SCHEDULER_ENABLED=1") == 1 and
                 (allow_stopped or (app["State"]["Running"] and app["State"]["Pid"] > 0)), "active scheduler contract invalid")
@@ -561,6 +606,13 @@ class Host:
                      "app": metadata(app, ("Mounts", "HostConfig")),
                      "app_env": environment(app["Config"]["Env"]), "app_cmd": app["Config"]["Cmd"],
                      "secrets": self.mount_files()}
+        for container in (app, proxy):
+            for mount in container["Mounts"]:
+                if mount["Type"] == "bind":
+                    require(mount["Source"] in self.t["protected_paths"], "protected bind input omitted from custody/preservation")
+                if mount["Type"] == "bind" and mount["Source"] in self.public_paths:
+                    require(container["Id"] == proxy["Id"] and mount["Destination"] == "/etc/caddy/Caddyfile" and not mount["RW"],
+                            "public config used as a secret/runtime input")
         # Docker injects the image selector into log tag configuration on some
         # versions; unsupported differences remain fail-closed, not normalized.
         if self.local:
@@ -574,14 +626,16 @@ class Host:
     def mount_files(self):
         records = []
         for path in self.t["protected_paths"]:
-            p = custody(path, directory=Path(path).is_dir())
+            public = path in self.public_paths
+            p = custody(path, directory=Path(path).is_dir(), public=public)
             files = [p, *sorted(p.iterdir())] if p.is_dir() else [p]
             for f in files:
                 s = f.lstat()
                 require(not f.is_symlink(), "symlink secret mount")
+                custody(f, directory=f.is_dir(), public=public)
                 record = {"path": str(f), "device": s.st_dev, "inode": s.st_ino, "mode": stat.S_IMODE(s.st_mode)}
                 if f.is_file():
-                    record["digest"] = file_digest(f)
+                    record["digest"] = file_digest(f, public=public)
                 else:
                     require(f == p and f.is_dir(), "nested secret mounts unsupported")
                 records.append(record)
@@ -644,14 +698,18 @@ class Host:
         else:
             native(["pg_restore", "--list", str(p)], self.timeout, env=self.env)
             remote = "s3://" + self.t["recovery_bucket"] + "/app-release/" + operation_id + ".dump"
-            self.aws("s3", "cp", str(p), remote, "--only-show-errors")
+            self.mutate(lambda: self.aws("s3", "cp", str(p), remote, "--only-show-errors"))
             copy = self.root / (operation_id + ".readback")
             # Pre-create private output; aws writes only to the selected path.
-            atomic(copy, b"", raw=True)
-            self.aws("s3", "cp", remote, str(copy), "--only-show-errors")
+            self.mutate(lambda: atomic(copy, b"", raw=True))
+            self.mutate(lambda: self.aws("s3", "cp", remote, str(copy), "--only-show-errors"))
             require(file_digest(copy) == file_digest(p), "off-host recovery readback mismatch")
             copy.unlink()
         return {"operation_id": operation_id, "dump_sha256": file_digest(p), "off_host_verified": not self.local}
+
+    def backup_readback(self, operation_id, record):
+        require(record["operation_id"] == operation_id and record["off_host_verified"] is (not self.local) and
+                file_digest(self.root / (operation_id + ".dump")) == record["dump_sha256"], "committed recovery artifact custody/content drift")
 
     def replace(self):
         # Compose stop-before-create replaces one singleton, never blue/green,
@@ -743,7 +801,33 @@ class Runner:
                 "global owner stop; no further campaign effects")
 
     def save(self):
+        self.cp["sequence"] = self.cp.get("sequence", 0) + 1
         atomic(self.checkpoint, self.cp)
+
+    def runtime_preimage(self):
+        self.stop()
+        initial = self.cp["initial"]
+        if initial["container"] is None:
+            state = self.host.snapshot(allow_stopped=True, allow_absent=True)
+        else:
+            state = self.host.snapshot(allow_stopped=self.cp["recovery"])
+        require(state == initial, "exact recorded runtime preimage drift")
+        return state
+
+    def pre_write(self, kind):
+        self.runtime_preimage()
+        if kind == "replace":
+            self.selector_state(self.cp["selector_after"])
+        elif kind == "persist" and self.cp.get("pending") and self.cp["pending"]["status"] != "proven-unsubmitted":
+            actual = self.selector_state()
+            require(actual in (self.cp["selector_before"], self.cp["pending"]["expected"]), "selector mutation preimage conflict")
+        else:
+            self.selector_state(self.cp["selector_before"])
+
+    def commit_effect(self, pending):
+        self.cp["effects"].append(pending)
+        self.cp["pending"] = None
+        self.save()
 
     def observe(self, expected_image, allow_stopped=False):
         self.stop()
@@ -768,26 +852,36 @@ class Runner:
         old_root = custody(failed_state, directory=True)
         require(old_root != self.root and not (old_root / "STOP").exists(), "invalid/stopped failed release state")
         cp = read_json(old_root / "checkpoint.json")
-        require(cp["target"] == self.d["target"] and cp["target_sha256"] == digest(self.t) and
-                cp["wanted"] == self.d["current"], "failed-state target/artifact mismatch")
+        require(cp["target"] == self.d["target"] and cp["target_sha256"] == digest(self.t), "failed-state target mismatch")
+        prior_artifact = cp["wanted"]
+        if cp["stage"] == "recovery-ready" and cp["accepted_state"]["image"] == cp["initial"]["image"]:
+            prior_artifact = cp["current"]
+        require(prior_artifact == self.d["current"], "failed-state effective artifact mismatch")
         if marker:
             old_owner = {"state_dir": str(old_root), "descriptor_sha256": cp["descriptor_sha256"]}
             new_owner = {"state_dir": str(self.root), "descriptor_sha256": digest(self.d)}
             require(marker.get("owner") == old_owner or
                     (marker.get("owner") == new_owner and (self.root / "handoff.json").exists()), "handoff marker belongs to another state")
-        require(cp["stage"] in ("replace", "verify", "complete") and not cp["pending"],
+        require(cp["stage"] in ("replace", "verify", "complete", "recovery-ready") and not cp["pending"],
                 "unresolved failed-state effects; use original resume before recovery")
         effects = {e["kind"]: e for e in cp["effects"]}
         require(set(effects) == {"recovery-point", "persist", "replace"} and len(cp["effects"]) == 3 and cp.get("backup"),
                 "failed release not fully committed/reconciled")
-        require(all(e["status"] in ("committed-verified", "committed-reconciled") for e in effects.values()), "unproven failed-state effects")
+        require(all(e["status"] in ("committed-verified", "committed-reconciled", "attended-effective-state") for e in effects.values()), "unproven failed-state effects")
         self.selector_state(effects["persist"]["result"])
-        actual = self.observe(self.d["current"]["image_id"], allow_stopped=True)
         committed = effects["replace"]["result"]
+        if cp["stage"] == "recovery-ready":
+            require(effects["replace"]["status"] == "attended-effective-state" and
+                    effects["replace"]["disposition"] == "recover-effective-state", "intermediate recovery not explicitly approved")
+            actual = self.host.snapshot(allow_stopped=True, allow_absent=True)
+            require(actual == committed, "attended intermediate recovery preimage drift")
+        else:
+            actual = self.observe(self.d["current"]["image_id"], allow_stopped=True)
         # Failure may stop/restart the SAME container. Do not adopt an unrelated
         # container/image or discard protected-state predicates to enable recovery.
         require(actual["container"] == committed["container"] and
                 actual.get("protected_sha256") == committed.get("protected_sha256"), "failed candidate identity drift")
+        require(self.a.get("recovery_preimage") == actual, "recovery authority must name exact observed intermediate/failed state")
         record = {"schema": 1, "failed_state": str(old_root), "failed_checkpoint_sha256": file_digest(old_root / "checkpoint.json"),
                   "failed_descriptor_sha256": cp["descriptor_sha256"], "new_descriptor_sha256": digest(self.d),
                   "approval_id": self.a["approval_id"], "observed": actual, "selector": self.selector_state(),
@@ -797,6 +891,7 @@ class Runner:
         else:
             atomic(self.root / "handoff.json", record)
         self.handoff_observed = actual
+        self.handoff_selector = record["selector"]
         # Preserve old checkpoint/receipts; a separate terminal marker prevents
         # their future resume from representing superseded acceptance as current.
         if (old_root / "superseded.json").exists():
@@ -838,6 +933,7 @@ class Runner:
         self.save()
         def submission(call):
             self.stop()
+            self.pre_write(kind)
             previous = pending["status"]
             pending["status"] = "submitted-unknown"
             self.save()
@@ -849,26 +945,90 @@ class Runner:
                     self.save()
                 raise
         self.host.submission = submission
+        def invocation_event(event):
+            pending["native_process"] = event
+            self.save()
+        self.host.invocation_event = invocation_event
         try:
             result = operation(pending["operation_id"])
         finally:
             self.host.submission = None
+            self.host.invocation_event = None
         self.stop()
         require(pending["status"] == "submitted-unknown", "adapter did not account for mutation submission")
         pending["result"] = result
-        pending["status"] = "committed-verified"
-        self.cp["effects"].append(pending)
-        self.cp["pending"] = None
+        pending["native_outcome"] = "delivered-success"
+        # Durable success/readback pair precedes clearing intent/stage advance.
         self.save()
+        pending["status"] = "committed-verified"
+        self.commit_effect(pending)
 
-    def start(self, recovery=False, resume=False, failed_state=None):
+    def attended_resolution(self, approval, wanted):
+        pending = self.cp["pending"]
+        require(pending and pending["kind"] == "replace" and pending["status"] == "submitted-unknown" and
+                not pending.get("result"), "attended resolution requires unbound replacement intent")
+        action = approval.get("disposition")
+        require(approval.get("schema") == 1 and action in ("accept-effective-state", "recover-effective-state") and approval.get("authority") == action and
+                re.fullmatch(r"[A-Za-z0-9_-]{1,120}", approval.get("approval_id", "")), "missing named attended identity/effect authority")
+        state = self.host.snapshot(allow_stopped=True, allow_absent=True)
+        allowed_images = {wanted["image_id"]}
+        if action == "recover-effective-state":
+            allowed_images.add(self.d["current"]["image_id"])
+        require(state["container"] is None or state["image"] in allowed_images, "attended state outside reviewed artifact lane")
+        selector = self.selector_state(self.cp["selector_after"])
+        binding = {"target": self.d["target"], "descriptor_sha256": digest(self.d), "evidence_sha256": digest(self.e),
+                   "target_sha256": digest(self.t), "checkpoint_sha256": file_digest(self.checkpoint),
+                   "sequence": self.cp["sequence"], "operation_id": pending["operation_id"], "artifact": wanted,
+                   "observed": state, "selector": selector}
+        require(all(approval.get(k) == v for k, v in binding.items()), "stale/conflicting attended disposition binding")
+        evidence = read_json(approval["evidence_file"])
+        require(file_digest(approval["evidence_file"]) == approval["evidence_sha256_file"] and
+                evidence.get("schema") == 1 and all(evidence.get(k) == v for k, v in binding.items()) and
+                all(evidence.get(k) is True for k in ("native_invocation_terminated", "native_effects_settled", "exclusive_operator")) and
+                isinstance(evidence.get("record"), str) and evidence["record"], "unsettled/unproven attended evidence")
+        # Client termination alone is NOT daemon-settlement proof. Independent
+        # settled/exclusive host inspection is a trusted attended input, not an
+        # inference from image equality or a synthetic operation UUID.
+        process = pending.get("native_process")
+        if process:
+            try:
+                os.kill(process["pid"], 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise Refuse("recorded native process still exists; no racing disposition")
+        self.stop()
+        require(self.host.snapshot(allow_stopped=True, allow_absent=True) == state, "attended effective state changed during resolution")
+        self.selector_state(selector)
+        archive = self.root / ("unknown-checkpoint-" + binding["checkpoint_sha256"] + ".json")
+        if not archive.exists():
+            atomic(archive, read_bytes(self.checkpoint), raw=True)
+        else:
+            require(file_digest(archive) == binding["checkpoint_sha256"], "unknown history archive conflict")
+        record = dict(approval, original_native_result="unknown", causal_container_provenance_claimed=False)
+        path = self.root / ("disposition-" + digest(approval) + ".json")
+        if path.exists():
+            require(read_json(path) == record, "attended disposition history conflict")
+        else:
+            atomic(path, record)
+        pending.update(result=state, status="attended-effective-state", original_native_result="unknown",
+                       disposition=action, disposition_record=path.name, causal_container_provenance_claimed=False)
+        self.cp["accepted_state"] = state
+        self.cp["stage"] = "recovery-ready" if action == "recover-effective-state" else "verify"
+        self.commit_effect(pending)
+
+    def start(self, recovery=False, resume=False, failed_state=None, disposition=None):
         self.stop()
         require(not (self.root / "superseded.json").exists(), "release state was handed to approved recovery; historical only")
         require(failed_state is None or (recovery and not resume), "failed-state handoff requires new approved recovery")
+        require(disposition is None or resume, "attended resolution requires original resume under same lock")
         if failed_state is not None:
             require(not self.checkpoint.exists(), "handoff state already has a checkpoint: resume it, never overwrite")
         wanted = self.d["recovery" if recovery else "candidate"]
-        require(wanted["image_id"] != self.d["current"]["image_id"], "no-op image release refused before effects")
+        require(wanted["image_id"] != self.d["current"]["image_id"] or
+                (recovery and (failed_state is not None or (resume and (self.root / "handoff.json").exists())) and
+                 self.a.get("recovery_preimage", {}).get("running") is False),
+                "no-op image release refused unless exact approved inactive intermediate recovery")
         for gate in ("observe", "persist", "replace", "recovery-point"):
             approve(self.d, self.a, gate)
         if recovery:
@@ -892,19 +1052,26 @@ class Runner:
                 require(self.cp["descriptor_sha256"] == digest(self.d) and self.cp["recovery"] == recovery and
                         self.cp["target"] == self.d["target"], "checkpoint identity mismatch")
                 require(self.cp["evidence_sha256"] == digest(self.e) and self.cp["target_sha256"] == digest(self.t), "checkpoint evidence/target changed")
+                require(self.cp.get("approvals_sha256") == digest(self.a) and self.cp.get("contract") == "attended-v2", "checkpoint approval/transition contract changed")
+                require(self.cp["wanted"] == wanted, "checkpoint intended artifact drift")
+                if disposition is not None:
+                    self.attended_resolution(disposition, wanted)
                 self.resume_pending(wanted)
             else:
                 require(not self.checkpoint.exists(), "checkpoint exists: resume, never overwrite recovery evidence")
-                initial = self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                initial = getattr(self, "handoff_observed", None) or self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
                 selector = self.selector_state()
-                require(selector["selector"] == self.d["current"]["selector"], "wrong authoritative persisted current selector")
-                self.cp = {"schema": 1, "target": self.d["target"], "descriptor_sha256": digest(self.d),
+                if failed_state is not None:
+                    require(selector == self.handoff_selector, "intermediate handoff selector drift")
+                else:
+                    require(selector["selector"] == self.d["current"]["selector"], "wrong authoritative persisted current selector")
+                self.cp = {"schema": 1, "contract": "attended-v2", "approvals_sha256": digest(self.a), "target": self.d["target"], "descriptor_sha256": digest(self.d),
                            "evidence_sha256": digest(self.e), "target_sha256": digest(self.t), "recovery": recovery,
-                           "initial": initial, "wanted": wanted, "selector_before": selector,
+                           "initial": initial, "current": self.d["current"], "wanted": wanted, "selector_before": selector,
                            "effects": [], "pending": None, "stage": "preflight", "samples": []}
                 self.save()
             if self.cp["stage"] == "preflight":
-                self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                self.pre_write("recovery-point")
                 def backup(op):
                     self.cp["backup"] = self.host.backup(op)
                     return self.cp["backup"]
@@ -912,9 +1079,9 @@ class Runner:
                 self.cp["stage"] = "persist"
                 self.save()
             if self.cp["stage"] == "persist":
-                self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                self.pre_write("persist")
                 before = self.selector_state(self.cp["selector_before"])
-                require(before["selector"] == self.d["current"]["selector"] and before["version"] == self.cp["selector_before"]["version"], "selector preimage drift")
+                require(before == self.cp["selector_before"], "selector preimage drift")
                 def persist(op):
                     assert self.host is not None
                     self.host.persist(wanted["selector"], before, op)
@@ -925,7 +1092,8 @@ class Runner:
                 self.cp["stage"] = "replace"
                 self.save()
             if self.cp["stage"] == "replace":
-                current = self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                self.pre_write("replace")
+                current = self.cp["initial"]
                 selector = self.selector_state(self.cp["selector_after"])
                 require(selector["selector"] == wanted["selector"] and selector["version"] == self.cp["selector_after"]["version"], "persisted selector changed before replacement")
                 self.cp["replacement_started"] = time.time()
@@ -941,6 +1109,11 @@ class Runner:
                 self.save()
             if self.cp["stage"] == "verify":
                 self.verify(wanted)
+            if self.cp["stage"] == "recovery-ready":
+                require(self.host.snapshot(allow_stopped=True, allow_absent=True) == self.cp["accepted_state"], "recovery disposition identity drift")
+                self.selector_state(self.cp["selector_after"])
+                return {"status": "attended-recovery-ready", "original_native_result": "unknown", "release_accepted": False,
+                        "next_action": "new separately approved compatible recovery with failed-state handoff"}
             require(self.observe(wanted["image_id"]) == self.cp["accepted_state"], "completed runtime identity drift")
             self.selector_state(self.cp["selector_after"])
             receipt = read_json(self.root / "receipt.json")
@@ -961,8 +1134,7 @@ class Runner:
                 # At most one deliberate resume retry. Reobserve all state before
                 # continuing. No infrastructure retry after any submitted process.
                 require(not self.cp.get("unsubmitted_retry_used"), "pre-submission retry exhausted")
-                require(self.observe(self.d["current"]["image_id"], allow_stopped=self.cp["recovery"]) == self.cp["initial"],
-                        "pre-submit runtime preimage drift")
+                self.runtime_preimage()
                 self.selector_state(self.cp.get("selector_after", self.cp["selector_before"]))
                 self.cp["unsubmitted_retry_used"] = True
                 self.cp["pending"] = None
@@ -971,24 +1143,36 @@ class Runner:
             if pending["kind"] == "persist":
                 state = self.selector_state(pending["expected"])
                 reconcile_effect(pending, state)
-                self.host.persist_runtime_env(wanted["selector"])
-                require(self.observe(self.d["current"]["image_id"], allow_stopped=self.cp["recovery"]) == self.cp["initial"], "ambiguous selector runtime drift")
+                self.runtime_preimage()
+                def env_submission(call):
+                    self.stop()
+                    self.runtime_preimage()
+                    self.selector_state(pending["expected"])
+                    return call()
+                self.host.submission = env_submission
+                try:
+                    self.host.persist_runtime_env(wanted["selector"])
+                finally:
+                    self.host.submission = None
+                self.runtime_preimage()
                 pending["result"] = state
                 self.cp["selector_after"] = state
                 self.cp["stage"] = "replace"
             elif pending["kind"] == "replace":
-                # An identifiable stopped candidate can reconcile its committed
-                # replacement, but it cannot pass verification. This records the
-                # failure truthfully and enables separately approved recovery.
                 state = self.observe(wanted["image_id"], allow_stopped=True)
                 reconcile_effect(pending, state)
                 self.selector_state(self.cp["selector_after"])
-                require(state["restarts"] == 0, "ambiguous replacement restarted")
-                pending["result"] = state
                 self.cp["accepted_state"] = state
                 self.cp["stage"] = "verify"
             else:
-                self.observe(self.d["current"]["image_id"])
+                self.pre_write("recovery-point")
+                if pending.get("native_outcome") == "delivered-success" and pending.get("result") == self.cp.get("backup"):
+                    self.host.backup_readback(pending["operation_id"], pending["result"])
+                    pending["status"] = "committed-reconciled"
+                    self.commit_effect(pending)
+                    self.cp["stage"] = "persist"
+                    self.save()
+                    return
                 # Observe artifact custody without treating a possibly partial
                 # archive/listable TOC as proof the submitted backup completed.
                 archive = self.root / (pending["operation_id"] + ".dump")
@@ -1002,9 +1186,14 @@ class Runner:
         # The process may die between effect readback and stage advancement.
         kinds = [e["kind"] for e in self.cp["effects"]]
         if self.cp["stage"] == "preflight" and "recovery-point" in kinds:
+            self.pre_write("recovery-point")
             require(self.cp.get("backup"), "recovery point evidence missing")
+            effect = next(e for e in self.cp["effects"] if e["kind"] == "recovery-point")
+            require(effect.get("native_outcome") == "delivered-success" and effect["result"] == self.cp["backup"], "committed recovery outcome missing")
+            self.host.backup_readback(effect["operation_id"], effect["result"])
             self.cp["stage"] = "persist"
         if self.cp["stage"] == "persist" and "persist" in kinds:
+            self.runtime_preimage()
             effect = next(e for e in self.cp["effects"] if e["kind"] == "persist")
             state = self.selector_state(effect["result"])
             require(state == effect["expected"], "committed native operation identity mismatch")
@@ -1016,7 +1205,8 @@ class Runner:
             self.selector_state(self.cp["selector_after"])
             self.cp["accepted_state"] = effect["result"]
             self.cp["stage"] = "verify"
-        self.save()
+        if pending or self.cp["stage"] not in ("complete", "recovery-ready"):
+            self.save()
 
     def verify(self, wanted):
         # Any interrupted observation restarts this local interval only. It does
@@ -1066,6 +1256,7 @@ def main():
         parser.add_argument("--" + name.replace("_", "-"), required=True, type=Path)
     parser.add_argument("--resume-recovery", action="store_true")
     parser.add_argument("--failed-state-dir", type=Path, help="explicit approved recovery handoff from this preserved release state")
+    parser.add_argument("--disposition-file", type=Path, help="separate trusted attended settled-effective-state disposition for original resume")
     args = parser.parse_args()
     os.umask(0o077)
     inputs = None
@@ -1083,7 +1274,8 @@ def main():
         elif args.stage == "preflight":
             result = runner.preflight()
         else:
-            result = runner.start(recovery=args.stage == "recover" or args.resume_recovery, resume=args.stage == "resume", failed_state=args.failed_state_dir)
+            result = runner.start(recovery=args.stage == "recover" or args.resume_recovery, resume=args.stage == "resume", failed_state=args.failed_state_dir,
+                                  disposition=read_json(args.disposition_file) if args.disposition_file else None)
         print(json.dumps(result, sort_keys=True))
     except (Refuse, OSError, KeyError, TypeError, ValueError, urllib.error.URLError):
         # Never print raw provider/subprocess/HTTP errors, private identifiers or
