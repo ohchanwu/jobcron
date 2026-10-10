@@ -463,6 +463,7 @@ class Fixture:
                 r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":17}', "post-change write lost across recovery")
             receipts.append(receipt)
         failure_receipt = self.failed_recovery()
+        pending_pair_receipt = self.pending_pair_recovery()
         intermediate_receipt = self.intermediate_recovery()
         old_stopped_receipt = self.old_stopped_recovery()
         self.unknown_refusal()
@@ -472,6 +473,7 @@ class Fixture:
                  "sequence": "current -> candidate -> compatible recovery -> candidate", "post_change_write_preserved": True,
                  "lost_reply_reconciled_without_replay": True, "unknown_state_refused": True,
                  "failed_stopped_candidate_approved_recovery": failure_receipt,
+                 "pending_pair_stopped_candidate_approved_recovery": pending_pair_receipt,
                  "absent_intermediate_attended_recovery": intermediate_receipt,
                  "old_app_stopped_before_completion_recovery": old_stopped_receipt,
                  "same_application_source_baseline": BASELINE, "independent_binary_build_parameters": True,
@@ -558,6 +560,58 @@ class Fixture:
                  "proxy_database_mounts_ledger_preserved": True, "one_confined_scheduler": True,
                  "completed_resume_same_container": before["container"], "historical_observation_not_current_stability": True})
         return result
+
+    def pending_pair_recovery(self):
+        root, d, e, a, t = self.inputs("pending-pair-failed", "candidate", "current", "recovery")
+        r.require(not (root / "checkpoint.json").exists(), "pending-pair failure already exercised; preserve evidence")
+        class CrashPair(r.Runner):
+            def commit_effect(self, pending):
+                if pending["kind"] == "replace":
+                    raise r.Unknown("LOCAL interruption AFTER native-success/exact-postimage pair, BEFORE clearing intent")
+                super().commit_effect(pending)
+        try:
+            CrashPair(d, e, a, t, root).start()
+            raise AssertionError("pending-pair interruption not injected")
+        except r.Unknown:
+            cp = r.read_json(root / "checkpoint.json")
+        pair = cp["pending"]
+        r.require(pair["native_outcome"] == "delivered-success" and pair["native_process"]["terminal"] is True and
+                  pair["native_process"]["exit_code"] == 0, "native-success pair missing")
+        original = r.file_digest(root / "checkpoint.json")
+        host = r.Host(d, t, self.directory("pending-pair-read"))
+        committed = host.snapshot()
+        r.require(committed == pair["result"] and host.inspect(committed["container"])["Config"]["Labels"].get("jobcron.card") == CARD,
+                  "pending-pair owned identity unproven")
+        self.sql("UPDATE profiles SET profile_json='{\"min_score\":19}', profile_hash='after-pending-pair-failure' WHERE user_id=1;")
+        self.docker("stop", "--time", "10", committed["container"])
+        stopped = host.snapshot(allow_stopped=True)
+        r.require(stopped["container"] == committed["container"] and not stopped["running"], "pending-pair stop unproven")
+        try:
+            r.Runner(d, e, a, t, root).start(resume=True)
+            raise AssertionError("failed pending pair accepted")
+        except r.Refuse:
+            r.require(r.file_digest(root / "checkpoint.json") == original and host.snapshot(allow_stopped=True) == stopped,
+                      "failed pending-pair refusal rewrote evidence or replayed")
+        rr, rd, re, ra, rt = self.inputs("pending-pair-compatible-recovery", "current", "candidate", "candidate")
+        ra["recovery_preimage"] = stopped
+        r.atomic(rr / "approvals.json", ra)
+        args = ["/usr/bin/python3", str(REPO / "scripts/app_release.py"), "recover", "--failed-state-dir", str(root), "--state-dir", str(rr)]
+        for name in ("descriptor", "evidence", "approvals", "target"):
+            args += ["--" + name, str(rr / (name + ".json"))]
+        receipt = json.loads(self.run(args, timeout=180))
+        r.require(receipt["recovery"] and receipt["status"] == "local-rehearsal-verified" and
+                  r.file_digest(root / "checkpoint.json") == original and r.read_json(rr / "handoff.json")["original_pending"] == pair,
+                  "pending-pair approved recovery changed original evidence")
+        r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":19}', "pending-pair recovery lost new write")
+        accepted = host.snapshot()
+        recovered = r.Runner(rd, re, ra, rt, rr)
+        recovered.start(recovery=True, resume=True)
+        r.require(host.snapshot() == accepted, "completed recovery replayed replacement")
+        r.atomic(rr / "pending-pair-preservation.json", {"durable_native_success_postimage": committed, "later_same_container_stopped": stopped,
+                 "original_pending_and_checkpoint_unchanged": True, "ordinary_resume_refused_without_replay": True,
+                 "separate_named_recovery_same_lock": True, "new_write_proxy_db_mounts_ledger_preserved": True, "one_confined_scheduler": True,
+                 "completed_resume_same_container": accepted["container"], "original_release_not_accepted": True})
+        return receipt
 
     def intermediate_recovery(self):
         root, d, e, a, t = self.inputs("absent-intermediate", "candidate", "current", "recovery")

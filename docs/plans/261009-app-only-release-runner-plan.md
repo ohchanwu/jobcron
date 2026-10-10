@@ -34,6 +34,16 @@ custody are distinct. Complete regressions and new owned native rehearsal are
 required for the NEW unique candidate; no prospective review resets the budget or
 authorizes production effects. Same-card exact-candidate acceptance is pending.
 
+Review164 requested the first consolidated approach2 correction, not approval.
+Controller reassessment authorizes the same strategy's omitted pending-pair ->
+later failed/stopped/restarted SAME container -> named same-lock compatible
+recovery transition, and completed-receipt digest/semantic acceptance binding.
+Original pending evidence remains byte-preserved; failed release is not accepted.
+Receipt-ready publication windows refuse missing/conflicting historical proof
+rather than regenerating it. Permanent offline transition/receipt negatives and
+actual owned interrupted-pair/stopped-app recovery supplement the original
+complete checks. A new unique candidate and independent review remain required.
+
 ## Phase 0 — documentation and readiness
 
 - Reconcile completed launch/release status from accepted evidence; archive old

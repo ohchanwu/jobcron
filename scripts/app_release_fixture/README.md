@@ -261,7 +261,15 @@ binds its wanted artifact to the new current artifact, checks exact native
 selector version/protected values, container identity, protected runtime and
 ledger, then transfers ownership with a separate `handoff.json`. The failed
 checkpoint and receipt remain unchanged; `superseded.json` makes their resume
-historical-only. A stopped/crashed but uniquely identifiable candidate is allowed
+historical-only. A durable pending replacement success/postimage pair can also
+hand off directly to this separately approved recovery if its SAME recorded
+container subsequently stops/fails/restarts. The delivered pair, pending intent
+and failed checkpoint are retained verbatim; `handoff.json` additionally records
+`original_pending`, the exact new observed failure state and named recovery scope.
+A native invocation must have terminal success and no still-existing recorded
+PID; unbound/still-in-flight intent cannot use this route. Failed state is never
+promoted to release acceptance and the original replacement is not replayed.
+A stopped/crashed but uniquely identifiable candidate is allowed
 only for recovery/reconciliation, never successful acceptance. Pending replacement
 without a durable native-result/postimage pair must first use the ORIGINAL
 `resume --disposition-file` and an independently settled-effective-state decision.
@@ -283,6 +291,19 @@ the intended selector. Ordinary running-image no-ops still refuse.
 A completed resume rechecks
 exact accepted container/start/restart/protected identity and native selector
 version, repeats the authenticated journey and records a fresh `resume_readback`.
+Before returning that receipt it validates a durable canonical `receipt_sha256`
+and exact semantic bindings to descriptor/evidence/approvals, source/image/platform,
+accepted CID/start, selector/version, effect outcomes, recovery point, journey and
+observation policy/samples. Missing/copied/mutated receipts refuse, even if the
+native runtime is unchanged; historical success is never regenerated to repair a
+missing binding. Before publication, the checkpoint records acceptance facts and
+requires at least three unchanged samples with a recorded final sample at or
+beyond the minimum observation interval, not only a later loop-condition clock.
+It then records
+the expected digest at `receipt-ready`. An interrupted publication can finalize
+ONLY if the existing receipt matches that binding and current identity. Missing
+or conflicting receipt-ready evidence remains refused; separately approved
+same-lock failed-app recovery is still available without rewriting it.
 It does not recreate the app or relabel the historical stability interval as a
 new production observation. Interrupted committed-stage advancement applies the
 same selector operation/version and protected-value checks as pending intent.
@@ -322,7 +343,12 @@ the real journey/stability checks. An injected unknown intent refuses without
 effects. It also injects a
 read-only prerequisite/acceptance failure, stops only the exact owned candidate,
 then invokes real CLI approved compatible recovery with new-write/proxy/DB/mount/
-ledger preservation and unchanged completed-resume controls. An owned absent-app
+ledger preservation and unchanged completed-resume controls. It additionally
+interrupts AFTER a real durable replacement-success/postimage pair but BEFORE
+clearing pending intent, stops that exact owned app, refuses ordinary acceptance,
+then exercises separately approved native same-lock recovery with the original
+pending pair/checkpoint byte-preserved and post-change writes retained.
+An owned absent-app
 fault exercises explicit local intermediate disposition followed by separately
 approved compatible recovery; the unknown original is never relabeled accepted.
 Transport/acceptance fault

@@ -23,6 +23,13 @@ identifiable stopped app and separately approved native recovery. Read-only
 failure history, explicit observed lock handoff, exact committed/completed resume
 identity and bounded non-disk stdout are part of the implementation; a prior
 receipt never approves a different container/version or protected value.
+Review164's consolidated local correction covers pending durable-success/postimage
+followed by same-container failure and explicitly approved same-lock recovery,
+without rewriting the original pair or accepting the failed release. Completed
+receipts bind a durable digest plus semantic input/runtime/acceptance facts;
+missing/copied/conflicting receipts and incomplete publication refuse. These
+regressions and affected owned native recovery are local evidence only; independent
+exact-new-candidate acceptance is still pending.
 
 Make ordinary upgrades of the existing working service easier and faster without
 weakening recovery, custody, review or external-write gates. This is a small

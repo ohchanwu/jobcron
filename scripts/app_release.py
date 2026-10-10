@@ -862,12 +862,39 @@ class Runner:
             new_owner = {"state_dir": str(self.root), "descriptor_sha256": digest(self.d)}
             require(marker.get("owner") == old_owner or
                     (marker.get("owner") == new_owner and (self.root / "handoff.json").exists()), "handoff marker belongs to another state")
-        require(cp["stage"] in ("replace", "verify", "complete", "recovery-ready") and not cp["pending"],
-                "unresolved failed-state effects; use original resume before recovery")
-        effects = {e["kind"]: e for e in cp["effects"]}
-        require(set(effects) == {"recovery-point", "persist", "replace"} and len(cp["effects"]) == 3 and cp.get("backup"),
+        require(cp.get("contract") == "attended-v2" and
+                cp["stage"] in ("replace", "verify", "receipt-ready", "complete", "recovery-ready"),
+                "unresolved failed-state stage; use original reconciliation")
+        pending = cp["pending"]
+        records = list(cp["effects"])
+        if pending:
+            # A delivered command/exact postimage can be durable while intent is
+            # still pending. Later failure is NOT successful resume or unknown
+            # adoption: separately scoped recovery retains the original pair.
+            require(cp["stage"] == "replace" and pending["kind"] == "replace" and
+                    pending["status"] in ("submitted-unknown", "committed-verified") and
+                    pending.get("native_outcome") == "delivered-success" and pending.get("result") and
+                    pending["before"] == cp["initial"] and pending["after"] == cp["wanted"]["image_id"] and
+                    pending["result"]["image"] == cp["wanted"]["image_id"] and pending["result"]["running"] is True,
+                    "unbound failed-state intent; attended settled-state resolution required")
+            process = pending.get("native_process")
+            if process:
+                require(process.get("terminal") is True and process.get("exit_code") == 0,
+                        "replacement invocation has no terminal success")
+                try:
+                    os.kill(process["pid"], 0)
+                except ProcessLookupError:
+                    pass
+                else:
+                    raise Refuse("recorded replacement process still exists; no racing recovery")
+            records.append(pending)
+        effects = {e["kind"]: e for e in records}
+        require(set(effects) == {"recovery-point", "persist", "replace"} and len(records) == 3 and cp.get("backup"),
                 "failed release not fully committed/reconciled")
-        require(all(e["status"] in ("committed-verified", "committed-reconciled", "attended-effective-state") for e in effects.values()), "unproven failed-state effects")
+        require(all(e is pending or e["status"] in ("committed-verified", "committed-reconciled", "attended-effective-state")
+                    for e in effects.values()), "unproven failed-state effects")
+        require(effects["persist"]["result"] == effects["persist"]["expected"] and
+                effects["persist"]["result"] == cp["selector_after"], "failed-state selector operation mismatch")
         self.selector_state(effects["persist"]["result"])
         committed = effects["replace"]["result"]
         if cp["stage"] == "recovery-ready":
@@ -885,7 +912,7 @@ class Runner:
         record = {"schema": 1, "failed_state": str(old_root), "failed_checkpoint_sha256": file_digest(old_root / "checkpoint.json"),
                   "failed_descriptor_sha256": cp["descriptor_sha256"], "new_descriptor_sha256": digest(self.d),
                   "approval_id": self.a["approval_id"], "observed": actual, "selector": self.selector_state(),
-                  "failed_acceptance_not_promoted": True}
+                  "original_pending": pending, "failed_acceptance_not_promoted": True}
         if (self.root / "handoff.json").exists():
             require(read_json(self.root / "handoff.json") == record, "handoff observation changed; preserve and reconcile")
         else:
@@ -1116,7 +1143,12 @@ class Runner:
                         "next_action": "new separately approved compatible recovery with failed-state handoff"}
             require(self.observe(wanted["image_id"]) == self.cp["accepted_state"], "completed runtime identity drift")
             self.selector_state(self.cp["selector_after"])
-            receipt = read_json(self.root / "receipt.json")
+            receipt = self.completed_receipt(wanted)
+            if self.cp["stage"] == "receipt-ready":
+                # Receipt publication may finish before the completion marker.
+                # Validate both first; never regenerate missing historical proof.
+                self.cp["stage"] = "complete"
+                self.save()
             if resume:
                 journey = self.host.journey()
                 require(self.observe(wanted["image_id"]) == self.cp["accepted_state"], "runtime drift during resumed journey")
@@ -1205,7 +1237,7 @@ class Runner:
             self.selector_state(self.cp["selector_after"])
             self.cp["accepted_state"] = effect["result"]
             self.cp["stage"] = "verify"
-        if pending or self.cp["stage"] not in ("complete", "recovery-ready"):
+        if pending or self.cp["stage"] not in ("receipt-ready", "complete", "recovery-ready"):
             self.save()
 
     def verify(self, wanted):
@@ -1220,33 +1252,75 @@ class Runner:
         self.cp["readiness_verified_at"] = time.time()
         self.cp["samples"] = [{"elapsed": 0, **first}]
         self.save()
-        while time.monotonic() < deadline:
+        while True:
             self.stop()
-            time.sleep(min(self.d["sample_seconds"], max(0, deadline - time.monotonic())))
+            remaining = deadline - time.monotonic()
+            time.sleep(min(self.d["sample_seconds"], remaining) if remaining > 0 else self.d["sample_seconds"])
             current = self.observe(wanted["image_id"])
             require(current == first, "unstable app identity/restart/protected state")
-            self.cp["samples"].append({"elapsed": time.monotonic() - started, **current})
+            elapsed = time.monotonic() - started
+            self.cp["samples"].append({"elapsed": elapsed, **current})
             self.save()
+            # Exit on an actual recorded final sample, not a later clock read
+            # which could outlast the window without corresponding evidence.
+            if elapsed >= self.d["observe_seconds"] and len(self.cp["samples"]) >= 3:
+                break
         require(len(self.cp["samples"]) >= 3, "insufficient stability samples")
         self.host.journey()
         require(self.observe(wanted["image_id"]) == first, "runtime drift during final journey")
         selector = self.selector_state(self.cp["selector_after"])
         require(selector["selector"] == wanted["selector"] and selector["version"] == self.cp["selector_after"]["version"], "final authoritative selector drift")
-        receipt = {"schema": 1, "release_id": self.d["release_id"], "mode": self.d["mode"],
+        self.cp["journey"] = journey
+        receipt = self.receipt_facts(wanted)
+        # Bind accepted facts BEFORE publishing the receipt. An interruption
+        # before publication refuses rather than silently regenerating success;
+        # after publication, matching evidence can finalize without a new interval.
+        self.cp["receipt_sha256"] = digest(receipt)
+        self.cp["stage"] = "receipt-ready"
+        self.save()
+        atomic(self.root / "receipt.json", receipt)
+        self.cp["stage"] = "complete"
+        self.save()
+
+    def receipt_facts(self, wanted):
+        first = self.cp["accepted_state"]
+        samples = self.cp["samples"]
+        require(len(samples) >= 3 and samples[0]["elapsed"] == 0 and
+                samples[-1]["elapsed"] >= self.d["observe_seconds"] and
+                all(math.isfinite(s["elapsed"]) and {k: v for k, v in s.items() if k != "elapsed"} == first for s in samples) and
+                all(a["elapsed"] < b["elapsed"] for a, b in zip(samples, samples[1:])) and
+                first["running"] is True and first["restarts"] == 0 and first["image"] == wanted["image_id"],
+                "historical acceptance sample/identity mismatch")
+        require(self.cp["journey"].get("authenticated_core") is True and self.cp["journey"].get("tls") is True and
+                self.cp["journey"].get("scrape_or_rerate") is False, "historical journey evidence missing")
+        require(not self.cp["pending"] and [e["kind"] for e in self.cp["effects"]] == ["recovery-point", "persist", "replace"] and
+                self.cp["effects"][-1]["result"] == first and
+                self.cp["effects"][1]["result"] == self.cp["selector_after"] and
+                all(e["status"] in ("committed-verified", "committed-reconciled", "attended-effective-state") for e in self.cp["effects"]),
+                "historical stage acceptance mismatch")
+        return {"schema": 1, "release_id": self.d["release_id"], "mode": self.d["mode"],
                    "status": "local-rehearsal-verified" if self.host.local else "production-verified",
                    "descriptor_sha256": digest(self.d), "source": wanted["source"], "image_id": wanted["image_id"],
                    "platform": wanted["platform"], "container": first["container"],
+                   "started_at": first["started_at"], "selector": self.cp["selector_after"],
+                   "evidence_sha256": digest(self.e), "approvals_sha256": digest(self.a),
+                   "acceptance_policy": {k: self.d[k] for k in ("observe_seconds", "sample_seconds")},
                    "approval_id": self.a["approval_id"], "approved_effects": self.a["effects"],
                    "stage_outcomes": [{"kind": e["kind"], "operation_id": e["operation_id"], "status": e["status"]} for e in self.cp["effects"]],
-                   "recovery": self.cp["recovery"], "recovery_point": self.cp["backup"], "journey": journey,
+                   "recovery": self.cp["recovery"], "recovery_point": self.cp["backup"], "journey": self.cp["journey"],
                    "observation_seconds": self.cp["samples"][-1]["elapsed"], "samples": len(self.cp["samples"]),
                    "unexpected_restarts": 0, "protected_state_preserved": True, "exact_ledger": True,
                    "interruption_upper_bound_seconds": max(0, self.cp["readiness_verified_at"] - self.cp["replacement_started"]),
                    "production_stability_proven": not self.host.local,
                    "cleanup": "runner checkpoint/evidence retained; no resource cleanup or credential mutation"}
-        atomic(self.root / "receipt.json", receipt)
-        self.cp["stage"] = "complete"
-        self.save()
+
+    def completed_receipt(self, wanted):
+        require(self.cp["stage"] in ("receipt-ready", "complete") and self.cp.get("receipt_sha256") and
+                (self.root / "receipt.json").exists(), "missing bound completion receipt; preserve and reconcile")
+        receipt = read_json(self.root / "receipt.json")
+        require(digest(receipt) == self.cp["receipt_sha256"] and receipt == self.receipt_facts(wanted),
+                "conflicting receipt digest/semantic acceptance binding")
+        return receipt
 
 
 def main():

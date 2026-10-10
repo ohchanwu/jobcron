@@ -46,6 +46,14 @@ exact runtime/version identity and a fresh journey, not just a matching image ta
 its old stability interval remains historical. Native stdout uses bounded
 non-disk capture; production secret/tool-temporary routes remain verified tmpfs.
 
+The same approved recovery route also covers a durable pending replacement
+success/postimage pair whose SAME container later fails/stops/restarts, retaining
+the original intent/pair and refusing in-flight/unbound or foreign/protected drift.
+Completed receipts require their durable digest and semantic acceptance binding;
+copied/missing/mutated receipts or missing/conflicting `receipt-ready` publication
+evidence refuse without regenerating historical success. These are local-tested
+safeguards, not production approval or a new stability observation.
+
 ## Deployment modes
 
 This directory now implements the replacement-host runtime, but running it is a

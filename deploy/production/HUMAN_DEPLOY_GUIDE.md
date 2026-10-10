@@ -17,6 +17,12 @@ defines the observed lock handoff and identifiable stopped-app recovery. Never
 delete a stale mutation marker, overwrite the failed checkpoint, restore a stale
 writable DB, or bypass global STOP. Resume rechecks exact native version and
 accepted runtime identity; historical receipts do not approve drifted state.
+That recovery route includes an interrupted durable pending success/postimage pair
+whose SAME container later fails/stops/restarts, preserving the original pair and
+requiring exact separately named recovery scope. Completed resume also verifies
+receipt digest and semantic acceptance/input/runtime binding. A missing/copied or
+conflicting receipt (including `receipt-ready` publication interruption) refuses;
+do not rewrite old checkpoints or regenerate historical success to make it pass.
 
 Unbound lost native replies remain unknown/no-replay. The invocation guide defines
 `resume --disposition-file` for separate trusted attended settled-exclusive

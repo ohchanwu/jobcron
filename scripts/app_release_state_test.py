@@ -57,7 +57,8 @@ class SimulatedHost:
         r.require(image == self.state["selector"], "runtime selector mismatch")
     def replace(self):
         self.submission(lambda: self.state.update(replacements=self.state["replacements"] + 1, image=self.state["selector"],
-                                                 container="new-container-" + str(self.state["replacements"] + 1), stopped=False))
+                                                 container="new-container-" + str(self.state["replacements"] + 1), stopped=False,
+                                                 restarts=0, started_at="new-start-" + str(self.state["replacements"] + 1)))
         if self.state.pop("lost_replace", False):
             raise r.Unknown("locally lost reply")
     def journey(self):

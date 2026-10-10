@@ -47,6 +47,9 @@ Use this index instead of recursively loading the entire documentation tree.
   Reviewer-directed local corrections cover failed/stopped-app approved lock
   handoff, mutation-boundary ambiguity, exact resume identity and non-disk secret
   output; independent re-review still governs acceptance.
+  The latest consolidated correction adds pending-success-pair failed-app recovery
+  with original evidence retained, and durable digest/semantic completed-receipt
+  binding with fail-closed publication windows; no historical success regeneration.
 - [Gemini pacing and quota classification — narrow draft specification](specs/261009-gemini-pacing-and-quota-classification.md)
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
   The Gemini payload remains a separate documentation-only proposal awaiting
