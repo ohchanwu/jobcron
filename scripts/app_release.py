@@ -18,6 +18,7 @@ import math
 import os
 from pathlib import Path
 import re
+import selectors
 import signal
 import ssl
 import stat
@@ -136,9 +137,10 @@ def atomic(path, value, raw=False):
 
 class TargetLock:
     """Kernel lock plus durable stale marker; no TTL-based lock deletion."""
-    def __init__(self, root, reconcile=False, owner=None):
+    def __init__(self, root, reconcile=False, owner=None, handoff=None, read_only=False):
         self.root, self.reconcile = Path(root), reconcile
         self.owner = owner
+        self.handoff, self.read_only = handoff, read_only
         self.fd = None
 
     def __enter__(self):
@@ -150,23 +152,44 @@ class TargetLock:
         try:
             fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             marker = self.root / "lock.json"
-            require(not marker.exists() or self.reconcile, "stale release lock: use resume and authoritative reconciliation")
+            require(not marker.exists() or self.reconcile or self.handoff, "stale release lock: use resume and authoritative reconciliation")
             if marker.exists():
-                require(read_json(marker).get("owner") == self.owner, "stale intent belongs to another release state")
-            atomic(marker, {"pid": os.getpid(), "pending": True, "owner": self.owner})
+                previous = read_json(marker)
+                if self.handoff:
+                    self.handoff(previous)
+                else:
+                    require(previous.get("owner") == self.owner, "stale intent belongs to another release state")
+                    require(not self.read_only or previous.get("read_only") is True, "read-only preflight cannot reconcile mutation intent")
+                atomic(self.root / ("history-" + str(uuid.uuid4()) + ".json"), previous)
+            elif self.handoff:
+                self.handoff(None)
+            atomic(marker, {"pid": os.getpid(), "pending": True, "owner": self.owner, "read_only": self.read_only})
             return self
         except (BlockingIOError, Refuse):
             os.close(self.fd)
             self.fd = None
             raise Refuse("release lock occupied or stale; reconciliation required") from None
+        except BaseException:
+            os.close(self.fd)
+            self.fd = None
+            raise
 
     def __exit__(self, typ, value, traceback):
         # Keep stale marker on interruption/ambiguous failure. Never unlink the
         # kernel lock inode, which could allow different processes to hold locks.
-        if typ is None:
+        # Read-only failures have no native mutation to reconcile. Preserve their
+        # disposition without stranding the target. intent() turns this off before
+        # publishing an effect checkpoint.
+        if typ is None or self.read_only:
+            atomic(self.root / ("history-" + str(uuid.uuid4()) + ".json"),
+                   {"owner": self.owner, "read_only": self.read_only, "outcome": "returned" if typ is None else "failed-before-effects"})
             (self.root / "lock.json").unlink()
         if self.fd is not None:
             os.close(self.fd)
+
+    def intent(self):
+        self.read_only = False
+        atomic(self.root / "lock.json", {"pid": os.getpid(), "pending": True, "owner": self.owner, "read_only": False})
 
 
 def native(args, timeout, env=None, data=None, output=None):
@@ -181,30 +204,64 @@ def native(args, timeout, env=None, data=None, output=None):
     clean.update(env or {})
     scratch = custody(clean.get("TMPDIR") or os.environ["TMPDIR"], directory=True)
     clean["TMPDIR"] = str(scratch)
-    # Spool native stdout privately, rather than letting communicate allocate
-    # an unbounded in-memory result before checking its size. Dump output uses
-    # the explicitly supplied owned stream instead.
-    with tempfile.TemporaryFile(dir=scratch) as captured:
+    # Secret-bearing output NEVER reaches a temporary disk file. Drain bounded
+    # pipes while feeding stdin concurrently (large pg_restore inputs must not
+    # deadlock). Only the explicitly approved backup stream writes data to disk.
+    try:
+        process = subprocess.Popen(args, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
+                                   stdout=output if output is not None else subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   env=clean, start_new_session=True)
+    except OSError:
+        raise Unsubmitted("native executable unavailable; no submission") from None
+    result = bytearray()
+    deadline = time.monotonic() + timeout
+    offset = 0
+    with selectors.DefaultSelector() as pipes:
         try:
-            process = subprocess.Popen(args, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
-                                       stdout=output if output is not None else captured, stderr=subprocess.DEVNULL,
-                                       env=clean, start_new_session=True)
-        except OSError:
-            raise Unsubmitted("native executable unavailable; no submission") from None
-        try:
-            process.communicate(data, timeout=timeout)
-        except BaseException:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
+            if process.stdout is not None:
+                os.set_blocking(process.stdout.fileno(), False)
+                pipes.register(process.stdout, selectors.EVENT_READ)
             if process.stdin is not None:
-                process.stdin.close()
+                if data:
+                    os.set_blocking(process.stdin.fileno(), False)
+                    pipes.register(process.stdin, selectors.EVENT_WRITE)
+                else:
+                    process.stdin.close()
+            while pipes.get_map() or process.poll() is None:
+                remaining = deadline - time.monotonic()
+                require(remaining > 0, "native operation timeout")
+                for key, event in pipes.select(min(0.2, remaining)):
+                    if event & selectors.EVENT_READ:
+                        block = os.read(key.fd, min(65536, 8 * 1024 * 1024 + 1 - len(result)))
+                        if not block:
+                            pipes.unregister(key.fileobj)
+                            key.fileobj.close()
+                        else:
+                            result.extend(block)
+                            require(len(result) <= 8 * 1024 * 1024, "native result exceeds bound")
+                    else:
+                        try:
+                            offset += os.write(key.fd, data[offset:offset + 65536])
+                        except BrokenPipeError:
+                            offset = len(data)
+                        if offset == len(data):
+                            pipes.unregister(key.fileobj)
+                            key.fileobj.close()
+            process.wait(timeout=max(0.01, deadline - time.monotonic()))
+        except BaseException:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
             raise Unknown("native operation interrupted/timed out; reconcile before any retry") from None
+        finally:
+            for stream in (process.stdin, process.stdout):
+                if stream is not None:
+                    stream.close()
         if process.returncode != 0:
             raise Unknown("native process returned failure; reconcile any submitted effect")
-        captured.seek(0)
-        result = captured.read(8 * 1024 * 1024 + 1)
-        require(len(result) <= 8 * 1024 * 1024, "native result exceeds bound")
-        return result
+        return bytes(result)
 
 
 def image_selector(value, mode):
@@ -337,9 +394,16 @@ class Host:
         if not self.local:
             aws_inputs(target)
             self.secret_work = custody(target["secret_work_dir"], directory=True)
-            for path in [self.secret_work, *map(Path, target["protected_paths"]), Path(target["aws_credentials"])]:
+            for path in [self.secret_work, *map(Path, target["protected_paths"]),
+                         *[Path(target[k]) for k in ("aws_credentials", "database_url_file", "journey_account_file", "proxy_secret_file")]]:
+                custody(path, directory=path.is_dir())
                 require(self.run(["findmnt", "-n", "-o", "FSTYPE", "--target", str(path)]).strip() == b"tmpfs", "production secret inputs require tmpfs")
             require(not self.run(["swapon", "--noheadings", "--show=NAME"]).strip(), "production swap must be disabled")
+            # Native stdout uses bounded non-disk pipes. Native tools' own scratch
+            # and credential/payload/passfile routes use verified private tmpfs.
+            # The durable root holds sanitized checkpoints/approved archives.
+            self.env["TMPDIR"] = str(self.secret_work)
+            self.secret_output_verified = True
             self.aws_env = {"AWS_CONFIG_FILE": target["aws_config"],
                             "AWS_SHARED_CREDENTIALS_FILE": target["aws_credentials"],
                             "AWS_PROFILE": target["aws_profile"], "AWS_CLI_AUTO_PROMPT": "off"}
@@ -360,8 +424,22 @@ class Host:
 
     def aws(self, *args):
         require(not self.local, "provider operation disabled in local mode")
+        require(self.secret_output_verified and self.env["TMPDIR"] == str(self.secret_work), "unverified secret output route")
         return native(["aws", "--no-cli-pager", "--region", self.t["region"], *args], self.timeout,
                       env={**self.env, **self.aws_env})
+
+    def mutate(self, operation):
+        # Precisely the mutating operation, not surrounding preflight/readback.
+        boundary = getattr(self, "submission", None)
+        return boundary(operation) if boundary else operation()
+
+    def expected_selector(self, image, operation_id):
+        if not self.local:
+            return {"selector": image, "version": operation_id}
+        values = self.env_values(read_bytes(self.t["selector_file"]))
+        values["JOBCRON_IMAGE"] = image
+        raw = "".join(f"{k}={v}\n" for k, v in values.items()).encode()
+        return {"selector": image, "version": hashlib.sha256(raw).hexdigest()}
 
     def prereqs(self):
         info = json.loads(self.docker("info", "--format", "{{json .}}"))
@@ -431,7 +509,7 @@ class Host:
             raw = read_bytes(self.t["selector_file"])
             values = self.env_values(raw)
             values["JOBCRON_IMAGE"] = image
-            atomic(self.t["selector_file"], "".join(f"{k}={v}\n" for k, v in values.items()).encode(), raw=True)
+            self.mutate(lambda: atomic(self.t["selector_file"], "".join(f"{k}={v}\n" for k, v in values.items()).encode(), raw=True))
         else:
             secret = dict(current["secret"], JOBCRON_IMAGE=image)
             payload = self.secret_work / "selector-payload.json"
@@ -440,8 +518,8 @@ class Host:
                 # Reobserve immediately before put. Secrets Manager has no CAS;
                 # exclusive attended operator custody remains an explicit boundary.
                 require(self.selector()["version"] == before["version"], "secret preimage changed")
-                self.aws("secretsmanager", "put-secret-value", "--secret-id", self.t["secret_id"],
-                         "--client-request-token", operation_id, "--secret-string", "file://" + str(payload))
+                self.mutate(lambda: self.aws("secretsmanager", "put-secret-value", "--secret-id", self.t["secret_id"],
+                         "--client-request-token", operation_id, "--secret-string", "file://" + str(payload)))
                 after = self.selector()
                 require(after["secret"] == secret and after["version"] == operation_id, "secret authoritative readback mismatch")
             finally:
@@ -455,24 +533,29 @@ class Host:
         raw = read_bytes(p)
         values = self.env_values(raw)
         values["JOBCRON_IMAGE"] = image
-        atomic(p, "".join(f"{k}={v}\n" for k, v in values.items()).encode(), raw=True)
+        desired = "".join(f"{k}={v}\n" for k, v in values.items()).encode()
+        if desired != raw:
+            self.mutate(lambda: atomic(p, desired, raw=True))
         require(self.env_values(read_bytes(p)) == values, "runtime selector readback failed")
         require(self.render() == self.t["config_sha256"], "non-image configuration changed")
 
     def inspect(self, container):
         return json.loads(self.docker("inspect", container))[0]
 
-    def service(self, name):
-        ids = self.docker("ps", "--filter", "label=com.docker.compose.project=" + self.t["project"],
+    def service(self, name, allow_stopped=False):
+        ids = self.docker("ps", "-a", "--filter", "label=com.docker.compose.project=" + self.t["project"],
                           "--filter", "label=com.docker.compose.service=" + name, "--format", "{{.ID}}").decode().split()
-        require(len(ids) == 1, "exactly one running " + name + " required")
-        return self.inspect(ids[0])
+        require(len(ids) == 1, "exactly one identifiable " + name + " required")
+        container = self.inspect(ids[0])
+        require(allow_stopped or container["State"]["Running"], "running service required")
+        return container
 
-    def snapshot(self):
+    def snapshot(self, allow_stopped=False):
         require(self.render() == self.t["config_sha256"], "non-image Compose drift")
-        app, proxy = self.service("app"), self.service("caddy")
+        app, proxy = self.service("app", allow_stopped=allow_stopped), self.service("caddy")
         require(app["Config"]["Env"].count("JOBCRON_SCHEDULER_ENABLED=1") == 1 and
-                app["State"]["Running"] and app["State"]["Pid"] > 0, "active scheduler contract invalid")
+                (allow_stopped or (app["State"]["Running"] and app["State"]["Pid"] > 0)), "active scheduler contract invalid")
+        require(not app["State"].get("Paused") and not app["State"].get("Restarting"), "indeterminate app lifecycle")
         # Snapshot only metadata, never container logs or secret values.
         protected = {"proxy": metadata(proxy, ("Id", "Image", "Mounts", "Config", "HostConfig")),
                      "app": metadata(app, ("Mounts", "HostConfig")),
@@ -486,7 +569,7 @@ class Host:
         require(digest(protected) == self.t["protected_sha256"], "protected runtime/mount/database/proxy drift")
         validate_ledger(self.d["manifests"], self.ledger())
         return {"container": app["Id"], "image": app["Image"], "restarts": app["RestartCount"],
-                "started_at": app["State"]["StartedAt"], "protected_sha256": digest(protected)}
+                "started_at": app["State"]["StartedAt"], "running": app["State"]["Running"], "protected_sha256": digest(protected)}
 
     def mount_files(self):
         records = []
@@ -541,10 +624,14 @@ class Host:
         # Own a new artifact; no migrations/restores or old database rollback.
         p = self.root / (operation_id + ".dump")
         require(not p.exists(), "recovery artifact already exists; reconcile")
-        with p.open("xb") as stream:
+        # Resolve read-only prerequisites before artifact creation. Once a file
+        # may exist, a later missing dump/upload/helper cannot prove the whole
+        # backup unsubmitted.
+        db = self.service("db") if self.local else None
+        stream = self.mutate(lambda: p.open("xb"))
+        with stream:
             os.chmod(p, 0o600)
             if self.local:
-                db = self.service("db")
                 self.run(["docker", "exec", db["Id"], "pg_dump", "-U", "postgres", "-d", "jobcron", "-Fc"], output=stream)
             else:
                 with self.pg_environment() as pg:
@@ -569,7 +656,7 @@ class Host:
     def replace(self):
         # Compose stop-before-create replaces one singleton, never blue/green,
         # never down, proxy recreate, mounted-dir cleanup or systemd restart.
-        self.compose("up", "--detach", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--scale", "app=1", "app")
+        self.mutate(lambda: self.compose("up", "--detach", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--scale", "app=1", "app"))
 
     def journey(self):
         account = read_json(self.t["journey_account_file"])
@@ -658,11 +745,66 @@ class Runner:
     def save(self):
         atomic(self.checkpoint, self.cp)
 
-    def observe(self, expected_image):
+    def observe(self, expected_image, allow_stopped=False):
         self.stop()
-        state = self.host.snapshot()
+        state = self.host.snapshot(allow_stopped=True) if allow_stopped else self.host.snapshot()
         require(state["image"] == expected_image, "wrong authoritative current image")
         return state
+
+    def selector_state(self, expected=None):
+        state = self.host.selector()
+        if not self.host.local:
+            protected = dict(state["secret"])
+            protected.pop("JOBCRON_IMAGE")
+            require(digest(protected) == self.e.get("secret_nonimage_sha256"), "protected secret value drift")
+        result = {k: state[k] for k in ("selector", "version")}
+        require(expected is None or result == expected, "exact native selector/version drift")
+        return result
+
+    def recovery_handoff(self, failed_state, marker):
+        # Called while holding the SAME stable kernel lock, before marker transfer.
+        # This is not authority inferred from failure: the new descriptor's
+        # compatible provenance and explicit recover approval were already checked.
+        old_root = custody(failed_state, directory=True)
+        require(old_root != self.root and not (old_root / "STOP").exists(), "invalid/stopped failed release state")
+        cp = read_json(old_root / "checkpoint.json")
+        require(cp["target"] == self.d["target"] and cp["target_sha256"] == digest(self.t) and
+                cp["wanted"] == self.d["current"], "failed-state target/artifact mismatch")
+        if marker:
+            old_owner = {"state_dir": str(old_root), "descriptor_sha256": cp["descriptor_sha256"]}
+            new_owner = {"state_dir": str(self.root), "descriptor_sha256": digest(self.d)}
+            require(marker.get("owner") == old_owner or
+                    (marker.get("owner") == new_owner and (self.root / "handoff.json").exists()), "handoff marker belongs to another state")
+        require(cp["stage"] in ("replace", "verify", "complete") and not cp["pending"],
+                "unresolved failed-state effects; use original resume before recovery")
+        effects = {e["kind"]: e for e in cp["effects"]}
+        require(set(effects) == {"recovery-point", "persist", "replace"} and len(cp["effects"]) == 3 and cp.get("backup"),
+                "failed release not fully committed/reconciled")
+        require(all(e["status"] in ("committed-verified", "committed-reconciled") for e in effects.values()), "unproven failed-state effects")
+        self.selector_state(effects["persist"]["result"])
+        actual = self.observe(self.d["current"]["image_id"], allow_stopped=True)
+        committed = effects["replace"]["result"]
+        # Failure may stop/restart the SAME container. Do not adopt an unrelated
+        # container/image or discard protected-state predicates to enable recovery.
+        require(actual["container"] == committed["container"] and
+                actual.get("protected_sha256") == committed.get("protected_sha256"), "failed candidate identity drift")
+        record = {"schema": 1, "failed_state": str(old_root), "failed_checkpoint_sha256": file_digest(old_root / "checkpoint.json"),
+                  "failed_descriptor_sha256": cp["descriptor_sha256"], "new_descriptor_sha256": digest(self.d),
+                  "approval_id": self.a["approval_id"], "observed": actual, "selector": self.selector_state(),
+                  "failed_acceptance_not_promoted": True}
+        if (self.root / "handoff.json").exists():
+            require(read_json(self.root / "handoff.json") == record, "handoff observation changed; preserve and reconcile")
+        else:
+            atomic(self.root / "handoff.json", record)
+        self.handoff_observed = actual
+        # Preserve old checkpoint/receipts; a separate terminal marker prevents
+        # their future resume from representing superseded acceptance as current.
+        if (old_root / "superseded.json").exists():
+            previous = read_json(old_root / "superseded.json")
+            require(previous["new_descriptor_sha256"] == digest(self.d) and
+                    previous["failed_checkpoint_sha256"] == record["failed_checkpoint_sha256"], "failed-state handoff already belongs elsewhere")
+        else:
+            atomic(old_root / "superseded.json", record)
 
     def prepare(self):
         # Local input-only validation: no provider/Docker reads, lock or writes.
@@ -674,45 +816,75 @@ class Runner:
         self.stop()
         approve(self.d, self.a, "observe")
         with TargetLock(custody(self.t["lock_dir"], directory=True),
-                        owner={"state_dir": str(self.root), "descriptor_sha256": digest(self.d)}):
+                        owner={"state_dir": str(self.root), "descriptor_sha256": digest(self.d)}, read_only=True, reconcile=True):
             self.host = self.host_class(self.d, self.t, self.root)
             self.host.prereqs()
             state = self.observe(self.d["current"]["image_id"])
-            require(self.host.selector()["selector"] == self.d["current"]["selector"], "persisted current selector mismatch")
+            require(self.selector_state()["selector"] == self.d["current"]["selector"], "persisted current selector mismatch")
             return {"status": "preflight-observed", "mode": self.d["mode"], "image_id": state["image"],
                     "protected_state_preserved": True, "exact_ledger": True, "effects_submitted": False}
 
     def effect(self, kind, operation, before, after):
         self.stop()
         approve(self.d, self.a, kind)
-        pending = {"kind": kind, "operation_id": str(uuid.uuid4()), "before": before, "after": after, "status": "submitted-unknown"}
+        pending = {"kind": kind, "operation_id": str(uuid.uuid4()), "before": before, "after": after, "status": "proven-unsubmitted"}
+        if kind == "persist":
+            pending["expected"] = self.host.expected_selector(after, pending["operation_id"])
         # Durable intent precedes invoking the native operation. Once this record
-        # exists, only an exec exception proves no submission. No blind replay.
+        # exists, the precise mutation boundary accounts for submission. A late
+        # missing readback helper cannot relabel an earlier mutation unsubmitted.
+        self.active_lock.intent()
         self.cp["pending"] = pending
         self.save()
-        try:
-            operation(pending["operation_id"])
-        except Unsubmitted:
-            pending["status"] = "proven-unsubmitted"
+        def submission(call):
+            self.stop()
+            previous = pending["status"]
+            pending["status"] = "submitted-unknown"
             self.save()
-            raise
+            try:
+                return call()
+            except Unsubmitted:
+                if previous == "proven-unsubmitted":
+                    pending["status"] = "proven-unsubmitted"
+                    self.save()
+                raise
+        self.host.submission = submission
+        try:
+            result = operation(pending["operation_id"])
+        finally:
+            self.host.submission = None
         self.stop()
+        require(pending["status"] == "submitted-unknown", "adapter did not account for mutation submission")
+        pending["result"] = result
         pending["status"] = "committed-verified"
         self.cp["effects"].append(pending)
         self.cp["pending"] = None
         self.save()
 
-    def start(self, recovery=False, resume=False):
+    def start(self, recovery=False, resume=False, failed_state=None):
         self.stop()
+        require(not (self.root / "superseded.json").exists(), "release state was handed to approved recovery; historical only")
+        require(failed_state is None or (recovery and not resume), "failed-state handoff requires new approved recovery")
+        if failed_state is not None:
+            require(not self.checkpoint.exists(), "handoff state already has a checkpoint: resume it, never overwrite")
         wanted = self.d["recovery" if recovery else "candidate"]
         require(wanted["image_id"] != self.d["current"]["image_id"], "no-op image release refused before effects")
         for gate in ("observe", "persist", "replace", "recovery-point"):
             approve(self.d, self.a, gate)
         if recovery:
             approve(self.d, self.a, "recover")
-        with TargetLock(custody(self.t["lock_dir"], directory=True), reconcile=resume,
-                        owner={"state_dir": str(self.root), "descriptor_sha256": digest(self.d)}):
+        # Handoff needs real readback UNDER the acquired target kernel lock.
+        def handoff(marker):
             self.host = self.host_class(self.d, self.t, self.root)
+            self.host.evidence_secret_digest = self.e.get("secret_nonimage_sha256")
+            self.host.prereqs()
+            self.recovery_handoff(failed_state, marker)
+        with TargetLock(custody(self.t["lock_dir"], directory=True), reconcile=resume,
+                        owner={"state_dir": str(self.root), "descriptor_sha256": digest(self.d)},
+                        handoff=handoff if failed_state is not None else None,
+                        read_only=not resume and failed_state is None) as lock:
+            self.active_lock = lock
+            self.host = self.host or self.host_class(self.d, self.t, self.root)
             self.host.evidence_secret_digest = self.e.get("secret_nonimage_sha256")
             self.host.prereqs()
             if resume:
@@ -723,40 +895,38 @@ class Runner:
                 self.resume_pending(wanted)
             else:
                 require(not self.checkpoint.exists(), "checkpoint exists: resume, never overwrite recovery evidence")
-                initial = self.observe(self.d["current"]["image_id"])
-                selector = self.host.selector()
+                initial = self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                selector = self.selector_state()
                 require(selector["selector"] == self.d["current"]["selector"], "wrong authoritative persisted current selector")
                 self.cp = {"schema": 1, "target": self.d["target"], "descriptor_sha256": digest(self.d),
                            "evidence_sha256": digest(self.e), "target_sha256": digest(self.t), "recovery": recovery,
-                           "initial": initial, "selector_before": {k: selector[k] for k in ("selector", "version")},
+                           "initial": initial, "wanted": wanted, "selector_before": selector,
                            "effects": [], "pending": None, "stage": "preflight", "samples": []}
                 self.save()
             if self.cp["stage"] == "preflight":
-                self.observe(self.d["current"]["image_id"])
+                self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
                 def backup(op):
                     self.cp["backup"] = self.host.backup(op)
+                    return self.cp["backup"]
                 self.effect("recovery-point", backup, self.cp["initial"], wanted["image_id"])
                 self.cp["stage"] = "persist"
                 self.save()
             if self.cp["stage"] == "persist":
-                self.observe(self.d["current"]["image_id"])
-                before = self.host.selector()
+                self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                before = self.selector_state(self.cp["selector_before"])
                 require(before["selector"] == self.d["current"]["selector"] and before["version"] == self.cp["selector_before"]["version"], "selector preimage drift")
                 def persist(op):
                     assert self.host is not None
                     self.host.persist(wanted["selector"], before, op)
-                    after = self.host.selector()
-                    require(after["selector"] == wanted["selector"] and after["version"] != before["version"], "selector persistence readback failed")
+                    return self.selector_state(self.cp["pending"]["expected"])
                 self.effect("persist", persist,
                             {k: before[k] for k in ("selector", "version")}, wanted["selector"])
-                after = self.host.selector()
-                require(after["selector"] == wanted["selector"] and after["version"] != before["version"], "selector persistence readback failed")
-                self.cp["selector_after"] = {k: after[k] for k in ("selector", "version")}
+                self.cp["selector_after"] = self.cp["effects"][-1]["result"]
                 self.cp["stage"] = "replace"
                 self.save()
             if self.cp["stage"] == "replace":
-                current = self.observe(self.d["current"]["image_id"])
-                selector = self.host.selector()
+                current = self.observe(self.d["current"]["image_id"], allow_stopped=recovery)
+                selector = self.selector_state(self.cp["selector_after"])
                 require(selector["selector"] == wanted["selector"] and selector["version"] == self.cp["selector_after"]["version"], "persisted selector changed before replacement")
                 self.cp["replacement_started"] = time.time()
                 def replace(op):
@@ -764,14 +934,25 @@ class Runner:
                     self.host.replace()
                     after = self.observe(wanted["image_id"])
                     require(after["container"] != current["container"], "replacement not committed")
+                    return after
                 self.effect("replace", replace, current, wanted["image_id"])
+                self.cp["accepted_state"] = self.cp["effects"][-1]["result"]
                 self.cp["stage"] = "verify"
                 self.save()
             if self.cp["stage"] == "verify":
                 self.verify(wanted)
-            self.observe(wanted["image_id"])
-            require(self.host.selector()["selector"] == wanted["selector"], "completed release selector drift")
-            return read_json(self.root / "receipt.json")
+            require(self.observe(wanted["image_id"]) == self.cp["accepted_state"], "completed runtime identity drift")
+            self.selector_state(self.cp["selector_after"])
+            receipt = read_json(self.root / "receipt.json")
+            if resume:
+                journey = self.host.journey()
+                require(self.observe(wanted["image_id"]) == self.cp["accepted_state"], "runtime drift during resumed journey")
+                self.selector_state(self.cp["selector_after"])
+                readback = {"verified_at": time.time(), "container": self.cp["accepted_state"]["container"],
+                            "journey": journey, "historical_observation_not_restarted": True, "effects_replayed": False}
+                atomic(self.root / ("resume-readback-" + str(uuid.uuid4()) + ".json"), readback)
+                return dict(receipt, resume_readback=readback)
+            return receipt
 
     def resume_pending(self, wanted):
         pending = self.cp["pending"]
@@ -780,28 +961,31 @@ class Runner:
                 # At most one deliberate resume retry. Reobserve all state before
                 # continuing. No infrastructure retry after any submitted process.
                 require(not self.cp.get("unsubmitted_retry_used"), "pre-submission retry exhausted")
-                self.observe(self.d["current"]["image_id"])
+                require(self.observe(self.d["current"]["image_id"], allow_stopped=self.cp["recovery"]) == self.cp["initial"],
+                        "pre-submit runtime preimage drift")
+                self.selector_state(self.cp.get("selector_after", self.cp["selector_before"]))
                 self.cp["unsubmitted_retry_used"] = True
                 self.cp["pending"] = None
                 self.save()
                 return
             if pending["kind"] == "persist":
-                state = self.host.selector()
+                state = self.selector_state(pending["expected"])
                 reconcile_effect(pending, state)
-                if not self.host.local:
-                    require(state["version"] == pending["operation_id"], "native secret operation identity mismatch")
-                    before_secret = self.e.get("secret_nonimage_sha256")
-                    secret = dict(state["secret"])
-                    secret.pop("JOBCRON_IMAGE")
-                    require(before_secret == digest(secret), "protected secret value drift after ambiguous write")
                 self.host.persist_runtime_env(wanted["selector"])
-                self.observe(self.d["current"]["image_id"])
-                self.cp["selector_after"] = {k: state[k] for k in ("selector", "version")}
+                require(self.observe(self.d["current"]["image_id"], allow_stopped=self.cp["recovery"]) == self.cp["initial"], "ambiguous selector runtime drift")
+                pending["result"] = state
+                self.cp["selector_after"] = state
                 self.cp["stage"] = "replace"
             elif pending["kind"] == "replace":
-                state = self.observe(wanted["image_id"])
+                # An identifiable stopped candidate can reconcile its committed
+                # replacement, but it cannot pass verification. This records the
+                # failure truthfully and enables separately approved recovery.
+                state = self.observe(wanted["image_id"], allow_stopped=True)
                 reconcile_effect(pending, state)
-                require(self.host.selector()["selector"] == wanted["selector"], "ambiguous replacement selector mismatch")
+                self.selector_state(self.cp["selector_after"])
+                require(state["restarts"] == 0, "ambiguous replacement restarted")
+                pending["result"] = state
+                self.cp["accepted_state"] = state
                 self.cp["stage"] = "verify"
             else:
                 self.observe(self.d["current"]["image_id"])
@@ -821,12 +1005,16 @@ class Runner:
             require(self.cp.get("backup"), "recovery point evidence missing")
             self.cp["stage"] = "persist"
         if self.cp["stage"] == "persist" and "persist" in kinds:
-            state = self.host.selector()
-            require(state["selector"] == wanted["selector"], "committed selector drift")
-            self.cp["selector_after"] = {k: state[k] for k in ("selector", "version")}
+            effect = next(e for e in self.cp["effects"] if e["kind"] == "persist")
+            state = self.selector_state(effect["result"])
+            require(state == effect["expected"], "committed native operation identity mismatch")
+            self.cp["selector_after"] = state
             self.cp["stage"] = "replace"
         if self.cp["stage"] == "replace" and "replace" in kinds:
-            self.observe(wanted["image_id"])
+            effect = next(e for e in self.cp["effects"] if e["kind"] == "replace")
+            require(self.observe(wanted["image_id"]) == effect["result"], "committed runtime identity drift")
+            self.selector_state(self.cp["selector_after"])
+            self.cp["accepted_state"] = effect["result"]
             self.cp["stage"] = "verify"
         self.save()
 
@@ -834,6 +1022,7 @@ class Runner:
         # Any interrupted observation restarts this local interval only. It does
         # not replay selector/replacement or refresh a completed recovery point.
         first = self.observe(wanted["image_id"])
+        require(first == self.cp["accepted_state"], "verification runtime differs from committed replacement")
         require(first["restarts"] == 0, "unexpected app restart")
         journey = self.host.journey()
         started = time.monotonic()
@@ -850,7 +1039,8 @@ class Runner:
             self.save()
         require(len(self.cp["samples"]) >= 3, "insufficient stability samples")
         self.host.journey()
-        selector = self.host.selector()
+        require(self.observe(wanted["image_id"]) == first, "runtime drift during final journey")
+        selector = self.selector_state(self.cp["selector_after"])
         require(selector["selector"] == wanted["selector"] and selector["version"] == self.cp["selector_after"]["version"], "final authoritative selector drift")
         receipt = {"schema": 1, "release_id": self.d["release_id"], "mode": self.d["mode"],
                    "status": "local-rehearsal-verified" if self.host.local else "production-verified",
@@ -875,6 +1065,7 @@ def main():
     for name in ("descriptor", "evidence", "approvals", "target", "state_dir"):
         parser.add_argument("--" + name.replace("_", "-"), required=True, type=Path)
     parser.add_argument("--resume-recovery", action="store_true")
+    parser.add_argument("--failed-state-dir", type=Path, help="explicit approved recovery handoff from this preserved release state")
     args = parser.parse_args()
     os.umask(0o077)
     inputs = None
@@ -892,7 +1083,7 @@ def main():
         elif args.stage == "preflight":
             result = runner.preflight()
         else:
-            result = runner.start(recovery=args.stage == "recover" or args.resume_recovery, resume=args.stage == "resume")
+            result = runner.start(recovery=args.stage == "recover" or args.resume_recovery, resume=args.stage == "resume", failed_state=args.failed_state_dir)
         print(json.dumps(result, sort_keys=True))
     except (Refuse, OSError, KeyError, TypeError, ValueError, urllib.error.URLError):
         # Never print raw provider/subprocess/HTTP errors, private identifiers or

@@ -41,6 +41,9 @@ Use this index instead of recursively loading the entire documentation tree.
   [real invocation and input custody](../scripts/app_release_fixture/README.md)
   cover the native CLI. Independent exact-candidate review remains required;
   no production/publication/provider authority follows from local checks.
+  Reviewer-directed local corrections cover failed/stopped-app approved lock
+  handoff, mutation-boundary ambiguity, exact resume identity and non-disk secret
+  output; independent re-review still governs acceptance.
 - [Gemini pacing and quota classification — narrow draft specification](specs/261009-gemini-pacing-and-quota-classification.md)
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
   The Gemini payload remains a separate documentation-only proposal awaiting

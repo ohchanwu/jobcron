@@ -35,24 +35,27 @@ class SimulatedHost:
         self.d = d
     def prereqs(self):
         r.require(not self.state.get("missing"), "missing native prerequisites")
-    def snapshot(self):
+    def snapshot(self, allow_stopped=False):
         r.require(not self.state.get("protected_drift"), "protected mutation")
-        return {"image": self.state["image"], "container": self.state["container"], "restarts": self.state.get("restarts", 0)}
+        r.require(allow_stopped or not self.state.get("stopped"), "stopped app")
+        return {"image": self.state["image"], "container": self.state["container"], "restarts": self.state.get("restarts", 0),
+                "started_at": self.state.get("started_at", "initial-start"), "running": not self.state.get("stopped")}
     def selector(self):
         return {"selector": self.state["selector"], "version": self.state["version"]}
     def backup(self, op):
-        self.state["backups"] += 1
+        self.submission(lambda: self.state.update(backups=self.state["backups"] + 1))
         return {"operation_id": op, "off_host_verified": False, "dump_sha256": "1" * 64}
+    def expected_selector(self, image, op):
+        return {"selector": image, "version": op}
     def persist(self, image, before, op):
-        self.state["persists"] += 1
-        self.state.update(selector=image, version=op)
+        self.submission(lambda: self.state.update(persists=self.state["persists"] + 1, selector=image, version=op))
         if self.state.pop("lost_persist", False):
             raise r.Unknown("locally lost reply")
     def persist_runtime_env(self, image):
         r.require(image == self.state["selector"], "runtime selector mismatch")
     def replace(self):
-        self.state["replacements"] += 1
-        self.state.update(image=self.state["selector"], container="new-container")
+        self.submission(lambda: self.state.update(replacements=self.state["replacements"] + 1, image=self.state["selector"],
+                                                 container="new-container-" + str(self.state["replacements"] + 1), stopped=False))
         if self.state.pop("lost_replace", False):
             raise r.Unknown("locally lost reply")
     def journey(self):

@@ -29,6 +29,15 @@ Compatible recovery requires named approval and keeps the authoritative database
 and post-change writes. The required production observation is at least 30 minutes;
 the shorter synthetic fixture interval never satisfies it.
 
+Failed acceptance can transfer the same target lock to a NEW separately approved
+compatible recovery using `recover --failed-state-dir "$FAILED_STATE"` and the
+new packet/state. This reobserves the exact failed (possibly stopped) container,
+selector version, protected values and ledger without rewriting the failed
+checkpoint. Unknown effects and global STOP still refuse. Completed resume checks
+exact runtime/version identity and a fresh journey, not just a matching image tag;
+its old stability interval remains historical. Native stdout uses bounded
+non-disk capture; production secret/tool-temporary routes remain verified tmpfs.
+
 ## Deployment modes
 
 This directory now implements the replacement-host runtime, but running it is a

@@ -15,6 +15,11 @@ authenticated HTTPS/logout, seeded post-change data retention and lost-reply
 readback ran; exact local candidate review remains required. Historical crash and
 fixture correction evidence is retained, not reset. No hosted publication,
 provider/IAM read, production deployment or Gemini experiment was performed.
+Review153 requested consolidated safety corrections, not approval. Same-card
+correction retains the rejected candidate/evidence and adds permanent regressions
+and real failed/stopped-candidate recovery, with exact resume identities,
+mutation-boundary submission accounting and bounded non-disk output custody.
+Independent exact-candidate re-review is still pending.
 
 ## Phase 0 — documentation and readiness
 

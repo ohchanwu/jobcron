@@ -39,8 +39,10 @@ settings, supplies an empty isolated Docker config, an explicit Compose file and
 env file, and no shell commands. AWS profiles admit only the selected static
 session: region-only config and access key/secret/session-token credentials. Role
 chaining, `credential_process`, endpoint overrides, SSO and hidden config routes
-are refused. Production credential files, protected secret paths and temporary
-secret workspace must be on tmpfs; payload/password temporaries are removed on
+are refused. Native stdout is captured in bounded, non-disk pipes (8 MiB maximum),
+not a temporary file in the durable checkpoint directory. Production credential
+files, journey account, database URL, protected secret paths and native temporary
+workspace must be on verified owner-only tmpfs; payload/password temporaries are removed on
 ordinary exits. Credentials never appear in argv, stdout, receipts or raw errors.
 An OS kill can leave private tmpfs files; inspect and clean only owned remnants.
 
@@ -157,12 +159,19 @@ resume a different release state to clear a stale marker: it is bound to the
 exact state-directory/descriptor pair, including for completed checkpoints.
 Pre-binding legacy markers refuse and require explicit owner reconciliation.
 Do not unlink the kernel-lock inode, expire a marker on a TTL, or overwrite a checkpoint.
+Read-only failures release their marker with an owner-only history record. A
+crashed read-only marker can be reobserved by the same packet/state's `preflight`;
+that route cannot clear mutation intent or another state's marker. History records
+retain every transferred marker and completed/failed-before-effects disposition.
 A submitted operation with a lost reply is unknown even if the process failed.
 Use the same unchanged packet/state with `resume`; authoritative committed
 selector versions/container identities are reconciled without resubmission.
-Conflicting/preimage/unprovable observations stop. Only a proven exec-before-
-submission failure permits one deliberate resume retry, never an ambiguous
-native effect. Ambiguous recovery-point creation needs attended archive
+Conflicting/preimage/unprovable observations stop. Submission is accounted at the
+actual mutating boundary, not around an entire multi-command callback: a missing
+late readback helper leaves earlier submission unknown. Only proven no-submission
+permits one deliberate resume retry, never an ambiguous native effect. Backup
+artifact creation is itself a mutation; a later missing dump/upload helper cannot
+make that partial artifact unsubmitted. Ambiguous recovery-point creation needs attended archive
 reconciliation and is deliberately not automatically replayed.
 
 SIGINT/SIGTERM writes the stable target-lock `STOP` marker. An owner-written marker
@@ -176,8 +185,32 @@ image, independently compatible recovery provenance and separately named
 `recover` approval, plus a NEW state directory. Invoke `recover`, or `resume
 --resume-recovery` for its interrupted checkpoint. It preserves the same
 writable DB and all post-change writes. Never restore a pre-change writable DB.
+When a prior failed acceptance still owns the target marker, invoke:
+
+```sh
+python3 scripts/app_release.py recover "$@" --failed-state-dir "$FAILED_STATE"
+```
+
+Here `$@` must select the NEW recovery packet/state, not the failed packet. The
+handoff holds the same target kernel lock, reads the preserved failed checkpoint,
+binds its wanted artifact to the new current artifact, checks exact native
+selector version/protected values, container identity, protected runtime and
+ledger, then transfers ownership with a separate `handoff.json`. The failed
+checkpoint and receipt remain unchanged; `superseded.json` makes their resume
+historical-only. A stopped/crashed but uniquely identifiable candidate is allowed
+only for recovery/reconciliation, never successful acceptance. Pending replacement
+can first be reconciled via the ORIGINAL `resume`, even if stopped; verification
+still refuses, after which approved handoff is possible. Unresolved backup or
+selector intent, foreign/unidentifiable containers, concurrent owners and global
+STOP remain fail-closed. Do not manually clear a mutation marker.
 No-op image releases are refused before effects. A completed resume rechecks
-actual final state/selector and does not recreate the app.
+exact accepted container/start/restart/protected identity and native selector
+version, repeats the authenticated journey and records a fresh `resume_readback`.
+It does not recreate the app or relabel the historical stability interval as a
+new production observation. Interrupted committed-stage advancement applies the
+same selector operation/version and protected-value checks as pending intent.
+Older checkpoints without these result/expected/wanted bindings refuse; preserve
+them for attended reconciliation rather than editing their history to pass.
 
 ## Explicit owned local harness
 
@@ -203,7 +236,10 @@ are a capability refusal, never implicit pulls or login. Preserve failed
 bootstrap inputs; `bootstrap` is only an explicit empty-DB continuation and
 refuses previously submitted bootstrap/account/migration work. The sequence
 includes a locally discarded reply from a REAL Compose replacement and an
-injected unknown intent that must refuse without effects. Transport fault
+injected unknown intent that must refuse without effects. It also injects a
+read-only prerequisite/acceptance failure, stops only the exact owned candidate,
+then invokes real CLI approved compatible recovery with new-write/proxy/DB/mount/
+ledger preservation and unchanged completed-resume controls. Transport/acceptance fault
 injection is local, not a provider permission test. Cleanup checks the exact
 owned daemon/card/resource labels, removes only owned container/volume/network
 resources, and retains images, checkpoints and sanitized evidence for review.

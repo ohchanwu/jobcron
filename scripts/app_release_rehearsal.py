@@ -393,14 +393,90 @@ class Fixture:
                 receipt = r.Runner(d, e, a, t, root).start(recovery=is_recovery)
                 r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":17}', "post-change write lost across recovery")
             receipts.append(receipt)
+        failure_receipt = self.failed_recovery()
         self.unknown_refusal()
         # Full receipts deliberately contain no private selector paths/config/
         # secret digests or credential/cookie values. Inputs remain owner-only.
         r.atomic(self.root / "rehearsal-summary.json", {"card": CARD, "mode": "local-only", "receipts": receipts,
                  "sequence": "current -> candidate -> compatible recovery -> candidate", "post_change_write_preserved": True,
                  "lost_reply_reconciled_without_replay": True, "unknown_state_refused": True,
+                 "failed_stopped_candidate_approved_recovery": failure_receipt,
                  "same_application_source_baseline": BASELINE, "independent_binary_build_parameters": True,
                  "production_stability_or_IAM_proven": False, "resources": "retained for review; exact owned cleanup only"})
+
+    def failed_recovery(self):
+        # Exact owned native effects; the acceptance fault is locally injected,
+        # not a claim that the real application image itself is defective.
+        root, d, e, a, t = self.inputs("failed-acceptance", "candidate", "current", "recovery")
+        r.require(not (root / "checkpoint.json").exists(), "failed-acceptance already exercised; retain evidence")
+        class MissingPrerequisite(r.Host):
+            def prereqs(self):
+                self.run(["/definitely/missing/fixture-prerequisite"])
+        try:
+            r.Runner(d, e, a, t, root, host_class=MissingPrerequisite).preflight()
+            raise AssertionError("missing prerequisite accepted")
+        except r.Unsubmitted:
+            r.require(not (Path(t["lock_dir"]) / "lock.json").exists() and not (root / "checkpoint.json").exists(),
+                      "read-only failure stranded lock")
+        r.atomic(root / "readonly-failure.json", {"effects_submitted": False, "lock_released_with_history": True})
+        r.Runner(d, e, a, t, root).preflight()
+        class FailedJourney(r.Host):
+            def replace(self):
+                super().replace()  # REAL owned Compose commits first.
+                self.run(["/definitely/missing/fixture-late-readback-helper"])
+            def journey(self):
+                super().journey()  # The actual synthetic account/HTTPS path works.
+                raise r.Refuse("locally injected acceptance failure after native replacement")
+        runner = r.Runner(d, e, a, t, root, host_class=FailedJourney)
+        try:
+            runner.start()
+            raise AssertionError("late missing helper accepted")
+        except r.Unsubmitted:
+            cp = r.read_json(root / "checkpoint.json")
+            r.require(cp["pending"]["kind"] == "replace" and cp["pending"]["status"] == "submitted-unknown",
+                      "late missing helper mislabeled committed replacement")
+        host = r.Host(d, t, self.directory("failed-read"))
+        before_resume = host.snapshot()
+        try:
+            runner.start(resume=True)
+            raise AssertionError("injected failed journey accepted")
+        except r.Refuse:
+            cp = r.read_json(root / "checkpoint.json")
+            r.require(cp["stage"] == "verify" and cp["pending"] is None and len(cp["effects"]) == 3,
+                      "failed acceptance not fully committed")
+        r.require(host.snapshot() == before_resume, "late-helper reconciliation replayed native replacement")
+        r.atomic(root / "late-helper-reconciliation.json", {"real_native_replacement_committed": True,
+                 "later_exec_failed_before_that_helper_only": True, "effect_retained_submitted_unknown": True,
+                 "resume_same_container": before_resume["container"], "effects_replayed": False})
+        self.sql("UPDATE profiles SET profile_json='{\"min_score\":19}', profile_hash='after-failed-candidate' WHERE user_id=1;")
+        committed = host.snapshot()
+        failed_hash = r.file_digest(root / "checkpoint.json")
+        # Stop only the exact recorded owned app, leaving Caddy/DB/mounts intact.
+        app = host.inspect(committed["container"])
+        r.require(app["Config"]["Labels"].get("jobcron.card") == CARD, "failed app not owned")
+        self.docker("stop", "--time", "10", committed["container"])
+        stopped = host.snapshot(allow_stopped=True)
+        r.require(not stopped["running"] and stopped["container"] == committed["container"], "failed app stop unproven")
+        r.atomic(root / "failure-readback.json", {"committed": committed, "stopped": stopped, "fault": "locally injected acceptance failure", "owned_native_stop": True})
+        recovery_root, rd, re, ra, rt = self.inputs("failed-compatible-recovery", "current", "candidate", "candidate")
+        # Real CLI invocation of the new approved handoff, not a command emitter.
+        args = ["/usr/bin/python3", str(REPO / "scripts/app_release.py"), "recover", "--failed-state-dir", str(root),
+                "--state-dir", str(recovery_root)]
+        for name in ("descriptor", "evidence", "approvals", "target"):
+            args += ["--" + name, str(recovery_root / (name + ".json"))]
+        result = json.loads(self.run(args, timeout=180))
+        r.require(result["recovery"] and result["status"] == "local-rehearsal-verified", "native approved recovery failed")
+        r.require(r.file_digest(root / "checkpoint.json") == failed_hash, "failed checkpoint overwritten")
+        r.require(self.sql("SELECT profile_json FROM profiles WHERE user_id=1;").decode().strip() == '{"min_score":19}',
+                  "new write lost after failed candidate recovery")
+        before = r.Host(rd, rt, self.directory("completed-read")).snapshot()
+        resumed = r.Runner(rd, re, ra, rt, recovery_root).start(recovery=True, resume=True)
+        after = r.Host(rd, rt, self.directory("completed-read")).snapshot()
+        r.require(before == after and resumed["resume_readback"]["effects_replayed"] is False, "completed recovery replayed")
+        r.atomic(recovery_root / "recovery-preservation.json", {"same_failed_checkpoint": True, "post_change_write_preserved": True,
+                 "proxy_database_mounts_ledger_preserved": True, "one_confined_scheduler": True,
+                 "completed_resume_same_container": before["container"], "historical_observation_not_current_stability": True})
+        return result
 
     def unknown_refusal(self):
         root, d, e, a, t = self.inputs("unknown-refusal", "candidate", "current", "recovery")

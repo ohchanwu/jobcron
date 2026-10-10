@@ -10,6 +10,14 @@
 > controls that unchanged-schema image-only lane, not the initial-launch sequence
 > below. Local checks grant no production/provider/publication authority.
 
+For failed acceptance in that runner lane, select a NEW independently approved
+compatible-recovery packet/state and use `recover --failed-state-dir "$FAILED_STATE"`.
+The [runner reference](../../scripts/app_release_fixture/README.md#commands-and-recovery)
+defines the observed lock handoff and identifiable stopped-app recovery. Never
+delete a stale mutation marker, overwrite the failed checkpoint, restore a stale
+writable DB, or bypass global STOP. Resume rechecks exact native version and
+accepted runtime identity; historical receipts do not approve drifted state.
+
 This guide supports an explicit lean initial deployment and the historical
 private Slice 4 replacement-host sequence. Neither authorizes a
 public cutover. Use only the approved commit, private controller artifacts, and

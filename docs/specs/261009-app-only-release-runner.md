@@ -18,6 +18,11 @@ operations. The owned local rehearsal executed real app/DB/proxy replacement,
 authenticated HTTPS journeys, retained new writes and lost-reply reconciliation.
 Local gate records/short observation do not prove hosted CI, IAM/provider
 permissions, public production routing or the 30-minute production gate.
+The corrected local rehearsal also exercises failed acceptance followed by an
+identifiable stopped app and separately approved native recovery. Read-only
+failure history, explicit observed lock handoff, exact committed/completed resume
+identity and bounded non-disk stdout are part of the implementation; a prior
+receipt never approves a different container/version or protected value.
 
 Make ordinary upgrades of the existing working service easier and faster without
 weakening recovery, custody, review or external-write gates. This is a small
