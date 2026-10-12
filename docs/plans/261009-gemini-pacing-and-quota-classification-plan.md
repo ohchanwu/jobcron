@@ -1,6 +1,8 @@
 # Gemini Pacing and Quota Classification — Follow-Up Plan
 
-Created: 2026-10-09. Updated: 2026-10-12. Status: draft, **not approved for execution**.
+Created: 2026-10-09. Updated: 2026-10-12. Status: retained narrow/experiment
+reference under the design-approved campaign; **IMPLEMENTATION ON HOLD,
+not approved for execution**. Future local task breakdown is in the campaign plan.
 Governing [specification](../specs/261009-gemini-pacing-and-quota-classification.md).
 Runner prerequisite is complete: [local acceptance](../decisions/261012-app-only-runner-local-acceptance.md)
 at `095bc775610656f3cbe74a076c5be495c30d22b5`. Coding approval remains missing.
@@ -10,13 +12,15 @@ is Gemini then live UI, each independently accepted; a possible single release
 after both. UI work need not wait for a paid/live Gemini run. Do not dispatch
 future application work or reopen the completed runner from this draft.
 
-## 0. Review the documentation, then wait
+## 0. Design approved; detailed plan review, then wait
 
-Review the narrow amendment against current AI outcome/cache and provider error
-contracts. Confirm experimental Gemini-only 10-second starts, non-Gemini behavior,
-quota-scope distinctions, redaction and honest timing. No provider/model or prompt
-change is part of this experiment. Obtain owner disposition of the final scope.
-Documentation approval is not permission to start coding or spend tokens.
+The integrated campaign's design is independently ready (review 169) and owner
+design-approved. Its detailed implementation plan awaits PLAN-READINESS review;
+do not repeat the completed design review. Retain experimental Gemini-only
+10-second starts, non-Gemini behavior, quota-scope distinctions, redaction and
+honest timing. No provider/model or prompt change is part of this experiment.
+Owner approval requested plan writing and explicitly prohibited implementation;
+documentation approval is not permission to start coding or spend tokens.
 
 ## 1. Future local implementation, after runner acceptance and explicit approval
 

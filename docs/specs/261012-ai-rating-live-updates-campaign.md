@@ -1,9 +1,12 @@
-# AI Rating and Live Posting Updates — Campaign Proposal
+# AI Rating and Live Posting Updates — Campaign Specification
 
-Created: 2026-10-12. Status: draft, awaiting independent design/readiness review
-and owner approval. **Documentation only; no application implementation, live
-inference, publication or deployment authorized.**
-Companion: [phased plan](../plans/261012-ai-rating-live-updates-campaign-plan.md).
+Created: 2026-10-12. Status: independently design-ready in review 169; owner
+DESIGN approved at `119fd7577ebd9b8134512654d0ed50dac2922827`.
+**APPLICATION IMPLEMENTATION ON HOLD.** The owner requested implementation-plan
+documentation and explicitly said not to start implementation. No application
+coding, live inference, publication or deployment authorized.
+Companion: [task-level plan](../plans/261012-ai-rating-live-updates-campaign-plan.md),
+awaiting independent PLAN-READINESS review, not execution approval.
 Discovery baseline: `095bc775610656f3cbe74a076c5be495c30d22b5`, tree
 `3a963914ba415838a11412a122458111cd144a15`.
 
