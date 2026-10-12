@@ -1,11 +1,14 @@
 # Gemini Pacing and Quota Classification — Follow-Up Plan
 
 Created: 2026-10-09. Updated: 2026-10-12. Status: retained narrow/experiment
-reference under the design-approved campaign; **IMPLEMENTATION ON HOLD,
-not approved for execution**. Future local task breakdown is in the campaign plan.
+reference under the approved campaign. Owner-approved autonomous LOCAL coding
+started on 2026-10-12 after plan review 171; Slice 1 is implemented locally and
+awaits exact-code acceptance/integration. Live experiment/release phases remain
+separately gated. Local task breakdown is in the campaign plan.
 Governing [specification](../specs/261009-gemini-pacing-and-quota-classification.md).
 Runner prerequisite is complete: [local acceptance](../decisions/261012-app-only-runner-local-acceptance.md)
-at `095bc775610656f3cbe74a076c5be495c30d22b5`. Coding approval remains missing.
+at `095bc775610656f3cbe74a076c5be495c30d22b5`. The earlier missing coding approval
+and hold described below are historical, superseded only for local work.
 This retains Slice 1/optional experiment detail under the
 [campaign plan](261012-ai-rating-live-updates-campaign-plan.md). Future local order
 is Gemini then live UI, each independently accepted; a possible single release

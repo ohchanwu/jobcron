@@ -8,8 +8,9 @@ acceptance is not fresh production evidence or authority for another operation.
 The [AI-rating/live-update campaign proposal](../../docs/specs/261012-ai-rating-live-updates-campaign.md)
 retains these outcome/cache semantics while proposing per-posting read-only live
 reconciliation after a separate Gemini slice. It is NOT implemented behavior:
-current clients still use owner-scoped run recovery and terminal reload. No coding,
-provider run or release is authorized by that draft.
+current clients still use owner-scoped run recovery and terminal reload. The owner's
+later 2026-10-12 instruction authorized local Slice 1 coding, not a provider run or
+release; its candidate is awaiting exact-code acceptance.
 
 ## Rated and genuine no-signal results are cached successes
 
@@ -88,7 +89,7 @@ calls, old-version rows, rejections or failures. M is the same eligible selected
 surface throughout the run. Processing progress can advance on failure/rejection;
 terminal copy separately reports processed, successfully analyzed, no-signal and
 rejected counts, including when contextual-validation warnings also need display.
-The inherited numeric progress, coffee-break copy, single observation owner and
+The numeric progress, provider-dependent wait copy, single observation owner and
 interruption recovery remain in place. Hard exclusions never acquire a new AI card.
 
 ## When IS a cached-empty listing re-analyzed?
@@ -159,5 +160,14 @@ post-upgrade recovery artifact. Preserve the authoritative ledger and user write
 See the [maintained outcome/release contract](../../docs/decisions/261009-ai-rating-and-release-contract.md)
 and [completed historical specification/plan](../../docs/archive/2026-10-09-alpha-launch-and-ai-rating-release/README.md).
 The [Gemini follow-up](../../docs/specs/261009-gemini-pacing-and-quota-classification.md)
-is draft work, not implemented behavior. Preparation and local rehearsal do not
+now has a local Slice 1 candidate awaiting exact-code acceptance. Gemini starts
+are spaced at least 10 seconds within one provider/pacer; other providers retain
+1.2 seconds. Extraction and scoring share that instance; unrelated runtimes and
+other project clients do not share a distributed quota guarantee. Explicit Gemini
+minute request/token, daily, mixed and account restrictions get distinct calm copy;
+generic 429/QuotaFailure/RetryInfo remain unknown in scope. Validated retry metadata
+does not trigger retries. Short waits cannot be promised to restore daily/account
+limits. Active progress explains provider-dependent waits, not a fixed 5–10 minutes.
+Outcome/cache/prompt/version/migration contracts are unchanged. The live UI slice
+is not yet implemented; current terminal reload behavior remains. Local checks do not
 authorize publication, production migration, deployment or live inference.

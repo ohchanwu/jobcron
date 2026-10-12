@@ -2,11 +2,13 @@
 
 Created: 2026-10-12. Status: independently design-ready in review 169; owner
 DESIGN approved at `119fd7577ebd9b8134512654d0ed50dac2922827`.
-**APPLICATION IMPLEMENTATION ON HOLD.** The owner requested implementation-plan
-documentation and explicitly said not to start implementation. No application
-coding, live inference, publication or deployment authorized.
+The plan was independently ready in review 171. On 2026-10-12 the owner approved
+the plan and autonomous LOCAL implementation, superseding the earlier instruction
+to write the plan without starting. Slice 1 is implemented locally, awaiting
+exact-code acceptance/integration; Slice 2 follows that gate. Live inference,
+publication and deployment remain unauthorized.
 Companion: [task-level plan](../plans/261012-ai-rating-live-updates-campaign-plan.md),
-awaiting independent PLAN-READINESS review, not execution approval.
+independently plan-ready; local coding authority is the later owner instruction.
 Discovery baseline: `095bc775610656f3cbe74a076c5be495c30d22b5`, tree
 `3a963914ba415838a11412a122458111cd144a15`.
 

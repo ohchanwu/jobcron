@@ -78,7 +78,7 @@ func seedRerateProgress(t *testing.T, n int) (*Server, *captureEmit, *AIRuntime)
 }
 
 // TestRunRerateOpensWithEstimateCopy: the FIRST status event of a press is the
-// calm 5–10 minute estimate (with its variability qualifier), not the old
+// calm provider-dependent wait explanation, not a fixed-duration promise
 // generic mid-run line, and no progress event may precede it — a user who just
 // pressed the button must immediately see how long the wait roughly is.
 func TestRunRerateOpensWithEstimateCopy(t *testing.T) {
@@ -91,12 +91,12 @@ func TestRunRerateOpensWithEstimateCopy(t *testing.T) {
 		t.Fatalf("no status event emitted: %v", cap.snapshot())
 	}
 	got := cap.snapshot()[firstStatus][1]
-	for _, want := range []string{"5–10분", "커피", "더 오래 걸릴 수 있어요"} {
+	for _, want := range estimateCopyTokens() {
 		if !strings.Contains(got, want) {
 			t.Errorf("first status = %q, want it to contain %q", got, want)
 		}
 	}
-	if strings.Contains(got, "보장") || strings.Contains(got, "정확히") {
+	if strings.Contains(got, "보장") || strings.Contains(got, "정확히") || strings.Contains(got, "5–10분") || strings.Contains(got, "커피") {
 		t.Errorf("first status = %q must stay a rough estimate, not a promise", got)
 	}
 	if prog := cap.firstIndex("progress", ""); prog != -1 && prog < firstStatus {
@@ -146,7 +146,7 @@ func TestRunRerateCountsStage1APreparationProgress(t *testing.T) {
 }
 
 // activeStatusCarriers returns, in order, every status event a full press
-// emits. The user-requested approximate 5–10분/coffee copy must survive the
+// emits. The provider-dependent wait explanation must survive the
 // WHOLE active wait: every status during the run (except deliberate, meaningful
 // failure/budget notices) carries the estimate tokens, so a mid-run line can
 // never overwrite the estimate with a generic "analyzing" phrase.
@@ -158,7 +158,7 @@ func activeStatusCarriers(cap *captureEmit) []string {
 		}
 		// Meaningful notices that must be allowed to replace the estimate:
 		// failure/budget/degradation guidance, and the FINAL rescoring line —
-		// claiming "약 5–10분" during the seconds-long terminal rescore (after
+		// describing a provider wait during the terminal rescore (after
 		// every provider call is done) would be dishonest, not calming.
 		if strings.Contains(ev[1], "예산") || strings.Contains(ev[1], "확인해 주세요") ||
 			strings.Contains(ev[1], "확인해주세요") || strings.Contains(ev[1], "다시 시도") ||
@@ -171,11 +171,11 @@ func activeStatusCarriers(cap *captureEmit) []string {
 }
 
 func estimateCopyTokens() []string {
-	return []string{"5–10분", "커피", "더 오래 걸릴 수 있어요"}
+	return []string{"공고 수", "제공자 요청 간격", "오래 걸릴 수 있어요"}
 }
 
 // TestRunRerateEstimateSurvivesFullRun: after the opening estimate, the
-// mid-run status lines must RE-ANCHOR the same approximate wait (coffee copy),
+// mid-run status lines must RE-ANCHOR the same provider-dependent wait,
 // not fall back to the old generic phrase — and the terminal rescoring line
 // must not drop it either. Proven on the full real event sequence.
 func TestRunRerateEstimateSurvivesFullRun(t *testing.T) {

@@ -1,10 +1,12 @@
 # AI Rating and Live Posting Updates — Task-Level Implementation Plan
 
-Created: 2026-10-12. Status: implementation-plan documentation awaiting independent
-PLAN-READINESS review. **DESIGN APPROVED; APPLICATION IMPLEMENTATION ON HOLD.**
-The owner instructed: “Approved. Write the impl plan. Don’t start impl.”
-This document does not authorize coding, feature/test scaffolding, dispatch,
-runtime experiments, paid inference, publication or deployment.
+Created: 2026-10-12. Status: independently PLAN-READY in review 171. The owner
+subsequently instructed “Plan approved. Start autonomous impl.”, superseding the
+historical “Approved. Write the impl plan. Don’t start impl.” LOCAL coding hold.
+T01–T03 are implemented locally; T04 exact-code acceptance/integration is pending.
+T05–T14 follow that gate on a separate slice. Historical future/hold wording below
+records the plan-writing phase, not renewed prohibition of authorized local work.
+No live experiment, paid inference, publication or deployment is authorized.
 
 Governing [campaign specification](../specs/261012-ai-rating-live-updates-campaign.md)
 was independently design-ready in review 169 and owner design-approved at
@@ -608,7 +610,7 @@ local acceptance are controlling; this matrix assigns tasks, layers and receipts
 | Campaign 6: hidden/BFCache/online, evidence/focus/pending controls, no reload; frozen calls/phase denominators/caps/cache/retry/budgets | T03/T09/T11–T13 | Node owner/mutator guards, real browser lifecycle, intercepted network and exact admission/call ledger |
 | Campaign 7: focused/broad/format/browser/privacy/docs/exact acceptance | T04/T14 | Actual suite counts/skips/timing, staged scanner/manual audit, full candidate/tree/baseline and independent verdict |
 
-## Future verification commands and fixture custody — DO NOT run now
+## Local verification commands and fixture custody — after coding approval
 
 Existing focused packages available today (new tests above still have to be written
 after coding approval):

@@ -37,18 +37,19 @@ Use this index instead of recursively loading the entire documentation tree.
 
 - [AI rating and live posting updates — design-approved campaign](specs/261012-ai-rating-live-updates-campaign.md)
   and [task-level implementation plan](plans/261012-ai-rating-live-updates-campaign-plan.md).
-  Independently design-ready in review 169 and owner DESIGN approved; detailed
-  plan awaits independent PLAN-READINESS review. APPLICATION IMPLEMENTATION ON
-  HOLD: owner requested the plan and explicitly prohibited starting implementation.
-  Future local slices: Gemini pacing/quota first, live updates
+  Design-ready in review 169; plan-ready in review 171. The owner approved the
+  plan and autonomous LOCAL implementation on 2026-10-12, superseding the earlier
+  implementation hold. Gemini Slice 1 is implemented locally, awaiting exact-code
+  acceptance/integration; live updates
   second; each needs separate implementation acceptance, with a possible single
   release after BOTH pass. UI work need not wait for a paid/live experiment.
-  No application coding, provider calls or publication/deployment authority.
+  No live provider calls or publication/deployment authority.
 - [Gemini pacing and quota classification — narrow Slice 1 specification](specs/261009-gemini-pacing-and-quota-classification.md)
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
   These retain Slice 1's technical/experiment details under the campaign above;
-  campaign design-approved, but implementation and the optional live experiment
-  remain unauthorized. The campaign task-level plan governs future local tasks.
+  local Slice 1 implementation is authorized; its exact acceptance is pending.
+  The optional live experiment remains unauthorized. The task-level plan governs
+  the remaining separately accepted local slice.
 - [App-only runner — completed local acceptance](decisions/261012-app-only-runner-local-acceptance.md)
   records accepted source `095bc775610656f3cbe74a076c5be495c30d22b5` and worker
   166 / reviewer 167. The old spec/plan paths are compatibility pointers, not

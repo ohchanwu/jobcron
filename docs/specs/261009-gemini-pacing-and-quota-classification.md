@@ -1,9 +1,10 @@
 # Gemini Pacing and Quota Classification — Narrow Follow-Up
 
 Created: 2026-10-09. Updated: 2026-10-12. Status: narrow Slice 1 design under the
-independently design-ready, owner design-approved campaign. **IMPLEMENTATION ON
-HOLD; no application coding or live model calls authorized.** The owner requested
-implementation-plan documentation only, not execution.
+independently design-ready, owner-approved campaign. The owner approved autonomous
+LOCAL implementation on 2026-10-12 after plan review 171. Slice 1 is implemented
+locally, awaiting exact-code acceptance/integration; live model calls remain
+unauthorized. The earlier plan-only implementation hold is historical.
 Companion: [experiment and implementation plan](../plans/261009-gemini-pacing-and-quota-classification-plan.md).
 Original design baseline: `4701eba23989b2dc4eac93ea12f1896ea16b6066`.
 Current discovery baseline: `095bc775610656f3cbe74a076c5be495c30d22b5`.

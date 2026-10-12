@@ -40,6 +40,22 @@ type rerateStorageError struct{ error }
 func providerFailureMessage(err error) string {
 	var apiErr *ai.APIError
 	if errors.As(err, &apiErr) {
+		if apiErr.Provider == "gemini" && apiErr.Status == http.StatusTooManyRequests {
+			switch apiErr.GeminiQuota() {
+			case ai.QuotaMinuteRequests:
+				return "AI 제공자의 분당 요청 한도에 도달했어요 — 기다린 뒤 다시 시도하면 도움이 될 수 있어요."
+			case ai.QuotaMinuteTokens:
+				return "AI 제공자의 분당 토큰 한도에 도달했어요 — 기다린 뒤 다시 시도하면 도움이 될 수 있어요."
+			case ai.QuotaDaily:
+				return "AI 제공자의 일일 사용 한도에 도달했어요 — 짧게 기다리는 것만으로 해결되지 않아요. 제공자 사용량·할당량을 확인해주세요."
+			case ai.QuotaMixed:
+				return "AI 제공자의 여러 사용 제한이 함께 확인됐어요 — 기다리는 것만으로 해결된다고 보기 어려워요. 제공자 사용량·할당량을 확인해주세요."
+			case ai.QuotaBilling:
+				return "AI 제공자의 계정·결제 조건을 확인해주세요 — 요청 간격을 늘리는 것만으로 해결되지 않아요."
+			default:
+				return "AI 제공자가 요청을 제한했어요 — 제한의 원인·범위는 확인되지 않았어요. 제공자 사용량·할당량을 확인해주세요."
+			}
+		}
 		signals := providerErrorSignals(apiErr.Body)
 		switch apiErr.Status {
 		case http.StatusUnauthorized, http.StatusForbidden:
@@ -125,11 +141,9 @@ func providerErrorSignals(body string) providerErrorSignalSet {
 }
 
 // rerateWorkers bounds how many visible rows a 재평가 press analyzes
-// concurrently. The provider's own 1-req/s limiter (internal/ai) spaces
-// request STARTS for politeness/backpressure; this pool overlaps the
-// multi-second LLM latencies so the press finishes in ~visible seconds
-// instead of visible×latency. ~4-6 in flight saturates the 1/s start rate
-// without bursting past it.
+// concurrently. The provider-instance limiter spaces transport STARTS (Gemini
+// 10s; other providers 1.2s). The pool overlaps responses, not start admissions;
+// it does not establish a project-wide quota or a promised completion time.
 const rerateWorkers = 6
 
 // callCap bounds how many not-yet-cached rows a single 재평가 press spends a
@@ -560,7 +574,7 @@ func rerateDoneMessage(summary rerateSummary) (message string) {
 // It is bounded by the surface's visible rows, never the whole DB.
 //
 // The rows run through a bounded worker pool (rerateWorkers): the per-row LLM
-// latencies overlap, cutting wall-time ~4×, while the provider's 1-req/s limiter
+// latencies overlap while the provider-specific limiter
 // still spaces request starts. The shared token budget and the per-call counter
 // are mutex-guarded; each worker commits its own ai_scores row.
 //
@@ -572,13 +586,12 @@ func rerateDoneMessage(summary rerateSummary) (message string) {
 // goal) and the total visible rows (M) for the progress copy.
 //
 // rerateActiveStatus is the status of a 재평가 press through every active
-// phase. The wait is dominated by paced provider calls (1 req/s starts), so a
-// surface of tens of listings takes minutes — the user is told that up front
-// AND re-anchored when the longest phase (Stage 2) begins, as a rough UX
-// estimate ("약", "정도", "수 있어요") and never a promised ETA. Every status
+// phase. Provider spacing, row count and response latency can make the wait
+// longer; explain that up front and when Stage 2 begins, without a fixed ETA.
+// Every status
 // during the active phases carries this copy; only deliberate failure/budget
 // notices or the final seconds-long rescore line may replace it.
-const rerateActiveStatus = "AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요."
+const rerateActiveStatus = "AI로 공고를 다시 분석하고 있어요. 공고 수와 제공자 요청 간격·응답 속도에 따라 오래 걸릴 수 있어요. 다른 일을 하며 기다리셔도 괜찮아요."
 
 func (s *Server) runRerate(ctx context.Context, surface string, emit func(event, data string), userID int64, runtime *AIRuntime) (summary rerateSummary, err error) {
 	if runtime == nil || runtime.UserID != userID {
@@ -645,7 +658,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 		return summary, nil
 	}
 	// Stage 2 is the longest phase (a provider call per uncached visible row,
-	// paced by the 1-req/s limiter): re-anchor the approximate wait so the
+	// paced by the provider-specific limiter): re-anchor the variable wait so the
 	// estimate is still on screen for the bulk of it, and open the phase with
 	// an honest 0/M BEFORE any worker result — the counter is numeric from
 	// the first moment of the phase, not only after the first completion.

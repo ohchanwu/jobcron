@@ -31,8 +31,8 @@ type providerSpec struct {
 	parseResp func(body []byte) (text string, usage Usage, err error)
 }
 
-// httpProvider is the shared chassis for the live providers: a pinned
-// http.Client plus 1-req/s pacing (the jumpit/rallit pattern).
+// httpProvider shares pinned transport and provider-instance start pacing across
+// extraction, contextual validation and scoring, with response latency overlap.
 type httpProvider struct {
 	spec    providerSpec
 	apiKey  string
@@ -80,7 +80,7 @@ func (p *httpProvider) Name() string { return p.spec.name }
 // (T2's extraction gate). It is the load-bearing request/response helper the
 // real providers share.
 func (p *httpProvider) complete(ctx context.Context, system, user string) (string, Usage, error) {
-	if err := p.pacer.Wait(ctx); err != nil {
+	if err := ctx.Err(); err != nil {
 		return "", Usage{}, err
 	}
 	body, err := json.Marshal(p.spec.buildBody(p.model, system, user))
@@ -94,34 +94,101 @@ func (p *httpProvider) complete(ctx context.Context, system, user string) (strin
 	req.Header.Set("Content-Type", "application/json")
 	p.spec.setAuth(req.Header, p.apiKey)
 
-	resp, err := p.http.Do(req)
+	// Admission belongs at transport entry, after both our request preparation
+	// and http.Client preparation. Keep the original pinned transport and client
+	// policy; the shared pacer never locks response latency.
+	transport := p.http.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	client := &http.Client{Transport: pacedTransport{p.pacer, transport, p.http.Timeout},
+		Jar: p.http.Jar, CheckRedirect: p.http.CheckRedirect}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", Usage{}, fmt.Errorf("ai: %s request: %w", p.spec.name, err)
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
 	if err != nil {
 		return "", Usage{}, fmt.Errorf("ai: %s read response: %w", p.spec.name, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", Usage{}, &APIError{Provider: p.spec.name, Status: resp.StatusCode, Body: string(respBody)}
+		apiErr := &APIError{Provider: p.spec.name, Status: resp.StatusCode}
+		if len(respBody) > 1<<20 {
+			// A truncated prefix cannot establish Gemini quota scope.
+			if p.spec.name != "gemini" {
+				apiErr.Body = string(respBody[:1<<20])
+			}
+		} else {
+			apiErr.Body = string(respBody)
+			if p.spec.name == "gemini" {
+				apiErr.RetryDelay = geminiRetryDelay(apiErr.Body, resp.Header, time.Now())
+			}
+		}
+		return "", Usage{}, apiErr
+	}
+	if len(respBody) > 1<<20 {
+		respBody = respBody[:1<<20]
 	}
 	return p.spec.parseResp(respBody)
+}
+
+type pacedTransport struct {
+	pacer   *pacing.Pacer
+	base    http.RoundTripper
+	timeout time.Duration
+}
+
+func (t pacedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := t.pacer.Wait(req.Context()); err != nil {
+		return nil, err
+	}
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
+	// Preserve the historical response timeout: admission waiting did not consume
+	// it. The parent operation's deadline still bounds both waiting and response.
+	if t.timeout <= 0 {
+		return t.base.RoundTrip(req)
+	}
+	ctx, cancel := context.WithTimeout(req.Context(), t.timeout)
+	resp, err := t.base.RoundTrip(req.Clone(ctx))
+	if err != nil {
+		cancel()
+		return resp, err
+	}
+	resp.Body = cancelOnCloseBody{resp.Body, cancel}
+	return resp, nil
+}
+
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b cancelOnCloseBody) Close() error {
+	defer b.cancel()
+	return b.ReadCloser.Close()
 }
 
 // APIError is a non-2xx response from a provider's API. It carries the HTTP
 // status so a caller can tell a 401 (bad key) from a 404 (model not found) and
 // surface a specific, calm message — the difference the BYOK user needs when a
 // provider switch leaves a mismatched model or key behind. Match it with
-// errors.As. Error() keeps the historical "ai: <provider> status <n>: <body>"
-// shape so existing log lines and string assertions are unchanged.
+// errors.As. Non-Gemini Error() retains the historical shape. Gemini diagnostics
+// expose only HTTP status and a closed quota enum, never raw provider text.
 type APIError struct {
 	Provider string
 	Status   int
 	Body     string
+	// RetryDelay carries validated Gemini metadata, never raw headers or retry authority.
+	RetryDelay time.Duration
 }
 
 func (e *APIError) Error() string {
+	if e.Provider == "gemini" {
+		return fmt.Sprintf("ai: gemini status %d quota %s", e.Status, e.GeminiQuota())
+	}
 	return fmt.Sprintf("ai: %s status %d: %s", e.Provider, e.Status, truncateForError([]byte(e.Body)))
 }
 

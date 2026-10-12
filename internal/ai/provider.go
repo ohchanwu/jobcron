@@ -228,8 +228,11 @@ func Providers() []ProviderInfo { return append([]ProviderInfo(nil), providers..
 // overlaps the multi-second call latencies.
 const aiRequestSpacing = time.Second + (time.Second / 5) // 1.2s
 
-// SuggestedRateLimit returns the uniform request-start spacing for a provider.
-// The provider name is accepted for API stability but not branched on.
+// SuggestedRateLimit spaces starts within one provider instance, not across a
+// Gemini project or unrelated runtimes. Ten seconds is not a quota-safe promise.
 func SuggestedRateLimit(providerName string) time.Duration {
+	if providerName == "gemini" {
+		return 10 * time.Second
+	}
 	return aiRequestSpacing
 }

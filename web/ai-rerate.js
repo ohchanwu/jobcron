@@ -11,7 +11,7 @@
   var noticeKey = 'jobcron:rerate-notice:' + surface;
   var handledKey = 'jobcron:rerate-handled:' + surface;
   var freshNotice = false;
-  var activeCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
+  var activeCopy = 'AI로 공고를 다시 분석하고 있어요. 공고 수와 제공자 요청 간격·응답 속도에 따라 오래 걸릴 수 있어요. 다른 일을 하며 기다리셔도 괜찮아요.';
   var estimateCopy = activeCopy;
   var completedAwayCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 반영했습니다.';
   // Bounded status-only recovery knobs: while an OWNED stream stays open but

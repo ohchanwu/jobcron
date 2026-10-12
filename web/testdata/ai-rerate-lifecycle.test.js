@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 const script = fs.readFileSync(path.join(__dirname, '..', 'ai-rerate.js'), 'utf8');
 const activeCopy = 'AI로 다시 분석하는 중이에요 — 여러 공고를 한 번에 살펴보고 있어요. ☕';
-const estimateCopy = 'AI로 공고를 다시 분석하고 있어요. 약 5–10분 정도 걸릴 수 있어요. 잠시 커피를 마시거나 다른 일을 하고 오셔도 좋아요. ☕ 공고 수와 AI 응답 속도에 따라 더 오래 걸릴 수 있어요.';
+const estimateCopy = 'AI로 공고를 다시 분석하고 있어요. 공고 수와 제공자 요청 간격·응답 속도에 따라 오래 걸릴 수 있어요. 다른 일을 하며 기다리셔도 괜찮아요.';
 const completedCopy = 'AI 평가가 완료됐어요. 새로운 평가 결과를 반영했습니다.';
 // Virtual-time constants mirroring the client's delay knobs: silenceWatchMs
 // is how long an OPEN stream may stay silent before a status probe, and
@@ -18,10 +18,10 @@ const maxStatusRetries = 20;
 const statusDeadlineMs = 10000;
 
 // estimateRetained reports whether the estimate copy is what the page is
-// showing right now (the visible status carries the 5–10분/coffee copy).
+// showing right now (without a fixed completion-time promise).
 function estimateRetained(page) {
   const text = page.text('rerate-status') || '';
-  return text.indexOf('5–10분') !== -1 && text.indexOf('커피') !== -1;
+  return text.indexOf('제공자 요청 간격') !== -1 && text.indexOf('오래 걸릴 수 있어요') !== -1 && text.indexOf('5–10분') === -1;
 }
 
 class Storage {
