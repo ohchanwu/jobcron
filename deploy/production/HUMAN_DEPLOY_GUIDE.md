@@ -4,11 +4,13 @@
 > is historical. This guide retains detailed native/runtime procedures, not a
 > mandate or authority to rerun the launch. For an existing working service,
 > use the [maintained safety contract](../../docs/decisions/261009-ai-rating-and-release-contract.md).
-> The [app-only runner](../../docs/specs/261009-app-only-release-runner.md) is now
-> implemented for local acceptance, with independent review pending. Its
+> The [app-only runner](../../docs/decisions/261012-app-only-runner-local-acceptance.md)
+> is independently locally accepted at `095bc775610656f3cbe74a076c5be495c30d22b5`. Its
 > [actual invocation/custody reference](../../scripts/app_release_fixture/README.md)
 > controls that unchanged-schema image-only lane, not the initial-launch sequence
 > below. Local checks grant no production/provider/publication authority.
+> Proposed next payloads are in the [draft campaign](../../docs/specs/261012-ai-rating-live-updates-campaign.md),
+> not authority to implement or release them.
 
 For failed acceptance in that runner lane, select a NEW independently approved
 compatible-recovery packet/state and use `recover --failed-state-dir "$FAILED_STATE"`.

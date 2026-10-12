@@ -7,11 +7,14 @@ selected host; it is not a remote command broker. It never publishes an image,
 starts a tunnel, acquires credentials, migrates, restores the authoritative DB,
 changes routing, runs Terraform, or invokes systemd/Compose shutdown.
 
-Status: implemented for local acceptance. The owned rehearsal exercises real
-Linux containers/Compose/PostgreSQL and synthetic HTTP authentication. Production
-AWS/IAM, EC2 host identity, off-host storage and public routing have NOT been
-exercised. Independent same-card review remains an acceptance gate. Neither this
-command nor its local fixtures grants production authority.
+Status: independently locally accepted/integrated at
+`095bc775610656f3cbe74a076c5be495c30d22b5` (worker 166 / reviewer 167).
+See [acceptance and evidence limits](../../docs/decisions/261012-app-only-runner-local-acceptance.md).
+The owned rehearsal exercised real Linux containers/Compose/PostgreSQL and synthetic
+HTTP authentication; native app artifacts were source `689129b`, not `095bc775`.
+Production AWS/IAM, EC2 host identity, off-host storage, public routing, production
+no-swap positive and the real 1800-second stability have NOT been exercised.
+Neither this command nor its local fixtures grants production authority.
 
 ## Native prerequisites and trust boundary
 

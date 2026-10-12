@@ -1,9 +1,13 @@
 # Gemini Pacing and Quota Classification — Narrow Follow-Up
 
-Created: 2026-10-09. Status: draft, awaiting review and owner approval.
+Created: 2026-10-09. Updated: 2026-10-12. Status: draft, awaiting review and owner approval.
 **Documentation only; no implementation or live model calls authorized.**
 Companion: [experiment and implementation plan](../plans/261009-gemini-pacing-and-quota-classification-plan.md).
-Baseline: `4701eba23989b2dc4eac93ea12f1896ea16b6066`.
+Original design baseline: `4701eba23989b2dc4eac93ea12f1896ea16b6066`.
+Current discovery baseline: `095bc775610656f3cbe74a076c5be495c30d22b5`.
+This retains Slice 1's narrow contract under the
+[integrated campaign](261012-ai-rating-live-updates-campaign.md), not a parallel
+payload campaign or approval to implement it.
 
 ## Purpose and placement
 
@@ -12,8 +16,11 @@ failures, and explain quota errors without conflating per-minute and daily limit
 This is a narrow follow-up to the implemented
 [AI-rating contract](../decisions/261009-ai-rating-and-release-contract.md), not a
 rewrite of the completed release spec. The accepted
-[app-only runner](261009-app-only-release-runner.md) comes first; this is its
-proposed initial small application payload, not implementation in the runner card.
+[app-only runner](../decisions/261012-app-only-runner-local-acceptance.md) is now
+locally accepted. This proposed Gemini payload comes before the campaign's live
+UI slice; a possible single release follows both independent local acceptances.
+It is not implementation in the completed runner card. UI acceptance need not
+wait for this proposal's separately gated live experiment.
 
 Keep the current outcome/cache/evidence rules in
 [re-rate notes](../../internal/server/RERATE_NOTES.md). A failed analysis card is
@@ -148,5 +155,6 @@ live arm is required by this draft.
 
 No provider switch, prompt/evidence weakening, success-cache deletion, higher caps,
 new paid retry, distributed rate controller, model quality benchmark, production
-error harvesting or credential acquisition under this document. The app-only
-runner's local card does not include these changes or live calls.
+error harvesting or credential acquisition under this document. The completed
+runner's local card did not include these changes or live calls. The campaign's
+separate live-update scope does not widen this pacing/experiment contract.

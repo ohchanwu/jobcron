@@ -5,6 +5,12 @@ unverified proposals, and a failed call. This contract was implemented and its
 release accepted at `4701eba23989b2dc4eac93ea12f1896ea16b6066`. That historical
 acceptance is not fresh production evidence or authority for another operation.
 
+The [AI-rating/live-update campaign proposal](../../docs/specs/261012-ai-rating-live-updates-campaign.md)
+retains these outcome/cache semantics while proposing per-posting read-only live
+reconciliation after a separate Gemini slice. It is NOT implemented behavior:
+current clients still use owner-scoped run recovery and terminal reload. No coding,
+provider run or release is authorized by that draft.
+
 ## Rated and genuine no-signal results are cached successes
 
 At least one accepted item is **rated**, including partial acceptance and a

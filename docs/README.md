@@ -35,31 +35,28 @@ Use this index instead of recursively loading the entire documentation tree.
   reports. Load only the active files listed here and the concise decision
   records needed for the current task.
 
-- [App-only release runner — local implementation, acceptance pending](specs/261009-app-only-release-runner.md)
-  and [phased plan](plans/261009-app-only-release-runner-plan.md).
-  Owner-authorized local implementation/rehearsal is on card `t_6e112520`;
-  [real invocation and input custody](../scripts/app_release_fixture/README.md)
-  cover the native CLI. Independent exact-candidate review remains required;
-  no production/publication/provider authority follows from local checks.
-  Eligible approach2 uses durable native-success/exact-postimage resume or a
-  separate settled-exclusive attended disposition; unbound lost replies stay
-  unknown/no-replay. Public disk Caddyfile and tmpfs secret custody remain distinct.
-  Reviewer-directed local corrections cover failed/stopped-app approved lock
-  handoff, mutation-boundary ambiguity, exact resume identity and non-disk secret
-  output; independent re-review still governs acceptance.
-  The latest consolidated correction adds pending-success-pair failed-app recovery
-  with original evidence retained, and durable digest/semantic completed-receipt
-  binding with fail-closed publication windows; no historical success regeneration.
+- [AI rating and live posting updates — integrated campaign proposal](specs/261012-ai-rating-live-updates-campaign.md)
+  and [phased draft plan](plans/261012-ai-rating-live-updates-campaign-plan.md).
+  Documentation/design review only, awaiting independent readiness review and
+  owner approval. Future local slices: Gemini pacing/quota first, live updates
+  second; each needs separate implementation acceptance, with a possible single
+  release after BOTH pass. UI work need not wait for a paid/live experiment.
+  No application coding, provider calls or publication/deployment authority.
 - [Gemini pacing and quota classification — narrow draft specification](specs/261009-gemini-pacing-and-quota-classification.md)
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
-  The Gemini payload remains a separate documentation-only proposal awaiting
-  review and owner approval; no Gemini implementation or live authority.
+  These retain Slice 1's technical/experiment details under the campaign above;
+  documentation-only, awaiting review and owner approval, not approved execution.
+- [App-only runner — completed local acceptance](decisions/261012-app-only-runner-local-acceptance.md)
+  records accepted source `095bc775610656f3cbe74a076c5be495c30d22b5` and worker
+  166 / reviewer 167. The old spec/plan paths are compatibility pointers, not
+  pending work. [Real invocation and custody](../scripts/app_release_fixture/README.md)
+  remain maintained; local acceptance is not production/provider/publication proof.
 - [Maintained AI-rating and existing-service release contract](decisions/261009-ai-rating-and-release-contract.md)
   records accepted behavior and reusable safety requirements. The prior AI-rating
   upgrade is complete at commit `4701eba23989b2dc4eac93ea12f1896ea16b6066`;
   its execution plan is no longer active work.
-- Historical compatibility pointers remain at the old human-assisted and emergency
-  spec paths because tests/owner instructions consume them. Full completed designs
+- Historical compatibility pointers remain at the old runner, human-assisted and
+  emergency paths because tests/owner instructions consume them. Full completed designs
   are archived; these pointers are not pending work or operational authority.
 
 ## Recently Archived
@@ -69,6 +66,9 @@ only when the active task or a human explicitly names it. See
 [archive guidance](archive/AGENTS.md).
 
 - [Completed PostgreSQL convergence specification][postgresql-convergence-spec-archive]
+- [Completed app-only runner local workstream](archive/2026-10-12-app-only-runner-local-acceptance/README.md)
+  retains design/recovery rationale and exact local acceptance, not production
+  authority. Its historical future release/experiment phases were not executed.
 - [Completed alpha launch and AI-rating upgrade](archive/2026-10-09-alpha-launch-and-ai-rating-release/README.md)
   includes the [human-assisted initial design][human-assisted-alpha-deployment],
   [closed emergency scope][emergency-overnight-deployment], and completed AI-rating
@@ -128,6 +128,7 @@ only when the active task or a human explicitly names it. See
 - [Jobcron production and rename decisions](decisions/260711-jobcron-production.md)
 - [Hosted-first product and local database convergence](decisions/260714-hosted-first-local-database-convergence.md)
 - [AI-rating outcomes and existing-service release safety](decisions/261009-ai-rating-and-release-contract.md)
+- [App-only runner local acceptance and evidence limits](decisions/261012-app-only-runner-local-acceptance.md)
 
 ## Context Policy
 
@@ -146,8 +147,9 @@ only when the active task or a human explicitly names it. See
   artifacts to `.superpowers/archive/`.
 - Git history is the authoritative fallback for old detail. Do not keep verbose
   completed reports active merely for discoverability.
-- Update this index and repository `AGENTS.md` when adding, moving, or removing
-  durable records.
+- Update this index when adding, moving, or removing durable records. Repository
+  instructions may require owner-controlled edits; preserve them when the task
+  excludes changes and retain narrow compatibility pointers instead.
 
 ## Deployment
 

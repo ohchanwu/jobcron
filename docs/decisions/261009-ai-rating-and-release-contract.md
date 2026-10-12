@@ -71,7 +71,11 @@ are maintained references; the archived execution plan is not a queue of new wor
   applicable explicit authority. Ambiguous submissions require reconciliation,
   not blind retry. Global user stop remains global.
 
-These are reused requirements, not a newly implemented deployment mechanism.
-The [runner draft](../specs/261009-app-only-release-runner.md) proposes that mechanism;
-the [Gemini draft](../specs/261009-gemini-pacing-and-quota-classification.md) proposes
-its first small release payload. Neither draft authorizes implementation or live work.
+These are reused requirements. The [runner is now locally accepted](261012-app-only-runner-local-acceptance.md)
+at `095bc775610656f3cbe74a076c5be495c30d22b5`; its
+[operator reference](../../scripts/app_release_fixture/README.md) maintains actual
+invocation/custody and limits. Local acceptance is not production proof or authority.
+The [campaign draft](../specs/261012-ai-rating-live-updates-campaign.md) proposes
+Gemini pacing/quota then live UI updates, each independently accepted, with a
+possible single release after both. It neither implements those changes nor
+authorizes coding, a live experiment or another release.

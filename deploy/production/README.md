@@ -4,10 +4,12 @@
 > not fresh operational authority. The [initial alpha launch design](../../docs/archive/2026-10-09-alpha-launch-and-ai-rating-release/260923-human-assisted-alpha-deployment.md)
 > is historical; its empty-bootstrap lane is not a routine-upgrade shortcut.
 > Read the [maintained release contract](../../docs/decisions/261009-ai-rating-and-release-contract.md).
-> The [app-only runner specification](../../docs/specs/261009-app-only-release-runner.md)
-> now has a runnable target-host CLI, with local acceptance review pending.
+> The [app-only runner local acceptance](../../docs/decisions/261012-app-only-runner-local-acceptance.md)
+> is complete at `095bc775610656f3cbe74a076c5be495c30d22b5`.
 > See [real invocation and custody](../../scripts/app_release_fixture/README.md).
 > Local rehearsal is not production, provider, publication or credential authority.
+> The [AI-rating/live-update campaign](../../docs/specs/261012-ai-rating-live-updates-campaign.md)
+> is a proposed future payload only; application coding/release approval is separate.
 
 ## Existing-service app-only releases
 

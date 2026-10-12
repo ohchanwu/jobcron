@@ -1,9 +1,14 @@
 # Gemini Pacing and Quota Classification — Follow-Up Plan
 
-Created: 2026-10-09. Status: draft, **not approved for execution**.
+Created: 2026-10-09. Updated: 2026-10-12. Status: draft, **not approved for execution**.
 Governing [specification](../specs/261009-gemini-pacing-and-quota-classification.md).
-Prerequisite: independently accepted/integrated
-[app-only runner](261009-app-only-release-runner-plan.md).
+Runner prerequisite is complete: [local acceptance](../decisions/261012-app-only-runner-local-acceptance.md)
+at `095bc775610656f3cbe74a076c5be495c30d22b5`. Coding approval remains missing.
+This retains Slice 1/optional experiment detail under the
+[campaign plan](261012-ai-rating-live-updates-campaign-plan.md). Future local order
+is Gemini then live UI, each independently accepted; a possible single release
+after both. UI work need not wait for a paid/live Gemini run. Do not dispatch
+future application work or reopen the completed runner from this draft.
 
 ## 0. Review the documentation, then wait
 
@@ -60,7 +65,11 @@ exact candidate/baseline, full diff and real output. Return actionable findings 
 the same implementation card. The controller integrates the exact approved code.
 None of these checks establishes the owner's actual quota or a live improvement.
 
-## 3. Separately gated first runner release
+## 3. Possible shared release, only after both local slices pass
+
+The campaign plan governs payload sequencing: complete and independently accept
+the live UI slice as well before a possible shared release. No intermediate
+release or live experiment is required merely to verify the UI locally.
 
 The controller binds green exact-head CI, published immutable artifact/platform,
 current target and compatible recovery with unchanged complete manifests.
@@ -119,7 +128,8 @@ a paid model comparison need a new applicable owner gate after reconciliation.
 ## Completion and archival
 
 Local payload acceptance, verified deployment and measured live experiment are
-three separate milestones. A denied/unavailable provider response is evidence,
+three separate milestones; the campaign additionally requires independent live-UI
+local acceptance. A denied/unavailable provider response is evidence,
 not fabricated success. Distill only verified behavior/results into maintained
 notes or a concise decision, then archive this execution plan when its authorized
 scope is actually complete. Keep the runner and completed prior release separate.
