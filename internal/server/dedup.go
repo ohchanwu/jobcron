@@ -27,7 +27,7 @@ import (
 // a few thousand we can pre-bucket by (normalizedCompany,
 // normalizedLocation) to drop the O(N²) — but that's a v1.x concern.
 func (s *Server) markCrossPortalDuplicates(ctx context.Context) (int, error) {
-	if err := s.store.ClearAllDuplicates(ctx); err != nil {
+	if err := s.writePostingState(0, true, func() error { return s.store.ClearAllDuplicates(ctx) }); err != nil {
 		return 0, fmt.Errorf("clear duplicates: %w", err)
 	}
 
@@ -64,7 +64,7 @@ func (s *Server) markCrossPortalDuplicates(ctx context.Context) (int, error) {
 			if !scoring.AreDuplicates(canon, cand) {
 				continue
 			}
-			if err := s.store.MarkDuplicate(ctx, cand.ID, canon.ID); err != nil {
+			if err := s.writePostingState(0, true, func() error { return s.store.MarkDuplicate(ctx, cand.ID, canon.ID) }); err != nil {
 				return marked, fmt.Errorf("mark dup %d -> %d: %w", cand.ID, canon.ID, err)
 			}
 			taken[cand.ID] = true

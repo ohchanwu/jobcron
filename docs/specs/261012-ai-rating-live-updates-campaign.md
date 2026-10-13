@@ -4,8 +4,9 @@ Created: 2026-10-12. Status: independently design-ready in review 169; owner
 DESIGN approved at `119fd7577ebd9b8134512654d0ed50dac2922827`.
 The plan was independently ready in review 171. On 2026-10-12 the owner approved
 the plan and autonomous LOCAL implementation, superseding the earlier instruction
-to write the plan without starting. Slice 1 is implemented locally, awaiting
-exact-code acceptance/integration; Slice 2 follows that gate. Live inference,
+to write the plan without starting. Slice 1 is locally accepted/integrated at
+`8c369d3cf19a4c966fe4745dfa99738c3fe78367`. Slice 2's live stored-view candidate is
+implemented locally and awaits separate exact-code implementation acceptance. Live inference,
 publication and deployment remain unauthorized.
 Companion: [task-level plan](../plans/261012-ai-rating-live-updates-campaign-plan.md),
 independently plan-ready; local coding authority is the later owner instruction.
@@ -281,6 +282,18 @@ and heartbeat checks; do not call the mutating helper before a supposedly read-o
 handler. Keep the same hashed-token, expiry and revocation predicates and API 401
 behavior, with no privilege bypass or session extension. Other route activity
 tracking is outside this slice. Verify no SQL writes from observation authentication.
+
+Owner amendment (2026-10-12, option 2): zero SQL/storage/session mutations applies
+to the page-document/read-projection path and the new observer endpoints, including
+their reconnect, polling and resync after restart. The two existing bootstrap
+status GETs, `/api/briefing-status` and `/api/rerate/status`, retain their existing
+`sessions.last_seen_at` activity writes and exact-session authentication. Real
+browser verification must allow and measure those unsuppressed requests separately;
+the complete page bootstrap is NOT zero-write. This exception permits no credential,
+usage, cache, score, outcome, profile or session-extension write, decryption,
+provider construction/call or paid restart. It does not weaken new observer or
+document read-only guarantees. Original whole-bootstrap failing evidence remains
+in the same task's recovery history, not relabeled as a passing old test.
 
 Recheck exact session validity before each private emission/read and on heartbeat;
 explicit logout/password/session revocation closes relevant listeners immediately.

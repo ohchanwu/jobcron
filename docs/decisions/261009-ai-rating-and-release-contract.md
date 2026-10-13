@@ -75,7 +75,11 @@ These are reused requirements. The [runner is now locally accepted](261012-app-o
 at `095bc775610656f3cbe74a076c5be495c30d22b5`; its
 [operator reference](../../scripts/app_release_fixture/README.md) maintains actual
 invocation/custody and limits. Local acceptance is not production proof or authority.
-The [campaign draft](../specs/261012-ai-rating-live-updates-campaign.md) proposes
-Gemini pacing/quota then live UI updates, each independently accepted, with a
-possible single release after both. It neither implements those changes nor
-authorizes coding, a live experiment or another release.
+The [approved campaign](../specs/261012-ai-rating-live-updates-campaign.md) orders
+Gemini pacing/quota then live UI updates, with separate exact-code acceptance.
+The owner's later 2026-10-12 instruction authorized local implementation. Gemini
+Slice 1 is locally accepted/integrated at `8c369d3cf19a4c966fe4745dfa99738c3fe78367`;
+the live-view candidate awaits its own implementation acceptance. A possible
+single release after both, or a live experiment, still needs separate authority.
+Page-document and new observation paths are strictly read-only; only the two
+legacy status GETs retain their session-activity exception chosen by the owner.

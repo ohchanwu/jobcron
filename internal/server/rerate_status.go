@@ -45,10 +45,11 @@ type rerateStatus struct {
 }
 
 type rerateTracker struct {
-	mu     sync.RWMutex
-	nextID uint64
-	epoch  string
-	runs   map[rerateKey]rerateStatus
+	mu       sync.RWMutex
+	nextID   uint64
+	epoch    string
+	runs     map[rerateKey]rerateStatus
+	onChange func(int64) // invoked after releasing tracker lock, never under view barrier
 }
 
 func newRerateTracker() *rerateTracker {
@@ -64,6 +65,11 @@ func newRerateEpoch() string {
 }
 
 func (t *rerateTracker) start(userID int64, surface, ownerEntry string) rerateStatus {
+	defer func() {
+		if t.onChange != nil {
+			t.onChange(userID)
+		}
+	}()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.nextID++
@@ -73,7 +79,20 @@ func (t *rerateTracker) start(userID int64, surface, ownerEntry string) rerateSt
 		OwnerEntry: ownerEntry,
 		State:      rerateStateRunning,
 	}
-	t.runs[rerateKey{userID: userID, surface: surface}] = status
+	key := rerateKey{userID: userID, surface: surface}
+	if _, exists := t.runs[key]; !exists && len(t.runs) >= 192 {
+		// The shared operation gate admits one active run. Evict the oldest
+		// idle recovery entry; tokens never repeat even after eviction.
+		var oldest rerateKey
+		var lowest uint64
+		for k, run := range t.runs {
+			if lowest == 0 || run.RunID < lowest {
+				oldest, lowest = k, run.RunID
+			}
+		}
+		delete(t.runs, oldest)
+	}
+	t.runs[key] = status
 	return status
 }
 
@@ -92,6 +111,11 @@ func validRerateEntryToken(value string) bool {
 }
 
 func (t *rerateTracker) record(userID int64, surface string, runID uint64, event, data string) {
+	defer func() {
+		if t.onChange != nil {
+			t.onChange(userID)
+		}
+	}()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	key := rerateKey{userID: userID, surface: surface}
@@ -114,6 +138,11 @@ func (t *rerateTracker) record(userID int64, surface string, runID uint64, event
 }
 
 func (t *rerateTracker) complete(userID int64, surface string, runID uint64, outcome rerateOutcome, message string) {
+	defer func() {
+		if t.onChange != nil {
+			t.onChange(userID)
+		}
+	}()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	key := rerateKey{userID: userID, surface: surface}

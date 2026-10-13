@@ -194,15 +194,13 @@
     return true;
   }
 
-  function rememberAndReload(message, runToken, ownerEntry) {
+  function rememberAndResync(message, runToken, ownerEntry) {
     if (!runToken || ownerEntry !== entryToken) return;
     markHandled(runToken);
-    sessionStorage.setItem(noticeKey, JSON.stringify({
-      entry_token: entryToken,
-      run_token: String(runToken),
-      message: message
-    }));
-    location.reload();
+    sessionStorage.removeItem(noticeKey);
+    freshNotice = true;
+    showStatus(message);
+    if (window.JobcronPostingUpdates) window.JobcronPostingUpdates.resync();
   }
 
   function showStoredNotice() {
@@ -278,10 +276,11 @@
       clearProgress();
       if (status.state === 'done' && !isHandled(run.token)) {
         var message = status.outcome === 'changed' ? completedAwayCopy : status.message;
-        rememberAndReload(message || completedAwayCopy, run.token, entryToken);
+        rememberAndResync(message || completedAwayCopy, run.token, entryToken);
       } else if (status.state === 'failed' && !isHandled(run.token)) {
         markHandled(run.token);
         showStatus(status.message || 'AI 평가에 실패했어요.');
+        if (window.JobcronPostingUpdates) window.JobcronPostingUpdates.resync();
       } else if (!freshNotice) {
         clearStatus();
       }
@@ -314,7 +313,7 @@
       if (!admit(run, null, null, source)) return;
       settle(run);
       clearProgress();
-      rememberAndReload(event.data, run.token, entryToken);
+      rememberAndResync(event.data, run.token, entryToken);
     });
     source.addEventListener('failed', function (event) {
       if (!admit(run, null, null, source)) return;
@@ -322,6 +321,7 @@
       clearProgress();
       markHandled(run.token);
       showStatus(event.data || 'AI 평가에 실패했어요.');
+      if (window.JobcronPostingUpdates) window.JobcronPostingUpdates.resync();
     });
     source.addEventListener('error', function () {
       if (!admit(run, null, null, source)) return;

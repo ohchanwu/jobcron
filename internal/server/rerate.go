@@ -32,6 +32,14 @@ func (e *providerCallError) Unwrap() error { return e.err }
 // Persistence failures must not masquerade as paid-provider failures.
 type rerateStorageError struct{ error }
 
+func analysisFailureMessage(err error) string {
+	var storageErr *rerateStorageError
+	if errors.As(err, &storageErr) {
+		return "분석 결과를 저장하지 못했어요 — 저장된 결과만 보여드릴게요."
+	}
+	return providerFailureMessage(err)
+}
+
 // providerFailureMessage maps an AI provider failure to a calm Korean message.
 // It uses provider-neutral HTTP status plus structured status/reason/detail
 // signals when present. Provider bodies are classification input only and are
@@ -191,7 +199,21 @@ func (s *Server) validateDealbreakers(
 	}
 	cached, err := s.store.AIDealbreakerValidationsByPostingID(ctx, userID, runtime.DealbreakerVersion)
 	if err != nil {
-		return summary, err
+		return summary, &rerateStorageError{err}
+	}
+	// Freeze the existing unresolved cohort against the same loaded cache. This
+	// is reporting/admission identity, never the changing live display queue.
+	unresolvedByIndex := make([][]ai.DealbreakerCandidate, len(postings))
+	for i, p := range postings {
+		_, hash := ai.DealbreakerModelInput(p)
+		for _, candidate := range scoring.DealbreakerCandidates(p, prof) {
+			if _, ok := cached[p.ID][hash+"\x00"+candidate.ID]; !ok {
+				unresolvedByIndex[i] = append(unresolvedByIndex[i], candidate)
+			}
+		}
+		if len(unresolvedByIndex[i]) > 0 {
+			summary.PendingBefore++
+		}
 	}
 	// An honest phase-labeled 0/N before the first blocking call of this
 	// phase, then a sequential count of every posting the phase EXAMINED —
@@ -207,13 +229,7 @@ func (s *Server) validateDealbreakers(
 		// than not judging it. The content hash is still the full-text hash, so
 		// Stage 1A/Stage 2 cache identity is untouched.
 		modelText, contentHash := ai.DealbreakerModelInput(p)
-		candidates := scoring.DealbreakerCandidates(p, prof)
-		var unresolved []ai.DealbreakerCandidate
-		for _, candidate := range candidates {
-			if _, ok := cached[p.ID][contentHash+"\x00"+candidate.ID]; !ok {
-				unresolved = append(unresolved, candidate)
-			}
-		}
+		unresolved := unresolvedByIndex[i]
 		if len(unresolved) == 0 {
 			continue
 		}
@@ -223,7 +239,6 @@ func (s *Server) validateDealbreakers(
 		for _, candidate := range unresolved {
 			matches[candidate.ID] = candidate.Match
 		}
-		summary.PendingBefore++
 		if !budget.canSpend() {
 			summary.PendingAfter++
 			summary.BudgetBlocked = true
@@ -259,8 +274,18 @@ func (s *Server) validateDealbreakers(
 				// could otherwise be stored with a fabricated match.
 				continue
 			}
-			if err := s.store.UpsertAIDealbreakerValidation(ctx, userID, p.ID, contentHash, runtime.DealbreakerVersion, validation.CandidateID, match, validation, now); err != nil {
-				return summary, err
+			if err := s.writePostingState(userID, false, func() error {
+				return s.store.UpsertAIDealbreakerValidation(ctx, userID, p.ID, contentHash, runtime.DealbreakerVersion, validation.CandidateID, match, validation, now)
+			}); err != nil {
+				summary.AcceptedChecks += accepted
+				summary.UnresolvedChecks += len(unresolved) - accepted
+				summary.PendingAfter++
+				for later := i + 1; later < len(postings); later++ {
+					if len(unresolvedByIndex[later]) > 0 {
+						summary.PendingAfter++
+					}
+				}
+				return summary, &rerateStorageError{err}
 			}
 			accepted++
 		}
@@ -374,6 +399,7 @@ func validRerateSurface(surface string) bool {
 type rerateSummary struct {
 	Analyzed                int
 	Processed               int
+	CachedUnknown           int
 	NoSignal                int
 	Rejected                int
 	Visible                 int
@@ -517,6 +543,9 @@ func rerateDoneMessage(summary rerateSummary) (message string) {
 		if summary.ScoreFailureMessage != "" {
 			message += " " + summary.ScoreFailureMessage
 		}
+		if summary.CachedUnknown > 0 {
+			message += " 이전 분석의 상태는 확인할 수 없어요. 저장된 내용만 보여드릴게요."
+		}
 		if summary.ScoreLimitBlocked {
 			message += " 호출 수나 토큰 예산 한도로 일부는 남겨뒀어요. 더 보려면 다시 눌러주세요."
 		}
@@ -643,7 +672,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 	summary.ContextBudgetBlocked = validation.BudgetBlocked
 	summary.ContextCallCapBlocked = validation.CallCapBlocked
 	if validationErr != nil {
-		summary.ContextFailureMessage = providerFailureMessage(validationErr)
+		summary.ContextFailureMessage = analysisFailureMessage(validationErr)
 		emit("status", summary.ContextFailureMessage)
 	}
 	if _, err := s.scoreAll(ctx, userID, runtime); err != nil {
@@ -667,7 +696,11 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 
 	var provErr error
 	var stage2Calls int
-	summary.Analyzed, stage2Calls, summary.Processed, provErr = s.rateStage2(ctx, postings, prof, userID, runtime, budget, calls, emit, true)
+	summary.Analyzed, stage2Calls, summary.Processed, provErr = s.rateStage2(ctx, postings, prof, userID, runtime, budget, calls, emit, true, func(result postingWorkerResult) {
+		if result.status == postingResultCachedUnknown {
+			summary.CachedUnknown++
+		}
+	})
 	summary.ProviderCalls += stage2Calls
 	// For an admitted manual pass every unique row is either cached, called,
 	// or skipped by the shared cap/budget. Rejections and provider failures are
@@ -726,7 +759,7 @@ func (s *Server) runRerate(ctx context.Context, surface string, emit func(event,
 // limiter still spaces request starts. SSE progress writes stay on this
 // goroutine (a ResponseWriter is not safe for concurrent writes); workers send
 // results to a fully-buffered channel that a closer goroutine ends.
-func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, userID int64, runtime *AIRuntime, budget *aiBudget, calls *callCap, emit func(event, data string), retryRejected bool) (analyzed int, providerCalls int, processed int, provErr error) {
+func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, prof profile.Profile, userID int64, runtime *AIRuntime, budget *aiBudget, calls *callCap, emit func(event, data string), retryRejected bool, accountResult ...func(postingWorkerResult)) (analyzed int, providerCalls int, processed int, provErr error) {
 	if runtime == nil || runtime.UserID != userID || budget == nil || calls == nil || len(postings) == 0 {
 		return 0, 0, 0, nil
 	}
@@ -747,20 +780,15 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 	total := len(postings)
 	outcomes, err := s.store.AIScoreOutcomesByPostingID(ctx, userID, aiInputHash, runtime.ScoreVersion)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, &rerateStorageError{err}
 	}
 
-	type rerateResult struct {
-		cached         bool
-		providerCalled bool
-		err            error
-	}
-	results := make(chan rerateResult, total)
+	results := make(chan postingWorkerResult, total)
 	sem := make(chan struct{}, rerateWorkers)
 	var wg sync.WaitGroup
 	for _, p := range postings {
 		if !retryRejected && outcomes[p.ID].State == storage.AIScoreRejected {
-			results <- rerateResult{}
+			results <- postingWorkerResult{postingID: p.ID, userID: userID, inputHash: aiInputHash, version: runtime.ScoreVersion, status: postingResultSkipped}
 			continue
 		}
 		wg.Add(1)
@@ -768,8 +796,7 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			cached, providerCalled, err := s.rerateOne(ctx, p, aiInputHash, profileText, now, userID, runtime, budget, calls)
-			results <- rerateResult{cached: cached, providerCalled: providerCalled, err: err}
+			results <- s.reratePosting(ctx, p, aiInputHash, profileText, now, userID, runtime, budget, calls, outcomes[p.ID].State)
 		}(p)
 	}
 	go func() { wg.Wait(); close(results) }()
@@ -777,10 +804,14 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 	completed := 0
 	for r := range results {
 		completed++
-		if r.cached || r.providerCalled {
+		// Accounting only, outside view locks; never the publication mechanism.
+		for _, account := range accountResult {
+			account(r)
+		}
+		if r.status == postingResultCached || r.status == postingResultCachedUnknown || r.providerCalled {
 			processed++
 		}
-		if r.cached {
+		if r.success() {
 			analyzed++
 		}
 		if r.providerCalled {
@@ -810,28 +841,59 @@ func (s *Server) rateStage2(ctx context.Context, postings []scraper.Posting, pro
 // mode with a busy timeout. A provider/budget failure leaves the row uncached
 // (regex score) but still consumes the reserved per-call slot, so a burst of
 // failing calls can't ignore the cap.
-func (s *Server) rerateOne(
+type postingResultStatus uint8
+
+const (
+	postingResultSkipped postingResultStatus = iota
+	postingResultCached
+	postingResultCachedUnknown // protected legacy hit, not fresh provenance
+	postingResultCommitted
+	postingResultStorageWarning
+)
+
+type postingWorkerResult struct {
+	postingID, userID  int64
+	inputHash, version string // internal identity, never sent in a dirty notice
+	status             postingResultStatus
+	outcome            string // durable existing or newly committed provenance
+	providerCalled     bool
+	err                error
+}
+
+func (r postingWorkerResult) success() bool {
+	return r.status == postingResultCached || (r.status == postingResultCommitted && (r.outcome == storage.AIScoreRated || r.outcome == storage.AIScoreNoSignal))
+}
+
+func (s *Server) reratePosting(
 	ctx context.Context, p scraper.Posting, aiInputHash, profileText string, now time.Time, userID int64, runtime *AIRuntime, budget *aiBudget, calls *callCap,
-) (cached bool, providerCalled bool, err error) {
+	knownOutcome ...string,
+) (result postingWorkerResult) {
+	result = postingWorkerResult{postingID: p.ID, userID: userID, inputHash: aiInputHash, version: runtime.ScoreVersion, status: postingResultSkipped}
 	// Already rated against the current goal text → reuse (reconnect-safe, no
 	// re-spend, free). An empty cached delta still counts as analyzed.
-	_, ok, cacheErr := s.store.AIScore(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion)
+	deltaHit, ok, cacheErr := s.store.AIScore(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion)
 	if cacheErr != nil {
-		return false, false, &rerateStorageError{cacheErr}
+		result.status, result.err = postingResultStorageWarning, &rerateStorageError{cacheErr}
+		return result
 	}
 	if ok {
-		return true, false, nil
+		result.status = postingResultCachedUnknown
+		if len(knownOutcome) > 0 && ((knownOutcome[0] == storage.AIScoreRated && len(deltaHit.Items) > 0) || (knownOutcome[0] == storage.AIScoreNoSignal && len(deltaHit.Items) == 0 && deltaHit.NetDelta == 0)) {
+			result.status, result.outcome = postingResultCached, knownOutcome[0]
+		}
+		return result
 	}
 	// Uncached: spend only if the token budget has headroom AND the per-call cap
 	// has a free slot. canSpend is checked first so a cap-only miss doesn't mark
 	// the budget degraded. Either miss leaves the row uncached for a later press —
 	// not an error (no provider call was attempted).
 	if budget == nil || !budget.canSpend() {
-		return false, false, nil
+		return result
 	}
 	if !calls.tryReserve() {
-		return false, false, nil
+		return result
 	}
+	result.providerCalled = true
 	sent, _, _ := ai.ModelInput(p)
 	raw, usage, err := runtime.Provider.ScoreDelta(ctx, sent, profileText)
 	// Even a malformed reply can follow a billed successful HTTP call.
@@ -842,10 +904,14 @@ func (s *Server) rerateOne(
 		// it so rateStage2 can surface a calm, specific message instead of letting
 		// the failure read as a silent "not analyzed." The reserved slot is spent.
 		outcome := storage.AIScoreOutcome{State: storage.AIScoreFailed, ComputedAt: now}
-		if writeErr := s.store.UpsertAIScoreFailure(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, outcome); writeErr != nil {
-			return false, true, &rerateStorageError{writeErr}
+		if writeErr := s.writePostingState(userID, false, func() error {
+			return s.store.UpsertAIScoreFailure(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, outcome)
+		}); writeErr != nil {
+			result.status, result.err = postingResultStorageWarning, &rerateStorageError{writeErr}
+			return result
 		}
-		return false, true, err
+		result.status, result.outcome, result.err = postingResultCommitted, outcome.State, err
+		return result
 	}
 	// Gate: presence against the SENT (truncated) text, absence against the FULL
 	// Description (S5). Survivors net into the stored delta.
@@ -855,15 +921,23 @@ func (s *Server) rerateOne(
 		outcome.State = storage.AIScoreNoSignal
 	} else if len(delta.Items) == 0 {
 		outcome.State = storage.AIScoreRejected
-		if err := s.store.UpsertAIScoreFailure(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, outcome); err != nil {
-			return false, true, &rerateStorageError{err}
+		if err := s.writePostingState(userID, false, func() error {
+			return s.store.UpsertAIScoreFailure(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, outcome)
+		}); err != nil {
+			result.status, result.err = postingResultStorageWarning, &rerateStorageError{err}
+			return result
 		}
-		return false, true, nil
+		result.status, result.outcome = postingResultCommitted, outcome.State
+		return result
 	}
-	if err := s.store.UpsertAIResult(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, delta, outcome); err != nil {
-		return false, true, &rerateStorageError{err}
+	if err := s.writePostingState(userID, false, func() error {
+		return s.store.UpsertAIResult(ctx, userID, p.ID, aiInputHash, runtime.ScoreVersion, delta, outcome)
+	}); err != nil {
+		result.status, result.err = postingResultStorageWarning, &rerateStorageError{err}
+		return result
 	}
-	return true, true, nil
+	result.status, result.outcome = postingResultCommitted, outcome.State
+	return result
 }
 
 // stage1BPostings orders every stored posting for a contextual-validation pass:

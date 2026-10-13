@@ -189,6 +189,8 @@ func TestValidateDealbreakersReportsPartialAcceptedChecks(t *testing.T) {
 		},
 	}
 	runtime := testAIRuntime(userID, provider, "shared-model")
+	listener, _ := srv.postingUpdates.subscribe(userID)
+	defer listener.close()
 
 	got, err := srv.validateDealbreakers(
 		ctx,
@@ -208,6 +210,14 @@ func TestValidateDealbreakersReportsPartialAcceptedChecks(t *testing.T) {
 	}
 	if got.AttemptedChecks != 2 || got.AcceptedChecks != 1 || got.UnresolvedChecks != 1 {
 		t.Fatalf("validation checks = %+v, want 2 attempted, 1 accepted, 1 unresolved", got)
+	}
+	select {
+	case <-listener.wake:
+		if notice := listener.take(); notice.UserRevision == 0 || notice.GlobalRevision != 0 {
+			t.Fatal(notice)
+		}
+	default:
+		t.Fatal("saved validation invisible to analyzed user")
 	}
 }
 

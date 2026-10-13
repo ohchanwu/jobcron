@@ -5,12 +5,13 @@ unverified proposals, and a failed call. This contract was implemented and its
 release accepted at `4701eba23989b2dc4eac93ea12f1896ea16b6066`. That historical
 acceptance is not fresh production evidence or authority for another operation.
 
-The [AI-rating/live-update campaign proposal](../../docs/specs/261012-ai-rating-live-updates-campaign.md)
-retains these outcome/cache semantics while proposing per-posting read-only live
-reconciliation after a separate Gemini slice. It is NOT implemented behavior:
-current clients still use owner-scoped run recovery and terminal reload. The owner's
-later 2026-10-12 instruction authorized local Slice 1 coding, not a provider run or
-release; its candidate is awaiting exact-code acceptance.
+The [AI-rating/live-update campaign](../../docs/specs/261012-ai-rating-live-updates-campaign.md)
+retains these outcome/cache semantics. Gemini Slice 1 is independently locally
+accepted/integrated at `8c369d3cf19a4c966fe4745dfa99738c3fe78367`. The Slice 2 local
+candidate now reads saved per-posting results on all three surfaces through
+read-only observation and keyed reconciliation; its separate exact-code acceptance
+is pending. Terminal events request a current snapshot rather than reloading.
+None of this authorizes a live provider experiment, publication or release.
 
 ## Rated and genuine no-signal results are cached successes
 
@@ -74,8 +75,8 @@ failed (`analyzed == 0`), the SSE terminal is a calm, classified `failed` event 
 `providerFailureMessage` maps a 401/403 to "AI 키를 확인해주세요", a 400/404 to
 "선택한 모델이 이 제공자와 맞지 않아요" (the mismatched-model trap a provider switch
 leaves behind), a 429 to a usage-cap line — instead of a hollow `done` with `0/M`.
-A *partial* failure still reloads (the rows that succeeded render) but emits a
-status note first and retains the same classified cause in the terminal and
+A *partial* failure retains individually committed results and emits a
+status note, retaining the same classified cause in the terminal and
 recovered message. Missing successes alone do not establish a cap/budget skip:
 called failures and rejected proposals were processed. Actual uncalled cap/budget
 skips, rejected evidence and contextual warnings can coexist and are reported
@@ -85,8 +86,12 @@ independently. The cache behavior above is unchanged: a failed row writes no
 ## Counts and progress
 
 Fresh N counts current-version rated and genuine no-signal successes, not chips,
-calls, old-version rows, rejections or failures. M is the same eligible selected
-surface throughout the run. Processing progress can advance on failure/rejection;
+calls, old-version rows, rejections or failures. The live counter's M is the current
+eligible stored-view surface, independent of quick search/source filters. Run phase
+processed/target/skipped denominators stay frozen at their original admission
+boundaries, including Stage 2 AFTER preparation, validation and rule merging.
+Live reordering, membership changes and new arrivals never expand that queue.
+Processing progress can advance on failure/rejection;
 terminal copy separately reports processed, successfully analyzed, no-signal and
 rejected counts, including when contextual-validation warnings also need display.
 The numeric progress, provider-dependent wait copy, single observation owner and
@@ -160,7 +165,7 @@ post-upgrade recovery artifact. Preserve the authoritative ledger and user write
 See the [maintained outcome/release contract](../../docs/decisions/261009-ai-rating-and-release-contract.md)
 and [completed historical specification/plan](../../docs/archive/2026-10-09-alpha-launch-and-ai-rating-release/README.md).
 The [Gemini follow-up](../../docs/specs/261009-gemini-pacing-and-quota-classification.md)
-now has a local Slice 1 candidate awaiting exact-code acceptance. Gemini starts
+is locally accepted as Slice 1 at `8c369d3cf19a4c966fe4745dfa99738c3fe78367`. Gemini starts
 are spaced at least 10 seconds within one provider/pacer; other providers retain
 1.2 seconds. Extraction and scoring share that instance; unrelated runtimes and
 other project clients do not share a distributed quota guarantee. Explicit Gemini
@@ -168,6 +173,13 @@ minute request/token, daily, mixed and account restrictions get distinct calm co
 generic 429/QuotaFailure/RetryInfo remain unknown in scope. Validated retry metadata
 does not trigger retries. Short waits cannot be promised to restore daily/account
 limits. Active progress explains provider-dependent waits, not a fixed 5–10 minutes.
-Outcome/cache/prompt/version/migration contracts are unchanged. The live UI slice
-is not yet implemented; current terminal reload behavior remains. Local checks do not
+Outcome/cache/prompt/version/migration contracts are unchanged. The local live-view
+candidate uses SELECT-only cookie validation and credential
+presence, one coherent read transaction, and no runtime/provider/decryption on
+page-document and new snapshot/observe paths. Owner option 2 preserves only the
+two legacy status GETs' existing `sessions.last_seen_at` activity writes; the full
+browser bootstrap is not zero-write. Saved outcomes publish at successful commit,
+even for detached/scheduled/noop callers. A persistence error publishes no saved
+outcome and retains a run warning. Reconnect/poll/resync never starts or retries
+analysis. The live-view candidate still needs independent acceptance. Local checks do not
 authorize publication, production migration, deployment or live inference.

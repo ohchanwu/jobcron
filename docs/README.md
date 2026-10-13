@@ -39,15 +39,19 @@ Use this index instead of recursively loading the entire documentation tree.
   and [task-level implementation plan](plans/261012-ai-rating-live-updates-campaign-plan.md).
   Design-ready in review 169; plan-ready in review 171. The owner approved the
   plan and autonomous LOCAL implementation on 2026-10-12, superseding the earlier
-  implementation hold. Gemini Slice 1 is implemented locally, awaiting exact-code
-  acceptance/integration; live updates
-  second; each needs separate implementation acceptance, with a possible single
+  implementation hold. Gemini Slice 1 was independently accepted and integrated
+  locally at `8c369d3cf19a4c966fe4745dfa99738c3fe78367`. Slice 2's stored-state
+  live-update candidate is implemented locally and awaits its own exact-code
+  implementation acceptance, with a possible single
   release after BOTH pass. UI work need not wait for a paid/live experiment.
-  No live provider calls or publication/deployment authority.
+  No live provider calls or publication/deployment authority. Owner option 2
+  preserves activity writes on the two legacy bootstrap status GETs; document
+  projections and new observation paths remain strictly read-only. See the
+  campaign specification's explicit measurement-window amendment.
 - [Gemini pacing and quota classification — narrow Slice 1 specification](specs/261009-gemini-pacing-and-quota-classification.md)
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
   These retain Slice 1's technical/experiment details under the campaign above;
-  local Slice 1 implementation is authorized; its exact acceptance is pending.
+  local Slice 1 implementation and exact acceptance are complete.
   The optional live experiment remains unauthorized. The task-level plan governs
   the remaining separately accepted local slice.
 - [App-only runner — completed local acceptance](decisions/261012-app-only-runner-local-acceptance.md)

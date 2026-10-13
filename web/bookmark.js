@@ -118,6 +118,8 @@
         return r.json();
       })
       .then(function (state) {
+        // This reply has no revision: it cannot undo a newer live projection.
+        if (window.JobcronPostingUpdates) return;
         var on = !!state.bookmarked;
         btn.classList.toggle('on', on);
         btn.setAttribute('aria-pressed', String(on));
@@ -126,12 +128,14 @@
         }
       })
       .catch(function () {
+        if (window.JobcronPostingUpdates) return;
         // Roll back the optimistic flip so the icon matches reality.
         btn.classList.toggle('on', wasOn);
         btn.setAttribute('aria-pressed', String(wasOn));
       })
       .finally(function () {
         btn.disabled = false;
+        if (window.JobcronPostingUpdates) window.JobcronPostingUpdates.resync();
       });
   });
 

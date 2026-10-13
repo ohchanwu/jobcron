@@ -17,7 +17,7 @@
   <meta name="csrf-token" content="{{.CSRFToken}}">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body data-demo="{{demoMode}}">
+<body data-demo="{{demoMode}}" data-live-surface="bookmarks" data-live-sort="saved">
   <!-- Icon sprite: defined once per page; cards reference these symbols via
        <svg><use href="#icon-…"/></svg> instead of pasting the full icon markup
        into every card. Inline (not an external file) because external-file
@@ -68,39 +68,11 @@
         {{end}}
       </div>
       <p id="source-filter-empty" class="source-filter-empty" hidden></p>
+      <div id="posting-lists">
       {{if .Postings}}
-      <ol class="postings">
+      <ol class="postings" data-live-section="main">
         {{range .Postings}}
-        <li class="posting{{if .Excluded}} posting-dim{{end}}" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
-          <div class="score-cell">
-            <span class="score{{if .Excluded}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
-            <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
-          </div>
-          <div class="posting-body">
-            <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
-            <div class="posting-meta">
-              <span>{{.Posting.Company}}</span>
-              {{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}
-              {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
-            </div>
-            {{template "scoreChips" .Breakdown}}
-            {{template "aiOutcome" .AIOutcome}}
-          </div>
-          <div class="posting-actions">
-            <button class="not-interested{{if .NotInterested}} on{{end}}" type="button"
-                    data-posting-id="{{.Posting.ID}}"
-                    aria-pressed="{{if .NotInterested}}true{{else}}false{{end}}"
-                    aria-label="관심 없음">
-              <svg width="22" height="22" aria-hidden="true"><use href="#icon-eye-off"/></svg>
-            </button>
-            <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button"
-                    data-posting-id="{{.Posting.ID}}"
-                    aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}"
-                    aria-label="북마크">
-              <svg width="24" height="24" aria-hidden="true"><use href="#icon-bookmark"/></svg>
-            </button>
-          </div>
-        </li>
+        {{template "posting" .}}
         {{end}}
       </ol>
       {{if demoMode}}
@@ -121,6 +93,10 @@
         <p class="empty-sub">마음에 드는 공고 옆의 북마크 아이콘을 눌러보세요.<br>여기서 다시 모아 볼 수 있어요.</p>
       </div>
       {{end}}
+      </div>
+      <p id="posting-live-notice" aria-live="polite"></p>
+      <p id="posting-live-stale" role="status" hidden>새 결과를 아직 확인하지 못했어요. <button id="posting-live-retry" type="button">결과 다시 확인</button></p>
+      <p id="posting-run-summary" role="status"></p>
     </main>
 
     <footer>오늘도 수고하셨어요</footer>
@@ -132,6 +108,7 @@
   <script src="/static/not-interested.js"></script>
   <script src="/static/source-filter.js"></script>
   <script src="/static/ai-popover.js"></script>
+  <script src="/static/posting-updates.js"></script>
   <script src="/static/ai-rerate.js"></script>
 </body>
 </html>

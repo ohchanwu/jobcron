@@ -18,7 +18,7 @@ import (
 	"github.com/ohchanwu/jobcron/internal/ai"
 	"github.com/ohchanwu/jobcron/internal/credential"
 	"github.com/ohchanwu/jobcron/internal/profile"
-	"github.com/ohchanwu/jobcron/internal/scoring"
+
 	"github.com/ohchanwu/jobcron/internal/scraper"
 	"github.com/ohchanwu/jobcron/internal/storage"
 	"github.com/ohchanwu/jobcron/web"
@@ -111,6 +111,7 @@ type Server struct {
 	tmpl                     *template.Template
 	flight                   *singleFlight
 	rerates                  *rerateTracker
+	postingUpdates           *postingUpdateHub
 	csrfSecret               []byte
 	loginLimiter             *loginRateLimiter
 	loginIPLimiter           *loginRateLimiter
@@ -328,10 +329,18 @@ func (s *Server) profileJSON(ctx context.Context, userID int64) (string, string,
 }
 
 func (s *Server) saveProfileJSON(ctx context.Context, userID int64, canonical string) (string, bool, error) {
-	if userID == 0 {
-		return s.store.SaveProfile(ctx, canonical)
-	}
-	return s.store.SaveProfileForUser(ctx, userID, canonical)
+	var hash string
+	var changed bool
+	err := s.writePostingContext(ctx, userID, func() error {
+		var err error
+		if userID == 0 {
+			hash, changed, err = s.store.SaveProfile(ctx, canonical)
+		} else {
+			hash, changed, err = s.store.SaveProfileForUser(ctx, userID, canonical)
+		}
+		return err
+	})
+	return hash, changed, err
 }
 
 func (s *Server) scoresByPostingID(ctx context.Context, userID int64) (map[int64]storage.Score, error) {
@@ -432,6 +441,7 @@ func newServer(store *storage.Store, localUserID int64, sources ...scraper.Scrap
 		sources:                  sources,
 		flight:                   newSingleFlight(),
 		rerates:                  newRerateTracker(),
+		postingUpdates:           newPostingUpdateHub(),
 		csrfSecret:               newCSRFSecret(),
 		loginLimiter:             newLoginRateLimiter(),
 		loginIPLimiter:           newLoginRateLimiter(),
@@ -442,6 +452,7 @@ func newServer(store *storage.Store, localUserID int64, sources ...scraper.Scrap
 		newAIProvider:            ai.New,
 		localUserID:              localUserID,
 	}
+	srv.rerates.onChange = srv.postingUpdates.statusChanged
 	funcs := template.FuncMap{
 		"sourceLabel":       sourceLabel,
 		"registeredSources": srv.allRegisteredSources,
@@ -595,9 +606,9 @@ func (s *Server) collectPostings(
 	for _, src := range succeeded {
 		activeIDs = append(activeIDs, src.Source())
 	}
-	removed, err := s.store.SweepStalePostings(
-		ctx, collection.now, sweepStaleWindow, sweepOldWindow, activeIDs,
-	)
+	finishSweep := s.postingUpdates.beginWrite(0, true)
+	removed, err := s.store.SweepStalePostings(ctx, collection.now, sweepStaleWindow, sweepOldWindow, activeIDs)
+	finishSweep(err == nil && removed > 0, "")
 	if err != nil {
 		return collection, fmt.Errorf("server: sweep stale postings: %w", err)
 	}
@@ -629,7 +640,23 @@ func (s *Server) analyzeUserCollection(
 	runtime *AIRuntime,
 	budget *aiBudget,
 	collection scrapeCollection,
-) (int, error) {
+) (scored int, analysisErr error) {
+	run := s.rerates.start(userID, "today", "")
+	var persistenceWarning error
+	downstream := emit
+	emit = func(event, data string) {
+		s.rerates.record(userID, "today", run.RunID, event, data)
+		downstream(event, data)
+	}
+	defer func() {
+		if analysisErr != nil {
+			s.rerates.record(userID, "today", run.RunID, "failed", "일부 결과를 저장하지 못했어요 — 저장된 결과만 보여드릴게요.")
+		} else if persistenceWarning != nil {
+			s.rerates.complete(userID, "today", run.RunID, rerateOutcomePartial, analysisFailureMessage(persistenceWarning))
+		} else {
+			s.rerates.complete(userID, "today", run.RunID, rerateOutcomeChanged, "저장된 결과를 반영했어요.")
+		}
+	}()
 	freshAI := freshAIAllowedForTrigger(trigger, true, prof, runtime)
 	if !freshAI {
 		budget = nil
@@ -645,7 +672,11 @@ func (s *Server) analyzeUserCollection(
 			ctx, userID, detailed, prof, runtime, budget, calls, emit,
 		)
 		if providerErr != nil {
-			emit("status", providerFailureMessage(providerErr))
+			var storageErr *rerateStorageError
+			if errors.As(providerErr, &storageErr) {
+				persistenceWarning = storageErr
+			}
+			emit("status", analysisFailureMessage(providerErr))
 		}
 	}
 	if budget != nil && budget.isDegraded() {
@@ -677,9 +708,13 @@ func (s *Server) analyzeUserCollection(
 				}
 			}
 			if provErr != nil {
+				var storageErr *rerateStorageError
+				if errors.As(provErr, &storageErr) {
+					persistenceWarning = storageErr
+				}
 				// The auto-rate hit a provider error (bad key/model after a switch).
 				// Surface it calmly inline — the scrape itself still succeeds.
-				emit("status", providerFailureMessage(provErr))
+				emit("status", analysisFailureMessage(provErr))
 			}
 			if budget != nil && budget.isDegraded() {
 				emit("status", "오늘 AI 예산을 다 써서 일부 공고는 아직 분석하지 못했어요 — 프로필 설정에서 한도를 바꿀 수 있어요.")
@@ -860,7 +895,7 @@ func (s *Server) runScrapeSource(
 	for _, p := range listing {
 		if info, ok := seen[p.SourcePostingID]; ok {
 			p.LastSeenAt = now
-			if _, _, err := s.store.UpsertPosting(ctx, p); err != nil {
+			if err := s.writePostingState(0, true, func() error { _, _, err := s.store.UpsertPosting(ctx, p); return err }); err != nil {
 				return res, detailedPostings, fmt.Errorf("server: refresh seen posting: %w", err)
 			}
 			if info.DetailFetchedAt.Before(staleBefore) {
@@ -882,7 +917,12 @@ func (s *Server) runScrapeSource(
 		}
 		detailed.FirstSeenAt = now
 		detailed.LastSeenAt = now
-		id, _, err := s.store.UpsertPosting(ctx, detailed)
+		var id int64
+		err = s.writePostingState(0, true, func() error {
+			var writeErr error
+			id, _, writeErr = s.store.UpsertPosting(ctx, detailed)
+			return writeErr
+		})
 		if err != nil {
 			return res, detailedPostings, fmt.Errorf("server: insert new posting: %w", err)
 		}
@@ -912,7 +952,7 @@ func (s *Server) runScrapeSource(
 			continue // transient detail failure — try again a later scrape
 		}
 		detailed.LastSeenAt = now
-		if err := s.store.RefreshPostingDetail(ctx, c.id, detailed, now); err != nil {
+		if err := s.writePostingState(0, true, func() error { return s.store.RefreshPostingDetail(ctx, c.id, detailed, now) }); err != nil {
 			return res, detailedPostings, fmt.Errorf("server: refresh posting detail: %w", err)
 		}
 		detailed.ID = c.id
@@ -960,7 +1000,9 @@ func (s *Server) extractStage1(
 		return // timeout / 5xx / malformed JSON / out-of-range → regex fallback
 	}
 	// Best-effort cache write; a failure here just means a regex score this pass.
-	_ = s.store.UpsertAIExtraction(ctx, id, contentHash, ai.ExtractionContractVersion(), ext, now)
+	_ = s.writePostingState(0, true, func() error {
+		return s.store.UpsertAIExtraction(ctx, id, contentHash, ai.ExtractionContractVersion(), ext, now)
+	})
 }
 
 // loadProfile fetches the saved profile, returning ok=false when none has
@@ -1110,35 +1152,21 @@ func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime)
 		if e, ok := exts[p.ID]; ok {
 			ext = &e
 		}
-		// Prefer a delta computed against the CURRENT goal text + provider/model
-		// (fresh). Else fall back, marked Stale (still summed into the Total — T1),
-		// so the chip reads "(이전 설정 기준)": first to the latest row under the
-		// current ai_version (a goal edit), then to the latest row under ANY
-		// ai_version (a provider/model switch, which rotated ai_version and orphaned
-		// the prior rows). The cross-version tier is what keeps the chip from
-		// vanishing when the user changes provider.
-		var delta *ai.Delta
+		in := storedScoreInputs{
+			Posting: p, Profile: &prof, Extraction: ext,
+			AIEnabled: runtime != nil, Demo: s.demoMode,
+			ContentHash: contentHashes[p.ID], Validations: dealbreakerValidations[p.ID],
+		}
 		if d, ok := freshDeltas[p.ID]; ok {
-			d.Stale = false
-			delta = &d
-		} else if d, ok := latestDeltas[p.ID]; ok {
-			d.Stale = true
-			delta = &d
-		} else if d, ok := anyVerDeltas[p.ID]; ok {
-			d.Stale = !s.demoMode
-			delta = &d
+			in.Fresh = &d
 		}
-		var validations map[string]ai.DealbreakerValidation
-		if cached := dealbreakerValidations[p.ID]; len(cached) > 0 {
-			contentHash := contentHashes[p.ID]
-			validations = make(map[string]ai.DealbreakerValidation)
-			for _, candidate := range scoring.DealbreakerCandidates(p, prof) {
-				if row, ok := cached[contentHash+"\x00"+candidate.ID]; ok {
-					validations[candidate.ID] = row.Validation
-				}
-			}
+		if d, ok := latestDeltas[p.ID]; ok {
+			in.Latest = &d
 		}
-		result := scoring.Score(p, prof, ext, delta, validations)
+		if d, ok := anyVerDeltas[p.ID]; ok {
+			in.AnyVersion = &d
+		}
+		result := composeStoredScore(in).Score
 		breakdown, err := json.Marshal(result)
 		if err != nil {
 			return scored, fmt.Errorf("server: marshal score: %w", err)
@@ -1150,11 +1178,22 @@ func (s *Server) scoreAll(ctx context.Context, userID int64, runtime *AIRuntime)
 			BreakdownJSON: string(breakdown),
 			ComputedAt:    time.Now().UTC(),
 		}
+		// Materialization shares the bounded commit/publication barrier with
+		// cache writers, including provider-free startup recovery. Timestamp-only
+		// churn is not a new saved reading and must not wake/flash every card.
+		finish := s.postingUpdates.beginWrite(userID, false)
+		previous, found, readErr := s.store.ScoreByPostingIDForUser(ctx, userID, p.ID)
+		if readErr != nil {
+			finish(false, "")
+			return scored, fmt.Errorf("server: save score: read previous score: %w", readErr)
+		}
+		changed := !found || previous.ProfileHash != sc.ProfileHash || previous.Total != sc.Total || previous.BreakdownJSON != sc.BreakdownJSON
 		if userID == 0 {
 			err = s.store.UpsertScore(ctx, sc)
 		} else {
 			err = s.store.UpsertScoreForUser(ctx, userID, sc)
 		}
+		finish(err == nil && changed, "")
 		if err != nil {
 			return scored, fmt.Errorf("server: save score: %w", err)
 		}

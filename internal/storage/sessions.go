@@ -168,6 +168,32 @@ DELETE FROM sessions
 	return true, nil
 }
 
+// SessionIdentity is the minimum observation identity. It deliberately carries
+// neither account details nor the bearer/hash used to authenticate it.
+type SessionIdentity struct {
+	UserID    int64
+	ExpiresAt time.Time
+}
+
+// SessionIdentityReadOnly checks the exact bearer, expiry and existing user using
+// SELECT only. Observation must not extend a session or touch its activity time.
+func (s *Store) SessionIdentityReadOnly(ctx context.Context, token string) (SessionIdentity, bool, error) {
+	if token == "" {
+		return SessionIdentity{}, false, nil
+	}
+	var identity SessionIdentity
+	err := s.db.QueryRowContext(ctx, s.query(`SELECT u.id, ss.expires_at
+ FROM sessions ss JOIN users u ON u.id=ss.user_id
+ WHERE ss.session_token_hash=? AND ss.expires_at>?`), auth.HashSessionToken(token), time.Now().UTC()).Scan(&identity.UserID, &identity.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SessionIdentity{}, false, nil
+	}
+	if err != nil {
+		return SessionIdentity{}, false, fmt.Errorf("storage: observation session unavailable: %w", err)
+	}
+	return identity, true, nil
+}
+
 // UserBySessionToken returns the user for an unexpired raw session token.
 func (s *Store) UserBySessionToken(ctx context.Context, token string) (User, bool, error) {
 	if token == "" {

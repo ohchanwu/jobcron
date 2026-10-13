@@ -20,11 +20,12 @@ func (s *Server) handleNotInterestedAdd(w http.ResponseWriter, r *http.Request) 
 		writeAuthUnauthorized(w)
 		return
 	}
-	if userID == 0 {
-		err = s.store.SetNotInterested(r.Context(), id, time.Now())
-	} else {
-		err = s.store.AddNotInterested(r.Context(), userID, id, time.Now())
-	}
+	err = s.writePostingState(userID, false, func() error {
+		if userID == 0 {
+			return s.store.SetNotInterested(r.Context(), id, time.Now())
+		}
+		return s.store.AddNotInterested(r.Context(), userID, id, time.Now())
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -44,11 +45,12 @@ func (s *Server) handleNotInterestedRemove(w http.ResponseWriter, r *http.Reques
 		writeAuthUnauthorized(w)
 		return
 	}
-	if userID == 0 {
-		err = s.store.ClearNotInterested(r.Context(), id)
-	} else {
-		err = s.store.ClearNotInterestedForUser(r.Context(), userID, id)
-	}
+	err = s.writePostingState(userID, false, func() error {
+		if userID == 0 {
+			return s.store.ClearNotInterested(r.Context(), id)
+		}
+		return s.store.ClearNotInterestedForUser(r.Context(), userID, id)
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

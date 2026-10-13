@@ -447,6 +447,61 @@ styling keeps the full row at normal contrast and uses text and a warning symbol
 color. Match provenance reuses this existing surface; it adds no new explanation interface, CSS, or
 JavaScript.
 
+## Live stored-posting candidate (2026-10-13, local acceptance pending)
+
+The [approved campaign](specs/261012-ai-rating-live-updates-campaign.md)'s local
+Slice 2 candidate adds `GET /api/posting-updates` invalidations and
+`GET /api/posting-view` complete keyed snapshots. Today, bookmarks and all-postings
+initial documents share the same deterministic stored-state projection; `/archive`
+still redirects to all postings. Missing/stale materialized scores no longer hide
+an otherwise eligible new row. A pure composition seam retains extraction,
+contextual exclusion, outcome, signed delta and supported stale-cache rules.
+
+The concrete Store opens a SELECT-only transaction (PostgreSQL repeatable-read,
+SQLite compatibility read transaction). Its FIRST profile SELECT establishes the
+database snapshot under a short global-then-user commit/read barrier. Profile,
+credential presence, public postings/extractions and user-owned validations,
+deltas/outcomes/bookmarks/mutes are batched in that same view; the transaction ends
+before rendering/network transfer. Read failures return unavailable whole views,
+not guessed counts. No page-document/new-observer path loads ciphertext/nonce,
+decrypts a credential, constructs a provider, rescores stored rows or starts AI.
+Credential presence describes configuration, not usable-key readiness. Owner
+option 2 retains the two legacy bootstrap status GETs' existing session-activity
+writes, so the complete browser bootstrap is explicitly NOT zero-write.
+
+Relevant writers hold the barrier only through bounded persistence and nonblocking
+publication. Insertions publish before extraction; each successful saved outcome
+publishes before sibling provider calls finish. Global notices contain only public
+changes; user context/outcomes/progress stay scoped to that user. Storage failure
+publishes no successful or failed saved card and retains an incomplete-persistence
+run warning. Materialized score timestamp-only churn does not advance revisions.
+If context metadata becomes unavailable after a successful commit, an explicit
+context-change/resync notice cancels old reads without inventing a token; a later
+complete read establishes the actual context when storage recovers.
+Flight precedes the barrier; no provider, budget, tracker, sleep or transfer holds
+it. Process epochs and scoped revisions are not a distributed event history;
+periodic forced reads detect external/CLI writes that bypass notification hooks.
+
+The client keeps keyed cards, selected archive date/score mode, disclosures,
+pending controls, viewport anchor and logical focus. Membership/order/counts
+change immediately; live movement never autoopens an excluded destination, even
+under search. Explicit search input retains its separate autoopen behavior.
+Run phase targets/caps remain frozen at existing admission boundaries, separate
+from current-view fresh N/M. Done/failed requests a read-only snapshot, not reload
+or operation replay. Hidden/offline/pagehide closes observation; visibility,
+online, BFCache, reconnect and epoch changes force stored-state recovery. Auth
+loss clears private live content; storage/transport failure retains last good UI
+with the bounded stale/recheck fallback. Reduced motion disables movement.
+
+Bounds are eight observers per user / 64 total, one coalesced pending notice,
+15-second validity heartbeat and five-second writes; complete snapshots have a
+ten-second whole-read deadline and two reads per user / eight total. Each page
+has one in-flight read and at most one start per second during bursts. Degraded
+visible polling starts at five seconds and backs off to 30; periodic visible
+forced resync is 30 seconds. No schema, dependency, scheduler, admission, budget,
+prompt, model, version or scoring-math change is introduced. Exact independent
+implementation acceptance and any later release remain separate gates.
+
 ## Deployment boundaries
 
 The prepared production deployment uses an immutable Linux arm64 container image. Caddy

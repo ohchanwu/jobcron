@@ -113,13 +113,23 @@ func TestProviderFailureMessageClassifies(t *testing.T) {
 // version-scoped lookups. The cross-version fallback must keep the chip rendered —
 // faded with "(이전 설정 기준)" — instead of letting it vanish entirely.
 func TestModelSwitchKeepsAIChipStale(t *testing.T) {
-	srv, _ := newTestServer(t, &fakeScraper{})
+	srv, st := newPostgresTestServer(t, &fakeScraper{})
+	srv.SetProductionMode(true)
+	uid, cookie := createSessionUser(t, st, "model-projection@example.invalid", "model-projection-session")
 	ctx := context.Background()
 	zero := 0
-	prof := profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발"}
-	pj, _ := profile.Marshal(prof)
-	if _, _, err := srv.store.SaveProfile(ctx, pj); err != nil {
-		t.Fatalf("SaveProfile: %v", err)
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, JobLikes: "백엔드 서버 개발", AIProvider: "anthropic", AIModel: "claude-haiku-4-5-20251001"}
+	saveAIRuntimeProfile(t, st, uid, prof)
+	saveAIRuntimeCredential(t, st, newAIRuntimeTestCipher(t, 0x74), uid, "anthropic", "synthetic-model-projection-key")
+	render := func() string {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, r)
+		if w.Code != 200 {
+			t.Fatalf("render status=%d", w.Code)
+		}
+		return w.Body.String()
 	}
 	now := time.Now().UTC()
 	p := listingPosting("sw1", "신입 백엔드")
@@ -129,18 +139,18 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 
 	// Model A (haiku) rated the posting: cache a delta under A's ai_version and
 	// the current goal hash, exactly as a 재평가 under A would.
-	runtimeA := testAIRuntime(1, &ai.StubProvider{NameVal: "anthropic"}, "claude-haiku-4-5-20251001")
+	runtimeA := testAIRuntime(uid, &ai.StubProvider{NameVal: "anthropic"}, "claude-haiku-4-5-20251001")
 	delta := ai.Delta{NetDelta: 7, Items: []ai.DeltaItem{
 		{Signal: "백엔드", Kind: ai.KindPresence, Delta: 7, Evidence: "서버 개발자를 찾습니다", MatchedGoal: "좋아하는 업무"},
 	}}
-	if err := srv.store.UpsertAIScore(ctx, 1, id, profile.AIInputHash(prof), runtimeA.ScoreVersion, delta, now); err != nil {
+	if err := srv.store.UpsertAIScore(ctx, uid, id, profile.AIInputHash(prof), runtimeA.ScoreVersion, delta, now); err != nil {
 		t.Fatalf("seed delta under provider A: %v", err)
 	}
-	if _, err := srv.scoreAll(ctx, 1, runtimeA); err != nil {
+	if _, err := srv.scoreAll(ctx, uid, runtimeA); err != nil {
 		t.Fatalf("scoreAll under A: %v", err)
 	}
 
-	bodyA := renderDashboard(t, srv)
+	bodyA := render()
 	if !strings.Contains(bodyA, "AI 분석") {
 		t.Fatalf("provider A: AI chip should render fresh:\n%s", bodyA)
 	}
@@ -151,12 +161,14 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 	// Switch to model B (sonnet) → ai_version rotates. Without the cross-version
 	// fallback, both the fresh and version-scoped stale lookups miss and the chip
 	// vanishes. With it, the chip persists, faded.
-	runtimeB := testAIRuntime(1, &ai.StubProvider{NameVal: "anthropic"}, "claude-sonnet-4-6")
-	if _, err := srv.scoreAll(ctx, 1, runtimeB); err != nil {
+	prof.AIModel = "claude-sonnet-4-6"
+	saveAIRuntimeProfile(t, st, uid, prof)
+	runtimeB := testAIRuntime(uid, &ai.StubProvider{NameVal: "anthropic"}, "claude-sonnet-4-6")
+	if _, err := srv.scoreAll(ctx, uid, runtimeB); err != nil {
 		t.Fatalf("scoreAll under B: %v", err)
 	}
 
-	bodyB := renderDashboard(t, srv)
+	bodyB := render()
 	if !strings.Contains(bodyB, "AI 분석") {
 		t.Fatalf("BUG 1: AI chip VANISHED after a model switch instead of going stale:\n%s", bodyB)
 	}
@@ -164,7 +176,7 @@ func TestModelSwitchKeepsAIChipStale(t *testing.T) {
 		t.Fatalf("BUG 1: chip not marked stale ('이전 설정 기준') after a model switch:\n%s", bodyB)
 	}
 	// The stale delta is still summed into the Total (the chosen behavior).
-	scores, _ := srv.store.ScoresByPostingID(ctx)
+	scores, _ := srv.store.ScoresByPostingID(ctx, uid)
 	if sc, ok := scores[id]; !ok || sc.Total < 7 {
 		t.Fatalf("stale AI +7 must still count toward the Total; got %+v", scores[id])
 	}

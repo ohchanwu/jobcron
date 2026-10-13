@@ -79,6 +79,24 @@ ON CONFLICT (user_id, provider) DO UPDATE SET
 	return nil
 }
 
+// HasUserAICredential reads only configured presence, never encrypted fields.
+// Presence is not proof that a key can be decrypted or accepted by a provider.
+func (s *Store) HasUserAICredential(ctx context.Context, userID int64, provider string) (bool, error) {
+	normalized, err := validateCredentialKey(userID, provider)
+	if err != nil {
+		return false, err
+	}
+	if err := s.requirePostgresCredentials(); err != nil {
+		return false, err
+	}
+	var present bool
+	err = s.db.QueryRowContext(ctx, s.query(`SELECT EXISTS(SELECT 1 FROM user_ai_credentials WHERE user_id=? AND provider=?)`), userID, normalized).Scan(&present)
+	if err != nil {
+		return false, fmt.Errorf("storage: credential presence unavailable: %w", err)
+	}
+	return present, nil
+}
+
 // UserAICredential returns one encrypted user/provider row.
 func (s *Store) UserAICredential(ctx context.Context, userID int64, provider string) (EncryptedAICredential, bool, error) {
 	normalizedProvider, err := validateCredentialKey(userID, provider)

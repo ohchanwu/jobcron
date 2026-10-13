@@ -204,7 +204,7 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 	// sort order, not the below-MinScore split (see
 	// TestArchiveRoutesBelowMinScoreToExcluded for that).
 	zero := 0
-	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero})
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &zero, Stacks: []profile.StackPref{{Name: "Go", Weight: 30}, {Name: "Java", Weight: 15}}})
 	profileHash, _, err := st.SaveProfile(ctx, profJSON)
 	if err != nil {
 		t.Fatalf("SaveProfile: %v", err)
@@ -218,8 +218,10 @@ func TestArchiveSortsByScoreWithinEachDay(t *testing.T) {
 	low := listingPosting("low", "낮은 점수")
 	low.FirstSeenAt, low.LastSeenAt = day, day
 	highScore := listingPosting("high", "높은 점수")
+	highScore.StackTags = []string{"Go"}
 	highScore.FirstSeenAt, highScore.LastSeenAt = day.Add(time.Minute), day.Add(time.Minute)
 	mid := listingPosting("mid", "중간 점수")
+	mid.StackTags = []string{"Java"}
 	mid.FirstSeenAt, mid.LastSeenAt = day.Add(2*time.Minute), day.Add(2*time.Minute)
 
 	lowID := mustUpsert(t, st, low)
@@ -265,7 +267,7 @@ func TestArchiveRoutesBelowMinScoreToExcluded(t *testing.T) {
 	ctx := context.Background()
 
 	forty := 40
-	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty})
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty, Stacks: []profile.StackPref{{Name: "Go", Weight: 25}}})
 	profileHash, _, err := st.SaveProfile(ctx, profJSON)
 	if err != nil {
 		t.Fatalf("SaveProfile: %v", err)
@@ -275,6 +277,7 @@ func TestArchiveRoutesBelowMinScoreToExcluded(t *testing.T) {
 	low := listingPosting("low", "낮은 점수 공고")
 	low.FirstSeenAt, low.LastSeenAt = day, day
 	high := listingPosting("high", "높은 점수 공고")
+	high.StackTags = []string{"Go"}
 	high.FirstSeenAt, high.LastSeenAt = day, day
 	lowID := mustUpsert(t, st, low)
 	highID := mustUpsert(t, st, high)

@@ -108,6 +108,9 @@
         return r.json();
       })
       .then(function (state) {
+        // No revision accompanies this response. Only a current stored read
+        // may update a live card after this pending mutation settles.
+        if (window.JobcronPostingUpdates) return;
         var muted = !!state.not_interested;
         btn.classList.toggle('on', muted);
         btn.setAttribute('aria-pressed', String(muted));
@@ -120,12 +123,14 @@
         }
       })
       .catch(function () {
+        if (window.JobcronPostingUpdates) return;
         // Reconcile the icon back to its pre-click state on failure.
         btn.classList.toggle('on', wasOn);
         btn.setAttribute('aria-pressed', String(wasOn));
       })
       .finally(function () {
         btn.disabled = false;
+        if (window.JobcronPostingUpdates) window.JobcronPostingUpdates.resync();
       });
   });
 

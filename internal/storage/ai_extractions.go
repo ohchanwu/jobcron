@@ -108,6 +108,10 @@ type aiExtractionPair struct {
 func (s *Store) AIExtractionsByPostingID(
 	ctx context.Context, contentHashes map[int64]string, aiVersion string,
 ) (map[int64]ai.Extraction, error) {
+	return s.aiExtractionsByPostingID(ctx, s.db, contentHashes, aiVersion)
+}
+
+func (s *Store) aiExtractionsByPostingID(ctx context.Context, db queryReader, contentHashes map[int64]string, aiVersion string) (map[int64]ai.Extraction, error) {
 	out := map[int64]ai.Extraction{}
 	if len(contentHashes) == 0 {
 		return out, nil
@@ -143,7 +147,7 @@ FROM ai_extractions e
 JOIN requested r ON r.posting_id = e.posting_id AND r.content_hash = e.content_hash
 WHERE e.ai_version = ?`
 		}
-		rows, err := s.db.QueryContext(ctx, s.query(query), args...)
+		rows, err := db.QueryContext(ctx, s.query(query), args...)
 		if err != nil {
 			return nil, fmt.Errorf("storage: query ai extractions: %w", err)
 		}

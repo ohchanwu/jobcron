@@ -86,9 +86,14 @@ func (s *Server) handleAccountPassword(w http.ResponseWriter, r *http.Request) {
 		s.renderAccountFailure(w, r, user.Email)
 		return
 	}
+	finish := s.postingUpdates.beginWrite(user.ID, false)
 	changed, err := s.store.ChangePassword(
 		r.Context(), user.ID, user.PasswordHash, hash, auth.HashSessionToken(rawSession),
 	)
+	if err == nil && changed {
+		s.postingUpdates.revokeUser(user.ID, auth.HashSessionToken(rawSession))
+	}
+	finish(false, "")
 	if err != nil {
 		http.Error(w, "password change failed", http.StatusInternalServerError)
 		return
@@ -141,9 +146,14 @@ func (s *Server) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer lease.release()
+	finish := s.postingUpdates.beginWrite(user.ID, false)
 	deleted, err := s.store.DeleteSelf(
 		r.Context(), user.ID, user.PasswordHash, auth.HashSessionToken(rawSession),
 	)
+	if err == nil && deleted {
+		s.postingUpdates.revokeUser(user.ID, "")
+	}
+	finish(false, "")
 	if err != nil {
 		http.Error(w, "account deletion failed", http.StatusInternalServerError)
 		return

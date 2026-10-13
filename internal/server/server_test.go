@@ -608,6 +608,9 @@ func TestRunScrapeSweepsStalePostings(t *testing.T) {
 	var sweepStatus string
 	emit := func(event, data string) {
 		if event == "status" && strings.Contains(data, "정리했어요") {
+			if srv.postingUpdates.revisions(0).GlobalRevision < 2 {
+				t.Error("sweep committed without a public revision")
+			}
 			sweepStatus = data
 		}
 	}

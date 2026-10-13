@@ -119,7 +119,7 @@ func resolveArchiveSort(w http.ResponseWriter, r *http.Request) string {
 // briefing's behavior.
 func (s *Server) buildArchive(ctx context.Context, now time.Time, userIDOpt ...int64) (archiveView, error) {
 	userID := optionalUserID(userIDOpt)
-	return s.buildArchiveWithRuntime(ctx, now, userID, s.runtimeForRender(ctx, userID))
+	return s.projectArchive(ctx, now, userID)
 }
 
 func (s *Server) buildArchiveWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (archiveView, error) {

@@ -208,6 +208,10 @@ LIMIT 1`
 func (s *Store) AIScoresByPostingID(
 	ctx context.Context, userID int64, aiInputHash, aiVersion string,
 ) (map[int64]ai.Delta, error) {
+	return s.aiScoresByPostingID(ctx, s.db, userID, aiInputHash, aiVersion)
+}
+
+func (s *Store) aiScoresByPostingID(ctx context.Context, db queryReader, userID int64, aiInputHash, aiVersion string) (map[int64]ai.Delta, error) {
 	if err := validateAIUserID(userID); err != nil {
 		return nil, err
 	}
@@ -223,7 +227,7 @@ FROM ai_scores
 WHERE user_id = ? AND ai_input_hash = ? AND ai_version = ?`
 		args = []any{userID, aiInputHash, aiVersion}
 	}
-	rows, err := s.db.QueryContext(ctx, s.query(query), args...)
+	rows, err := db.QueryContext(ctx, s.query(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query ai scores: %w", err)
 	}
@@ -248,6 +252,10 @@ WHERE user_id = ? AND ai_input_hash = ? AND ai_version = ?`
 func (s *Store) LatestAIScoresByPostingID(
 	ctx context.Context, userID int64, aiVersion string,
 ) (map[int64]ai.Delta, error) {
+	return s.latestAIScoresByPostingID(ctx, s.db, userID, aiVersion)
+}
+
+func (s *Store) latestAIScoresByPostingID(ctx context.Context, db queryReader, userID int64, aiVersion string) (map[int64]ai.Delta, error) {
 	if err := validateAIUserID(userID); err != nil {
 		return nil, err
 	}
@@ -265,7 +273,7 @@ WHERE user_id = ? AND ai_version = ?
 ORDER BY posting_id, computed_at DESC`
 		args = []any{userID, aiVersion}
 	}
-	rows, err := s.db.QueryContext(ctx, s.query(query), args...)
+	rows, err := db.QueryContext(ctx, s.query(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query latest ai scores: %w", err)
 	}
@@ -297,6 +305,10 @@ ORDER BY posting_id, computed_at DESC`
 func (s *Store) LatestAIScoresAnyVersionByPostingID(
 	ctx context.Context, userID int64,
 ) (map[int64]ai.Delta, error) {
+	return s.latestAIScoresAnyVersionByPostingID(ctx, s.db, userID)
+}
+
+func (s *Store) latestAIScoresAnyVersionByPostingID(ctx context.Context, db queryReader, userID int64) (map[int64]ai.Delta, error) {
 	if err := validateAIUserID(userID); err != nil {
 		return nil, err
 	}
@@ -313,7 +325,7 @@ WHERE user_id = ?
 ORDER BY posting_id, computed_at DESC`
 		args = []any{userID}
 	}
-	rows, err := s.db.QueryContext(ctx, s.query(query), args...)
+	rows, err := db.QueryContext(ctx, s.query(query), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query latest ai scores (any version): %w", err)
 	}

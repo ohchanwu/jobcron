@@ -12,11 +12,8 @@ import (
 	"github.com/ohchanwu/jobcron/internal/profile"
 )
 
-// TestBuildBriefingSkipsUnscoredPosting locks in Bug 2B: a posting that exists
-// but has no score row (an interrupted scrape inserted it before scoreAll ran)
-// must NOT render as a blank card — no total, no 신입 chip. It is skipped until
-// a later scrape / profile-save scores it, then it appears normally.
-func TestBuildBriefingSkipsUnscoredPosting(t *testing.T) {
+// Pure rules render committed postings even before score materialization.
+func TestBuildBriefingComputesUnscoredPosting(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 	profJSON, _ := profile.Marshal(profile.Profile{})
@@ -29,27 +26,23 @@ func TestBuildBriefingSkipsUnscoredPosting(t *testing.T) {
 	p.FirstSeenAt, p.LastSeenAt = now, now
 	id := mustUpsert(t, st, p)
 
-	// No score row yet → must be skipped from both the main list and the
-	// 관심 밖 excluded list (a blank card is the bug).
+	// Default rules put this posting below MinScore, with real chips and total.
 	b, err := srv.buildBriefing(ctx, now)
 	if err != nil {
 		t.Fatalf("buildBriefing: %v", err)
 	}
-	if contains(b.Today, p.Title) {
-		t.Fatalf("unscored posting rendered in Today as a blank card; want it skipped")
-	}
-	if contains(b.Excluded, p.Title) {
-		t.Fatalf("unscored posting rendered in the 관심 밖 list; want it skipped")
+	if contains(b.Today, p.Title) || !contains(b.Excluded, p.Title) || b.Excluded[0].Total != 25 || len(b.Excluded[0].Breakdown) == 0 {
+		t.Fatalf("missing score did not get real rules: %+v", b)
 	}
 
-	// Once scored, it appears in the briefing as normal.
+	// A synthetic materialized total must not override pure current rules.
 	scoreEach(t, st, map[int64]int{id: 50})
 	b, err = srv.buildBriefing(ctx, now)
 	if err != nil {
 		t.Fatalf("buildBriefing: %v", err)
 	}
-	if !contains(b.Today, p.Title) {
-		t.Fatalf("scored posting missing from briefing; want it shown")
+	if contains(b.Today, p.Title) || !contains(b.Excluded, p.Title) || b.Excluded[0].Total != 25 {
+		t.Fatalf("materialized fixture total overrode current rules: %+v", b)
 	}
 }
 

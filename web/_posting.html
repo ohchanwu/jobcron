@@ -1,0 +1,30 @@
+{{define "posting"}}
+<li class="posting{{if .Dim}} posting-dim{{end}}" data-posting-key="{{.Posting.ID}}" data-source="{{.Posting.Source}}{{range .DuplicateSources}},{{.}}{{end}}">
+  <div class="score-cell" data-live-region="score">
+    <span class="score{{if .Dim}} score-dim{{end}}">{{if .Excluded}}—{{else}}{{.Total}}{{end}}</span>
+    <span class="source-stamp">{{sourceLabel .Posting.Source}}{{range .DuplicateSources}} · {{sourceLabel .}}{{end}}</span>
+  </div>
+  <div class="posting-body" data-live-region="body">
+    <a class="posting-title" href="{{.Posting.URL}}" target="_blank" rel="noopener">{{.Posting.Title}}</a>
+    <div class="posting-meta">
+      <span>{{.Posting.Company}}</span>
+      {{if .Excluded}}{{if .Explanation}}<span class="sep">/</span><span>{{.Explanation}}</span>{{end}}{{else}}{{if .Posting.Location}}<span class="sep">/</span><span>{{.Posting.Location}}</span>{{end}}{{end}}
+      {{if .Deadline.Text}}<span class="deadline deadline-{{.Deadline.Kind}}">{{.Deadline.Text}}</span>{{end}}
+    </div>
+    {{if .Excluded}}{{template "exclusion-reasons" .ExclusionReasons}}{{end}}
+    {{if ge .Total 0}}
+      {{template "scoreChips" .Breakdown}}
+      {{template "aiOutcome" .AIOutcome}}
+      {{if and .AIConfigured (not .AIOutcome)}}<span class="ai-outcome ai-outcome--pending">아직 AI 분석 전</span>{{end}}
+    {{end}}
+  </div>
+  <div class="posting-actions" data-live-region="actions">
+    <button class="not-interested{{if .NotInterested}} on{{end}}" type="button" data-posting-id="{{.Posting.ID}}" aria-pressed="{{if .NotInterested}}true{{else}}false{{end}}" aria-label="관심 없음">
+      <svg width="22" height="22" aria-hidden="true"><use href="#icon-eye-off"/></svg>
+    </button>
+    <button class="bookmark{{if .Bookmarked}} on{{end}}" type="button" data-posting-id="{{.Posting.ID}}" aria-pressed="{{if .Bookmarked}}true{{else}}false{{end}}" aria-label="북마크">
+      <svg width="24" height="24" aria-hidden="true"><use href="#icon-bookmark"/></svg>
+    </button>
+  </div>
+</li>
+{{end}}

@@ -42,7 +42,7 @@ func (s *Server) handleBookmarks(w http.ResponseWriter, r *http.Request) {
 // order is most-recently-saved first (storage layer does the sort).
 func (s *Server) buildBookmarks(ctx context.Context, now time.Time, userIDOpt ...int64) (bookmarksView, error) {
 	userID := optionalUserID(userIDOpt)
-	return s.buildBookmarksWithRuntime(ctx, now, userID, s.runtimeForRender(ctx, userID))
+	return s.projectBookmarks(ctx, now, userID)
 }
 
 func (s *Server) buildBookmarksWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (bookmarksView, error) {
@@ -111,11 +111,12 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 		writeAuthUnauthorized(w)
 		return
 	}
-	if userID == 0 {
-		err = s.store.SetBookmark(r.Context(), id, time.Now())
-	} else {
-		err = s.store.AddBookmark(r.Context(), userID, id)
-	}
+	err = s.writePostingState(userID, false, func() error {
+		if userID == 0 {
+			return s.store.SetBookmark(r.Context(), id, time.Now())
+		}
+		return s.store.AddBookmark(r.Context(), userID, id)
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -135,11 +136,12 @@ func (s *Server) handleBookmarkRemove(w http.ResponseWriter, r *http.Request) {
 		writeAuthUnauthorized(w)
 		return
 	}
-	if userID == 0 {
-		err = s.store.ClearBookmark(r.Context(), id)
-	} else {
-		err = s.store.ClearBookmarkForUser(r.Context(), userID, id)
-	}
+	err = s.writePostingState(userID, false, func() error {
+		if userID == 0 {
+			return s.store.ClearBookmark(r.Context(), id)
+		}
+		return s.store.ClearBookmarkForUser(r.Context(), userID, id)
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -44,7 +44,8 @@ test('closed source callbacks cannot erase recovery or terminate it', async () =
   assert.equal(p.text('rerate-progress'), '공고 2/4 분석 중...');
   pending.resolve(snapshot(p, { state: 'done', outcome: 'partial', message: 'owned partial' }));
   await flush();
-  assert.equal(p.location.reloads, 1);
+  assert.equal(p.location.reloads, 0);
+  assert.equal(p.location.snapshots, 1);
 });
 
 // The old concurrent foreign/late schedules are now unreachable. Keep the
@@ -96,7 +97,8 @@ test('exhaustion closes source and ignores every late source callback', async ()
   assert.equal(p.button.disabled, true);
   assert.equal(p.text('rerate-progress'), '공고 0/3 분석 중...');
   p.sources[1].emit('done', 'next complete');
-  assert.equal(p.location.reloads, 1);
+  assert.equal(p.location.reloads, 0);
+  assert.equal(p.location.snapshots, 1);
 });
 
 for (const state of ['running', 'done', 'failed', 'idle']) {
@@ -175,7 +177,8 @@ test('hidden error resumes on visibility and history return preserves identity o
   p.queueStatus(snapshot(p, { state: 'done', outcome: 'partial', message: 'partial on history return' }));
   p.dispatchWindow('pageshow', { persisted: true });
   await flush();
-  assert.equal(p.location.reloads, 1);
+  assert.equal(p.location.reloads, 0);
+  assert.equal(p.location.snapshots, 1);
   assert.equal(p.sources.length, 1, 'history recovery must never start provider stream');
 });
 

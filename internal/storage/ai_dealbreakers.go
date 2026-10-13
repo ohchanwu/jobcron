@@ -69,10 +69,14 @@ func (s *Store) AIDealbreakerValidationsByPostingID(
 	userID int64,
 	aiVersion string,
 ) (map[int64]map[string]AIDealbreakerValidation, error) {
+	return s.aiDealbreakerValidationsByPostingID(ctx, s.db, userID, aiVersion)
+}
+
+func (s *Store) aiDealbreakerValidationsByPostingID(ctx context.Context, db queryReader, userID int64, aiVersion string) (map[int64]map[string]AIDealbreakerValidation, error) {
 	if err := s.validateAIDealbreakerStore(userID); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := db.QueryContext(ctx, `
 SELECT posting_id, content_hash, ai_version, keyword_hash,
        verdict, match_json, reason_code, reason_evidence, computed_at
   FROM ai_dealbreaker_validations

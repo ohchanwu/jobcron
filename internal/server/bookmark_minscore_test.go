@@ -21,7 +21,8 @@ func scoreEach(t *testing.T, st *storage.Store, totals map[int64]int) {
 		t.Fatalf("Profile: %v", err)
 	}
 	if !found {
-		profileJSON, marshalErr := profile.Marshal(profile.Profile{})
+		zero := 0
+		profileJSON, marshalErr := profile.Marshal(profile.Profile{MinScore: &zero})
 		if marshalErr != nil {
 			t.Fatalf("profile.Marshal: %v", marshalErr)
 		}
@@ -75,7 +76,7 @@ func TestArchiveBookmarkExemptFromMinScore(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 	forty := 40
-	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty})
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty, Dealbreakers: []string{"북마크한 제외 공고"}})
 	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}
@@ -133,7 +134,7 @@ func TestBriefingBookmarkExemptFromMinScore(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
 	ctx := context.Background()
 	forty := 40
-	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty})
+	profJSON, _ := profile.Marshal(profile.Profile{MinScore: &forty, Dealbreakers: []string{"북마크한 제외 공고"}})
 	if _, _, err := st.SaveProfile(ctx, profJSON); err != nil {
 		t.Fatalf("SaveProfile: %v", err)
 	}

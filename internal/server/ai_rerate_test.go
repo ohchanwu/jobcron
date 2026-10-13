@@ -205,7 +205,7 @@ func TestRunRerateBackfillsStage1DespiteCurrentStage2Cache(t *testing.T) {
 		t.Fatalf("runRerate: %v", err)
 	}
 	if sponsor.Calls != 1 || provider.Calls != 0 || provider.ScoreDeltaCalls != 0 ||
-		summary.Visible != 1 || summary.Analyzed != 1 {
+		summary.Visible != 1 || summary.Analyzed != 0 || summary.CachedUnknown != 1 {
 		t.Fatalf(
 			"summary=%+v sponsor_stage1=%d user_stage1=%d stage2=%d",
 			summary,
@@ -216,6 +216,12 @@ func TestRunRerateBackfillsStage1DespiteCurrentStage2Cache(t *testing.T) {
 	}
 	assertStage1Usage(t, st, sponsorID, 2)
 	assertStage1Usage(t, st, userID, 0)
+	// A legacy successful cache stays free, but its absent provenance must not
+	// turn into a fabricated current no-signal success during backfill.
+	outcomes, err := st.AIScoreOutcomesByPostingID(ctx, userID, profile.AIInputHash(prof), runtime.ScoreVersion)
+	if err != nil || len(outcomes) != 0 {
+		t.Fatalf("legacy provenance was fabricated: %+v err=%v", outcomes, err)
+	}
 	after, ok, err := st.ScoreByPostingIDForUser(ctx, userID, postingID)
 	if err != nil || !ok || after.Total == -1 {
 		t.Fatalf("Stage 1 extraction did not restore posting before Stage 2: score=%+v ok=%v err=%v", after, ok, err)
@@ -545,7 +551,7 @@ func TestRerateButtonShowsStaleCount(t *testing.T) {
 		t.Fatalf("scoreAll: %v", err)
 	}
 
-	b, err := srv.buildBriefing(ctx, now)
+	b, err := srv.buildBriefingWithRuntime(ctx, now, 1, runtime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1092,8 +1098,9 @@ func TestProviderReasonEvidenceNeverReachesScoreOrRender(t *testing.T) {
 	ctx := context.Background()
 	userID, cookie := createSessionUser(t, st, "sentinel@example.invalid", "sentinel-session-token")
 	zero := 0
-	prof := profile.Profile{CareerYears: 0, MinScore: &zero, Dealbreakers: []string{"병역특례"}}
+	prof := profile.Profile{CareerYears: 0, MinScore: &zero, Dealbreakers: []string{"병역특례"}, AIProvider: "anthropic", AIModel: "shared-model"}
 	saveAIRuntimeProfile(t, st, userID, prof)
+	saveAIRuntimeCredential(t, st, newAIRuntimeTestCipher(t, 0x73), userID, "anthropic", "synthetic-projection-key")
 
 	// Deliberately phrase-free, grounded nowhere near the server match, and
 	// unlikely to collide with any other string in the page.
@@ -1107,7 +1114,7 @@ func TestProviderReasonEvidenceNeverReachesScoreOrRender(t *testing.T) {
 	p.ID = mustUpsert(t, st, p)
 
 	provider := &ai.StubProvider{
-		NameVal: "stub",
+		NameVal: "anthropic",
 		ValidateDealbreakersFn: func(_ context.Context, _ string, candidates []ai.DealbreakerCandidate) ([]ai.DealbreakerValidation, ai.Usage, error) {
 			return []ai.DealbreakerValidation{{
 				CandidateID:    candidates[0].ID,

@@ -87,14 +87,28 @@
       searchInput.addEventListener('input', applyFilters);
     }
     document.addEventListener('demo-state-change', applyFilters);
-    document.addEventListener('posting-list-change', applyFilters);
+    document.addEventListener('posting-list-change', function () {refreshRegistry();applyFilters(false);});
+    document.addEventListener('posting-live-change', function (event) {
+      refreshRegistry();
+      originalCount = String(event.detail.excluded);
+      applyFilters(false);
+    });
+
+    function refreshRegistry() {
+      cards = Array.from(document.querySelectorAll('.posting[data-source]')).map(function (el) {
+        var title=el.querySelector('.posting-title'),company=el.querySelector('.posting-meta span');
+        return {el:el,text:((title?title.textContent:'')+' '+(company?company.textContent:'')).normalize('NFC').toLowerCase()};
+      });
+      excludedBox = document.querySelector('.excluded-box');
+      countEl = excludedBox ? excludedBox.querySelector('.excluded-count') : null;
+    }
 
     function activeSource() {
       var on = container.querySelector('.source-pill.on');
       return on ? on.dataset.source : ALL_KEY;
     }
 
-    function applyFilters() {
+    function applyFilters(allowAutoopen) {
       var source = activeSource();
       var q = searchInput ? searchInput.value.trim().normalize('NFC').toLowerCase() : '';
       var liveCards = cards.filter(function (card) {
@@ -117,27 +131,27 @@
       });
 
       markEmptyPills(container, liveCards);
-      updateExcludedBox(q);
+      updateExcludedBox(q, allowAutoopen !== false);
       updateEmptyMessage(source, q, anyVisible, liveCards.length > 0);
     }
 
     /* The 관심 밖 collapsible needs care during search: a matching low-score
        card lives in the DOM inside a closed <details>, so it must be opened to
        be seen, and the server-rendered count must reflect the filtered subset. */
-    function updateExcludedBox(q) {
+    function updateExcludedBox(q, allowAutoopen) {
       if (!excludedBox) return;
       if (q !== '') {
         // Snapshot the user's open state once, when the search begins.
-        if (preSearchOpen === null) preSearchOpen = excludedBox.open;
+        if (allowAutoopen && preSearchOpen === null) preSearchOpen = excludedBox.open;
         var visibleInside = excludedBox.querySelectorAll('.posting:not(.filter-hidden)').length;
         // Search-driven: open the box iff a match lives inside it — so a match
         // is never stranded behind a collapsed summary, and the box never stays
         // expanded over zero matching content (even if the user opened it).
-        excludedBox.open = visibleInside > 0;
+        if (allowAutoopen) excludedBox.open = visibleInside > 0;
         if (countEl) countEl.textContent = visibleInside;
       } else {
         // Search cleared: restore exactly what the user had before they typed.
-        if (preSearchOpen !== null) {
+        if (allowAutoopen && preSearchOpen !== null) {
           excludedBox.open = preSearchOpen;
           preSearchOpen = null;
         }

@@ -85,6 +85,10 @@ func upsertAIScoreOutcome(ctx context.Context, tx *sql.Tx, s *Store, userID, pos
 }
 
 func (s *Store) AIScoreOutcomesByPostingID(ctx context.Context, userID int64, hash, version string) (map[int64]AIScoreOutcome, error) {
+	return s.aiScoreOutcomesByPostingID(ctx, s.db, userID, hash, version)
+}
+
+func (s *Store) aiScoreOutcomesByPostingID(ctx context.Context, db queryReader, userID int64, hash, version string) (map[int64]AIScoreOutcome, error) {
 	if err := s.validateOutcomeUserID(userID); err != nil {
 		return nil, err
 	}
@@ -94,7 +98,7 @@ func (s *Store) AIScoreOutcomesByPostingID(ctx context.Context, userID int64, ha
 	if s.dialect == DialectPostgres {
 		cacheUser = ` AND ai_scores.user_id=ai_score_outcomes.user_id`
 	}
-	rows, err := s.db.QueryContext(ctx, s.query(`SELECT posting_id, state, proposed, accepted, computed_at FROM ai_score_outcomes
+	rows, err := db.QueryContext(ctx, s.query(`SELECT posting_id, state, proposed, accepted, computed_at FROM ai_score_outcomes
  WHERE user_id=? AND ai_input_hash=? AND ai_version=?
  AND (state NOT IN ('rated','no_signal') OR EXISTS (
  SELECT 1 FROM ai_scores WHERE ai_scores.posting_id=ai_score_outcomes.posting_id

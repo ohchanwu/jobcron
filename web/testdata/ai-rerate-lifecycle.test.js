@@ -107,6 +107,7 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
   };
   const location = {
     reloads: 0,
+    snapshots: 0,
     reload() { this.reloads++; }
   };
   const timers = new Map();
@@ -195,6 +196,7 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     for (const listener of documentListeners.get(name) || []) listener();
   }
   const window = {
+    JobcronPostingUpdates: {resync() {location.snapshots++;}},
     crypto: { randomUUID: () => `entry-token-${String(++tokenCounter).padStart(8, '0')}` },
     addEventListener(name, listener) {
       if (!windowListeners.has(name)) windowListeners.set(name, []);
@@ -419,17 +421,19 @@ async function main() {
   assert.equal(storage.getItem('jobcron:rerate-notice:archive'), null);
   assert.equal(storage.getItem('jobcron:rerate-handled:archive'), null);
 
-  // The owner reloads once, sees one completion notice, then a manual reload is quiet.
+  // The owner reconciles once and sees one completion notice without reloading.
   const doneOwner = makePage({ storage, state: initiating.history.state, navigationType: 'back_forward' });
   doneOwner.queueStatus(doneStatus);
   doneOwner.dispatchWindow('pageshow');
   await flush();
-  assert.equal(doneOwner.location.reloads, 1);
-  assert.notEqual(storage.getItem('jobcron:rerate-notice:archive'), null);
+  assert.equal(doneOwner.location.reloads, 0);
+  assert.equal(doneOwner.location.snapshots, 1);
+  assert.equal(doneOwner.text('rerate-status'), completedCopy);
+  assert.equal(storage.getItem('jobcron:rerate-notice:archive'), null);
   assert.equal(storage.getItem('jobcron:rerate-handled:archive'), running.run_token);
 
   const reloaded = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
-  assert.equal(reloaded.text('rerate-status'), completedCopy);
+  assert.equal(reloaded.text('rerate-status'), '');
   assert.equal(storage.getItem('jobcron:rerate-notice:archive'), null);
   const manualReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
   assert.equal(manualReload.has('rerate-status'), false);
@@ -447,9 +451,11 @@ async function main() {
   cachedOwner.queueStatus(cachedStatus);
   cachedOwner.dispatchWindow('pageshow');
   await flush();
-  assert.equal(cachedOwner.location.reloads, 1);
+  assert.equal(cachedOwner.location.reloads, 0);
+  assert.equal(cachedOwner.location.snapshots, 1);
+  assert.equal(cachedOwner.text('rerate-status'), cachedCopy);
   const cachedReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
-  assert.equal(cachedReload.text('rerate-status'), cachedCopy);
+  assert.equal(cachedReload.text('rerate-status'), '');
 
   const partialCopy = '공고 2/7개를 AI로 분석했어요 — 토큰을 아끼려고 한 번에 일정 개수만 분석해요. 더 보려면 다시 눌러주세요.';
   const partialStatus = {
@@ -462,9 +468,11 @@ async function main() {
   partialOwner.queueStatus(partialStatus);
   partialOwner.dispatchWindow('pageshow');
   await flush();
-  assert.equal(partialOwner.location.reloads, 1);
+  assert.equal(partialOwner.location.reloads, 0);
+  assert.equal(partialOwner.location.snapshots, 1);
+  assert.equal(partialOwner.text('rerate-status'), partialCopy);
   const partialReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
-  assert.equal(partialReload.text('rerate-status'), partialCopy);
+  assert.equal(partialReload.text('rerate-status'), '');
 
   const noProgressCopy = '8개는 AI가 근거를 확인하지 못했어요. 지금 다시 눌러도 같은 결과일 수 있어요.';
   const noProgressStatus = {
@@ -477,9 +485,11 @@ async function main() {
   noProgressOwner.queueStatus(noProgressStatus);
   noProgressOwner.dispatchWindow('pageshow');
   await flush();
-  assert.equal(noProgressOwner.location.reloads, 1);
+  assert.equal(noProgressOwner.location.reloads, 0);
+  assert.equal(noProgressOwner.location.snapshots, 1);
+  assert.equal(noProgressOwner.text('rerate-status'), noProgressCopy);
   const noProgressReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
-  assert.equal(noProgressReload.text('rerate-status'), noProgressCopy);
+  assert.equal(noProgressReload.text('rerate-status'), '');
 
   const emptyCopy = '지금 화면에 분석할 공고가 없어요.';
   const emptyStatus = {
@@ -492,9 +502,11 @@ async function main() {
   emptyOwner.queueStatus(emptyStatus);
   emptyOwner.dispatchWindow('pageshow');
   await flush();
-  assert.equal(emptyOwner.location.reloads, 1);
+  assert.equal(emptyOwner.location.reloads, 0);
+  assert.equal(emptyOwner.location.snapshots, 1);
+  assert.equal(emptyOwner.text('rerate-status'), emptyCopy);
   const emptyReload = makePage({ storage, state: initiating.history.state, navigationType: 'reload' });
-  assert.equal(emptyReload.text('rerate-status'), emptyCopy);
+  assert.equal(emptyReload.text('rerate-status'), '');
 
   // The additive run-token event preserves the visible-page SSE flow.
   const visibleStorage = new Storage();
@@ -506,7 +518,8 @@ async function main() {
   assert.equal(visible.button.disabled, true);
   assert.equal(visible.text('rerate-progress'), '공고 1/2 분석 중...');
   visible.sources[0].emit('done', '공고 2개를 모두 AI로 분석했어요.');
-  assert.equal(visible.location.reloads, 1);
+  assert.equal(visible.location.reloads, 0);
+  assert.equal(visible.location.snapshots, 1);
   assert.equal(visibleStorage.getItem('jobcron:rerate-handled:archive'), 'process-visible-run-1');
 
   // --- Progress copy + transport recovery (t_942f06ba) ---
@@ -559,8 +572,9 @@ async function main() {
   live.sources[0].emit('progress', '공고 0/8 분석 중...');
   live.sources[0].emit('progress', '공고 8/8 분석 중...');
   live.sources[0].emit('done', '공고 8개를 모두 AI로 분석했어요.');
-  assert.ok(estimateRetained(live), 'estimate must remain visible through the full real status sequence');
-  assert.equal(live.location.reloads, 1);
+  assert.equal(live.text('rerate-status'), '공고 8개를 모두 AI로 분석했어요.');
+  assert.equal(live.location.reloads, 0);
+  assert.equal(live.location.snapshots, 1);
 
   // Estimate retention through error → poll recovery with the REAL server
   // running status (the tracker now holds the estimate, not the old copy).
@@ -595,7 +609,8 @@ async function main() {
   // Terminal cleanup: done fires on the stream → transport stops, no timers.
   silent.sources[0].emit('done', '공고 9개를 모두 AI로 분석했어요.');
   assert.equal(silent.timerCount(), 0, 'terminal done must clear every recovery timer');
-  assert.equal(silent.location.reloads, 1);
+  assert.equal(silent.location.reloads, 0);
+  assert.equal(silent.location.snapshots, 1);
 
   // A hidden tab whose stream died silently: on return, the client re-adopts
   // the owned run via one status probe (the stream may be dead but non-null).
@@ -628,7 +643,8 @@ async function main() {
   assert.equal(flaky.timerCount(), 1, 'a retry must be scheduled after a failed status fetch');
   flaky.queueStatus({ state: 'done', run_token: 'process-flaky-run-1', owner_entry: flaky.history.state.jobcronRerateEntry, outcome: 'changed', message: '공고 3개를 모두 AI로 분석했어요.' });
   await flaky.run(retryDelayMs);
-  assert.equal(flaky.location.reloads, 1, 'connectivity return must complete the run end-to-end with no user action');
+  assert.equal(flaky.location.reloads, 0);
+  assert.equal(flaky.location.snapshots, 1, 'connectivity return reconciles stored results, not paid work');
 
   // Bounded exhaustion: repeated failed status reads end in an explicit
   // unresolved state (page still owned, button re-enabled, honest copy),
@@ -676,7 +692,8 @@ async function main() {
   assert.equal(numeric.text('rerate-progress'), '공고 0/6 분석 중...', 'the honest 0/M must render before any row completes');
   assert.equal(numeric.button.disabled, true);
   numeric.sources[0].emit('done', '공고 6개를 모두 AI로 분석했어요.');
-  assert.equal(numeric.location.reloads, 1);
+  assert.equal(numeric.location.reloads, 0);
+  assert.equal(numeric.location.snapshots, 1);
 
 
   // A page shown WITHOUT a history return (e.g. reload while the owned run is

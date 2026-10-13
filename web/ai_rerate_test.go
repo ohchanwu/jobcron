@@ -13,7 +13,7 @@ func TestAIRerateLifecycleBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatal("node is required for the zero-package ai-rerate lifecycle test")
 	}
-	for _, script := range []string{"testdata/ai-rerate-lifecycle.test.js", "testdata/ai-rerate-owner.test.js"} {
+	for _, script := range []string{"testdata/ai-rerate-lifecycle.test.js", "testdata/ai-rerate-owner.test.js", "testdata/ai-rerate-no-reload.test.js"} {
 		t.Run(script, func(t *testing.T) {
 			cmd := exec.Command(node, script)
 			out, err := cmd.CombinedOutput()

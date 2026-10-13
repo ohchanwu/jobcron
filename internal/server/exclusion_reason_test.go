@@ -2,8 +2,7 @@ package server
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
+
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,9 +10,8 @@ import (
 	"time"
 
 	"github.com/ohchanwu/jobcron/internal/ai"
-	"github.com/ohchanwu/jobcron/internal/profile"
+
 	"github.com/ohchanwu/jobcron/internal/scoring"
-	"github.com/ohchanwu/jobcron/internal/storage"
 )
 
 func TestExclusionReasonViewShowsEveryReasonInOrder(t *testing.T) {
@@ -249,17 +247,11 @@ func TestExcludedReasonEscapesProviderOutput(t *testing.T) {
 }
 
 func TestDailyAndArchiveRenderExclusionReasons(t *testing.T) {
-	srv, st := newTestServer(t, &fakeScraper{})
-	ctx := context.Background()
-	profJSON, _ := profile.Marshal(profile.Profile{})
-	profileHash, _, err := st.SaveProfile(ctx, profJSON)
-	if err != nil {
-		t.Fatal(err)
-	}
+	srv, _ := newTestServer(t, &fakeScraper{})
 	now := time.Now().UTC()
 	p := listingPosting("excluded-reason", "문맥 확인 공고")
 	p.FirstSeenAt, p.LastSeenAt = now, now
-	id := mustUpsert(t, st, p)
+	p.ID = 7
 	result := scoring.ScoreResult{Total: -1, ExclusionReasons: []scoring.ExclusionReason{{
 		Kind:       "career",
 		Label:      "신입 지원 불가",
@@ -274,16 +266,9 @@ func TestDailyAndArchiveRenderExclusionReasons(t *testing.T) {
 		Category:   "welfare",
 		Confidence: "confirmed",
 	}}}
-	breakdown, _ := json.Marshal(result)
-	if err := st.UpsertScore(ctx, storage.Score{
-		PostingID:     id,
-		ProfileHash:   profileHash,
-		Total:         -1,
-		BreakdownJSON: string(breakdown),
-		ComputedAt:    now,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	// This is an escaped-template contract fixture, not cache selection. The
+	// shared projection no longer trusts hand-authored materialized breakdowns.
+	dp := dashboardPosting{Posting: p, Total: -1, Excluded: true, ExclusionReasons: exclusionReasonViews(result.ExclusionReasons)}
 
 	// The two surfaces are NOT /briefing and /archive: /{$} is Archive
 	// (handleArchive) and /briefing is Today (handleDashboard); /archive only
@@ -299,7 +284,12 @@ func TestDailyAndArchiveRenderExclusionReasons(t *testing.T) {
 	} {
 		t.Run(surface.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, surface.path, nil))
+			req := httptest.NewRequest(http.MethodGet, surface.path, nil)
+			if surface.name == "today" {
+				srv.renderWithRequest(rec, req, "index.html", briefing{Excluded: []dashboardPosting{dp}})
+			} else {
+				srv.renderWithRequest(rec, req, "archive.html", archiveView{Excluded: []dashboardPosting{dp}, Total: 1})
+			}
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET %s status = %d", surface.path, rec.Code)
 			}

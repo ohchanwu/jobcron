@@ -3,8 +3,10 @@
 Created: 2026-10-12. Status: independently PLAN-READY in review 171. The owner
 subsequently instructed “Plan approved. Start autonomous impl.”, superseding the
 historical “Approved. Write the impl plan. Don’t start impl.” LOCAL coding hold.
-T01–T03 are implemented locally; T04 exact-code acceptance/integration is pending.
-T05–T14 follow that gate on a separate slice. Historical future/hold wording below
+T01–T04 are locally accepted/integrated at
+`8c369d3cf19a4c966fe4745dfa99738c3fe78367`. T05–T14's live-update candidate is
+implemented locally; final verification and separate exact-code acceptance remain
+the gate, not prior design/plan approval. Historical future/hold wording below
 records the plan-writing phase, not renewed prohibition of authorized local work.
 No live experiment, paid inference, publication or deployment is authorized.
 
@@ -561,8 +563,16 @@ test size, not a claim about live volume or a new row limit. Matrix:
 | Lifecycle/security/resource browser + handler | Gap/overflow/dropped hints, late reads/mutators, context changes/restart, hidden-return/BFCache/offline-online; revocation/expiry/deletion during read; no-store/escape/no-compression/flush; all limits/timeouts/cleanup |
 
 Assert provider factory/call/decrypt and SQL mutation counters explicitly around
-initial/snapshot/observe/reconnect/poll/resync AFTER restart. Counts must remain
-zero; reading encrypted fields is also forbidden. Session activity unchanged.
+page-document/read-projection and new snapshot/observe/reconnect/poll/resync AFTER
+restart. Counts must remain zero; encrypted-field reads are also forbidden and
+session activity unchanged on those paths. Owner option 2 (2026-10-12) preserves
+the two legacy bootstrap status GETs `/api/briefing-status` and `/api/rerate/status`
+and their existing `sessions.last_seen_at` writes. Measure unsuppressed native
+browser requests separately; never call the entire bootstrap zero-write. This
+exception permits no other mutation, decryption, provider construction/call or
+paid restart. Test both legacy activity and invalid-session rejection; retain the
+original run175 whole-bootstrap RED evidence. See the specification's owner
+amendment for the exact boundary.
 Intentional synthetic mutation/analysis phases are outside this read-only measurement
 window and labeled separately. Existing startup cache-only recovery is not replayed
 by observation. Negative tests must not count failure-to-persist as a saved failure.

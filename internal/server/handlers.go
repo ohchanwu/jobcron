@@ -47,6 +47,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/rerate", s.handleRerateSSE)
 	mux.HandleFunc("GET /api/rerate/status", s.handleRerateStatus)
 	mux.HandleFunc("GET /api/briefing-status", s.handleBriefingStatus)
+	mux.Handle("GET /api/posting-view", s.requireObservationAuth(http.HandlerFunc(s.handlePostingView)))
+	mux.Handle("GET /api/posting-updates", s.requireObservationAuth(http.HandlerFunc(s.handlePostingUpdates)))
 	mux.HandleFunc("PUT /api/bookmark/{id}", s.handleBookmarkAdd)
 	mux.HandleFunc("DELETE /api/bookmark/{id}", s.handleBookmarkRemove)
 	mux.HandleFunc("PUT /api/not-interested/{id}", s.handleNotInterestedAdd)
@@ -208,11 +210,13 @@ type dashboardPosting struct {
 	Posting          scraper.Posting
 	Total            int
 	Excluded         bool
+	Dim              bool               // existing bookmark-only hard-exclusion treatment
 	Bookmarked       bool               // user has saved this posting
 	NotInterested    bool               // user has muted this posting ("관심 없음")
 	Explanation      string             // "React +20 · 신입 +25 ..." (used for excluded rows)
 	Breakdown        []scoring.LineItem // structured line items, rendered as chips
 	AIOutcome        string             // current bounded provenance; never a scored line item
+	AIConfigured     bool               // nonsecret presence, not proof of usable-key readiness
 	ExclusionReasons []exclusionReasonView
 	Deadline         deadlineBadgeInfo // closing-date badge: text + urgency tier
 	DuplicateSources []string          // sources of cross-portal duplicates collapsed into this canonical
@@ -272,7 +276,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // the "also on …" badge).
 func (s *Server) buildBriefing(ctx context.Context, now time.Time, userIDOpt ...int64) (briefing, error) {
 	userID := optionalUserID(userIDOpt)
-	return s.buildBriefingWithRuntime(ctx, now, userID, s.runtimeForRender(ctx, userID))
+	return s.projectBriefing(ctx, now, userID)
 }
 
 func (s *Server) buildBriefingWithRuntime(ctx context.Context, now time.Time, userID int64, runtime *AIRuntime) (briefing, error) {
@@ -697,7 +701,10 @@ func (s *Server) handleProfileSave(w http.ResponseWriter, r *http.Request) {
 		}
 		encrypted = &storage.EncryptedAICredential{UserID: userID, Provider: provider, Ciphertext: ciphertext, Nonce: nonce, EncryptionVersion: version}
 	}
-	if _, _, err := s.store.SaveProfileAndCredentialForUser(r.Context(), userID, canonical, encrypted); err != nil {
+	if err := s.writePostingContext(r.Context(), userID, func() error {
+		_, _, err := s.store.SaveProfileAndCredentialForUser(r.Context(), userID, canonical, encrypted)
+		return err
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -741,7 +748,9 @@ func (s *Server) handleAIKeyDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer lease.release()
-	if err := s.store.DeleteUserAICredential(r.Context(), userID, provider); err != nil {
+	if err := s.writePostingContext(r.Context(), userID, func() error {
+		return s.store.DeleteUserAICredential(r.Context(), userID, provider)
+	}); err != nil {
 		http.Error(w, "AI 키를 삭제하지 못했어요.", http.StatusInternalServerError)
 		return
 	}

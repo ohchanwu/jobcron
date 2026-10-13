@@ -104,9 +104,11 @@ func TestProductionTwoAccountHTTPIsolationAndLifecycle(t *testing.T) {
 	seedProductionScoredPosting(t, st, sharedAI.ID, userA, userB)
 
 	assertPageContains(t, srv, cookieA, "/", "웨이브 A 전용 점수 공고")
-	assertPageMissing(t, srv, cookieA, "/", "웨이브 B 전용 점수 공고")
+	// Posting facts are public/shared; a missing user-specific score now gets
+	// that user's pure rules rather than suppressing the public posting.
+	assertPageContains(t, srv, cookieA, "/", "웨이브 B 전용 점수 공고")
 	assertPageContains(t, srv, cookieB, "/", "웨이브 B 전용 점수 공고")
-	assertPageMissing(t, srv, cookieB, "/", "웨이브 A 전용 점수 공고")
+	assertPageContains(t, srv, cookieB, "/", "웨이브 A 전용 점수 공고")
 
 	if err := st.AddBookmark(ctx, userB, sharedBookmarkID); err != nil {
 		t.Fatalf("seed user B bookmark: %v", err)
@@ -836,8 +838,11 @@ func TestProductionRenderUsesOneProfileSnapshotForScoreFilteringAndLayout(t *tes
 	}
 }
 
-func TestSQLiteRenderRejectsScoresCommittedForANewerProfileSnapshot(t *testing.T) {
+func TestSQLiteRenderComputesAgainstEstablishedProfileSnapshot(t *testing.T) {
 	srv, st := newTestServer(t, &fakeScraper{})
+	// This interleaving needs a separate writer connection while a read tx is
+	// established. No deferred read-to-write upgrade happens on the observer.
+	st.SQLDB().SetMaxOpenConns(2)
 	ctx := context.Background()
 	zero, hundred := 0, 100
 	saveAIRuntimeProfile(t, st, 0, profile.Profile{CareerYears: 0, MinScore: &zero})
@@ -880,12 +885,12 @@ func TestSQLiteRenderRejectsScoresCommittedForANewerProfileSnapshot(t *testing.T
 	if result.err != nil {
 		t.Fatalf("buildBriefing: %v", result.err)
 	}
-	if contains(result.briefing.Today, p.Title) || contains(result.briefing.Excluded, p.Title) {
-		t.Fatalf("new-profile score rendered with old profile snapshot: %+v", result.briefing)
+	if !contains(result.briefing.Today, p.Title) || contains(result.briefing.Excluded, p.Title) {
+		t.Fatalf("pure score did not preserve the established profile snapshot: %+v", result.briefing)
 	}
 }
 
-func TestProductionScoredSurfacesOmitPostingsWithStaleProfileHash(t *testing.T) {
+func TestProductionScoredSurfacesComputePostingsWithStaleProfileHash(t *testing.T) {
 	tests := []struct {
 		name   string
 		seed   func(context.Context, *storage.Store, int64, int64) error
@@ -947,8 +952,8 @@ func TestProductionScoredSurfacesOmitPostingsWithStaleProfileHash(t *testing.T) 
 			if err != nil {
 				t.Fatalf("render %s: %v", tt.name, err)
 			}
-			if rendered {
-				t.Fatalf("%s rendered a stale or fabricated zero-score card for posting %d", tt.name, postingID)
+			if rendered != (tt.name != "hidden") {
+				t.Fatalf("%s pure projection presence=%v for posting %d", tt.name, rendered, postingID)
 			}
 		})
 	}
@@ -1141,8 +1146,18 @@ func TestProductionAIKeyDeleteIsConfirmedAndUserScoped(t *testing.T) {
 	if rec := postDelete("unknown", "yes"); rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid provider status=%d body=%q", rec.Code, rec.Body.String())
 	}
+	listener, _ := srv.postingUpdates.subscribe(userA)
+	defer listener.close()
 	if rec := postDelete("openai", "yes"); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/profile" {
 		t.Fatalf("confirmed delete status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	select {
+	case <-listener.wake:
+		if n := listener.take(); n.Context == "" {
+			t.Fatal("credential commit missing context")
+		}
+	default:
+		t.Fatal("credential deletion unannounced")
 	}
 	if _, found, err := st.UserAICredential(context.Background(), userA, "openai"); err != nil || found {
 		t.Fatalf("selected credential after delete: found=%v err=%v", found, err)
@@ -1928,6 +1943,8 @@ func TestProfilePostChangingOnlyProviderModelPreservesProfileAndCredentials(t *t
 		}
 		credentialsBefore[providerName] = stored
 	}
+	listener, _ := srv.postingUpdates.subscribe(userID)
+	defer listener.close()
 
 	form := url.Values{
 		"career_years": {"2"}, "career_weight": {"23"},
@@ -1948,6 +1965,14 @@ func TestProfilePostChangingOnlyProviderModelPreservesProfileAndCredentials(t *t
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/briefing" {
 		t.Fatalf("profile switch status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	select {
+	case <-listener.wake:
+		if n := listener.take(); n.Context == "" {
+			t.Fatal("profile commit missing context")
+		}
+	default:
+		t.Fatal("profile switch unannounced")
 	}
 
 	afterJSON, _, found, err := st.ProfileForUser(ctx, userID)

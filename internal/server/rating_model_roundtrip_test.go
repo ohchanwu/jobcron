@@ -79,7 +79,8 @@ func TestRatingModelRoundtripRecordsDefiniteRetry(t *testing.T) {
 							}
 							return []ai.RawDeltaItem{{Signal: "invalid", MatchedGoal: "goal", Kind: ai.KindPresence, Delta: 10, Quote: "fabricated nonexistent quote"}}, ai.Usage{InputTokens: 5}, nil
 						}
-						cached, called, err := srv.rerateOne(ctx, p, hash, profile.BuildStage2ProfileText(prof), now, uid, runtime, srv.newAIBudget(ctx, uid, runtime), &callCap{max: 200})
+						result := srv.reratePosting(ctx, p, hash, profile.BuildStage2ProfileText(prof), now, uid, runtime, srv.newAIBudget(ctx, uid, runtime), &callCap{max: 200})
+						cached, called, err := result.success(), result.providerCalled, result.err
 						var storageErr *rerateStorageError
 						if cached || !called || errors.As(err, &storageErr) || (successor == storage.AIScoreRejected && err != nil) || (successor == storage.AIScoreFailed && err == nil) {
 							t.Fatalf("definite retry: cached=%v called=%v err=%v", cached, called, err)

@@ -30,11 +30,22 @@ type loginPage struct {
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// New observers perform independent SELECT-only exact-session admission.
+		// Legacy status endpoints intentionally remain on activity-writing auth.
+		if r.URL.Path == "/api/posting-view" || r.URL.Path == "/api/posting-updates" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if publicAuthPath(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if _, ok := s.userFromRequest(r.Context(), r); ok {
+		if listingReadPath(r) {
+			if _, err := s.observationUserID(r.Context(), r); err == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+		} else if _, ok := s.userFromRequest(r.Context(), r); ok {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -73,6 +84,9 @@ func (s *Server) userFromRequest(ctx context.Context, r *http.Request) (userID i
 }
 
 func (s *Server) stateUserID(ctx context.Context, r *http.Request) (int64, error) {
+	if !s.demoMode && listingReadPath(r) {
+		return s.observationUserID(ctx, r)
+	}
 	if !s.productionMode {
 		if s.store.Dialect() == storage.DialectSQLite {
 			return 0, nil
@@ -184,7 +198,13 @@ func (s *Server) renderLoginFailure(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
-		if err := s.store.RevokeSessionToken(r.Context(), cookie.Value); err != nil {
+		finish := s.postingUpdates.beginWrite(0, true)
+		err := s.store.RevokeSessionToken(r.Context(), cookie.Value)
+		if err == nil {
+			s.postingUpdates.revokeSession(auth.HashSessionToken(cookie.Value))
+		}
+		finish(false, "") // authentication revocation is not a posting revision
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
