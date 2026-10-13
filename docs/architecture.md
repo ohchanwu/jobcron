@@ -493,6 +493,21 @@ online, BFCache, reconnect and epoch changes force stored-state recovery. Auth
 loss clears private live content; storage/transport failure retains last good UI
 with the bounded stale/recheck fallback. Reduced motion disables movement.
 
+Context-triggered reads remain fenced to the announced context. A later explicit,
+periodic or reconnect baseline may recover a superseding external context only
+when its request started after the notice and its scoped revision is at least
+that notice's commit. Older generations, lifecycle owners, retired epochs and
+revision rollback still fail admission; duplicate/older context hints cannot
+cancel the current read or discard independent public/status changes.
+The hidden disabled AI control/count/feedback shell remains present while AI is
+off. Accepted views update configuration, hint/title and zero/nonzero counts;
+one deliberate-operation handler survives toggles and retires stale run owners.
+Enabling configuration does not initiate inference. Bounded user-scoped running
+summaries and terminal partial/failure warnings are visible across surfaces even
+when scheduled/noop work coalesces straight to terminal. A warning can be dismissed
+for that epoch/run identity; a new run replaces it, and restart clears transient
+state. Successful initiating-owner completion notices are not replayed there.
+
 Bounds are eight observers per user / 64 total, one coalesced pending notice,
 15-second validity heartbeat and five-second writes; complete snapshots have a
 ten-second whole-read deadline and two reads per user / eight total. Each page

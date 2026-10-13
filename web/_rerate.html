@@ -1,20 +1,21 @@
 {{/*
   rerateButton renders the AI 평가 control for a surface. Dot is the .Rerate field
-  (*rerateInfo) — nil when no AI key is configured, so the button is HIDDEN
-  entirely (design §4: no dead control). It is a ghost/secondary button, never a
+  (*rerateInfo) — nil when no AI key is configured, so the shell is hidden and
+  disabled, ready for live configuration changes without a dead control or reload.
+  It is a ghost/secondary button, never a
   second primary. When visible rows are stale (computed against a prior profile),
   it takes a gold attention treatment with a count: "AI 평가 ·N".
   Shared by /, /archive, /bookmarks (an a11y/SSE control that must stay
   identical, like the AI chip — a deliberate exception to "duplicate templates").
 */}}
-{{define "rerateButton"}}{{with .}}
-<div class="rerate-row">
-  <button id="rerate" type="button" class="btn-ghost{{if .PendingCount}} has-stale{{end}}" data-surface="{{.Surface}}">AI 평가{{if .PendingCount}} ·{{.PendingCount}}{{end}}</button>
-  <span class="rerate-hint">AI로 화면에 보이는 공고를 분석해요{{if .PendingContextCount}} · AI 문맥 확인이 필요한 공고 {{.PendingContextCount}}개{{end}}{{if .PendingScoreCount}} · 다시 평가할 공고 {{.PendingScoreCount}}개{{end}}</span>
-  {{if .Visible}}<span class="rerate-count{{if ge .Analyzed .Visible}} complete{{end}}" title="화면에 보이는 공고 {{.Visible}}개 중 {{.Analyzed}}개를 AI로 분석했어요. 토큰을 아끼려고 한 번에 일정 개수만 분석하고, 더 보려면 AI 평가를 다시 누르면 돼요.">AI 분석 {{.Analyzed}}/{{.Visible}}</span>{{end}}
+{{define "rerateButton"}}
+<div class="rerate-row"{{if not .}} hidden{{end}}>
+  <button id="rerate" type="button" class="btn-ghost{{with .}}{{if .PendingCount}} has-stale{{end}}{{end}}" data-surface="{{with .}}{{.Surface}}{{end}}"{{if not .}} disabled{{end}}>AI 평가{{with .}}{{if .PendingCount}} ·{{.PendingCount}}{{end}}{{end}}</button>
+  <span class="rerate-hint">{{with .}}AI로 화면에 보이는 공고를 분석해요{{if .PendingContextCount}} · AI 문맥 확인이 필요한 공고 {{.PendingContextCount}}개{{end}}{{if .PendingScoreCount}} · 다시 평가할 공고 {{.PendingScoreCount}}개{{end}}{{end}}</span>
+  <span class="rerate-count{{with .}}{{if and .Visible (ge .Analyzed .Visible)}} complete{{end}}{{end}}"{{if not .}} hidden{{else if not .Visible}} hidden{{end}} title="{{with .}}화면에 보이는 공고 {{.Visible}}개 중 {{.Analyzed}}개를 AI로 분석했어요. 토큰을 아끼려고 한 번에 일정 개수만 분석하고, 더 보려면 AI 평가를 다시 누르면 돼요.{{end}}">{{with .}}AI 분석 {{.Analyzed}}/{{.Visible}}{{end}}</span>
 </div>
-<div class="rerate-feedback">
+<div class="rerate-feedback"{{if not .}} hidden{{end}}>
   <span id="rerate-activity" class="rerate-activity" aria-hidden="true" hidden><i></i><i></i><i></i></span>
   <div id="rerate-log" class="scrape-log" aria-live="polite"></div>
 </div>
-{{end}}{{end}}
+{{end}}

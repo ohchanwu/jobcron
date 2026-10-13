@@ -86,11 +86,12 @@ function response(status) {
 
 let tokenCounter = 0;
 
-function makePage({ storage, state = null, navigationType = 'navigate' }) {
+function makePage({ storage, state = null, navigationType = 'navigate', enabled = true, surface = 'archive' }) {
   const registry = new Map();
   const button = new Element('button', registry);
   button.id = 'rerate';
-  button.dataset.surface = 'archive';
+  button.dataset.surface = surface;
+  button.disabled = !enabled;
   const log = new Element('div', registry);
   log.id = 'rerate-log';
   const activity = new Element('span', registry);
@@ -182,7 +183,9 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
 
   const document = {
     title: 'jobcron test',
+    body: {dataset: {liveSurface:surface}},
     visibilityState: 'visible',
+    querySelector(selector) { return selector === '.rerate-row' ? {hidden:!enabled} : null; },
     getElementById(id) { return registry.get(id) || null; },
     createElement(tagName) { return new Element(tagName, registry); },
     createTextNode(text) { return { textContent: String(text), parentNode: null }; },
@@ -192,8 +195,8 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
     }
   };
   const documentListeners = new Map();
-  function dispatchDocument(name) {
-    for (const listener of documentListeners.get(name) || []) listener();
+  function dispatchDocument(name, event = {}) {
+    for (const listener of documentListeners.get(name) || []) listener(event);
   }
   const window = {
     JobcronPostingUpdates: {resync() {location.snapshots++;}},
@@ -253,6 +256,7 @@ function makePage({ storage, state = null, navigationType = 'navigate' }) {
   }
 
   return {
+    applyView(view) { dispatchDocument('posting-view-applied', {detail:view}); },
     button,
     history,
     location,

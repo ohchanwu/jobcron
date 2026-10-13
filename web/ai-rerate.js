@@ -4,8 +4,10 @@
   var activity = document.getElementById('rerate-activity');
   if (!btn || !log || !activity) return;
 
-  var surface = btn.dataset.surface;
+  var surface = btn.dataset.surface || document.body.dataset.liveSurface;
   if (!surface) return;
+  var enabled = !document.querySelector('.rerate-row').hidden;
+  var viewContext = '';
   var entryStateKey = 'jobcronRerateEntry';
   var owner = null;
   var noticeKey = 'jobcron:rerate-notice:' + surface;
@@ -122,7 +124,7 @@
   }
 
   function setRunning(running) {
-    btn.disabled = running;
+    btn.disabled = !enabled || running;
     activity.hidden = !running;
   }
 
@@ -288,6 +290,7 @@
   }
 
   btn.addEventListener('click', function () {
+    if (!enabled || btn.disabled) return;
     var run = beginOwner();
     freshNotice = false;
     log.textContent = '';
@@ -350,8 +353,25 @@
     if (owner) observe(owner);
   });
   window.addEventListener('pageshow', function (event) {
+    if (!enabled) return;
     showStoredNotice();
     observe(owner || beginOwner());
   });
   showStoredNotice();
+  document.addEventListener('posting-view-applied', function (event) {
+    var view = event.detail;
+    if (!view || view.surface !== surface) return;
+    var nextContext = view.epoch + ':' + view.context;
+    var nextEnabled = Boolean(view.rerate);
+    if ((viewContext && viewContext !== nextContext) || enabled !== nextEnabled) {
+      if (owner) settle(owner);
+      owner = null;
+      freshNotice = false;
+      clearProgress();
+      clearStatus();
+    }
+    viewContext = nextContext;
+    enabled = nextEnabled;
+    setRunning(Boolean(owner && !owner.settled));
+  });
 })();

@@ -15,9 +15,48 @@
     if(g===null||u===null||(current.retired||[]).indexOf(view.epoch)!==-1)return false;
     if(current.epoch&&view.epoch!==current.epoch&&!request.force)return false;
     if(last&&view.epoch!==last.epoch&&!request.force)return false;
-    if(current.context&&view.context!==current.context&&(!request.force||current.contextLocked))return false;
+    // A context-triggered read remains locked to the notice. A later deliberate,
+    // periodic or reconnect baseline may discover a superseding external write,
+    // but only if started after that notice and at/after its committed revision.
+    if(current.context&&view.context!==current.context&&
+       (!request.force||(current.contextLocked&&(!request.baseline||u<revision(current.contextRevision||'0')))))return false;
     if(last&&view.epoch===last.epoch&&(g<revision(last.global_revision)||u<revision(last.user_revision)))return false;
     return ['total','main','excluded'].every(function(key){return Number.isInteger(view[key])&&view[key]>=0;}) && view.rows.length===view.main+view.excluded;
+  }
+  function createRunSummary(doc,node) {
+    var epoch='',latest=new Map(),dismissed=new Map(),entries=[],signature='';
+    function render() {
+      var shown=entries.filter(function(entry){return dismissed.get(entry.surface)!==entry.key;});
+      var next=JSON.stringify(shown);
+      if(next===signature)return;
+      signature=next;node.textContent='';
+      shown.forEach(function(entry,index){
+        if(index) {var separator=doc.createElement('span');separator.textContent=' · ';node.appendChild(separator);}
+        var item=doc.createElement('span'),text=doc.createElement('span');text.textContent=entry.message;item.appendChild(text);
+        if(entry.warning) {
+          var button=doc.createElement('button');button.type='button';button.textContent='알림 닫기';
+          button.addEventListener('click',function(){dismissed.set(entry.surface,entry.key);render();});item.appendChild(button);
+        }
+        node.appendChild(item);
+      });
+    }
+    return function(view) {
+      if(!node)return;
+      if(epoch!==view.epoch){epoch=view.epoch;latest.clear();dismissed.clear();}
+      entries=[];
+      ['today','bookmarks','archive'].forEach(function(surface){
+        var run=(view.runs||{})[surface];
+        if(!run||!Number.isSafeInteger(run.run_id)||run.run_id<1||!run.run_token)return;
+        if(run.run_id<(latest.get(surface)||0))return;
+        latest.set(surface,run.run_id);
+        var warning=run.state==='failed'||(run.state==='done'&&(run.outcome==='partial'||run.outcome==='no_progress'));
+        var message=run.state==='running'?(run.progress||run.status||'공고를 분석하는 중...'):warning?run.message:'';
+        // Three scoped transient summaries maximum; no owner completion replay
+        // or saved outcome inferred from an uncommitted provider response.
+        if(message)entries.push({surface:surface,key:epoch+':'+run.run_token,warning:warning,message:message});
+      });
+      render();
+    };
   }
   function init() {
     var root = document.getElementById('posting-lists');
@@ -27,6 +66,7 @@
     var notice = document.getElementById('posting-live-notice');
     var lastHTML = new Map();
     var animations = new Map();
+    var updateRunSummary=createRunSummary(document,document.getElementById('posting-run-summary'));
 
 
     function visible(el) {
@@ -149,12 +189,14 @@
     function updateCounts(view) {
       var info=view.rerate, button=document.getElementById('rerate'), row=document.querySelector('.rerate-row');
       if (row) row.hidden=!info;
+      var feedback=document.querySelector('.rerate-feedback');if(feedback)feedback.hidden=!info;
       if (info && button) {button.classList.toggle('has-stale',info.PendingCount>0);button.textContent='AI 평가'+(info.PendingCount?' ·'+info.PendingCount:'');}
+      var hint=document.querySelector('.rerate-hint');
+      if(hint)hint.textContent=info?'AI로 화면에 보이는 공고를 분석해요'+(info.PendingContextCount?' · AI 문맥 확인이 필요한 공고 '+info.PendingContextCount+'개':'')+(info.PendingScoreCount?' · 다시 평가할 공고 '+info.PendingScoreCount+'개':''):'';
       var count=document.querySelector('.rerate-count');
       if (!count && row && info) {count=document.createElement('span');count.className='rerate-count';row.appendChild(count);}
-      if(count) {count.hidden=!info||!info.Visible;if(info){count.textContent='AI 분석 '+info.Analyzed+'/'+info.Visible;count.classList.toggle('complete',info.Analyzed>=info.Visible);}}
-      var summary=document.getElementById('posting-run-summary');
-      if(summary){var runs=Object.values(view.runs||{}).filter(function(run){return run.state==='running';});summary.textContent=runs.map(function(run){return run.progress||run.status||'공고를 분석하는 중...';}).join(' · ');}
+      if(count) {count.hidden=!info||!info.Visible;count.textContent=info?'AI 분석 '+info.Analyzed+'/'+info.Visible:'';count.title=info?'화면에 보이는 공고 '+info.Visible+'개 중 '+info.Analyzed+'개를 AI로 분석했어요. 토큰을 아끼려고 한 번에 일정 개수만 분석하고, 더 보려면 AI 평가를 다시 누르면 돼요.':'';count.classList.toggle('complete',!!info&&info.Visible>0&&info.Analyzed>=info.Visible);}
+      updateRunSummary(view);
     }
     var engine=createObserver({now:Date.now,setTimeout:window.setTimeout.bind(window),clearTimeout:window.clearTimeout.bind(window),fetch:window.fetch.bind(window),EventSource:window.EventSource,AbortController:window.AbortController,
       visible:function(){return document.visibilityState==='visible'&&navigator.onLine!==false;}},surface,sort,function(view){reconcile(view);document.dispatchEvent(new CustomEvent('posting-view-applied',{detail:view}));},function(){
@@ -172,9 +214,9 @@
   // The clock/transport seam is only for deterministic zero-package tests. The
   // browser supplies its native APIs; no provider/runtime or operation URL exists.
   function createObserver(env,surface,sort,onView,onAuth,onStale) {
-    var applied=null,generation=0,pending=null,dirty=false,forced=false,active=false,authLost=false;
+    var applied=null,generation=0,pending=null,dirty=false,forced=false,baseline=false,active=false,authLost=false;
     var timer=null,periodic=null,poll=null,reconnect=null,source=null,lastStart=-Infinity,failures=0,observeFailures=0;
-    var admission={owner:0,contextSequence:0,epoch:'',context:'',contextLocked:false,user_revision:'0',retired:[]};
+    var admission={owner:0,contextSequence:0,epoch:'',context:'',contextLocked:false,contextRevision:'0',user_revision:'0',retired:[]};
     function allowed(){return active&&!authLost&&env.visible();}
     function clear(name){if(name!==null)env.clearTimeout(name);}
     function cancelRead(){var old=pending;pending=null;if(old){clear(old.deadline);old.controller.abort();}}
@@ -183,7 +225,7 @@
       timer=env.setTimeout(function(){timer=null;read();},Math.max(0,1000-(env.now()-lastStart)));
     }
     function resync(force){dirty=true;forced=forced||!!force;schedule();}
-    function force(){resync(true);}
+    function force(){baseline=true;resync(true);}
     function release(record){clear(record.deadline);if(pending===record)pending=null;}
     function fail(record){
       if(pending!==record||record.owner!==admission.owner)return;
@@ -193,7 +235,7 @@
     function read(){
       if(!allowed()||pending)return;
       dirty=false;lastStart=env.now();generation++;
-      var record={generation:String(generation),surface:surface,sort:sort,owner:admission.owner,contextSequence:admission.contextSequence,force:forced,controller:new env.AbortController()};forced=false;pending=record;
+      var record={generation:String(generation),surface:surface,sort:sort,owner:admission.owner,contextSequence:admission.contextSequence,force:forced,baseline:baseline,controller:new env.AbortController()};forced=false;baseline=false;pending=record;
       record.deadline=env.setTimeout(function(){fail(record);},10000);
       env.fetch('/api/posting-view?surface='+encodeURIComponent(surface)+'&sort='+encodeURIComponent(sort)+'&generation='+record.generation,{cache:'no-store',signal:record.controller.signal,headers:{Accept:'application/json'}})
         .then(function(response){
@@ -214,12 +256,20 @@
     function hint(n){
       if(!allowed()||!n||typeof n.epoch!=='string'||!n.epoch)return;
       if(admission.retired.indexOf(n.epoch)!==-1)return;
+      var u=revision(n.user_revision);
+      if((n.context||n.context_changed)&&admission.epoch===n.epoch&&u!==null&&
+         (u<revision(admission.user_revision)||u<=revision(admission.contextRevision)||(applied&&applied.epoch===n.epoch&&u<=revision(applied.user_revision)))) {
+        // A coalesced notice may still carry newer public changes or status.
+        // Ignore only its obsolete context, not that independent dirty signal.
+        n=Object.assign({},n,{context:'',context_changed:false});
+      }
       var changed=!!n.context_changed||(admission.epoch&&admission.epoch!==n.epoch)||(n.context&&admission.context&&admission.context!==n.context);
-      if(changed){admission.contextSequence++;cancelRead();}
-      if(admission.epoch!==n.epoch){if(admission.epoch)admission.retired=[admission.epoch];admission.context='';}
+      if(changed){admission.contextSequence++;cancelRead();baseline=false;}
+      if(admission.epoch!==n.epoch){if(admission.epoch)admission.retired=[admission.epoch];admission.context='';admission.user_revision='0';admission.contextRevision='0';}
       admission.epoch=n.epoch;
+      if(changed&&u!==null)admission.contextRevision=n.user_revision;
       if(n.context_changed&&!n.context){admission.context='';admission.contextLocked=false;}
-      if(n.context){admission.context=n.context;admission.contextLocked=true;}
+      if(n.context){admission.context=n.context;admission.contextLocked=true;admission.contextRevision=u===null?admission.user_revision:n.user_revision;}
       if(revision(n.user_revision)!==null&&revision(n.user_revision)>revision(admission.user_revision))admission.user_revision=n.user_revision;
       resync(!!n.resync||changed);
     }
@@ -246,6 +296,6 @@
     }
     return {resume:resume,pause:pause,force:force,hint:hint};
   }
-  if(typeof module==='object'&&module.exports)module.exports={viewAdmission:viewAdmission,createObserver:createObserver};
+  if(typeof module==='object'&&module.exports)module.exports={viewAdmission:viewAdmission,createObserver:createObserver,createRunSummary:createRunSummary};
   if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();}
 })();

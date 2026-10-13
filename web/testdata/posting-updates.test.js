@@ -21,5 +21,7 @@ assert.equal(admit({...view,epoch:'epoch-b'},request,last,current),false,'old or
 assert.equal(admit({...view,epoch:'epoch-b'},{...request,force:true},last,{...current,epoch:''}),true,'forced stored-state recovery admits new process epoch');
 assert.equal(admit(view,{...request,force:true},null,{...current,retired:['epoch-a']}),false,'retired epoch never returns');
 assert.equal(admit({...view,context:'old-context'},{...request,force:true},last,{...current,contextLocked:true}),false,'forced resync cannot bypass the latest context notice');
+assert.equal(admit({...view,context:'external-context',user_revision:'5'},{...request,force:true,baseline:true},last,{...current,contextLocked:true,contextRevision:'6'}),false,'baseline cannot admit a response below the announced commit');
+assert.equal(admit({...view,context:'external-context',user_revision:'6'},{...request,force:true,baseline:true},last,{...current,contextLocked:true,contextRevision:'6'}),true,'post-notice baseline may recover superseding external state');
 assert.equal(admit({...view,user_revision:'bad'},request,last,current),false,'closed revision grammar');
 console.log('posting snapshot admission: PASS (ordinary-write convergence, context/epoch/lifecycle/schema/surface/sort/generation and numeric gates)');

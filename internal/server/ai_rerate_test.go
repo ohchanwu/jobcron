@@ -511,12 +511,15 @@ func TestRerateRejectsUnknownSurface(t *testing.T) {
 }
 
 func TestRerateButtonHiddenWithoutKey(t *testing.T) {
-	// AI off → no button rendered (design §4: no dead control).
+	// AI off has no visible/dead control, but retains the hidden shell so an
+	// already-open page can become configured without reload or duplicate handlers.
 	srv, _ := newTestServer(t, &fakeScraper{})
 	saveSinipProfile(t, srv)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-	if strings.Contains(rec.Body.String(), `id="rerate"`) {
+	if !strings.Contains(rec.Body.String(), `class="rerate-row" hidden`) ||
+		!strings.Contains(rec.Body.String(), `data-surface="" disabled`) ||
+		!strings.Contains(rec.Body.String(), `class="rerate-feedback" hidden`) {
 		t.Fatal("the re-rate button must be hidden when no AI key is configured")
 	}
 

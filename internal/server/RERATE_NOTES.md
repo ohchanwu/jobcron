@@ -183,3 +183,15 @@ even for detached/scheduled/noop callers. A persistence error publishes no saved
 outcome and retains a run warning. Reconnect/poll/resync never starts or retries
 analysis. The live-view candidate still needs independent acceptance. Local checks do not
 authorize publication, production migration, deployment or live inference.
+
+Live AI configuration reconciles the hidden disabled control/feedback/count shell
+without reload. Hint/title and zero-to-nonzero counts come from the accepted current
+view; enabling configuration never starts analysis. Context changes retire old
+operation callbacks, while same-context count updates retain the active owner.
+Cross-surface run summaries retain bounded terminal partial/failure warnings,
+including scheduled/noop persistence failures. Dismissal is local to that
+epoch/run identity; a new run replaces it and restart clears transient state.
+They do not replay successful owner-only completion notices or manufacture saved
+outcomes. A post-notice authoritative resync can recover an externally superseded
+context, but still rejects old generations, owners, epochs and revisions below
+the announced commit. These corrections remain subject to exact-code review.

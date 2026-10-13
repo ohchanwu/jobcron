@@ -355,6 +355,7 @@ nav.primary a.active {
   align-items: flex-start;
   gap: 0.45rem;
 }
+.rerate-row[hidden], .rerate-feedback[hidden] { display: none; }
 .rerate-activity {
   flex: 0 0 1.3rem;
   display: inline-flex;
