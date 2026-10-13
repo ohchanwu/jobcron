@@ -15,7 +15,8 @@ func TestSessionIdentityReadOnly(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expiry := time.Now().UTC().Add(time.Hour)
+		// PostgreSQL stores microseconds; keep exact equality with a representable fixture.
+		expiry := time.Now().UTC().Truncate(time.Second).Add(time.Hour + 123456*time.Microsecond)
 		for _, token := range []string{"valid", "expired", "revoked"} {
 			ex := expiry
 			if token == "expired" {
