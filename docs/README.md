@@ -35,15 +35,17 @@ Use this index instead of recursively loading the entire documentation tree.
   reports. Load only the active files listed here and the concise decision
   records needed for the current task.
 
-- [AI rating and live posting updates — design-approved campaign](specs/261012-ai-rating-live-updates-campaign.md)
+- [AI rating and live posting updates — locally accepted campaign](specs/261012-ai-rating-live-updates-campaign.md)
   and [task-level implementation plan](plans/261012-ai-rating-live-updates-campaign-plan.md).
   Design-ready in review 169; plan-ready in review 171. The owner approved the
   plan and autonomous LOCAL implementation on 2026-10-12, superseding the earlier
   implementation hold. Gemini Slice 1 was independently accepted and integrated
   locally at `8c369d3cf19a4c966fe4745dfa99738c3fe78367`. Slice 2's stored-state
-  live-update candidate is implemented locally and awaits its own exact-code
-  implementation acceptance, with a possible single
-  release after BOTH pass. UI work need not wait for a paid/live experiment.
+  live updates were independently accepted in review 180 and integrated locally
+  at `3cdfa85f2718396a35ee9c083a9f6bdbbd9f4b3a` (correction worker 179;
+  original worker 177 and rejected candidate history retained). Both local
+  implementation slices are complete. A possible combined release remains
+  separately authorized; local acceptance is not production or model-quality proof.
   No live provider calls or publication/deployment authority. Owner option 2
   preserves activity writes on the two legacy bootstrap status GETs; document
   projections and new observation paths remain strictly read-only. See the
@@ -52,8 +54,8 @@ Use this index instead of recursively loading the entire documentation tree.
   and [follow-up / experiment plan](plans/261009-gemini-pacing-and-quota-classification-plan.md).
   These retain Slice 1's technical/experiment details under the campaign above;
   local Slice 1 implementation and exact acceptance are complete.
-  The optional live experiment remains unauthorized. The task-level plan governs
-  the remaining separately accepted local slice.
+  The optional live experiment remains unauthorized. The campaign's local
+  implementation is complete; remaining live/release work is separately gated.
 - [App-only runner — completed local acceptance](decisions/261012-app-only-runner-local-acceptance.md)
   records accepted source `095bc775610656f3cbe74a076c5be495c30d22b5` and worker
   166 / reviewer 167. The old spec/plan paths are compatibility pointers, not
